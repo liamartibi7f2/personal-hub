@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Personal Hub OS — A modular command center for productivity and learning.">
+  <title>Hub OS</title>
+
+  <!-- Stylesheet (relative path for GitHub Pages) -->
+  <link rel="stylesheet" href="./styles.css">
+
+  <!-- Preconnect for Google Fonts (JetBrains Mono for timer/code text) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- ============================================================ -->
+  <!-- APP SHELL LAYOUT                                              -->
+  <!-- ============================================================ -->
+  <div id="app" class="app-layout">
+
+    <!-- -------------------------------------------------------- -->
+    <!-- SIDEBAR NAVIGATION                                        -->
+    <!-- Fixed left on desktop; floating bottom dock on mobile     -->
+    <!-- -------------------------------------------------------- -->
+    <aside id="sidebar" class="sidebar glass" role="navigation" aria-label="Main navigation">
+      <!-- Brand / Logo -->
+      <div class="sidebar-brand">
+        <div class="brand-icon">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+            <rect x="2" y="2" width="24" height="24" rx="6" stroke="var(--accent-primary)" stroke-width="2"/>
+            <circle cx="14" cy="14" r="5" fill="var(--accent-primary)" opacity="0.6"/>
+            <circle cx="14" cy="14" r="2" fill="var(--accent-primary)"/>
+          </svg>
+        </div>
+        <span class="brand-text">HUB<span class="accent-dot">.</span>OS</span>
+      </div>
+
+      <!-- Nav items are injected here by app.js -->
+      <nav id="nav-list" class="sidebar-nav" aria-label="Tool navigation">
+        <!-- Populated dynamically -->
+      </nav>
+
+      <!-- Sidebar footer -->
+      <div class="sidebar-footer">
+        <div class="status-indicator" title="System online">
+          <span class="status-dot"></span>
+          <span class="status-label">Online</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- -------------------------------------------------------- -->
+    <!-- MAIN CONTENT AREA                                         -->
+    <!-- Content for the active tab is injected here               -->
+    <!-- -------------------------------------------------------- -->
+    <main id="main-content" class="main-content" aria-live="polite">
+      <!-- Populated dynamically by app.js -->
+    </main>
+
+  </div><!-- /#app -->
+
+  <!-- ============================================================ -->
+  <!-- SCRIPTS (order matters: app.js first, then modules)          -->
+  <!-- ============================================================ -->
+  <script src="./app.js"></script>
+  <script src="./modules/dashboard.js"></script>
+  <script src="./modules/flashcard.js"></script>
+  <script src="./modules/pomodoro.js"></script>
+  <script src="./modules/quiz.js"></script>
+
+</body>
+</html>
