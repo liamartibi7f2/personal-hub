@@ -4290,3 +4290,57 @@ ul, ol { list-style: none; }
     display: none; /* Already hidden on mobile */
   }
 }
+/* ==========================================================
+   MOBILE PERFORMANCE PATCH
+   Disables heavy glassmorphism and complex shadows on mobile 
+   to ensure 60FPS rendering and prevent GPU lag.
+   ========================================================== */
+@media (max-width: 768px) {
+  /* 1. Reduce GPU Load: Remove heavy blur, use solid slightly transparent background */
+  .glass, 
+  .glass-card, 
+  .settings-modal, 
+  .focus-vibe-panel,
+  .card-front,
+  .card-back {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background-color: rgba(18, 18, 30, 0.98) !important; /* solid fallback */
+  }
+
+  /* 2. Flatten Shadows: Remove complex neon glows */
+  .glass-card:hover,
+  .settings-modal,
+  .focus-vibe-panel,
+  .timer-btn-main,
+  .studio-vibe-card.studio-vibe-active {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6) !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+  }
+
+  .text-glow,
+  .widget-stat-value--cyan,
+  .widget-stat-value--purple,
+  .widget-stat-value--green,
+  .stat-value,
+  .timer-ring-progress {
+    text-shadow: none !important;
+    filter: none !important;
+  }
+
+  /* 3. Hardware Acceleration: Force GPU rendering for moving parts */
+  .card-3d, 
+  .timer-ring-progress,
+  .generate-modal,
+  .settings-modal {
+    transform: translateZ(0);
+    will-change: transform, opacity;
+  }
+
+  /* 4. Optimize Transitions: Neutralize heavy layout thrashing on touch */
+  .nav-item,
+  .quiz-option,
+  .deck-card {
+    transition: transform 0.1s ease, background-color 0.1s ease !important;
+  }
+}
