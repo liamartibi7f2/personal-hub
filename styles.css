@@ -2220,6 +2220,81 @@ ul, ol { list-style: none; }
   flex-shrink: 0;
 }
 
+/* Sound profile selector row */
+.settings-sound-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+/* Glass-select wrapper — matches the stepper input aesthetic */
+.settings-select-wrap {
+  padding: 0 !important;
+  overflow: hidden;
+  transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
+}
+
+.settings-select-wrap:focus-within {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.1);
+}
+
+/* The select itself — glassmorphism dropdown */
+.settings-sound-select {
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  /* Custom dropdown arrow */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238b8b9e' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 36px;
+}
+
+.settings-sound-select option {
+  background: #12121a;
+  color: var(--text-primary);
+}
+
+/* Test sound button — circular icon button */
+.btn-test-sound {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--accent-primary);
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+}
+
+.btn-test-sound:hover {
+  background: rgba(0, 240, 255, 0.12);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.2);
+  transform: scale(1.08);
+}
+
+.btn-test-sound:active {
+  transform: scale(0.93);
+  background: rgba(0, 240, 255, 0.18);
+}
+
 /* Footer actions */
 .settings-modal-footer {
   display: flex;
@@ -4290,57 +4365,1032 @@ ul, ol { list-style: none; }
     display: none; /* Already hidden on mobile */
   }
 }
+
 /* ==========================================================
-   MOBILE PERFORMANCE PATCH
-   Disables heavy glassmorphism and complex shadows on mobile 
-   to ensure 60FPS rendering and prevent GPU lag.
+   MOBILE PERFORMANCE PATCH (≤ 768px)
+   GPU-friendly overrides: kill backdrop-filter, flatten
+   shadows, force hardware acceleration, tame transitions.
+   Must load LAST to override all prior mobile rules.
    ========================================================== */
 @media (max-width: 768px) {
-  /* 1. Reduce GPU Load: Remove heavy blur, use solid slightly transparent background */
-  .glass, 
-  .glass-card, 
-  .settings-modal, 
-  .focus-vibe-panel,
-  .card-front,
+
+  /* ── Disable body dot-grid on mobile (saves fill-rate) ── */
+  body::before {
+    background-image: none;
+  }
+
+  /* ── 1. REPLACE GLASS WITH SOLID FALLBACK ── */
+  .glass {
+    background: rgba(18, 18, 30, 0.95);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .glass-card {
+    background: rgba(18, 18, 30, 0.92);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .card-front {
+    background: rgba(18, 18, 30, 0.92);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
   .card-back {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    background-color: rgba(18, 18, 30, 0.98) !important; /* solid fallback */
+    background: linear-gradient(135deg, rgba(179, 71, 234, 0.12), rgba(18, 18, 30, 0.92));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 
-  /* 2. Flatten Shadows: Remove complex neon glows */
-  .glass-card:hover,
-  .settings-modal,
-  .focus-vibe-panel,
-  .timer-btn-main,
-  .studio-vibe-card.studio-vibe-active {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6) !important;
-    border-color: rgba(255, 255, 255, 0.1) !important;
-  }
-
-  .text-glow,
-  .widget-stat-value--cyan,
-  .widget-stat-value--purple,
-  .widget-stat-value--green,
-  .stat-value,
-  .timer-ring-progress {
-    text-shadow: none !important;
-    filter: none !important;
-  }
-
-  /* 3. Hardware Acceleration: Force GPU rendering for moving parts */
-  .card-3d, 
-  .timer-ring-progress,
-  .generate-modal,
   .settings-modal {
+    background: rgba(18, 18, 30, 0.96);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .focus-vibe-panel {
+    background: rgba(18, 18, 30, 0.95);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .focus-vibe-trigger {
+    background: rgba(18, 18, 30, 0.93);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .deck-btn,
+  .timer-btn-icon,
+  .settings-btn,
+  .settings-toggle,
+  .settings-panel {
+    background: rgba(18, 18, 30, 0.9);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .backup-modal {
+    background: rgba(18, 18, 30, 0.96);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .generate-modal {
+    background: rgba(18, 18, 30, 0.96);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .srs-assessment-btn {
+    background: rgba(18, 18, 30, 0.85);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  /* Overlays — keep minimal blur for depth or kill it */
+  .settings-overlay,
+  .backup-overlay,
+  .add-card-overlay {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  /* ── 2. FLATTEN HEAVY SHADOWS ── */
+
+  /* Modal / panel double shadows → single flat */
+  .settings-modal {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
+  }
+
+  .focus-vibe-panel {
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+  }
+
+  .focus-vibe-widget.playing .focus-vibe-panel {
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+  }
+
+  .backup-modal {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
+  }
+
+  /* Kill multi-shadow triggers */
+  .focus-vibe-trigger {
+    box-shadow: 0 3px 16px rgba(0, 0, 0, 0.45);
+  }
+
+  .focus-vibe-trigger:hover {
+    box-shadow: 0 3px 20px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Neat text-glow → simple */
+  .text-glow {
+    text-shadow: 0 0 6px rgba(0, 240, 255, 0.3);
+  }
+
+  /* Widget stat neon glows → subtle */
+  .widget-stat-value--cyan {
+    text-shadow: 0 0 6px rgba(0, 240, 255, 0.15);
+  }
+
+  .widget-stat-value--purple {
+    text-shadow: 0 0 6px rgba(179, 71, 234, 0.15);
+  }
+
+  .widget-stat-value--green {
+    text-shadow: 0 0 6px rgba(68, 255, 136, 0.12);
+  }
+
+  .widget-stat-value--due.has-due {
+    text-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+  }
+
+  /* Timer ring glow → single pass */
+  .timer-ring-progress {
+    filter: drop-shadow(0 0 3px rgba(0, 240, 255, 0.25));
+  }
+
+  .timer-ring-progress.break-mode {
+    filter: drop-shadow(0 0 3px rgba(179, 71, 234, 0.25));
+  }
+
+  /* Stat value glows */
+  .stat-value {
+    text-shadow: 0 0 6px rgba(0, 240, 255, 0.15);
+  }
+
+  .srs-stat-value.due {
+    text-shadow: 0 0 8px rgba(0, 240, 255, 0.15);
+  }
+
+  /* Widget card hover shadow → simple */
+  .widget-card:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  }
+
+  /* Button glows on hover → simple */
+  .widget-btn-cyan:hover {
+    box-shadow: 0 0 12px rgba(0, 240, 255, 0.1);
+  }
+
+  .widget-btn-purple:hover {
+    box-shadow: 0 0 12px rgba(179, 71, 234, 0.1);
+  }
+
+  .widget-btn-green:hover {
+    box-shadow: 0 0 12px rgba(68, 255, 136, 0.1);
+  }
+
+  .deck-btn:hover {
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.12);
+  }
+
+  .add-card-btn:hover {
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.12);
+  }
+
+  .timer-btn-main {
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.1);
+  }
+
+  .timer-btn-main:hover {
+    box-shadow: 0 0 16px rgba(0, 240, 255, 0.18);
+  }
+
+  .settings-btn:hover {
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.1);
+  }
+
+  .stepper-btn:hover {
+    box-shadow: 0 0 6px rgba(0, 240, 255, 0.1);
+  }
+
+  .btn-test-sound:hover {
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.1);
+    transform: none;
+  }
+
+  .btn-test-sound:active {
+    transform: none;
+  }
+
+  /* SRS study btn */
+  .srs-btn-study {
+    box-shadow: 0 0 12px rgba(0, 240, 255, 0.2);
+  }
+
+  .srs-btn-study:hover {
+    box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
+  }
+
+  /* Deck play btn */
+  .deck-play-btn:hover {
+    box-shadow: 0 0 12px rgba(0, 240, 255, 0.12);
+  }
+
+  /* Sidebar settings btn */
+  .sidebar-settings-btn:hover {
+    box-shadow: 0 0 6px rgba(0, 240, 255, 0.1);
+  }
+
+  /* Focus vibe play btn */
+  .focus-vibe-play-btn {
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.08);
+  }
+
+  .focus-vibe-play-btn:hover {
+    box-shadow: 0 0 12px rgba(0, 240, 255, 0.15);
+  }
+
+  .focus-vibe-play-btn.playing {
+    box-shadow: 0 0 14px rgba(0, 240, 255, 0.2);
+  }
+
+  /* Quiz option hover */
+  .quiz-option:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  }
+
+  /* Quiz correct/incorrect glows */
+  .quiz-option.option-correct {
+    box-shadow: 0 0 10px rgba(68, 255, 136, 0.08);
+  }
+
+  .quiz-option.option-incorrect {
+    box-shadow: 0 0 10px rgba(255, 68, 102, 0.05);
+  }
+
+  .btn-primary {
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.15);
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 0 14px rgba(0, 240, 255, 0.25);
+  }
+
+  /* Chart bar glows → simpler */
+  .chart-bar {
+    box-shadow: 0 0 4px rgba(0, 240, 255, 0.1);
+  }
+
+  .chart-bar--today {
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.25), 0 0 16px rgba(179, 71, 234, 0.1);
+  }
+
+  /* Status dot → simple */
+  .status-dot {
+    box-shadow: 0 0 3px var(--success);
+  }
+
+  /* Settings modal icon SVG glow → simple */
+  .settings-modal-icon-svg {
+    filter: drop-shadow(0 0 3px rgba(0, 240, 255, 0.2));
+  }
+
+  .backup-modal-icon-svg {
+    filter: drop-shadow(0 0 3px rgba(0, 240, 255, 0.2));
+  }
+
+  /* Studio vibe card icon */
+  .studio-vibe-card-icon {
+    filter: drop-shadow(0 0 4px rgba(0, 240, 255, 0.1));
+  }
+
+  /* ── 3. HARDWARE ACCELERATION ── */
+  .card-3d {
+    transform: translateZ(0);
+    will-change: transform;
+  }
+
+  .timer-ring-progress {
+    will-change: stroke-dashoffset;
+  }
+
+  .settings-modal,
+  .backup-modal {
+    transform: translateZ(0);
+    will-change: transform;
+  }
+
+  .focus-vibe-panel {
     transform: translateZ(0);
     will-change: transform, opacity;
   }
 
-  /* 4. Optimize Transitions: Neutralize heavy layout thrashing on touch */
-  .nav-item,
-  .quiz-option,
-  .deck-card {
-    transition: transform 0.1s ease, background-color 0.1s ease !important;
+  .tab-content {
+    transform: translateZ(0);
+    will-change: transform, opacity;
   }
+
+  .add-card-form {
+    transform: translateZ(0);
+    will-change: transform, opacity;
+  }
+
+  .timer-ring-container {
+    transform: translateZ(0);
+  }
+
+  .timer-ring-svg {
+    transform: rotate(-90deg) translateZ(0);
+  }
+
+  .glass-card {
+    transform: translateZ(0);
+    will-change: transform;
+  }
+
+  /* ── 4. TAME TRANSITIONS (avoid layout thrashing) ── */
+
+  /* Kill transition: all on nav items */
+  .nav-item {
+    transition: color var(--duration-fast) var(--ease-out-expo),
+                background-color var(--duration-fast) var(--ease-out-expo);
+  }
+
+  /* glass-card hover lift — kill transform transition */
+  .glass-card {
+    transition: box-shadow var(--duration-fast) var(--ease-out-expo),
+                border-color var(--duration-fast) var(--ease-out-expo);
+  }
+
+  .glass-card:hover {
+    transform: none;
+  }
+
+  /* Widget card also kills lift */
+  .widget-card {
+    transition: box-shadow var(--duration-fast) var(--ease-out-expo),
+                border-color var(--duration-fast) var(--ease-out-expo);
+  }
+
+  .widget-card:hover {
+    transform: none;
+  }
+
+  /* Settings toggle */
+  .settings-toggle {
+    transition: color var(--duration-fast), border-color var(--duration-fast);
+  }
+
+  /* Deck button hover no lift */
+  .deck-btn:hover {
+    transform: none;
+  }
+
+  .deck-btn:active,
+  .timer-btn-main:active,
+  .settings-btn:active,
+  .stepper-btn:active,
+  .sidebar-settings-btn:active,
+  .timer-btn-icon:active,
+  .deck-play-btn:active,
+  .deck-browse-btn:active,
+  .quiz-option:active,
+  .settings-close-btn:active,
+  .deck-delete-btn:active {
+    transform: none;
+  }
+
+  /* Vibe pill */
+  .vibe-pill:hover {
+    transform: none;
+  }
+
+  .vibe-pill:active {
+    transform: none;
+  }
+
+  /* Options that use translateY on hover — kill all */
+  .glass-card:hover,
+  .widget-card:hover,
+  .deck-card:hover,
+  .studio-vibe-card:hover,
+  .settings-btn:hover,
+  .btn-primary:hover,
+  .deck-play-btn:hover,
+  .deck-browse-btn:hover,
+  .widget-btn:hover,
+  .backup-action-btn:hover,
+  .quiz-option:hover,
+  .srs-assessment-btn:hover,
+  .srs-btn-study:hover {
+    transform: none !important;
+  }
+
+  /* Widget btn icon arrow can still animate */
+  .widget-btn:hover .widget-btn-icon {
+    transform: translateX(2px);
+  }
+
+  /* Sidebar settings gear spin — keep but lightweight */
+  .sidebar-settings-btn:hover .sidebar-settings-icon {
+    transform: rotate(30deg);
+  }
+}
+
+/* ==========================================================
+   LIGHT MODE (class on <html> or <body>)
+   Design tokens + hardcoded-value overrides for WCAG AA
+   contrast on a soft cool-gray background.
+   ========================================================== */
+html.light-mode,
+body.light-mode {
+
+  /* ── Background Palette ── */
+  --bg-deep:        #f4f5f7;
+  --bg-surface:     #ffffff;
+  --bg-elevated:    #f0f1f5;
+
+  /* ── Glassmorphism (semi-transparent white) ── */
+  --glass-bg:       rgba(255, 255, 255, 0.60);
+  --glass-border:   rgba(0, 0, 0, 0.10);
+  --glass-highlight: rgba(0, 0, 0, 0.05);
+
+  /* ── Accents (darkened for readability on white) ── */
+  --accent-primary:   #0077b6;   /* Deep azure blue (from neon cyan) */
+  --accent-secondary: #7c3aed;   /* Rich violet (from neon purple) */
+  --accent-glow:      0 0 12px rgba(0, 119, 182, 0.12);
+
+  /* ── Typography (WCAG AA) ── */
+  --text-primary:   #111827;
+  --text-secondary: #4b5563;
+  --text-muted:     #9ca3af;
+
+  /* ── Semantic Colors ── */
+  --danger:  #dc2626;
+  --success: #16a34a;
+
+  /* ── Shadows (soft dark, no neon glows) ── */
+  --shadow-sm:   0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-md:   0 4px 16px rgba(0, 0, 0, 0.08);
+  --shadow-lg:   0 8px 32px rgba(0, 0, 0, 0.10);
+  --shadow-glow: 0 0 12px rgba(0, 119, 182, 0.10);
+}
+
+/* ── Hardcoded-value overrides (not captured by variables) ── */
+
+html.light-mode body::before,
+body.light-mode body::before {
+  /* Dot grid: dark dots on light bg instead of white dots on dark bg */
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    rgba(0, 0, 0, 0.06) 1px,
+    transparent 0
+  );
+}
+
+html.light-mode .glass,
+body.light-mode .glass {
+  background: var(--glass-bg);
+}
+
+html.light-mode .glass-card,
+body.light-mode .glass-card {
+  background: var(--glass-bg);
+}
+
+html.light-mode .card-front,
+body.light-mode .card-front {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+}
+
+html.light-mode .card-back,
+body.light-mode .card-back {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.08), rgba(255, 255, 255, 0.85));
+  border: 1px solid rgba(124, 58, 237, 0.2);
+}
+
+html.light-mode .settings-modal,
+body.light-mode .settings-modal {
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-lg);
+}
+
+html.light-mode .backup-modal,
+body.light-mode .backup-modal {
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-lg);
+}
+
+html.light-mode .settings-overlay,
+body.light-mode .settings-overlay,
+html.light-mode .backup-overlay,
+body.light-mode .backup-overlay,
+html.light-mode .add-card-overlay,
+body.light-mode .add-card-overlay {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+html.light-mode .generate-modal,
+body.light-mode .generate-modal {
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-lg);
+}
+
+html.light-mode .focus-vibe-panel,
+body.light-mode .focus-vibe-panel {
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: var(--shadow-md);
+}
+
+html.light-mode .focus-vibe-widget.playing .focus-vibe-panel,
+body.light-mode .focus-vibe-widget.playing .focus-vibe-panel {
+  border-color: rgba(0, 119, 182, 0.15);
+  box-shadow: var(--shadow-md);
+}
+
+html.light-mode .focus-vibe-trigger,
+body.light-mode .focus-vibe-trigger {
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: var(--shadow-sm);
+}
+
+html.light-mode .sidebar,
+body.light-mode .sidebar {
+  background: rgba(255, 255, 255, 0.80);
+  border-color: var(--glass-border);
+}
+
+/* ── Nav items: active state uses darkened accent on light bg ── */
+html.light-mode .nav-item.active,
+body.light-mode .nav-item.active {
+  background: rgba(0, 119, 182, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(0, 119, 182, 0.2);
+}
+
+html.light-mode .nav-item.active::before,
+body.light-mode .nav-item.active::before {
+  background: var(--accent-primary);
+  box-shadow: 0 0 4px var(--accent-primary);
+}
+
+/* ── Inputs & textareas on light bg ── */
+html.light-mode .form-group input,
+body.light-mode .form-group input,
+html.light-mode .form-group textarea,
+body.light-mode .form-group textarea,
+html.light-mode .stepper-input,
+body.light-mode .stepper-input,
+html.light-mode .quiz-textarea,
+body.light-mode .quiz-textarea,
+html.light-mode .settings-select-wrap,
+body.light-mode .settings-select-wrap {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: var(--text-primary);
+}
+
+html.light-mode .settings-sound-select option,
+body.light-mode .settings-sound-select option {
+  background: #ffffff;
+}
+
+/* ── Buttons that used dark bg → light bg ── */
+html.light-mode .stepper-btn,
+body.light-mode .stepper-btn,
+html.light-mode .deck-btn,
+body.light-mode .deck-btn,
+html.light-mode .timer-btn-icon,
+body.light-mode .timer-btn-icon,
+html.light-mode .settings-close-btn,
+body.light-mode .settings-close-btn,
+html.light-mode .sidebar-settings-btn,
+body.light-mode .sidebar-settings-btn,
+html.light-mode .card-flip-back-btn,
+body.light-mode .card-flip-back-btn,
+html.light-mode .deck-delete-btn,
+body.light-mode .deck-delete-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.10);
+}
+
+/* ── Settings / mode / vibe buttons bg ── */
+html.light-mode .mode-toggle,
+body.light-mode .mode-toggle,
+html.light-mode .chart-range-toggle,
+body.light-mode .chart-range-toggle {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.10);
+}
+
+html.light-mode .mode-btn,
+body.light-mode .mode-btn {
+  color: var(--text-secondary);
+}
+
+html.light-mode .mode-btn:hover,
+body.light-mode .mode-btn:hover {
+  color: var(--text-primary);
+}
+
+html.light-mode .settings-btn,
+body.light-mode .settings-btn,
+html.light-mode .settings-toggle,
+body.light-mode .settings-toggle {
+  background: rgba(255, 255, 255, 0.70);
+  border-color: rgba(0, 0, 0, 0.10);
+  color: var(--text-secondary);
+}
+
+html.light-mode .settings-btn:hover,
+body.light-mode .settings-btn:hover {
+  color: var(--accent-primary);
+  border-color: rgba(0, 119, 182, 0.3);
+  box-shadow: 0 0 10px rgba(0, 119, 182, 0.08);
+}
+
+/* ── Quiz options ── */
+html.light-mode .quiz-option,
+body.light-mode .quiz-option {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: var(--text-secondary);
+}
+
+html.light-mode .quiz-option:hover,
+body.light-mode .quiz-option:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.15);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ── Quiz correct/incorrect ── */
+html.light-mode .quiz-option.option-correct,
+body.light-mode .quiz-option.option-correct {
+  background: rgba(22, 163, 74, 0.08) !important;
+  border-color: rgba(22, 163, 74, 0.3) !important;
+}
+
+html.light-mode .quiz-option.option-incorrect,
+body.light-mode .quiz-option.option-incorrect {
+  background: rgba(220, 38, 38, 0.06) !important;
+  border-color: rgba(220, 38, 38, 0.3) !important;
+}
+
+/* ── SRS assessment buttons ── */
+html.light-mode .srs-assessment-btn,
+body.light-mode .srs-assessment-btn {
+  background: rgba(255, 255, 255, 0.70);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+/* ── Timer ring background track ── */
+html.light-mode .timer-ring-bg,
+body.light-mode .timer-ring-bg {
+  stroke: rgba(0, 0, 0, 0.08);
+}
+
+/* ── Scrollbar: light track, dark thumb ── */
+html.light-mode ::-webkit-scrollbar-thumb,
+body.light-mode ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+html.light-mode ::-webkit-scrollbar-thumb:hover,
+body.light-mode ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* ── Vibe pill inactive bg ── */
+html.light-mode .vibe-pill,
+body.light-mode .vibe-pill {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: var(--text-secondary);
+}
+
+html.light-mode .vibe-pill:hover,
+body.light-mode .vibe-pill:hover {
+  background: rgba(0, 119, 182, 0.06);
+  border-color: rgba(0, 119, 182, 0.2);
+  color: var(--text-primary);
+}
+
+/* ── Divider lines ── */
+html.light-mode .widget-stat-divider,
+body.light-mode .widget-stat-divider,
+html.light-mode .widget-footer,
+body.light-mode .widget-footer,
+html.light-mode .card-section,
+body.light-mode .card-section,
+html.light-mode .sidebar-footer > .status-indicator,
+body.light-mode .sidebar-footer > .status-indicator {
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+/* ── Card-section label backgrounds (keep tint but lighter) ── */
+html.light-mode .card-section-label,
+body.light-mode .card-section-label {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+/* ── Accent text on light bg needs stronger color ── */
+html.light-mode .text-gradient,
+body.light-mode .text-gradient {
+  background: linear-gradient(135deg, #0077b6, #7c3aed);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+/* ── Widget buttons on light bg ── */
+html.light-mode .widget-btn,
+body.light-mode .widget-btn {
+  background: transparent;
+}
+
+html.light-mode .widget-btn-cyan,
+body.light-mode .widget-btn-cyan {
+  color: var(--accent-primary);
+  border-color: rgba(0, 119, 182, 0.3);
+}
+
+html.light-mode .widget-btn-cyan:hover,
+body.light-mode .widget-btn-cyan:hover {
+  background: rgba(0, 119, 182, 0.08);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 12px rgba(0, 119, 182, 0.1);
+}
+
+html.light-mode .widget-btn-purple,
+body.light-mode .widget-btn-purple {
+  color: var(--accent-secondary);
+  border-color: rgba(124, 58, 237, 0.3);
+}
+
+html.light-mode .widget-btn-purple:hover,
+body.light-mode .widget-btn-purple:hover {
+  background: rgba(124, 58, 237, 0.08);
+  border-color: var(--accent-secondary);
+  box-shadow: 0 0 12px rgba(124, 58, 237, 0.1);
+}
+
+html.light-mode .widget-btn-green,
+body.light-mode .widget-btn-green {
+  color: var(--success);
+  border-color: rgba(22, 163, 74, 0.3);
+}
+
+html.light-mode .widget-btn-green:hover,
+body.light-mode .widget-btn-green:hover {
+  background: rgba(22, 163, 74, 0.08);
+  border-color: var(--success);
+  box-shadow: 0 0 12px rgba(22, 163, 74, 0.1);
+}
+
+/* ── Stat values: kill heavy text-shadow on light bg ── */
+html.light-mode .widget-stat-value--cyan,
+body.light-mode .widget-stat-value--cyan,
+html.light-mode .widget-stat-value--due.has-due,
+body.light-mode .widget-stat-value--due.has-due,
+html.light-mode .stat-value,
+body.light-mode .stat-value,
+html.light-mode .now-value,
+body.light-mode .now-value,
+html.light-mode .focus-vibe-widget.playing .now-value,
+body.light-mode .focus-vibe-widget.playing .now-value {
+  text-shadow: none;
+}
+
+/* ── Timer ring progress glow ── */
+html.light-mode .timer-ring-progress,
+body.light-mode .timer-ring-progress {
+  filter: drop-shadow(0 0 3px rgba(0, 119, 182, 0.15));
+}
+
+html.light-mode .timer-ring-progress.break-mode,
+body.light-mode .timer-ring-progress.break-mode {
+  filter: drop-shadow(0 0 3px rgba(124, 58, 237, 0.15));
+}
+
+/* ── Play/study buttons with accent bg ── */
+html.light-mode .timer-btn-main,
+body.light-mode .timer-btn-main,
+html.light-mode .focus-vibe-play-btn,
+body.light-mode .focus-vibe-play-btn,
+html.light-mode .studio-main-btn,
+body.light-mode .studio-main-btn {
+  background: rgba(0, 119, 182, 0.08);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  box-shadow: 0 0 12px rgba(0, 119, 182, 0.08);
+}
+
+html.light-mode .timer-btn-main:hover,
+body.light-mode .timer-btn-main:hover,
+html.light-mode .focus-vibe-play-btn:hover,
+body.light-mode .focus-vibe-play-btn:hover,
+html.light-mode .studio-main-btn:hover,
+body.light-mode .studio-main-btn:hover {
+  background: rgba(0, 119, 182, 0.15);
+  box-shadow: 0 0 20px rgba(0, 119, 182, 0.15);
+}
+
+/* ── Deck play button ── */
+html.light-mode .deck-play-btn,
+body.light-mode .deck-play-btn {
+  background: rgba(0, 119, 182, 0.06);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+html.light-mode .deck-play-btn:hover,
+body.light-mode .deck-play-btn:hover {
+  background: rgba(0, 119, 182, 0.12);
+  box-shadow: 0 0 14px rgba(0, 119, 182, 0.1);
+}
+
+/* ── SRS study button ── */
+html.light-mode .srs-btn-study,
+body.light-mode .srs-btn-study {
+  box-shadow: 0 0 12px rgba(0, 119, 182, 0.12);
+}
+
+html.light-mode .srs-btn-study:hover,
+body.light-mode .srs-btn-study:hover {
+  box-shadow: 0 0 24px rgba(0, 119, 182, 0.2);
+}
+
+/* ── API key input & hint ── */
+html.light-mode .api-key-input,
+body.light-mode .api-key-input,
+html.light-mode .generate-word-input,
+body.light-mode .generate-word-input,
+html.light-mode .focus-vibe-url-input,
+body.light-mode .focus-vibe-url-input {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: var(--text-primary);
+}
+
+/* ── Focus vibe volume slider track ── */
+html.light-mode .focus-vibe-volume,
+body.light-mode .focus-vibe-volume {
+  background: rgba(0, 0, 0, 0.10);
+}
+
+/* ── Test sound button light bg ── */
+html.light-mode .btn-test-sound,
+body.light-mode .btn-test-sound {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.10);
+}
+
+html.light-mode .btn-test-sound:hover,
+body.light-mode .btn-test-sound:hover {
+  background: rgba(0, 119, 182, 0.10);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 8px rgba(0, 119, 182, 0.1);
+}
+
+/* ── Deck browse button ── */
+html.light-mode .deck-browse-btn,
+body.light-mode .deck-browse-btn {
+  border-color: rgba(0, 0, 0, 0.10);
+  color: var(--text-secondary);
+}
+
+html.light-mode .deck-browse-btn:hover,
+body.light-mode .deck-browse-btn:hover {
+  border-color: rgba(0, 0, 0, 0.2);
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.03);
+}
+
+/* ── Deck delete button ── */
+html.light-mode .deck-delete-btn:hover,
+body.light-mode .deck-delete-btn:hover {
+  background: rgba(220, 38, 38, 0.06);
+  border-color: rgba(220, 38, 38, 0.2);
+}
+
+/* ── Sidebar settings btn hover ── */
+html.light-mode .sidebar-settings-btn:hover,
+body.light-mode .sidebar-settings-btn:hover {
+  background: rgba(0, 119, 182, 0.08);
+  border-color: rgba(0, 119, 182, 0.2);
+  box-shadow: 0 0 8px rgba(0, 119, 182, 0.08);
+}
+
+/* ── Status dot on light bg ── */
+html.light-mode .status-dot,
+body.light-mode .status-dot {
+  box-shadow: 0 0 3px var(--success);
+}
+
+/* ── Settings modal icon SVG glow ── */
+html.light-mode .settings-modal-icon-svg,
+body.light-mode .settings-modal-icon-svg,
+html.light-mode .backup-modal-icon-svg,
+body.light-mode .backup-modal-icon-svg {
+  filter: drop-shadow(0 0 2px rgba(0, 119, 182, 0.12));
+}
+
+/* ── Chart bar (light bg gradient still works, just kill glow) ── */
+html.light-mode .chart-bar,
+body.light-mode .chart-bar {
+  box-shadow: 0 0 4px rgba(0, 119, 182, 0.08);
+}
+
+html.light-mode .chart-bar--today,
+body.light-mode .chart-bar--today {
+  box-shadow: 0 0 8px rgba(0, 119, 182, 0.15);
+}
+
+/* ── btn-primary keeps its contrast but tone down glow ── */
+html.light-mode .btn-primary,
+body.light-mode .btn-primary {
+  box-shadow: 0 0 10px rgba(0, 119, 182, 0.1);
+}
+
+html.light-mode .btn-primary:hover,
+body.light-mode .btn-primary:hover {
+  box-shadow: 0 0 18px rgba(0, 119, 182, 0.15);
+}
+
+/* ── SRS stat value due ── */
+html.light-mode .srs-stat-value.due,
+body.light-mode .srs-stat-value.due {
+  text-shadow: none;
+}
+
+/* ── Completion icon glow ── */
+html.light-mode .srs-completion-icon,
+body.light-mode .srs-completion-icon {
+  filter: drop-shadow(0 0 10px rgba(0, 119, 182, 0.12));
+}
+
+/* ── Studio vibe card icon ── */
+html.light-mode .studio-vibe-card-icon,
+body.light-mode .studio-vibe-card-icon {
+  filter: drop-shadow(0 0 4px rgba(0, 119, 182, 0.08));
+}
+
+/* ── btn-danger hover bg ── */
+html.light-mode .btn-danger:hover,
+body.light-mode .btn-danger:hover {
+  background: rgba(220, 38, 38, 0.06);
+}
+
+/* ── SRS end session button ── */
+html.light-mode .srs-btn-end-session:hover,
+body.light-mode .srs-btn-end-session:hover {
+  background: rgba(220, 38, 38, 0.04);
+}
+
+/* ── Form inputs focus ring ── */
+html.light-mode .form-group input:focus,
+body.light-mode .form-group input:focus,
+html.light-mode .form-group textarea:focus,
+body.light-mode .form-group textarea:focus,
+html.light-mode .stepper-input:focus,
+body.light-mode .stepper-input:focus {
+  box-shadow: 0 0 0 3px rgba(0, 119, 182, 0.08);
+}
+
+/* ── Theme toggle button ── */
+.theme-toggle-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--duration-base) var(--ease-out-expo);
+}
+
+.theme-toggle-btn:hover {
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.25);
+  background: rgba(245, 158, 11, 0.08);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.15);
+}
+
+.theme-toggle-btn:active {
+  transform: scale(0.9);
+}
+
+html.light-mode .theme-toggle-btn,
+body.light-mode .theme-toggle-btn {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-muted);
+}
+
+html.light-mode .theme-toggle-btn:hover,
+body.light-mode .theme-toggle-btn:hover {
+  color: #6366f1;
+  border-color: rgba(99, 102, 241, 0.25);
+  background: rgba(99, 102, 241, 0.08);
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.12);
 }
