@@ -95,17 +95,19 @@ const VIBES = [
       try { S.player.destroy(); } catch (_) {}
     }
 
+    var origin = window.location.origin;
     S.player = new YT.Player('focus-vibe-player', {
       height: '0',
       width: '0',
       videoId: S.currentVideoId,
       playerVars: {
-        autoplay: 1,
+        autoplay: 0,
         controls: 0,
         disablekb: 1,
         enablejsapi: 1,
         fs: 0,
         modestbranding: 1,
+        origin: origin,
         playsinline: 1,
         rel: 0,
         iv_load_policy: 3,
@@ -121,6 +123,10 @@ const VIBES = [
   function onPlayerReady() {
     S.playerReady = true;
     S.player.setVolume(Math.round(S.volume * 100));
+    if (S.autoPlay) {
+      S.autoPlay = false;
+      S.player.playVideo();
+    }
     updatePlayButton();
     updateWidgetPlayingState();
   }
