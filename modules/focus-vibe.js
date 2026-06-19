@@ -28,7 +28,7 @@ currentVideoId: 'X4VbdwhkE10',
      ---------------------------------------------------------- */
 const VIBES = [
     { id: 'lofi',      name: 'Lofi Beats',        videoId: 'X4VbdwhkE10', icon: '🎹' },
-    { id: 'cyberpunk', name: 'Ghibi Lives',       videoId:  'gIWsboTllGA', icon: '🌱 },
+    { id: 'cyberpunk', name: 'Ghibi Lives',       videoId:  'gIWsboTllGA', icon: '🌱' },
     { id: 'rain',      name: 'Rain & Thunder',    videoId: 'mPZkdNFkNps', icon: '🌧️' },
   ];
 
