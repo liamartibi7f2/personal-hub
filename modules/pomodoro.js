@@ -2,8 +2,8 @@
    HUB.OS — modules/pomodoro.js
    Pomodoro timer with circular SVG progress ring,
    focus/break modes, premium settings modal, professional
-   statistics dashboard with weekly chart, Web Audio beep,
-   and localStorage persistence for state, settings & stats.
+   statistics dashboard with weekly chart, 5-profile custom
+   synthesized sound engine, and localStorage persistence.
 
    Module contract:
      - id: 'pomodoro'
@@ -24,7 +24,8 @@ const pomodoroModule = (function () {
   const DEFAULT_SETTINGS = {
     focus: 25,
     shortBreak: 5,
-    longBreak: 15
+    longBreak: 15,
+    soundProfile: 'cyber_synth'
   };
 
   // --- Default stats structure ---
@@ -620,6 +621,8 @@ const pomodoroModule = (function () {
 
           <!-- Body: Duration inputs -->
           <div class="settings-body">
+            ${_renderSoundField()}
+            <hr style="border:none;border-top:1px solid var(--glass-border);margin:0;">
             ${_renderSettingsField('Focus Duration', 'focus', _settings.focus, 1, 120)}
             ${_renderSettingsField('Short Break', 'shortBreak', _settings.shortBreak, 1, 60)}
             ${_renderSettingsField('Long Break', 'longBreak', _settings.longBreak, 1, 60)}
@@ -632,6 +635,34 @@ const pomodoroModule = (function () {
           </div>
         </div>
 
+      </div>
+    `;
+  }
+
+  /** Render the sound profile selector field */
+  function _renderSoundField() {
+    const profiles = [
+      { key: 'classic_alarm', label: 'Classic Alarm' },
+      { key: 'soft_chime',   label: 'Soft Chime' },
+      { key: 'cyber_synth',  label: 'Cyber Synth' },
+      { key: 'success_ding', label: 'Success Ding' },
+      { key: 'zen_bell',     label: 'Zen Bell' }
+    ];
+    const current = _settings.soundProfile || 'cyber_synth';
+
+    return `
+      <div class="settings-field">
+        <label class="settings-field-label">Sound Effect</label>
+        <div class="settings-sound-row">
+          <div class="settings-select-wrap glass-card" style="flex:1;padding:0;border-radius:var(--radius-sm);">
+            <select id="input-soundProfile" class="settings-sound-select">
+              ${profiles.map(p => `
+                <option value="${p.key}"${p.key === current ? ' selected' : ''}>${p.label}</option>
+              `).join('')}
+            </select>
+          </div>
+          <button class="btn-test-sound" id="btn-test-sound" title="Test selected sound" aria-label="Test sound">${'🔊'}</button>
+        </div>
       </div>
     `;
   }
@@ -727,6 +758,16 @@ const pomodoroModule = (function () {
       });
     });
 
+    // --- Settings: test sound button ---
+    const btnTestSound = _container.querySelector('#btn-test-sound');
+    if (btnTestSound) {
+      btnTestSound.addEventListener('click', () => {
+        const select = _container.querySelector('#input-soundProfile');
+        const profile = select ? select.value : 'cyber_synth';
+        _playSound(profile);
+      });
+    }
+
     // --- Keyboard: Escape to close settings ---
     if (_escapeHandler) {
       document.removeEventListener('keydown', _escapeHandler);
@@ -784,11 +825,18 @@ const pomodoroModule = (function () {
     const focusVal      = parseInt(document.getElementById('input-focus')?.value, 10);
     const shortBreakVal = parseInt(document.getElementById('input-shortBreak')?.value, 10);
     const longBreakVal  = parseInt(document.getElementById('input-longBreak')?.value, 10);
+    const soundVal      = document.getElementById('input-soundProfile')?.value;
 
     // Validate and clamp
     _settings.focus      = Math.max(1, Math.min(120, focusVal || DEFAULT_SETTINGS.focus));
     _settings.shortBreak = Math.max(1, Math.min(60, shortBreakVal || DEFAULT_SETTINGS.shortBreak));
     _settings.longBreak  = Math.max(1, Math.min(60, longBreakVal || DEFAULT_SETTINGS.longBreak));
+
+    // Sound profile — only accept known keys
+    const validSounds = ['classic_alarm', 'soft_chime', 'cyber_synth', 'success_ding', 'zen_bell'];
+    if (soundVal && validSounds.includes(soundVal)) {
+      _settings.soundProfile = soundVal;
+    }
 
     _saveSettings();
 
@@ -901,7 +949,7 @@ const pomodoroModule = (function () {
       _recordFocusCompletion();   // detailed stats (total time, daily history, streak)
     }
 
-    _playBeep();
+    _playSound(_settings.soundProfile);
     _showNotification();
 
     // Full re-render to refresh the stats dashboard with updated numbers
@@ -926,27 +974,148 @@ const pomodoroModule = (function () {
   }
 
   // =============================================================
-  //  AUDIO: Web Audio API beep
+  //  AUDIO: Custom Sound Engine (5 profiles, pure Web Audio API)
   // =============================================================
 
-  function _playBeep() {
+  /**
+   * Play a synthesized notification sound by profile name.
+   * All sounds are procedurally generated — no external files.
+   * @param {'classic_alarm'|'soft_chime'|'cyber_synth'|'success_ding'|'zen_bell'} profile
+   */
+  function _playSound(profile) {
     try {
       if (!_audioCtx) {
         _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       }
-      [440, 554, 659].forEach((freq, i) => {
-        const osc  = _audioCtx.createOscillator();
-        const gain = _audioCtx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, _audioCtx.currentTime + i * 0.15);
-        gain.gain.setValueAtTime(0.15, _audioCtx.currentTime + i * 0.15);
-        gain.gain.exponentialRampToValueAtTime(0.001, _audioCtx.currentTime + i * 0.15 + 0.3);
-        osc.connect(gain);
-        gain.connect(_audioCtx.destination);
-        osc.start(_audioCtx.currentTime + i * 0.15);
-        osc.stop(_audioCtx.currentTime + i * 0.15 + 0.3);
-      });
-    } catch (_) { /* ignore */ }
+      const ctx = _audioCtx;
+      const now = ctx.currentTime;
+
+      // Ensure context is running (browsers suspend inactive AudioContexts)
+      if (ctx.state === 'suspended') ctx.resume();
+
+      // Shared master gain — prevents clipping when multiple oscillators stack
+      const master = ctx.createGain();
+      master.gain.setValueAtTime(0.18, now);
+      master.connect(ctx.destination);
+
+      switch (profile) {
+        // ── 1. Classic Alarm — digital multi-beep (square wave, urgent) ──
+        case 'classic_alarm':
+          [880, 1100, 880, 1100, 1320].forEach((freq, i) => {
+            const t = now + i * 0.18;
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(freq, t);
+            g.gain.setValueAtTime(0.25, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 0.25);
+          });
+          break;
+
+        // ── 2. Soft Chime — ascending bell-like sine arpeggio ──
+        case 'soft_chime':
+          [523, 659, 784, 1047].forEach((freq, i) => {
+            const t = now + i * 0.2;
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, t);
+            g.gain.setValueAtTime(0.22, t);
+            g.gain.exponentialRampToValueAtTime(0.3, t + 0.04);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 0.75);
+          });
+          break;
+
+        // ── 3. Cyber Synth — neon sweep + chord (cyberpunk UI match) ──
+        case 'cyber_synth':
+          // Low sweep riser
+          (() => {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(80, now);
+            osc.frequency.exponentialRampToValueAtTime(600, now + 0.35);
+            g.gain.setValueAtTime(0.08, now);
+            g.gain.exponentialRampToValueAtTime(0.12, now + 0.15);
+            g.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+            osc.connect(g); g.connect(master);
+            osc.start(now); osc.stop(now + 0.6);
+          })();
+          // High chord stab
+          [1047, 1319, 1568].forEach((freq, i) => {
+            const t = now + 0.25 + i * 0.06;
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, t);
+            g.gain.setValueAtTime(0.15, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 0.45);
+          });
+          break;
+
+        // ── 4. Success Ding — positive "level-up" melody ──
+        case 'success_ding':
+          [523, 659, 784, 659, 1047].forEach((freq, i) => {
+            const t = now + i * 0.12;
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = i === 4 ? 'triangle' : 'sine';
+            osc.frequency.setValueAtTime(freq, t);
+            g.gain.setValueAtTime(0.2, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+            osc.connect(g); g.connect(master);
+            osc.start(t); osc.stop(t + 0.35);
+          });
+          break;
+
+        // ── 5. Zen Bell — deep gong/bowl, slow-motion fade ──
+        case 'zen_bell':
+          // Main low gong tone
+          (() => {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(147, now);
+            osc.frequency.setTargetAtTime(138, now + 0.15, 0.4);
+            g.gain.setValueAtTime(0.35, now);
+            g.gain.exponentialRampToValueAtTime(0.25, now + 0.4);
+            g.gain.exponentialRampToValueAtTime(0.001, now + 2.5);
+            osc.connect(g); g.connect(master);
+            osc.start(now); osc.stop(now + 2.8);
+          })();
+          // Subtle harmonic overtones
+          [196, 294, 392].forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, now + i * 0.03);
+            g.gain.setValueAtTime(0.08, now + i * 0.03);
+            g.gain.exponentialRampToValueAtTime(0.001, now + 2.2);
+            osc.connect(g); g.connect(master);
+            osc.start(now + i * 0.03); osc.stop(now + 2.5);
+          });
+          break;
+
+        default:
+          // Fallback: simple sine beep
+          (() => {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, now);
+            g.gain.setValueAtTime(0.15, now);
+            g.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+            osc.connect(g); g.connect(master);
+            osc.start(now); osc.stop(now + 0.35);
+          })();
+      }
+    } catch (_) { /* Audio unsupported — fail silently */ }
   }
 
   // =============================================================
