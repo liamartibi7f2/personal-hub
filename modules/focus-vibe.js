@@ -14,7 +14,7 @@
   const S = window.__focusVibeState = window.__focusVibeState || {
     player: null,
     isPlaying: false,
-    currentVideoId: 'jfKfPfyJRdk',
+    currentVideoId: 'X4VbdwhkE10',
     currentVibe: 'Lofi Beats',
     volume: 0.5,
     playerReady: false,
