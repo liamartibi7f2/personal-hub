@@ -28,8 +28,8 @@
      Each has: id, display name, YouTube video ID, icon
      ---------------------------------------------------------- */
   const VIBES = [
-    { id: 'lofi',      name: 'Lofi Beats',        videoId: 'jfKfPfyJRdk', icon: '🎹' },
-    { id: 'cyberpunk', name: 'Cyberpunk Ambient', videoId: '4WTYEkeP4v0', icon: '🤖' },
+    { id: 'lofi',      name: 'Lofi Beats',        videoId: 'X4VbdwhkE10', icon: '🎹' },
+    { id: 'cyberpunk', name: 'Cyberpunk Ambient', videoId: 'gIWsboTllGA', icon: '🤖' },
     { id: 'rain',      name: 'Rain & Thunder',    videoId: 'mPZkdNFkNps', icon: '🌧️' },
   ];
 
