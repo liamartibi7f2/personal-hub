@@ -133,7 +133,55 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize the global backup modal (sidebar gear icon)
   _initBackupModal();
+
+  // Initialize the theme toggle (light/dark mode)
+  _initThemeToggle();
 });
+
+/* ----------------------------------------------------------
+   THEME TOGGLE (Light / Dark Mode)
+   ---------------------------------------------------------- */
+
+const THEME_KEY  = 'hub_theme';
+const LIGHT_MODE = 'light-mode';
+
+function _initThemeToggle() {
+  const btn   = document.getElementById('btn-theme-toggle');
+  const icon  = btn ? btn.querySelector('.theme-toggle-icon') : null;
+  if (!btn || !icon) return;
+
+  /** Update icon to reflect current state */
+  function _syncIcon() {
+    const isLight = document.body.classList.contains(LIGHT_MODE);
+    icon.textContent = isLight ? '🌙' : '☀️';
+    btn.setAttribute('title', isLight ? 'Switch to dark mode' : 'Switch to light mode');
+  }
+
+  // Sync on init (flash prevention already set html.light-mode; mirror to body)
+  if (document.documentElement.classList.contains(LIGHT_MODE)) {
+    document.body.classList.add(LIGHT_MODE);
+  }
+  _syncIcon();
+
+  // Toggle on click
+  btn.addEventListener('click', () => {
+    const isLight = document.body.classList.toggle(LIGHT_MODE);
+
+    // Keep html and body in sync
+    if (isLight) {
+      document.documentElement.classList.add(LIGHT_MODE);
+    } else {
+      document.documentElement.classList.remove(LIGHT_MODE);
+    }
+
+    _syncIcon();
+
+    // Persist preference
+    try {
+      localStorage.setItem(THEME_KEY, isLight ? 'light' : 'dark');
+    } catch (_) { /* quota exceeded — ignore */ }
+  });
+}
 
 /* ----------------------------------------------------------
    GLOBAL BACKUP MODAL (Export / Import)
