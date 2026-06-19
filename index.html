@@ -13,6 +13,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Theme flash prevention: apply light-mode before first paint -->
+  <script>
+    (function(){try{if(localStorage.getItem('hub_theme')==='light'){document.documentElement.classList.add('light-mode');}}catch(_){}})();
+  </script>
 </head>
 <body>
 
@@ -49,6 +54,9 @@
           <span class="status-dot"></span>
           <span class="status-label">Online</span>
         </div>
+        <button class="theme-toggle-btn" id="btn-theme-toggle" title="Toggle light/dark theme" aria-label="Toggle theme">
+          <span class="theme-toggle-icon">☀️</span>
+        </button>
         <button class="sidebar-settings-btn" id="btn-backup-open" title="Settings &amp; Data Backup" aria-label="Open settings and backup">
           <svg width="16" height="16" viewBox="0 0 18 18" fill="none" class="sidebar-settings-icon">
             <circle cx="9" cy="9" r="2.5" stroke="currentColor" stroke-width="1.3"/>
