@@ -1,3 +1,4 @@
+@@ -0,0 +1,497 @@
 /* ============================================================
    HUB.OS — Focus Vibe (Music & Ambient Sound Player)
    Persistent floating widget with YouTube IFrame API integration.
@@ -13,7 +14,7 @@
   const S = window.__focusVibeState = window.__focusVibeState || {
     player: null,
     isPlaying: false,
-currentVideoId: 'X4VbdwhkE10',
+    currentVideoId: 'jfKfPfyJRdk',
     currentVibe: 'Lofi Beats',
     volume: 0.5,
     playerReady: false,
@@ -26,9 +27,9 @@ currentVideoId: 'X4VbdwhkE10',
      PRESET VIBES
      Each has: id, display name, YouTube video ID, icon
      ---------------------------------------------------------- */
-const VIBES = [
-    { id: 'lofi',      name: 'Lofi Beats',        videoId: 'X4VbdwhkE10', icon: '🎹' },
-    { id: 'cyberpunk', name: 'Ghibi Lives',       videoId:  'gIWsboTllGA', icon: '🌱' },
+  const VIBES = [
+    { id: 'lofi',      name: 'Lofi Beats',        videoId: 'jfKfPfyJRdk', icon: '🎹' },
+    { id: 'cyberpunk', name: 'Cyberpunk Ambient', videoId: '4WTYEkeP4v0', icon: '🤖' },
     { id: 'rain',      name: 'Rain & Thunder',    videoId: 'mPZkdNFkNps', icon: '🌧️' },
   ];
 
@@ -95,19 +96,17 @@ const VIBES = [
       try { S.player.destroy(); } catch (_) {}
     }
 
-    var origin = window.location.origin;
     S.player = new YT.Player('focus-vibe-player', {
       height: '0',
       width: '0',
       videoId: S.currentVideoId,
       playerVars: {
-        autoplay: 0,
+        autoplay: 1,
         controls: 0,
         disablekb: 1,
         enablejsapi: 1,
         fs: 0,
         modestbranding: 1,
-        origin: origin,
         playsinline: 1,
         rel: 0,
         iv_load_policy: 3,
@@ -123,10 +122,6 @@ const VIBES = [
   function onPlayerReady() {
     S.playerReady = true;
     S.player.setVolume(Math.round(S.volume * 100));
-    if (S.autoPlay) {
-      S.autoPlay = false;
-      S.player.playVideo();
-    }
     updatePlayButton();
     updateWidgetPlayingState();
   }
