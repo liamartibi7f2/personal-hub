@@ -1,4 +1,3 @@
-@@ -0,0 +1,497 @@
 /* ============================================================
    HUB.OS — Focus Vibe (Music & Ambient Sound Player)
    Persistent floating widget with YouTube IFrame API integration.
