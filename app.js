@@ -130,4 +130,216 @@ const app = (function () {
 document.addEventListener('DOMContentLoaded', () => {
   const initialModule = window.location.hash.replace('#', '') || 'dashboard';
   app.switchTo(initialModule);
+
+  // Initialize the global backup modal (sidebar gear icon)
+  _initBackupModal();
 });
+
+/* ----------------------------------------------------------
+   GLOBAL BACKUP MODAL (Export / Import)
+   ---------------------------------------------------------- */
+
+/**
+ * List of all localStorage keys used by the app.
+ * When adding a new module, append its key(s) here.
+ */
+const BACKUP_KEYS = [
+  'hub_pomodoro_settings',
+  'hub_pomodoro_sessions',
+  'hub_pomodoro_ref',
+  'hub_pomodoro_stats',
+  'hub_flashcards',
+  'hub_flashcard_reviewed',
+  'hub_gemini_api_key',
+  'quiz_decks',
+  'hub_quiz_scores'
+];
+
+function _initBackupModal() {
+  const openBtn     = document.getElementById('btn-backup-open');
+  const closeBtn    = document.getElementById('btn-backup-close');
+  const cancelBtn   = document.getElementById('btn-backup-cancel');
+  const overlay     = document.getElementById('backup-overlay');
+  const exportBtn   = document.getElementById('btn-backup-export');
+  const importBtn   = document.getElementById('btn-backup-import-trigger');
+  const fileInput   = document.getElementById('backup-file-input');
+  const statusEl    = document.getElementById('backup-status');
+
+  if (!openBtn || !overlay) return;
+
+  // --- Open ---
+  openBtn.addEventListener('click', () => {
+    overlay.classList.add('backup-overlay--visible');
+    _setBackupStatus('', '');
+  });
+
+  // --- Close helpers ---
+  function _close() {
+    overlay.classList.remove('backup-overlay--visible');
+  }
+
+  closeBtn?.addEventListener('click', _close);
+  cancelBtn?.addEventListener('click', _close);
+
+  // Close on backdrop click
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) _close();
+  });
+
+  // Close on Escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && overlay.classList.contains('backup-overlay--visible')) {
+      _close();
+    }
+  });
+
+  // --- Export ---
+  exportBtn?.addEventListener('click', () => {
+    _exportBackup();
+  });
+
+  // --- Import trigger → click hidden file input ---
+  importBtn?.addEventListener('click', () => {
+    if (fileInput) fileInput.click();
+  });
+
+  // --- Import handler ---
+  fileInput?.addEventListener('change', () => {
+    _importBackup(fileInput);
+  });
+}
+
+/**
+ * Export: gather all localStorage data → JSON → Blob → download
+ */
+function _exportBackup() {
+  try {
+    const backup = {};
+    BACKUP_KEYS.forEach(key => {
+      const raw = localStorage.getItem(key);
+      if (raw !== null) {
+        backup[key] = raw;
+      }
+    });
+
+    // Include any undiscovered hub_ keys just in case
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k.startsWith('hub_') && !(k in backup)) {
+        backup[k] = localStorage.getItem(k);
+      }
+    }
+
+    const json  = JSON.stringify(backup, null, 2);
+    const blob  = new Blob([json], { type: 'application/json' });
+    const url   = URL.createObjectURL(blob);
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const filename = `hub_os_backup_${timestamp}.json`;
+
+    const a = document.createElement('a');
+    a.href  = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    _setBackupStatus(`✓ Backup exported — ${filename}`, 'success');
+  } catch (err) {
+    console.error('[HubOS] Export failed:', err);
+    _setBackupStatus('Export failed — see console for details', 'error');
+  }
+}
+
+/**
+ * Import: read selected .json file → validate → overwrite localStorage → reload
+ * @param {HTMLInputElement} fileInput
+ */
+function _importBackup(fileInput) {
+  const files = fileInput.files;
+  if (!files || files.length === 0) {
+    _setBackupStatus('', '');
+    return;
+  }
+
+  const file = files[0];
+
+  // Validate extension
+  if (!file.name.toLowerCase().endsWith('.json')) {
+    _setBackupStatus('Invalid file type — please select a .json backup file', 'error');
+    fileInput.value = '';
+    return;
+  }
+
+  _setBackupStatus('Reading file…', 'info');
+
+  const reader = new FileReader();
+
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+
+      if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+        throw new Error('Backup file is not a valid key/value map');
+      }
+
+      // Sanity check: at least one known key should be present
+      const hasKnownKey = BACKUP_KEYS.some(k => k in data);
+      // Also accept any hub_ prefixed key
+      const hasHubKey = Object.keys(data).some(k => k.startsWith('hub_') || k === 'quiz_decks');
+      if (!hasKnownKey && !hasHubKey) {
+        throw new Error('No recognizable Hub OS data found in the file');
+      }
+
+      // Count keys before overwriting
+      const importCount = Object.keys(data).length;
+
+      // Safely overwrite localStorage with validated data
+      Object.entries(data).forEach(([key, value]) => {
+        // Only store values that look like they were legitimately stored as strings
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+          localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+        } else if (typeof value === 'object' && value !== null) {
+          localStorage.setItem(key, JSON.stringify(value));
+        }
+      });
+
+      _setBackupStatus(`✓ ${importCount} keys restored — reloading…`, 'success');
+
+      // Small delay so user sees the success message, then reload
+      setTimeout(() => {
+        window.location.reload();
+      }, 800);
+
+    } catch (err) {
+      console.error('[HubOS] Import failed:', err);
+      _setBackupStatus(`Import failed: ${err.message}`, 'error');
+    }
+
+    // Reset file input so the same file can be re-selected
+    fileInput.value = '';
+  };
+
+  reader.onerror = () => {
+    _setBackupStatus('Failed to read file — it may be corrupted', 'error');
+    fileInput.value = '';
+  };
+
+  reader.readAsText(file);
+}
+
+/**
+ * Helper: show a status message inside the backup modal
+ * @param {string} msg
+ * @param {'success'|'error'|'info'|''} type
+ */
+function _setBackupStatus(msg, type) {
+  const el = document.getElementById('backup-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.className   = 'backup-status';
+  if (type) {
+    el.classList.add(`backup-status-${type}`);
+  }
+}

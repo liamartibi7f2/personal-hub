@@ -57,6 +57,7 @@ const pomodoroModule = (function () {
   let _audioCtx       = null;
   let _settingsOpen   = false;   // Tracks settings modal visibility
   let _escapeHandler  = null;    // Reference for cleanup
+  let _chartRange     = 'week';  // 'week' | 'month' | 'year'
 
   // =============================================================
   //  PUBLIC API
@@ -225,6 +226,103 @@ const pomodoroModule = (function () {
     }
 
     return days;
+  }
+
+  /**
+   * Build monthly chart data: last 30 days grouped into 4 weekly buckets.
+   * Each bucket aggregates ~7 days of focus minutes.
+   * @returns {Array<{label: string, minutes: number, isCurrent: boolean}>}
+   */
+  function _getMonthlyData() {
+    const stats = _loadStats();
+    const now   = new Date();
+    const weeks = [];
+
+    // Walk backwards in 7-day chunks: Week 4 (oldest) → Week 1 (current)
+    for (let w = 3; w >= 0; w--) {
+      let weekMinutes = 0;
+      const endDay  = new Date(now.getFullYear(), now.getMonth(), now.getDate() - w * 7);
+      const startDay = new Date(endDay.getFullYear(), endDay.getMonth(), endDay.getDate() - 6);
+
+      for (let d = new Date(startDay); d <= endDay; d.setDate(d.getDate() + 1)) {
+        const key     = _getDateKey(d);
+        const seconds = stats.dailyHistory[key] || 0;
+        weekMinutes += Math.floor(seconds / 60);
+      }
+
+      // Format label like "Jun 1-7"
+      const sLabel = startDay.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const eLabel = endDay.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+      weeks.push({
+        label:     `${sLabel}–${eLabel}`,
+        shortLabel: `W${4 - w}`,
+        minutes:   weekMinutes,
+        isCurrent: w === 0
+      });
+    }
+
+    return weeks;
+  }
+
+  /**
+   * Build yearly chart data: 12 months of the current year.
+   * @returns {Array<{label: string, minutes: number, isCurrent: boolean}>}
+   */
+  function _getYearlyData() {
+    const stats     = _loadStats();
+    const now       = new Date();
+    const year      = now.getFullYear();
+    const monthNow  = now.getMonth(); // 0-indexed
+    const months    = [];
+
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    for (let m = 0; m < 12; m++) {
+      let monthMinutes = 0;
+
+      // Iterate every day in this month
+      const daysInMonth = new Date(year, m + 1, 0).getDate();
+      for (let day = 1; day <= daysInMonth; day++) {
+        const d       = new Date(year, m, day);
+        const key     = _getDateKey(d);
+        const seconds = stats.dailyHistory[key] || 0;
+        monthMinutes += Math.floor(seconds / 60);
+      }
+
+      months.push({
+        label:     monthNames[m],
+        minutes:   monthMinutes,
+        isCurrent: m === monthNow
+      });
+    }
+
+    return months;
+  }
+
+  /**
+   * Unified data getter based on current chart range.
+   * @returns {{ bars: Array, chartLabel: string }}
+   */
+  function _getChartData() {
+    if (_chartRange === 'month') {
+      return {
+        bars:       _getMonthlyData(),
+        chartLabel: 'This Month · Focus Minutes'
+      };
+    }
+    if (_chartRange === 'year') {
+      return {
+        bars:       _getYearlyData(),
+        chartLabel: `${new Date().getFullYear()} · Focus Hours`
+      };
+    }
+    // Default: week
+    return {
+      bars:       _getWeeklyData(),
+      chartLabel: 'This Week · Focus Minutes'
+    };
   }
 
   // =============================================================
@@ -425,7 +523,7 @@ const pomodoroModule = (function () {
   function _renderStatsDashboard() {
     const stats      = _loadStats();
     const streak     = _calculateStreak();
-    const weeklyData = _getWeeklyData();
+    const chartData  = _getChartData();
 
     // Format total focus time → "Xh Ym"
     const totalMin = Math.floor(stats.totalFocusSeconds / 60);
@@ -433,8 +531,9 @@ const pomodoroModule = (function () {
     const mins     = totalMin % 60;
     const focusTimeStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
 
-    // Weekly chart: compute bar heights
-    const maxMinutes = Math.max(...weeklyData.map(d => d.minutes), 1);
+    // Chart: compute bar heights. For year view: show hours instead of minutes.
+    const isYearView = _chartRange === 'year';
+    const maxValue   = Math.max(...chartData.bars.map(d => d.minutes), 1);
 
     return `
       <div class="pomodoro-stats">
@@ -459,20 +558,34 @@ const pomodoroModule = (function () {
           </div>
         </div>
 
-        <!-- Weekly chart -->
+        <!-- Chart with time-range toggle -->
         <div class="weekly-chart glass-card">
-          <h5 class="chart-heading">This Week · Focus Minutes</h5>
-          <div class="chart-bars" id="weekly-bars">
-            ${weeklyData.map(d => {
-              const heightPct = Math.max(4, (d.minutes / maxMinutes) * 100);
+          <div class="chart-header-row">
+            <h5 class="chart-heading">${chartData.chartLabel}</h5>
+            <div class="chart-range-toggle" role="group" aria-label="Chart time range">
+              <button class="chart-range-btn${_chartRange === 'week' ? ' active' : ''}"
+                      data-range="week">Week</button>
+              <button class="chart-range-btn${_chartRange === 'month' ? ' active' : ''}"
+                      data-range="month">Month</button>
+              <button class="chart-range-btn${_chartRange === 'year' ? ' active' : ''}"
+                      data-range="year">Year</button>
+            </div>
+          </div>
+          <div class="chart-bars" id="chart-bars">
+            ${chartData.bars.map(d => {
+              const displayVal = isYearView ? (d.minutes / 60) : d.minutes;
+              const displayValStr = isYearView
+                ? (displayVal >= 0.1 ? displayVal.toFixed(1) + 'h' : '')
+                : (d.minutes > 0 ? d.minutes + 'm' : '');
+              const heightPct = Math.max(4, (d.minutes / maxValue) * 100);
               return `
                 <div class="chart-bar-wrapper">
-                  <span class="chart-bar-value">${d.minutes > 0 ? d.minutes + 'm' : ''}</span>
-                  <div class="chart-bar${d.isToday ? ' chart-bar--today' : ''}"
+                  <span class="chart-bar-value">${displayValStr}</span>
+                  <div class="chart-bar${d.isCurrent ? ' chart-bar--today' : ''}"
                        style="height:${heightPct}%"
-                       title="${d.dayName}: ${d.minutes} min focus">
+                       title="${d.label}: ${displayValStr}">
                   </div>
-                  <span class="chart-bar-label${d.isToday ? ' chart-bar-label--today' : ''}">${d.dayName}</span>
+                  <span class="chart-bar-label${d.isCurrent ? ' chart-bar-label--today' : ''}">${d.shortLabel || d.dayName || d.label}</span>
                 </div>
               `;
             }).join('')}
@@ -631,6 +744,16 @@ const pomodoroModule = (function () {
       }
     };
     document.addEventListener('keydown', _escapeHandler);
+
+    // --- Chart range toggle pills ---
+    _container.querySelectorAll('.chart-range-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const range = btn.dataset.range;
+        if (!range || range === _chartRange) return;
+        _chartRange = range;
+        _renderApp();
+      });
+    });
   }
 
   // ---------------------------------------------------------
