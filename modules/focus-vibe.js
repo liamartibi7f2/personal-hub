@@ -1,6 +1,7 @@
 /* ============================================================
    HUB.OS — Focus Vibe (Music & Ambient Sound Player)
    Persistent floating widget with YouTube IFrame API integration.
+   Smart Dynamic Playlist with Hashtag Filters via localStorage.
    Survives SPA tab switches via global state + body-attached DOM.
    ============================================================ */
 
@@ -20,30 +21,64 @@
     youtubeLoaded: false,
     youtubeLoading: false,
     initCalled: false,
+    _activeTag: null,
   };
 
   /* ----------------------------------------------------------
-     PRESET VIBES
-     Each has: id, display name, YouTube video ID, icon
+     DYNAMIC PLAYLIST (localStorage-backed)
      ---------------------------------------------------------- */
-  const VIBES = [
-    { id: 'lofi',      name: 'Lofi Beats',        videoId: 'X4VbdwhkE10', icon: '🎹' },
-    { id: 'cyberpunk', name: 'Cyberpunk Ambient', videoId: 'gIWsboTllGA', icon: '🤖' },
-    { id: 'rain',      name: 'Rain & Thunder',    videoId: 'mPZkdNFkNps', icon: '🌧️' },
+  const PLAYLIST_KEY = 'hub_focus_playlist';
+
+  const DEFAULT_PLAYLIST = [
+    { id: 'lofi',      name: 'Lofi Beats',        videoId: 'X4VbdwhkE10', icon: '🎹', tags: ['lofi', 'focus', 'chill'], _default: true },
+    { id: 'cyberpunk', name: 'Cyberpunk Ambient', videoId: 'gIWsboTllGA', icon: '🤖', tags: ['cyberpunk', 'focus', 'dark'], _default: true },
+    { id: 'rain',      name: 'Rain & Thunder',    videoId: 'mPZkdNFkNps', icon: '🌧️', tags: ['rain', 'nature', 'relax'], _default: true },
   ];
+
+  function getPlaylist() {
+    try {
+      var raw = localStorage.getItem(PLAYLIST_KEY);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
+    savePlaylist(DEFAULT_PLAYLIST);
+    return DEFAULT_PLAYLIST.slice();
+  }
+
+  function savePlaylist(playlist) {
+    try {
+      localStorage.setItem(PLAYLIST_KEY, JSON.stringify(playlist));
+    } catch (_) {}
+  }
+
+  function getAllTags() {
+    var playlist = getPlaylist();
+    var tags = [];
+    var seen = {};
+    playlist.forEach(function (item) {
+      (item.tags || []).forEach(function (tag) {
+        var lower = tag.toLowerCase().trim();
+        if (lower && !seen[lower]) {
+          seen[lower] = true;
+          tags.push(lower);
+        }
+      });
+    });
+    return tags;
+  }
 
   /* ----------------------------------------------------------
      YOUTUBE URL PARSER
-     Accepts: watch URL, short URL, embed URL, or raw video ID
+     Accepts: watch URL, short URL, shorts URL, embed URL, or raw video ID
      ---------------------------------------------------------- */
   function extractVideoId(input) {
     const trimmed = (input || '').trim();
     if (!trimmed) return null;
-    // Bare 11-char video ID
     if (/^[A-Za-z0-9_-]{11}$/.test(trimmed)) return trimmed;
-    // Standard YouTube formats
     const m = trimmed.match(
-      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([A-Za-z0-9_-]{11})/
+      /(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/
     );
     return m ? m[1] : null;
   }
@@ -55,7 +90,6 @@
   function loadYouTubeAPI() {
     if (S.youtubeLoaded || S.youtubeLoading) return;
 
-    // Already loaded externally
     if (window.YT && typeof window.YT.Player === 'function') {
       S.youtubeLoaded = true;
       createPlayer();
@@ -64,11 +98,10 @@
 
     S.youtubeLoading = true;
 
-    // Set up the global callback BEFORE injecting the script
     window.onYouTubeIframeAPIReady = function () {
       S.youtubeLoaded = true;
       S.youtubeLoading = false;
-      S.autoPlay = true; // mark to autoplay once player is ready
+      S.autoPlay = true;
       createPlayer();
     };
 
@@ -90,7 +123,6 @@
     const target = document.getElementById('focus-vibe-player');
     if (!target) return;
 
-    // Guard: YT won't create a second player on the same DOM target
     if (S.player && typeof S.player.destroy === 'function') {
       try { S.player.destroy(); } catch (_) {}
     }
@@ -126,12 +158,10 @@
   }
 
   function onPlayerStateChange(event) {
-    // YouTube states: -1 unstarted, 0 ended, 1 playing, 2 paused, 3 buffering, 5 cued
     S.isPlaying = event.data === YT.PlayerState.PLAYING;
     updatePlayButton();
     updateWidgetPlayingState();
 
-    // Auto-replay on end (useful for non-live videos)
     if (event.data === YT.PlayerState.ENDED) {
       S.player.seekTo(0);
       S.player.playVideo();
@@ -152,7 +182,6 @@
      ---------------------------------------------------------- */
   function togglePlay() {
     if (!S.playerReady || !S.player) {
-      // First interaction — load YouTube API
       loadYouTubeAPI();
       return;
     }
@@ -175,16 +204,19 @@
     S.currentVideoId = videoId;
     S.currentVibe = vibeName || 'Custom';
 
-    // Update floating widget label
     const label = document.getElementById('focus-vibe-label');
     if (label) label.textContent = S.currentVibe;
 
-    // Highlight active vibe pill
+    // Highlight active pill in floating widget
     document.querySelectorAll('.vibe-pill').forEach(function (pill) {
       pill.classList.toggle('active', pill.dataset.videoId === videoId);
     });
 
-    // Load into player
+    // Refresh studio grid & now-playing if visible
+    refreshVibeGrid();
+    const studioLabel = document.getElementById('studio-now-label');
+    if (studioLabel) studioLabel.textContent = S.currentVibe;
+
     if (S.playerReady && S.player) {
       S.player.loadVideoById(videoId);
       S.player.playVideo();
@@ -216,7 +248,7 @@
   }
 
   /* ----------------------------------------------------------
-     HANDLE CUSTOM URL
+     HANDLE CUSTOM URL (floating widget only)
      ---------------------------------------------------------- */
   function handleCustomUrl(url) {
     var videoId = extractVideoId(url);
@@ -250,14 +282,14 @@
   }
 
   /* ----------------------------------------------------------
-     RENDER VIBE PILLS
-     Idempotent — only renders if container is empty.
+     RENDER FLOATING WIDGET PILLS (from playlist)
      ---------------------------------------------------------- */
   function renderVibePills() {
     var container = document.getElementById('focus-vibe-vibes');
     if (!container || container.children.length > 0) return;
 
-    VIBES.forEach(function (v) {
+    var playlist = getPlaylist();
+    playlist.forEach(function (v) {
       var pill = document.createElement('button');
       pill.className = 'vibe-pill';
       if (v.videoId === S.currentVideoId) pill.classList.add('active');
@@ -273,7 +305,6 @@
 
   /* ----------------------------------------------------------
      BIND FLOATING WIDGET EVENTS
-     Called once after widget is in DOM.
      ---------------------------------------------------------- */
   function bindWidgetEvents() {
     var playBtn = document.getElementById('focus-vibe-play');
@@ -307,44 +338,191 @@
     var triggerBtn = document.getElementById('focus-vibe-trigger');
     if (triggerBtn) triggerBtn.addEventListener('click', expand);
 
-    // Sync volume slider from persisted state
     if (volSlider) volSlider.value = String(S.volume);
   }
 
   /* ----------------------------------------------------------
+     STUDIO PAGE — RENDER HELPERS
+     Pure functions returning HTML strings.
+     ---------------------------------------------------------- */
+  function renderTagFilterHTML(allTags, activeTag) {
+    var html = '<button class="studio-tag-pill' + (activeTag === null ? ' active' : '') + '" data-tag="">All Vibes</button>';
+    allTags.forEach(function (tag) {
+      html += '<button class="studio-tag-pill' + (activeTag === tag ? ' active' : '') + '" data-tag="' + tag + '">#' + tag + '</button>';
+    });
+    return html;
+  }
+
+  function renderVibeGridHTML(playlist, filterTag) {
+    var filtered = filterTag
+      ? playlist.filter(function (item) { return (item.tags || []).indexOf(filterTag) !== -1; })
+      : playlist;
+
+    if (filtered.length === 0) {
+      return '<div class="studio-vibe-empty glass-card">No vibes match this tag.<br>Try another filter or add a new vibe below.</div>';
+    }
+
+    return filtered.map(function (v) {
+      var activeClass = v.videoId === S.currentVideoId ? ' studio-vibe-active' : '';
+      var statusText = v.videoId === S.currentVideoId ? (S.isPlaying ? '🔊 Playing' : '⏸ Paused') : '';
+      var deleteBtn = v._default
+        ? ''
+        : '<button class="studio-vibe-card-delete" data-delete-id="' + v.id + '" title="Remove from library" aria-label="Remove from library">🗑</button>';
+
+      return '<div class="studio-vibe-card glass-card' + activeClass + '" data-video-id="' + v.videoId + '" data-vibe-name="' + v.name + '" data-id="' + v.id + '">' +
+        deleteBtn +
+        '<div class="studio-vibe-card-icon">' + v.icon + '</div>' +
+        '<div class="studio-vibe-card-name">' + v.name + '</div>' +
+        '<div class="studio-vibe-card-tags">' + (v.tags || []).map(function (t) { return '#' + t; }).join(' ') + '</div>' +
+        '<div class="studio-vibe-card-status" data-status-for="' + v.videoId + '">' + statusText + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  /* ----------------------------------------------------------
+     STUDIO PAGE — DOM REFRESHERS
+     Update parts of the page without a full re-render.
+     ---------------------------------------------------------- */
+  function refreshTagFilters() {
+    var container = document.getElementById('studio-tag-filter');
+    if (!container) return;
+    var allTags = getAllTags();
+    var activeTag = S._activeTag || null;
+    container.innerHTML = renderTagFilterHTML(allTags, activeTag);
+  }
+
+  function refreshVibeGrid() {
+    var container = document.getElementById('studio-vibe-grid');
+    if (!container) return;
+    var playlist = getPlaylist();
+    var activeTag = S._activeTag || null;
+    container.innerHTML = renderVibeGridHTML(playlist, activeTag);
+  }
+
+  /* ----------------------------------------------------------
+     STUDIO PAGE — DELETE & SAVE LOGIC
+     ---------------------------------------------------------- */
+  function deleteVibeFromLibrary(id) {
+    var playlist = getPlaylist();
+    var idx = -1;
+    for (var i = 0; i < playlist.length; i++) {
+      if (playlist[i].id === id) { idx = i; break; }
+    }
+    if (idx === -1) return;
+    if (playlist[idx]._default) return;
+    playlist.splice(idx, 1);
+    savePlaylist(playlist);
+    refreshTagFilters();
+    refreshVibeGrid();
+  }
+
+  function saveNewVibe(urlInput, title, tagsStr) {
+    var videoId = extractVideoId(urlInput);
+    var urlField = document.getElementById('studio-add-url');
+
+    if (!videoId) {
+      if (urlField) {
+        urlField.classList.add('error');
+        urlField.placeholder = '❌ Invalid YouTube link or ID';
+        setTimeout(function () {
+          urlField.classList.remove('error');
+          urlField.placeholder = 'YouTube URL or Video ID';
+        }, 2000);
+      }
+      return;
+    }
+
+    var name = (title || '').trim();
+    if (!name) {
+      var titleField = document.getElementById('studio-add-title');
+      if (titleField) {
+        titleField.classList.add('error');
+        titleField.placeholder = '❌ Please enter a title';
+        setTimeout(function () {
+          titleField.classList.remove('error');
+          titleField.placeholder = 'Title for this vibe';
+        }, 2000);
+      }
+      return;
+    }
+
+    var tags = (tagsStr || '').split(',').map(function (t) { return t.trim().toLowerCase(); }).filter(Boolean);
+    if (tags.length === 0) tags = ['uncategorized'];
+
+    var newVibe = {
+      id: 'custom_' + Date.now().toString(36),
+      name: name,
+      videoId: videoId,
+      icon: '🎵',
+      tags: tags,
+    };
+
+    var playlist = getPlaylist();
+    playlist.push(newVibe);
+    savePlaylist(playlist);
+
+    // Clear form
+    var uf = document.getElementById('studio-add-url');
+    var tf = document.getElementById('studio-add-title');
+    var gf = document.getElementById('studio-add-tags');
+    if (uf) uf.value = '';
+    if (tf) tf.value = '';
+    if (gf) gf.value = '';
+
+    // Reset filter to show all
+    S._activeTag = null;
+    refreshTagFilters();
+    refreshVibeGrid();
+
+    // Play it
+    loadVideo(videoId, name);
+    var label = document.getElementById('studio-now-label');
+    if (label) label.textContent = name;
+  }
+
+  /* ----------------------------------------------------------
      MODULE PAGE (rendered into #main-content)
-     Full-featured Focus Vibe Studio.
+     Full-featured Focus Vibe Studio with dynamic playlist.
      ---------------------------------------------------------- */
   function renderStudioPage(container) {
+    var playlist = getPlaylist();
+    var allTags = getAllTags();
+    var activeTag = S._activeTag || null;
+
     container.innerHTML =
       '<div class="tab-content focus-vibe-studio">' +
         '<h1 class="studio-title"><span class="text-gradient">🎧 Focus Vibe Studio</span></h1>' +
-        '<p class="studio-subtitle">Ambient sounds &amp; music to power your focus sessions</p>' +
+        '<p class="studio-subtitle">Smart dynamic playlist — save your favorite focus sounds</p>' +
 
+        // Tag Filter Bar
         '<div class="studio-section">' +
-          '<h2 class="section-header">Preset Vibes</h2>' +
+          '<div class="studio-tag-filter" id="studio-tag-filter">' +
+            renderTagFilterHTML(allTags, activeTag) +
+          '</div>' +
+        '</div>' +
+
+        // Dynamic Vibe Grid
+        '<div class="studio-section">' +
+          '<h2 class="section-header">Your Library</h2>' +
           '<div class="studio-vibe-grid" id="studio-vibe-grid">' +
-            VIBES.map(function (v) {
-              var activeClass = v.videoId === S.currentVideoId ? ' studio-vibe-active' : '';
-              return '<div class="studio-vibe-card glass-card' + activeClass + '" data-video-id="' + v.videoId + '" data-vibe-name="' + v.name + '">' +
-                '<div class="studio-vibe-card-icon">' + v.icon + '</div>' +
-                '<div class="studio-vibe-card-name">' + v.name + '</div>' +
-                '<div class="studio-vibe-card-status" data-status-for="' + v.videoId + '">' +
-                  (v.videoId === S.currentVideoId ? (S.isPlaying ? '🔊 Playing' : '⏸ Paused') : '') +
-                '</div>' +
-              '</div>';
-            }).join('') +
+            renderVibeGridHTML(playlist, activeTag) +
           '</div>' +
         '</div>' +
 
+        // Add to Library Form
         '<div class="studio-section">' +
-          '<h2 class="section-header">Custom Link</h2>' +
-          '<div class="studio-custom-row">' +
-            '<input type="text" id="studio-custom-url" class="focus-vibe-url-input studio-url-input" placeholder="https://youtube.com/watch?v=..." spellcheck="false">' +
-            '<button id="studio-load-btn" class="btn btn-primary">Load &amp; Play</button>' +
+          '<h2 class="section-header">Add to Library</h2>' +
+          '<div class="studio-add-card glass-card">' +
+            '<div class="studio-add-form">' +
+              '<input type="text" id="studio-add-url" class="focus-vibe-url-input" placeholder="YouTube URL or Video ID" spellcheck="false">' +
+              '<input type="text" id="studio-add-title" class="focus-vibe-url-input" placeholder="Title for this vibe" spellcheck="false">' +
+              '<input type="text" id="studio-add-tags" class="focus-vibe-url-input" placeholder="Tags: lofi, focus, chill" spellcheck="false">' +
+              '<button id="studio-add-save" class="btn btn-primary studio-save-btn">💾 Save to Library &amp; Play</button>' +
+            '</div>' +
           '</div>' +
         '</div>' +
 
+        // Current Session
         '<div class="studio-section">' +
           '<h2 class="section-header">Current Session</h2>' +
           '<div class="studio-session-card glass-card">' +
@@ -366,82 +544,97 @@
     bindStudioEvents(container);
   }
 
+  /* ----------------------------------------------------------
+     STUDIO PAGE — EVENT BINDING (uses delegation)
+     ---------------------------------------------------------- */
   function bindStudioEvents(container) {
-    // Vibe cards
-    var cards = container.querySelectorAll('.studio-vibe-card');
-    Array.prototype.forEach.call(cards, function (card) {
-      card.addEventListener('click', function () {
-        var videoId = this.dataset.videoId;
-        var vibeName = this.dataset.vibeName;
-
-        loadVideo(videoId, vibeName);
-
-        // Update active state
-        Array.prototype.forEach.call(cards, function (c) { c.classList.remove('studio-vibe-active'); });
-        this.classList.add('studio-vibe-active');
-
-        // Update status text on all cards
-        Array.prototype.forEach.call(cards, function (c) {
-          var statusEl = c.querySelector('.studio-vibe-card-status');
-          if (statusEl) {
-            statusEl.textContent = c.dataset.videoId === videoId ? '🔊 Playing' : '';
-          }
-        });
-
-        // Update now-playing label
-        var label = document.getElementById('studio-now-label');
-        if (label) label.textContent = vibeName;
+    // Tag filter clicks — delegation
+    var tagFilter = container.querySelector('#studio-tag-filter');
+    if (tagFilter) {
+      tagFilter.addEventListener('click', function (e) {
+        var pill = e.target.closest('.studio-tag-pill');
+        if (!pill) return;
+        var tag = pill.dataset.tag || null;
+        S._activeTag = tag || null;
+        refreshTagFilters();
+        refreshVibeGrid();
       });
-    });
+    }
+
+    // Vibe grid clicks — delegation for play + delete
+    var vibeGrid = container.querySelector('#studio-vibe-grid');
+    if (vibeGrid) {
+      vibeGrid.addEventListener('click', function (e) {
+        // Delete button
+        var deleteBtn = e.target.closest('.studio-vibe-card-delete');
+        if (deleteBtn) {
+          e.stopPropagation();
+          deleteVibeFromLibrary(deleteBtn.dataset.deleteId);
+          return;
+        }
+
+        // Card click → play
+        var card = e.target.closest('.studio-vibe-card');
+        if (!card) return;
+        var videoId = card.dataset.videoId;
+        var vibeName = card.dataset.vibeName;
+        loadVideo(videoId, vibeName);
+      });
+    }
 
     // Play button
     var playBtn = container.querySelector('#studio-play-btn');
     if (playBtn) playBtn.addEventListener('click', togglePlay);
 
-    // Volume
+    // Volume slider
     var volSlider = container.querySelector('#studio-volume');
     if (volSlider) {
       volSlider.addEventListener('input', function () {
         setVolume(parseFloat(this.value));
-        // Sync with floating widget
         var fwVol = document.getElementById('focus-vibe-volume');
         if (fwVol) fwVol.value = this.value;
       });
     }
 
-    // Custom URL
-    var loadBtn = container.querySelector('#studio-load-btn');
-    var urlInput = container.querySelector('#studio-custom-url');
-    if (loadBtn && urlInput) {
-      loadBtn.addEventListener('click', function () { handleCustomUrl(urlInput.value); });
-      urlInput.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') handleCustomUrl(urlInput.value);
+    // Save to library
+    var saveBtn = container.querySelector('#studio-add-save');
+    var urlInput = container.querySelector('#studio-add-url');
+    var titleInput = container.querySelector('#studio-add-title');
+    var tagsInput = container.querySelector('#studio-add-tags');
+
+    if (saveBtn && urlInput && titleInput) {
+      var doSave = function () {
+        saveNewVibe(urlInput.value, titleInput.value, tagsInput ? tagsInput.value : '');
+      };
+      saveBtn.addEventListener('click', doSave);
+      [urlInput, titleInput, tagsInput].forEach(function (input) {
+        if (input) {
+          input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') doSave();
+          });
+        }
       });
     }
   }
 
   /* ----------------------------------------------------------
      INITIALIZE FLOATING WIDGET
-     Attaches to body; idempotent — only sets up once.
      ---------------------------------------------------------- */
   function initWidget() {
     if (S.initCalled) return;
     S.initCalled = true;
 
-    // The widget HTML is already in index.html — just bind and render pills
     renderVibePills();
     bindWidgetEvents();
     updatePlayButton();
     updateWidgetPlayingState();
 
-    // Sync volume slider from persisted state
     var volSlider = document.getElementById('focus-vibe-volume');
     if (volSlider) volSlider.value = String(S.volume);
   }
 
   /* ----------------------------------------------------------
      MODULE DEFINITION
-     Registered with app.register() so it appears in sidebar.
      ---------------------------------------------------------- */
   var focusVibeModule = {
     id: 'focus-vibe',
@@ -449,22 +642,13 @@
     icon: '🎧',
 
     render: function (container) {
-      // Initialize the persistent floating widget (once)
       initWidget();
-
-      // Render the full studio page in the main content area
       renderStudioPage(container);
     },
 
     destroy: function () {
-      // INTENTIONALLY DO NOT destroy the player or floating widget.
-      // The player continues playing across SPA tab switches.
-      // Only the studio page content in #main-content is cleared
-      // by the parent app.js harness.
-      //
-      // If we need to clean up studio-specific listeners, do it here.
-      // Currently, studio listeners are on elements that get removed
-      // with innerHTML, so they die with the DOM.
+      // Player & floating widget persist across SPA tab switches.
+      // Studio DOM listeners die with innerHTML teardown.
     },
   };
 
@@ -475,8 +659,6 @@
 
   /* ----------------------------------------------------------
      AUTO-INIT on DOMContentLoaded
-     The floating widget is in index.html and should be
-     interactive immediately, not just when the module is visited.
      ---------------------------------------------------------- */
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initWidget);

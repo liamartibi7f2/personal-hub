@@ -4355,6 +4355,132 @@ body.light-mode .btn-edit-card:hover {
 }
 
 /* ----------------------------------------------------------
+   TAG FILTER BAR
+   ---------------------------------------------------------- */
+.studio-tag-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.studio-tag-pill {
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+}
+.studio-tag-pill:hover {
+  border-color: rgba(0, 240, 255, 0.3);
+  color: var(--text-primary);
+  background: rgba(0, 240, 255, 0.06);
+  transform: translateY(-1px);
+}
+.studio-tag-pill:active {
+  transform: scale(0.95);
+}
+.studio-tag-pill.active {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: rgba(0, 240, 255, 0.1);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.15);
+  font-weight: 600;
+}
+
+/* ----------------------------------------------------------
+   VIBE CARD TAGS & DELETE
+   ---------------------------------------------------------- */
+.studio-vibe-card {
+  position: relative;
+}
+.studio-vibe-card-tags {
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+  line-height: 1.4;
+  min-height: 1.4em;
+}
+.studio-vibe-card-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 0.7rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--duration-fast), background var(--duration-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.studio-vibe-card:hover .studio-vibe-card-delete,
+.studio-vibe-card:focus-within .studio-vibe-card-delete {
+  opacity: 1;
+}
+.studio-vibe-card-delete:hover {
+  background: rgba(255, 68, 102, 0.15);
+}
+
+/* ----------------------------------------------------------
+   ADD TO LIBRARY FORM
+   ---------------------------------------------------------- */
+.studio-add-card {
+  padding: var(--space-lg);
+}
+.studio-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.studio-save-btn {
+  margin-top: 4px;
+  padding: 12px 20px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent-primary);
+  background: rgba(0, 240, 255, 0.1);
+  color: var(--accent-primary);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+}
+.studio-save-btn:hover {
+  background: rgba(0, 240, 255, 0.2);
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.2);
+  transform: translateY(-1px);
+}
+.studio-save-btn:active {
+  transform: scale(0.97);
+}
+
+/* ----------------------------------------------------------
+   EMPTY STATE
+   ---------------------------------------------------------- */
+.studio-vibe-empty {
+  grid-column: 1 / -1;
+  padding: var(--space-xl) var(--space-lg);
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+/* ----------------------------------------------------------
    RESPONSIVE: MOBILE
    ---------------------------------------------------------- */
 @media (max-width: 768px) {
@@ -4381,6 +4507,16 @@ body.light-mode .btn-edit-card:hover {
   }
   .studio-custom-row {
     flex-direction: column;
+  }
+  .studio-add-form {
+    gap: var(--space-sm);
+  }
+  .studio-tag-filter {
+    gap: 4px;
+  }
+  .studio-tag-pill {
+    padding: 5px 10px;
+    font-size: 0.6rem;
   }
 }
 
@@ -5609,6 +5745,44 @@ body.light-mode .srs-completion-icon {
 html.light-mode .studio-vibe-card-icon,
 body.light-mode .studio-vibe-card-icon {
   filter: drop-shadow(0 0 4px rgba(0, 119, 182, 0.08));
+}
+
+/* ── Tag filter pills ── */
+html.light-mode .studio-tag-pill,
+body.light-mode .studio-tag-pill {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: var(--text-secondary);
+}
+html.light-mode .studio-tag-pill:hover,
+body.light-mode .studio-tag-pill:hover {
+  border-color: rgba(0, 119, 182, 0.3);
+  background: rgba(0, 119, 182, 0.04);
+}
+html.light-mode .studio-tag-pill.active,
+body.light-mode .studio-tag-pill.active {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: rgba(0, 119, 182, 0.08);
+  box-shadow: 0 0 12px rgba(0, 119, 182, 0.1);
+}
+
+/* ── Add form card ── */
+html.light-mode .studio-add-card,
+body.light-mode .studio-add-card {
+  background: rgba(255, 255, 255, 0.5);
+  border-color: rgba(0, 0, 0, 0.06);
+}
+html.light-mode .studio-save-btn,
+body.light-mode .studio-save-btn {
+  background: rgba(0, 119, 182, 0.06);
+  border-color: rgba(0, 119, 182, 0.3);
+  color: var(--accent-primary);
+}
+html.light-mode .studio-save-btn:hover,
+body.light-mode .studio-save-btn:hover {
+  background: rgba(0, 119, 182, 0.12);
+  box-shadow: 0 0 20px rgba(0, 119, 182, 0.12);
 }
 
 /* ── btn-danger hover bg ── */
