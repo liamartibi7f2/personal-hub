@@ -69,6 +69,21 @@
     return tags;
   }
 
+  function getSystemTags() {
+    var tags = [];
+    var seen = {};
+    DEFAULT_PLAYLIST.forEach(function (item) {
+      (item.tags || []).forEach(function (tag) {
+        var lower = tag.toLowerCase().trim();
+        if (lower && !seen[lower]) {
+          seen[lower] = true;
+          tags.push(lower);
+        }
+      });
+    });
+    return tags;
+  }
+
   /* ----------------------------------------------------------
      YOUTUBE URL PARSER
      Accepts: watch URL, short URL, shorts URL, embed URL, or raw video ID
@@ -346,9 +361,14 @@
      Pure functions returning HTML strings.
      ---------------------------------------------------------- */
   function renderTagFilterHTML(allTags, activeTag) {
+    var systemTags = getSystemTags();
     var html = '<button class="studio-tag-pill' + (activeTag === null ? ' active' : '') + '" data-tag="">All Vibes</button>';
     allTags.forEach(function (tag) {
-      html += '<button class="studio-tag-pill' + (activeTag === tag ? ' active' : '') + '" data-tag="' + tag + '">#' + tag + '</button>';
+      var isSystem = systemTags.indexOf(tag) !== -1;
+      var deleteHtml = isSystem
+        ? ''
+        : '<span class="studio-tag-pill-delete" data-delete-tag="' + tag + '" title="Remove this tag from all videos">&times;</span>';
+      html += '<button class="studio-tag-pill' + (activeTag === tag ? ' active' : '') + '" data-tag="' + tag + '">#' + tag + deleteHtml + '</button>';
     });
     return html;
   }
@@ -412,6 +432,23 @@
     if (playlist[idx]._default) return;
     playlist.splice(idx, 1);
     savePlaylist(playlist);
+    refreshTagFilters();
+    refreshVibeGrid();
+  }
+
+  function deleteTagGlobally(tag) {
+    if (!window.confirm('Remove the tag "#' + tag + '" from all videos in your library?')) return;
+
+    var playlist = getPlaylist();
+    playlist.forEach(function (item) {
+      if (item.tags) {
+        item.tags = item.tags.filter(function (t) { return t.toLowerCase().trim() !== tag; });
+      }
+    });
+    savePlaylist(playlist);
+
+    if (S._activeTag === tag) S._activeTag = null;
+
     refreshTagFilters();
     refreshVibeGrid();
   }
@@ -552,6 +589,15 @@
     var tagFilter = container.querySelector('#studio-tag-filter');
     if (tagFilter) {
       tagFilter.addEventListener('click', function (e) {
+        // Delete-tag icon click → remove tag from all videos
+        var deleteIcon = e.target.closest('.studio-tag-pill-delete');
+        if (deleteIcon) {
+          e.stopPropagation();
+          deleteTagGlobally(deleteIcon.dataset.deleteTag);
+          return;
+        }
+
+        // Filter click
         var pill = e.target.closest('.studio-tag-pill');
         if (!pill) return;
         var tag = pill.dataset.tag || null;

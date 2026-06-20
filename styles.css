@@ -4392,6 +4392,26 @@ body.light-mode .btn-edit-card:hover {
   box-shadow: 0 0 12px rgba(0, 240, 255, 0.15);
   font-weight: 600;
 }
+.studio-tag-pill-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  font-size: 0.5rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text-muted);
+  transition: all var(--duration-fast);
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.studio-tag-pill-delete:hover {
+  color: #ff4466;
+  background: rgba(255, 68, 102, 0.15);
+}
 
 /* ----------------------------------------------------------
    VIBE CARD TAGS & DELETE
@@ -5765,6 +5785,15 @@ body.light-mode .studio-tag-pill.active {
   color: var(--accent-primary);
   background: rgba(0, 119, 182, 0.08);
   box-shadow: 0 0 12px rgba(0, 119, 182, 0.1);
+}
+html.light-mode .studio-tag-pill-delete,
+body.light-mode .studio-tag-pill-delete {
+  color: var(--text-muted);
+}
+html.light-mode .studio-tag-pill-delete:hover,
+body.light-mode .studio-tag-pill-delete:hover {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.12);
 }
 
 /* ── Add form card ── */
