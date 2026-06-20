@@ -25,7 +25,9 @@ const pomodoroModule = (function () {
     focus: 25,
     shortBreak: 5,
     longBreak: 15,
-    soundProfile: 'cyber_synth'
+    soundProfile: 'cyber_synth',
+    autoStartBreaks: false,
+    autoStartFocus: false
   };
 
   // --- Default stats structure ---
@@ -623,6 +625,7 @@ const pomodoroModule = (function () {
 
           <!-- Body: Duration inputs -->
           <div class="settings-body">
+            ${_renderAutoStartToggles()}
             ${_renderSoundField()}
             <hr style="border:none;border-top:1px solid var(--glass-border);margin:0;">
             ${_renderSettingsField('Focus Duration', 'focus', _settings.focus, 1, 120)}
@@ -637,6 +640,26 @@ const pomodoroModule = (function () {
           </div>
         </div>
 
+      </div>
+    `;
+  }
+
+  /** Render auto-start toggle switches */
+  function _renderAutoStartToggles() {
+    return `
+      <div class="settings-field settings-field--row">
+        <span class="settings-field-label">Auto-start Breaks</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="input-autoStartBreaks"${_settings.autoStartBreaks ? ' checked' : ''}>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="settings-field settings-field--row">
+        <span class="settings-field-label">Auto-start Focus</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="input-autoStartFocus"${_settings.autoStartFocus ? ' checked' : ''}>
+          <span class="toggle-slider"></span>
+        </label>
       </div>
     `;
   }
@@ -829,6 +852,10 @@ const pomodoroModule = (function () {
     const longBreakVal  = parseInt(document.getElementById('input-longBreak')?.value, 10);
     const soundVal      = document.getElementById('input-soundProfile')?.value;
 
+    // Read auto-start toggles
+    _settings.autoStartBreaks = document.getElementById('input-autoStartBreaks')?.checked || false;
+    _settings.autoStartFocus  = document.getElementById('input-autoStartFocus')?.checked  || false;
+
     // Validate and clamp
     _settings.focus      = Math.max(1, Math.min(120, focusVal || DEFAULT_SETTINGS.focus));
     _settings.shortBreak = Math.max(1, Math.min(60, shortBreakVal || DEFAULT_SETTINGS.shortBreak));
@@ -964,6 +991,27 @@ const pomodoroModule = (function () {
 
     _playSound(_settings.soundProfile);
     _showNotification();
+
+    // --- AUTO-TRANSITION ---
+    // Focus → Break (if enabled)
+    if (_currentMode === 'focus' && _settings.autoStartBreaks) {
+      const stats     = _loadStats();
+      const breakMode = stats.completedPomodoros % 4 === 0 ? 'longBreak' : 'shortBreak';
+      _currentMode = breakMode;
+      _setDuration(_settings[MODES.find(m => m.key === breakMode).settingKey]);
+      _startTimer();
+      _renderApp();
+      return;
+    }
+
+    // Break → Focus (if enabled)
+    if ((_currentMode === 'shortBreak' || _currentMode === 'longBreak') && _settings.autoStartFocus) {
+      _currentMode = 'focus';
+      _setDuration(_settings.focus);
+      _startTimer();
+      _renderApp();
+      return;
+    }
 
     // Full re-render to refresh the stats dashboard with updated numbers
     _renderApp();
