@@ -3163,6 +3163,246 @@ body.light-mode .btn-edit-card:hover {
 }
 
 /* ----------------------------------------------------------
+   QUIZ LIBRARY ACTIONS (Create + AI buttons)
+   ---------------------------------------------------------- */
+.quiz-library-actions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+.deck-ai-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 24px;
+}
+.ai-btn-icon {
+  font-size: 1rem;
+}
+
+/* ----------------------------------------------------------
+   AI GENERATOR MODAL
+   ---------------------------------------------------------- */
+.ai-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+}
+.ai-modal {
+  width: 100%;
+  max-width: 640px;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  padding: var(--space-xl);
+}
+.ai-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ai-modal-header h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.ai-modal-icon { font-size: 1.2rem; }
+.ai-modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--duration-fast);
+}
+.ai-modal-close:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.06);
+}
+.ai-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+.ai-textarea {
+  min-height: 180px;
+  width: 100%;
+}
+.ai-textarea-key {
+  min-height: 80px;
+  width: 100%;
+}
+.ai-label-hint {
+  font-weight: 400;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+.ai-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+.ai-footer-hint {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+.ai-modal-actions {
+  display: flex;
+  gap: var(--space-sm);
+  margin-left: auto;
+}
+
+/* ----------------------------------------------------------
+   MODE SELECT SCREEN
+   ---------------------------------------------------------- */
+.mode-select-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-lg);
+}
+.mode-select-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-md);
+  padding: var(--space-xl);
+  transition: transform var(--duration-base) var(--ease-out-expo),
+              box-shadow var(--duration-base) var(--ease-out-expo);
+}
+.mode-select-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(0, 240, 255, 0.15);
+  box-shadow: 0 8px 32px rgba(0, 240, 255, 0.06);
+}
+.mode-select-icon {
+  font-size: 2.5rem;
+}
+.mode-select-card h3 {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.mode-select-card p {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.mode-test-time {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+.mode-test-time input {
+  width: 70px;
+  padding: 6px 10px;
+  text-align: center;
+}
+
+/* ----------------------------------------------------------
+   TEST MODE TIMER
+   ---------------------------------------------------------- */
+.test-timer-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: 12px 24px;
+  border: 1px solid var(--accent-primary);
+  background: rgba(0, 240, 255, 0.06);
+}
+.test-timer-label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+.test-timer-display {
+  font-family: var(--font-mono);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+  letter-spacing: 0.04em;
+  transition: color var(--duration-fast);
+}
+.test-timer-display.timer-warning {
+  color: #f59e0b;
+}
+.test-timer-display.timer-urgent {
+  color: #ff4466;
+  animation: timer-pulse 0.5s ease-in-out infinite alternate;
+}
+@keyframes timer-pulse {
+  from { opacity: 1; }
+  to   { opacity: 0.5; }
+}
+
+/* Submit button */
+.test-submit-btn {
+  width: 100%;
+  padding: 14px 24px;
+  font-size: 1rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border: 2px solid var(--accent-primary);
+  background: rgba(0, 240, 255, 0.08);
+  color: var(--accent-primary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all var(--duration-fast) var(--ease-out-expo);
+}
+.test-submit-btn:hover {
+  background: rgba(0, 240, 255, 0.18);
+  box-shadow: 0 0 28px rgba(0, 240, 255, 0.25);
+  transform: translateY(-2px);
+}
+
+/* Submitted banner */
+.test-submitted-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 24px;
+  border: 1px solid var(--success);
+  background: rgba(34, 197, 94, 0.08);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--success);
+  letter-spacing: 0.04em;
+  border-radius: var(--radius-sm);
+}
+
+/* ----------------------------------------------------------
    RESPONSIVE — Mobile (≤ 768px)
    Sidebar → floating bottom dock
    ---------------------------------------------------------- */
@@ -3377,6 +3617,27 @@ body.light-mode .btn-edit-card:hover {
 		width: 100%;
 		justify-content: center;
 	}
+}
+
+/* Add mobile rules for AI modal, mode select, test timer */
+@media (max-width: 768px) {
+  .quiz-library-actions {
+    flex-direction: column;
+  }
+  .deck-ai-btn {
+    justify-content: center;
+  }
+  .mode-select-container {
+    grid-template-columns: 1fr;
+  }
+  .ai-modal {
+    max-width: 100%;
+    max-height: 95vh;
+    padding: var(--space-lg);
+  }
+  .test-timer-display {
+    font-size: 1.2rem;
+  }
 }
 
 /* ==========================================================

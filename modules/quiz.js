@@ -31,6 +31,16 @@ const quizModule = (function () {
   let _answeredMap  = {};          // key: "sectionIdx-questionIdx" → 'correct'|'incorrect'|'revealed'
   let _selectedMap  = {};          // key: "sectionIdx-questionIdx" → option letter user picked
 
+  // --- Test Mode state ---
+  let _testMode         = false;
+  let _testTimeLimit    = 45 * 60;   // seconds, default 45 min
+  let _testTimerId      = null;
+  let _testTimeRemaining = 0;
+  let _testSubmitted    = false;
+
+  // --- AI Generator state ---
+  let _aiGenerating     = false;
+
   // --- Default sample text (shown in the editor textarea) ---
   const DEFAULT_TEXT = `'IELTS Grammar
 When we went back to the bookstore, the bookseller _ the book we wanted.
@@ -57,12 +67,16 @@ D. Local Councils`;
     _currentDeck = null;
     _answeredMap = {};
     _selectedMap = {};
+    _testMode = false;
+    _testTimerId = null;
+    _testTimeRemaining = 0;
+    _testSubmitted = false;
     _renderApp();
   }
 
   function destroy() {
+    _stopTestTimer();
     _container = null;
-    // No intervals to clear; DOM events are GC'd
   }
 
   /* ==========================================================
@@ -78,6 +92,9 @@ D. Local Councils`;
         break;
       case 'play':
         _renderPlayMode();
+        break;
+      case 'mode-select':
+        _renderModeSelect();
         break;
       default:
         _renderLibraryMode();
@@ -206,14 +223,19 @@ D. Local Councils`;
           <span class="quiz-badge">${hasDecks ? decks.length + ' deck' + (decks.length !== 1 ? 's' : '') : 'Empty'}</span>
         </div>
 
-        <!-- Create button (always visible) -->
-        <button class="btn btn-primary deck-create-btn" id="btn-create-deck">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-            <line x1="9" y1="3" x2="9" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            <line x1="3" y1="9" x2="15" y2="9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-          Create New Deck
-        </button>
+        <!-- Create & AI buttons (always visible) -->
+        <div class="quiz-library-actions">
+          <button class="btn btn-primary deck-create-btn" id="btn-create-deck">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <line x1="9" y1="3" x2="9" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <line x1="3" y1="9" x2="15" y2="9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            Create New Deck
+          </button>
+          <button class="btn btn-secondary deck-ai-btn" id="btn-ai-generate">
+            <span class="ai-btn-icon">✨</span> AI Generate
+          </button>
+        </div>
 
         ${hasDecks ? gridHtml : `
           <!-- Empty state -->
@@ -230,6 +252,39 @@ D. Local Councils`;
             </button>
           </div>
         `}
+
+        <!-- AI Generator Modal (hidden by default) -->
+        <div class="ai-modal-overlay" id="ai-modal-overlay" style="display:none;">
+          <div class="ai-modal glass-card">
+            <div class="ai-modal-header">
+              <h3><span class="ai-modal-icon">✨</span> AI Quiz Generator</h3>
+              <button class="ai-modal-close" id="btn-ai-close" aria-label="Close">&times;</button>
+            </div>
+            <div class="ai-modal-body">
+              <div class="form-group">
+                <label for="ai-deck-title">Deck Title</label>
+                <input type="text" id="ai-deck-title" class="form-group input" placeholder="e.g., Biology 101, SAT Math..." autocomplete="off">
+              </div>
+              <div class="form-group">
+                <label for="ai-quiz-content">Quiz Content</label>
+                <textarea id="ai-quiz-content" class="quiz-textarea glass ai-textarea" placeholder="Paste your Quiz questions and options here..." spellcheck="false"></textarea>
+              </div>
+              <div class="form-group">
+                <label for="ai-quiz-key">Answer Key <span class="ai-label-hint">(Optional — leave blank to let AI solve it)</span></label>
+                <textarea id="ai-quiz-key" class="quiz-textarea glass ai-textarea-key" placeholder="Paste Answer Key here (Optional - Leave blank to let AI solve it)" spellcheck="false"></textarea>
+              </div>
+            </div>
+            <div class="ai-modal-footer">
+              <span class="ai-footer-hint" id="ai-status-hint">Powered by Gemini</span>
+              <div class="ai-modal-actions">
+                <button class="btn btn-ghost" id="btn-ai-cancel">Cancel</button>
+                <button class="btn btn-primary" id="btn-ai-generate-confirm">
+                  <span id="ai-generate-btn-text">⚡ Generate Quiz</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     `;
 
@@ -257,6 +312,26 @@ D. Local Councils`;
         _handleDeleteDeck(id);
       });
     });
+
+    // --- AI Generator events ---
+    const btnAI = _container.querySelector('#btn-ai-generate');
+    const modalOverlay = _container.querySelector('#ai-modal-overlay');
+    const btnAIClose = _container.querySelector('#btn-ai-close');
+    const btnAICancel = _container.querySelector('#btn-ai-cancel');
+    const btnAIGenerate = _container.querySelector('#btn-ai-generate-confirm');
+
+    if (btnAI && modalOverlay) {
+      btnAI.addEventListener('click', () => { modalOverlay.style.display = 'flex'; });
+    }
+    const hideModal = () => { if (modalOverlay) { modalOverlay.style.display = 'none'; _aiGenerating = false; } };
+    if (btnAIClose) btnAIClose.addEventListener('click', hideModal);
+    if (btnAICancel) btnAICancel.addEventListener('click', hideModal);
+    if (modalOverlay) {
+      modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) hideModal(); });
+    }
+    if (btnAIGenerate) {
+      btnAIGenerate.addEventListener('click', () => _handleAIGenerate());
+    }
   }
 
   /* ==========================================================
@@ -273,9 +348,12 @@ D. Local Councils`;
 
     _currentDeck = deck;
     _quizData = { sections: deck.sections };
-    _mode = 'play';
+    _mode = 'mode-select';
     _answeredMap = {};
     _selectedMap = {};
+    _testMode = false;
+    _testTimeRemaining = 0;
+    _testSubmitted = false;
     _renderApp();
     _container.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
@@ -469,8 +547,154 @@ D. Local Councils`;
   }
 
   /* ==========================================================
-     STATE 3 — PLAY MODE
-     (Interactive quiz — same UI as before, loaded from deck)
+     STATE 3 — MODE SELECT
+     Choose between Practice and Test mode before playing.
+     ========================================================== */
+
+  function _renderModeSelect() {
+    if (!_container || !_currentDeck) return;
+
+    const deckTitle = _currentDeck.title;
+    let totalQuestions = 0;
+    (_currentDeck.sections || []).forEach(s => { totalQuestions += s.questions.length; });
+
+    _container.innerHTML = `
+      <div class="tab-content quiz-app">
+        <div class="quiz-header-row">
+          <button class="btn btn-ghost" id="btn-back-from-select" style="padding:6px 14px;">⬅ Back</button>
+          <h2 class="section-header" style="margin-bottom:0;">${_esc(deckTitle)}</h2>
+          <span class="quiz-badge">${totalQuestions} Qs</span>
+        </div>
+
+        <div class="mode-select-container">
+          <div class="mode-select-card glass-card" id="mode-practice">
+            <div class="mode-select-icon">📝</div>
+            <h3>Practice Mode</h3>
+            <p>Answer questions at your own pace. Get immediate feedback after each answer. No time limit.</p>
+            <button class="btn btn-primary" data-mode="practice">Start Practice</button>
+          </div>
+
+          <div class="mode-select-card glass-card" id="mode-test">
+            <div class="mode-select-icon">⏱️</div>
+            <h3>Test Mode</h3>
+            <p>Simulate a real exam. Timer counts down — submit before time runs out. No feedback until you finish.</p>
+            <div class="mode-test-time">
+              <label for="test-time-input">Time limit (minutes):</label>
+              <input type="number" id="test-time-input" class="form-group input" value="45" min="1" max="180" step="1">
+            </div>
+            <button class="btn btn-accent" data-mode="test">Start Test</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Back button
+    const btnBack = _container.querySelector('#btn-back-from-select');
+    if (btnBack) btnBack.addEventListener('click', () => { _mode = 'library'; _currentDeck = null; _renderApp(); });
+
+    // Mode buttons
+    _container.querySelectorAll('[data-mode]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mode = btn.dataset.mode;
+        if (mode === 'practice') {
+          _testMode = false;
+          _startPlaySession();
+        } else {
+          const timeInput = _container.querySelector('#test-time-input');
+          const minutes = timeInput ? Math.max(1, Math.min(180, parseInt(timeInput.value, 10) || 45)) : 45;
+          _testMode = true;
+          _testTimeLimit = minutes * 60;
+          _testTimeRemaining = _testTimeLimit;
+          _testSubmitted = false;
+          _startPlaySession();
+        }
+      });
+    });
+  }
+
+  function _startPlaySession() {
+    _mode = 'play';
+    _renderApp();
+    _container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  /* ==========================================================
+     TEST TIMER LOGIC
+     ========================================================== */
+
+  function _startTestTimer() {
+    if (_testTimerId) return;
+    _testTimerId = setInterval(() => {
+      _testTimeRemaining--;
+      _updateTimerDisplay();
+
+      if (_testTimeRemaining <= 0) {
+        _stopTestTimer();
+        _testSubmitted = true;
+        // Disable all option buttons
+        _container.querySelectorAll('.quiz-option').forEach(b => b.disabled = true);
+        alert("⏰ Time's Up! Click OK to see your results.");
+        _submitTest();
+      }
+    }, 1000);
+  }
+
+  function _stopTestTimer() {
+    if (_testTimerId) {
+      clearInterval(_testTimerId);
+      _testTimerId = null;
+    }
+  }
+
+  function _formatTime(seconds) {
+    const m = Math.floor(Math.max(0, seconds) / 60);
+    const s = Math.max(0, seconds) % 60;
+    return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  function _updateTimerDisplay() {
+    const el = document.getElementById('test-timer-display');
+    if (!el) return;
+
+    el.textContent = _formatTime(_testTimeRemaining);
+
+    const urgent = _testTimeRemaining < 60;
+    const warning = _testTimeRemaining < 300 && !urgent;
+
+    el.classList.toggle('timer-urgent', urgent);
+    el.classList.toggle('timer-warning', warning);
+  }
+
+  function _submitTest() {
+    _stopTestTimer();
+
+    // Re-render in completed state showing all answers + score
+    // First, calculate score
+    let total = 0, correct = 0;
+    if (_quizData) {
+      for (let si = 0; si < _quizData.sections.length; si++) {
+        const qs = _quizData.sections[si].questions;
+        total += qs.length;
+        for (let qi = 0; qi < qs.length; qi++) {
+          if (_answeredMap[si + '-' + qi] === 'correct') correct++;
+        }
+      }
+    }
+
+    // Reveal all unanswered questions
+    _revealAllAnswers();
+    _renderPlayMode();
+
+    // Scroll to results
+    setTimeout(() => {
+      const banner = _container.querySelector('.quiz-complete-banner');
+      if (banner) banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 200);
+  }
+
+  /* ==========================================================
+     STATE 4 — PLAY MODE
+     (Interactive quiz — with optional test mode timer)
      ========================================================== */
 
   function _renderPlayMode() {
@@ -572,6 +796,20 @@ D. Local Councils`;
 
     _container.innerHTML = `
       <div class="tab-content quiz-app">
+        ${_testMode && !_testSubmitted ? `
+          <!-- Test Mode Sticky Timer -->
+          <div class="test-timer-bar glass-card" id="test-timer-bar">
+            <span class="test-timer-label">⏱️ Time Remaining</span>
+            <span class="test-timer-display" id="test-timer-display">${_formatTime(_testTimeRemaining)}</span>
+          </div>
+        ` : ''}
+
+        ${_testSubmitted ? `
+          <div class="test-submitted-banner glass-card">
+            <span>🏁 Test Submitted</span>
+          </div>
+        ` : ''}
+
         <!-- Top bar: back button + deck title + score -->
         <div class="quiz-topbar glass-card">
           <div class="quiz-topbar-left">
@@ -581,7 +819,7 @@ D. Local Councils`;
             <div>
               <h2 class="section-header" style="margin-bottom:0;">${_esc(deckTitle)}</h2>
             </div>
-            <span class="quiz-badge quiz-badge-live">Live</span>
+            <span class="quiz-badge quiz-badge-live">${_testSubmitted ? 'Submitted' : (_testMode ? 'Test' : 'Live')}</span>
           </div>
           <div class="quiz-topbar-right">
             <!-- Score ring -->
@@ -611,6 +849,11 @@ D. Local Councils`;
 
         <!-- Bottom actions -->
         <div class="quiz-bottom-actions">
+          ${_testMode && !_testSubmitted && !allAnswered ? `
+            <button class="btn btn-accent test-submit-btn" id="btn-submit-test">
+              🏁 Submit Test
+            </button>
+          ` : ''}
           ${allAnswered ? `
             <div class="quiz-complete-banner glass-card">
               <span class="quiz-complete-icon">${correctCount === totalQuestions ? '🏆' : correctCount >= totalQuestions / 2 ? '👍' : '📚'}</span>
@@ -643,11 +886,14 @@ D. Local Councils`;
     // Back to decks
     const btnBack = _container.querySelector('#btn-back-to-decks');
     if (btnBack) btnBack.addEventListener('click', () => {
+      _stopTestTimer();
       _mode = 'library';
       _quizData = null;
       _currentDeck = null;
       _answeredMap = {};
       _selectedMap = {};
+      _testMode = false;
+      _testSubmitted = false;
       _renderApp();
     });
 
@@ -676,6 +922,22 @@ D. Local Councils`;
     const btnReveal = _container.querySelector('#btn-show-answers');
     if (btnReveal) {
       btnReveal.addEventListener('click', () => _revealAllAnswers());
+    }
+
+    // Test mode: submit button
+    const btnSubmit = _container.querySelector('#btn-submit-test');
+    if (btnSubmit) {
+      btnSubmit.addEventListener('click', () => {
+        if (confirm('Submit your test? You will not be able to change answers.')) {
+          _testSubmitted = true;
+          _submitTest();
+        }
+      });
+    }
+
+    // Test mode: start timer
+    if (_testMode && !_testSubmitted) {
+      _startTestTimer();
     }
   }
 
@@ -775,6 +1037,130 @@ D. Local Councils`;
   function _hideErrors() {
     const el = document.getElementById('quiz-errors');
     if (el) el.style.display = 'none';
+  }
+
+  /* ==========================================================
+     AI QUIZ GENERATOR — Gemini API integration
+     ========================================================== */
+
+  async function _handleAIGenerate() {
+    if (_aiGenerating) return;
+
+    const titleInput = document.getElementById('ai-deck-title');
+    const contentTA = document.getElementById('ai-quiz-content');
+    const keyTA = document.getElementById('ai-quiz-key');
+    const statusHint = document.getElementById('ai-status-hint');
+    const btnText = document.getElementById('ai-generate-btn-text');
+
+    const title = (titleInput && titleInput.value || '').trim();
+    const content = (contentTA && contentTA.value || '').trim();
+    const answerKey = (keyTA && keyTA.value || '').trim();
+
+    if (!title) {
+      if (titleInput) {
+        titleInput.style.borderColor = 'var(--danger)';
+        setTimeout(() => { titleInput.style.borderColor = ''; }, 2000);
+      }
+      return;
+    }
+    if (!content) {
+      if (contentTA) {
+        contentTA.style.borderColor = 'var(--danger)';
+        setTimeout(() => { contentTA.style.borderColor = ''; }, 2000);
+      }
+      return;
+    }
+
+    // Read API key from localStorage
+    const apiKey = (() => {
+      try { return localStorage.getItem('hub_gemini_api_key') || ''; } catch (_) { return ''; }
+    })();
+
+    if (!apiKey) {
+      if (statusHint) statusHint.textContent = '❌ No API key found. Set it in Settings & Backup.';
+      return;
+    }
+
+    _aiGenerating = true;
+    if (statusHint) statusHint.textContent = '⏳ Generating quiz with AI...';
+    if (btnText) btnText.textContent = '⏳ Generating...';
+
+    const prompt = `You are a quiz parser AI. Given raw quiz text and an optional answer key, produce a structured JSON array.
+
+RULES:
+1. Parse each question and its options from the provided content.
+2. Options must be labeled A, B, C, D, etc.
+3. If the answer key is provided, map the correct letters to each question in order.
+4. If the answer key is EMPTY, act as an expert and solve each question to determine the correct answer.
+5. Return ONLY a valid JSON array — no markdown fences, no explanatory text.
+
+REQUIRED OUTPUT FORMAT:
+[{"text": "Question text here?", "options": [{"letter": "A", "text": "Option text", "isCorrect": true}, {"letter": "B", "text": "Option text", "isCorrect": false}]}]
+
+--- CONTENT ---
+${content}
+--- END CONTENT ---
+
+--- ANSWER KEY ---
+${answerKey || '(empty — solve the questions yourself)'}
+--- END ANSWER KEY ---`;
+
+    try {
+      const response = await fetch(
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.2, maxOutputTokens: 8192 }
+          })
+        }
+      );
+
+      if (!response.ok) {
+        const err = await response.text();
+        throw new Error('API error ' + response.status + ': ' + err.substring(0, 200));
+      }
+
+      const data = await response.json();
+      const rawText = data.candidates && data.candidates[0] && data.candidates[0].content &&
+        data.candidates[0].content.parts && data.candidates[0].content.parts[0] &&
+        data.candidates[0].content.parts[0].text;
+
+      if (!rawText) throw new Error('Empty response from Gemini');
+
+      // Strip markdown fences if present
+      let jsonStr = rawText.trim();
+      if (jsonStr.startsWith('```')) {
+        jsonStr = jsonStr.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+      }
+
+      const questions = JSON.parse(jsonStr);
+      if (!Array.isArray(questions) || questions.length === 0) {
+        throw new Error('AI did not return a valid question array');
+      }
+
+      // Build a single-section deck from the AI response
+      const parsed = { sections: [{ title: title, questions: questions }], errors: [] };
+      _addDeck(title, parsed);
+
+      // Hide modal and refresh library
+      const overlay = document.getElementById('ai-modal-overlay');
+      if (overlay) overlay.style.display = 'none';
+      if (contentTA) contentTA.value = '';
+      if (keyTA) keyTA.value = '';
+      if (titleInput) titleInput.value = '';
+
+      _renderLibraryMode();
+
+    } catch (err) {
+      console.warn('[Quiz AI]', err);
+      if (statusHint) statusHint.textContent = '❌ ' + (err.message || 'Generation failed');
+    } finally {
+      _aiGenerating = false;
+      if (btnText) btnText.textContent = '⚡ Generate Quiz';
+    }
   }
 
   /* ==========================================================
