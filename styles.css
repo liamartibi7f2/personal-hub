@@ -4018,6 +4018,37 @@ body.light-mode .btn-edit-card:hover {
 }
 
 /* ----------------------------------------------------------
+   NEON AUDIO VISUALIZER
+   Simulated bar visualizer — no Web Audio API needed.
+   ---------------------------------------------------------- */
+.focus-vibe-visualizer {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 36px;
+  padding: 0 2px;
+  opacity: 0;
+  transition: opacity var(--duration-base);
+}
+.focus-vibe-widget.playing .focus-vibe-visualizer {
+  opacity: 1;
+}
+.vibe-bar {
+  flex: 1;
+  min-width: 4px;
+  border-radius: 2px 2px 0 0;
+  transition: height 0.1s ease-in-out;
+}
+.vibe-bar-c {
+  background: linear-gradient(180deg, #00f0ff, rgba(0, 240, 255, 0.5));
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.5), 0 0 2px rgba(0, 240, 255, 0.3);
+}
+.vibe-bar-p {
+  background: linear-gradient(180deg, #b829ea, rgba(184, 41, 234, 0.5));
+  box-shadow: 0 0 8px rgba(184, 41, 234, 0.5), 0 0 2px rgba(184, 41, 234, 0.3);
+}
+
+/* ----------------------------------------------------------
    CONTROLS ROW: Play button + Volume
    ---------------------------------------------------------- */
 .focus-vibe-controls-row {
@@ -4511,6 +4542,10 @@ body.light-mode .btn-edit-card:hover {
   .focus-vibe-panel {
     width: 260px;
     padding: var(--space-sm) var(--space-md);
+  }
+  .focus-vibe-visualizer {
+    height: 28px;
+    gap: 3px;
   }
   .focus-vibe-trigger {
     width: 48px;
@@ -5591,6 +5626,16 @@ body.light-mode .now-value,
 html.light-mode .focus-vibe-widget.playing .now-value,
 body.light-mode .focus-vibe-widget.playing .now-value {
   text-shadow: none;
+}
+
+/* ── Visualizer bars (light mode) ── */
+html.light-mode .vibe-bar-c,
+body.light-mode .vibe-bar-c {
+  box-shadow: 0 0 10px rgba(0, 119, 182, 0.45), 0 0 3px rgba(0, 119, 182, 0.25);
+}
+html.light-mode .vibe-bar-p,
+body.light-mode .vibe-bar-p {
+  box-shadow: 0 0 10px rgba(124, 58, 237, 0.45), 0 0 3px rgba(124, 58, 237, 0.25);
 }
 
 /* ── Timer ring progress glow ── */

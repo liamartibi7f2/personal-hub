@@ -22,6 +22,7 @@
     youtubeLoading: false,
     initCalled: false,
     _activeTag: null,
+    _visualizer: { bars: null, rafId: null, running: false, targets: [], lastUpdate: 0 },
   };
 
   /* ----------------------------------------------------------
@@ -177,6 +178,12 @@
     updatePlayButton();
     updateWidgetPlayingState();
 
+    if (event.data === YT.PlayerState.PLAYING) {
+      startVisualizer();
+    } else if (event.data === YT.PlayerState.PAUSED) {
+      stopVisualizer();
+    }
+
     if (event.data === YT.PlayerState.ENDED) {
       S.player.seekTo(0);
       S.player.playVideo();
@@ -188,6 +195,7 @@
     S.isPlaying = false;
     updatePlayButton();
     updateWidgetPlayingState();
+    stopVisualizer();
     const label = document.getElementById('focus-vibe-label');
     if (label) label.textContent = '⚠️ Track unavailable';
   }
@@ -263,8 +271,73 @@
   }
 
   /* ----------------------------------------------------------
-     HANDLE CUSTOM URL (floating widget only)
+     NEON AUDIO VISUALIZER (simulated — no Web Audio API)
+     Smooth random pulse synced to YouTube player state.
      ---------------------------------------------------------- */
+  function initVisualizer() {
+    var container = document.getElementById('focus-vibe-visualizer');
+    if (!container) return;
+    S._visualizer.bars = [].slice.call(container.querySelectorAll('.vibe-bar'));
+    S._visualizer.targets = S._visualizer.bars.map(function () { return 10; });
+    // Set initial idle state
+    S._visualizer.bars.forEach(function (bar) { bar.style.height = '10%'; });
+  }
+
+  function startVisualizer() {
+    var V = S._visualizer;
+    if (V.running) return;
+    if (!V.bars || V.bars.length === 0) initVisualizer();
+    if (!V.bars || V.bars.length === 0) return;
+
+    V.running = true;
+    V.lastUpdate = 0;
+    V.targets = V.bars.map(function () { return 10; });
+    loopVisualizer();
+  }
+
+  function stopVisualizer() {
+    var V = S._visualizer;
+    V.running = false;
+    if (V.rafId) {
+      cancelAnimationFrame(V.rafId);
+      V.rafId = null;
+    }
+    // Smoothly settle all bars to idle
+    if (V.bars) {
+      V.bars.forEach(function (bar) { bar.style.height = '10%'; });
+    }
+  }
+
+  function loopVisualizer(timestamp) {
+    var V = S._visualizer;
+    if (!V.running) return;
+
+    if (!timestamp) timestamp = 0;
+    if (!V.lastUpdate) V.lastUpdate = timestamp;
+
+    // Every ~180ms, pick 2-3 random bars and assign new random heights
+    if (timestamp - V.lastUpdate >= 180) {
+      V.lastUpdate = timestamp;
+      var count = 2 + Math.floor(Math.random() * 2); // 2 or 3 bars
+      var indices = [];
+      while (indices.length < count) {
+        var idx = Math.floor(Math.random() * V.bars.length);
+        if (indices.indexOf(idx) === -1) indices.push(idx);
+      }
+      indices.forEach(function (i) {
+        V.targets[i] = 20 + Math.floor(Math.random() * 80); // 20%–100%
+      });
+    }
+
+    // Lerp each bar toward its target
+    V.bars.forEach(function (bar, i) {
+      var current = parseFloat(bar.style.height) || 10;
+      var next = current + (V.targets[i] - current) * 0.35;
+      bar.style.height = next + '%';
+    });
+
+    V.rafId = requestAnimationFrame(loopVisualizer);
+  }
   function handleCustomUrl(url) {
     var videoId = extractVideoId(url);
     var input = document.getElementById('focus-vibe-url');
@@ -670,6 +743,7 @@
     if (S.initCalled) return;
     S.initCalled = true;
 
+    initVisualizer();
     renderVibePills();
     bindWidgetEvents();
     updatePlayButton();
