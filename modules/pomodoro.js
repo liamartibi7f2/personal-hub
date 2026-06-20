@@ -83,9 +83,15 @@ const pomodoroModule = (function () {
   }
 
   function destroy() {
-    _pauseTimer();
-    if (_isRunning || _secondsRemaining < _totalSeconds) {
-      _saveTimerState();
+    // Persist the current timer state so it survives SPA tab switches.
+    // IMPORTANT: do NOT call _pauseTimer() — it sets _isRunning = false
+    // which would kill background execution. We only clear the browser
+    // interval handle; the logical timer stays running.
+    _saveTimerState();
+
+    if (_timerInterval) {
+      clearInterval(_timerInterval);
+      _timerInterval = null;
     }
 
     // Remove global escape handler if present
@@ -367,7 +373,7 @@ const pomodoroModule = (function () {
 
         _isRunning = true;
         _lastTickTime = Date.now();
-        _startInterval();
+        // Interval will be started by _renderApp()
       } else {
         _secondsRemaining = state.remaining;
         _isRunning = false;
@@ -989,6 +995,7 @@ const pomodoroModule = (function () {
       _recordFocusCompletion();   // detailed stats (total time, daily history, streak)
     }
 
+    // Audio and notification work regardless of which SPA tab is active
     _playSound(_settings.soundProfile);
     _showNotification();
 
@@ -1000,7 +1007,8 @@ const pomodoroModule = (function () {
       _currentMode = breakMode;
       _setDuration(_settings[MODES.find(m => m.key === breakMode).settingKey]);
       _startTimer();
-      _renderApp();
+      // Only re-render if user is actively viewing the Pomodoro tab
+      if (_container) _renderApp();
       return;
     }
 
@@ -1009,15 +1017,16 @@ const pomodoroModule = (function () {
       _currentMode = 'focus';
       _setDuration(_settings.focus);
       _startTimer();
-      _renderApp();
+      if (_container) _renderApp();
       return;
     }
 
     // Full re-render to refresh the stats dashboard with updated numbers
-    _renderApp();
-
-    // Pulse animation on the updated stat values
-    _pulseStatValues();
+    if (_container) {
+      _renderApp();
+      // Pulse animation on the updated stat values
+      _pulseStatValues();
+    }
   }
 
   /**
