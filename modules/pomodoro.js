@@ -59,6 +59,7 @@ const pomodoroModule = (function () {
   let _settingsOpen   = false;   // Tracks settings modal visibility
   let _escapeHandler  = null;    // Reference for cleanup
   let _chartRange     = 'week';  // 'week' | 'month' | 'year'
+  let _lastTickTime   = null;    // Date.now() anchor for delta-based timing
 
   // =============================================================
   //  PUBLIC API
@@ -363,6 +364,7 @@ const pomodoroModule = (function () {
         }
 
         _isRunning = true;
+        _lastTickTime = Date.now();
         _startInterval();
       } else {
         _secondsRemaining = state.remaining;
@@ -881,6 +883,7 @@ const pomodoroModule = (function () {
       _setDuration(_settings[settingKey]);
     }
     _isRunning = true;
+    _lastTickTime = Date.now();
     _startInterval();
     _saveTimerState();
   }
@@ -911,26 +914,36 @@ const pomodoroModule = (function () {
   function _startInterval() {
     if (_timerInterval) clearInterval(_timerInterval);
     _timerInterval = setInterval(() => {
-      if (_secondsRemaining > 0) {
-        _secondsRemaining--;
+      const now   = Date.now();
+      const delta = (now - _lastTickTime) / 1000;   // seconds elapsed since last tick
+      _lastTickTime = now;
 
-        // Efficient DOM updates (no full re-render)
-        const timeEl = document.getElementById('timer-time');
-        const ringEl = document.getElementById('ring-progress');
-        if (timeEl) {
-          const m = Math.floor(_secondsRemaining / 60);
-          const s = _secondsRemaining % 60;
-          timeEl.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-        }
-        if (ringEl) {
-          const p = (_totalSeconds - _secondsRemaining) / _totalSeconds;
-          ringEl.style.strokeDashoffset = RING_CIRCUMFERENCE * (1 - p);
-        }
-
-        _saveTimerState();
-      } else {
-        _onTimerComplete();
+      if (delta > 0) {
+        _secondsRemaining = Math.max(0, _secondsRemaining - delta);
       }
+
+      // Timer completed — guard against oversleep past end time
+      if (_secondsRemaining <= 0) {
+        _secondsRemaining = 0;
+        _onTimerComplete();
+        return;
+      }
+
+      // Efficient DOM updates (no full re-render)
+      const displaySeconds = Math.ceil(_secondsRemaining);
+      const timeEl = document.getElementById('timer-time');
+      const ringEl = document.getElementById('ring-progress');
+      if (timeEl) {
+        const m = Math.floor(displaySeconds / 60);
+        const s = displaySeconds % 60;
+        timeEl.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      }
+      if (ringEl) {
+        const p = (_totalSeconds - _secondsRemaining) / _totalSeconds;
+        ringEl.style.strokeDashoffset = RING_CIRCUMFERENCE * (1 - Math.min(1, p));
+      }
+
+      _saveTimerState();
     }, 1000);
   }
 
