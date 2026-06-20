@@ -1528,6 +1528,232 @@ ul, ol { list-style: none; }
 }
 
 /* ----------------------------------------------------------
+   BUTTON GROUP (AI Generate + Manual Add)
+   ---------------------------------------------------------- */
+
+.btn-group {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.btn-group .btn-sm {
+  padding: 8px 16px;
+  font-size: 0.72rem;
+}
+
+/* Manual Add button — purple accent to differentiate from AI */
+.btn-manual-add {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 10px 20px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(179, 71, 234, 0.3);
+  background: transparent;
+  color: var(--accent-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+}
+
+.btn-manual-add:hover {
+  background: rgba(179, 71, 234, 0.08);
+  border-color: var(--accent-secondary);
+  box-shadow: 0 0 24px rgba(179, 71, 234, 0.2);
+  transform: translateY(-1px);
+}
+
+.btn-manual-add:active {
+  transform: scale(0.97);
+}
+
+/* Edit Card button — golden accent */
+.btn-edit-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 10px 22px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(255, 146, 43, 0.25);
+  background: transparent;
+  color: #ff922b;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+}
+
+.btn-edit-card:hover {
+  background: rgba(255, 146, 43, 0.08);
+  border-color: #ff922b;
+  box-shadow: 0 0 24px rgba(255, 146, 43, 0.15);
+  transform: translateY(-1px);
+}
+
+.btn-edit-card:active {
+  transform: scale(0.97);
+}
+
+/* ----------------------------------------------------------
+   CARD EDITOR MODAL (Universal: Manual Add + Edit)
+   ---------------------------------------------------------- */
+
+.card-editor-modal {
+  width: 92%;
+  max-width: 500px;
+  max-height: 88vh;
+  padding: var(--space-xl);
+  border-radius: var(--radius-xl);
+  animation: scaleIn 300ms var(--ease-out-expo);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Scrollable form body */
+.card-editor-body {
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  padding-right: 6px;
+  margin: 0 -6px 0 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.08) transparent;
+}
+
+.card-editor-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.card-editor-body::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.1);
+  border-radius: var(--radius-full);
+}
+
+/* Two-column row inside the editor */
+.card-editor-row {
+  display: flex;
+  gap: var(--space-md);
+}
+
+@media (max-width: 500px) {
+  .card-editor-row {
+    flex-direction: column;
+    gap: 0;
+  }
+}
+
+/* Editor input — matches form-group input style */
+.card-editor-input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  transition: border-color var(--duration-fast);
+}
+
+.card-editor-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.1);
+}
+
+.card-editor-input::placeholder {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+/* Editor textarea */
+.card-editor-textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  resize: vertical;
+  min-height: 52px;
+  line-height: 1.5;
+  transition: border-color var(--duration-fast);
+}
+
+.card-editor-textarea:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.1);
+}
+
+.card-editor-textarea::placeholder {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+/* Light mode overrides for editor */
+html.light-mode .card-editor-input,
+body.light-mode .card-editor-input,
+html.light-mode .card-editor-textarea,
+body.light-mode .card-editor-textarea {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: var(--text-primary);
+}
+
+html.light-mode .card-editor-input:focus,
+body.light-mode .card-editor-input:focus,
+html.light-mode .card-editor-textarea:focus,
+body.light-mode .card-editor-textarea:focus {
+  box-shadow: 0 0 0 3px rgba(0, 119, 182, 0.08);
+}
+
+html.light-mode .btn-manual-add,
+body.light-mode .btn-manual-add {
+  color: var(--accent-secondary);
+  border-color: rgba(124, 58, 237, 0.3);
+}
+
+html.light-mode .btn-manual-add:hover,
+body.light-mode .btn-manual-add:hover {
+  background: rgba(124, 58, 237, 0.08);
+  border-color: var(--accent-secondary);
+  box-shadow: 0 0 14px rgba(124, 58, 237, 0.1);
+}
+
+html.light-mode .btn-edit-card,
+body.light-mode .btn-edit-card {
+  color: #d97706;
+  border-color: rgba(217, 119, 6, 0.25);
+}
+
+html.light-mode .btn-edit-card:hover,
+body.light-mode .btn-edit-card:hover {
+  background: rgba(217, 119, 6, 0.08);
+  border-color: #d97706;
+  box-shadow: 0 0 14px rgba(217, 119, 6, 0.12);
+}
+
+/* Mobile perf patch for editor modal */
+@media (max-width: 768px) {
+  .card-editor-modal {
+    background: rgba(18, 18, 30, 0.96);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    max-width: 95vw;
+    max-height: 85vh;
+  }
+}
+
+/* ----------------------------------------------------------
    POMODORO STYLES
    ---------------------------------------------------------- */
 

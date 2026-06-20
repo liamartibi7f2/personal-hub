@@ -1275,15 +1275,20 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
           <div class="empty-state">
             <div class="empty-state-icon">🃏</div>
             <h3>No flashcards yet</h3>
-            <p>Generate your first vocabulary card for this deck with Gemini AI.</p>
-            <button class="btn btn-primary" id="btn-add-first-deck">+ Generate Card</button>
+            <p>Add your first vocabulary card with AI or manually.</p>
+            <div class="btn-group" style="justify-content:center;">
+              <button class="btn btn-primary" id="btn-add-ai-empty">✨ AI Generate</button>
+              <button class="btn btn-manual-add" id="btn-add-manual-empty">✍️ Manual Add</button>
+            </div>
           </div>
         </div>
       `;
       const btnBack = _container.querySelector('#btn-back-to-library');
       if (btnBack) btnBack.addEventListener('click', () => { _mode = 'library'; _activeDeckId = null; _renderApp(); });
-      const btnAdd = _container.querySelector('#btn-add-first-deck');
-      if (btnAdd) btnAdd.addEventListener('click', _showAddForm);
+      const btnAi = _container.querySelector('#btn-add-ai-empty');
+      if (btnAi) btnAi.addEventListener('click', _showAddForm);
+      const btnManual = _container.querySelector('#btn-add-manual-empty');
+      if (btnManual) btnManual.addEventListener('click', () => _showCardEditorModal(null));
       return;
     }
 
@@ -1314,9 +1319,10 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
             <h2 class="section-header" style="margin-bottom:2px;">${_esc(deck.title)}</h2>
             <span style="font-family:var(--font-mono);font-size:0.6rem;color:var(--text-muted);">${cards.length} card${cards.length !== 1 ? 's' : ''}</span>
           </div>
-          <button class="add-card-btn" id="btn-add-card">
-            <span>+</span> Generate Card
-          </button>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" id="btn-add-card-ai">✨ AI Generate</button>
+            <button class="btn btn-manual-add btn-sm" id="btn-add-card-manual">✍️ Manual Add</button>
+          </div>
         </div>
 
         <!-- 3D Card -->
@@ -1449,10 +1455,15 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
           `).join('')}
         </div>
 
-        <!-- Delete button -->
-        <button class="btn btn-danger" id="btn-delete-card" style="margin-top:var(--space-md);">
-          🗑 Delete Card
-        </button>
+        <!-- Delete + Edit buttons -->
+        <div class="btn-group" style="margin-top:var(--space-md);">
+          <button class="btn btn-danger" id="btn-delete-card">
+            🗑 Delete Card
+          </button>
+          <button class="btn btn-edit-card" id="btn-edit-card">
+            ✏️ Edit Card
+          </button>
+        </div>
       </div>
     `;
 
@@ -1503,9 +1514,11 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
       });
     }
 
-    // Add card button
-    const btnAdd = _container.querySelector('#btn-add-card');
-    if (btnAdd) btnAdd.addEventListener('click', _showAddForm);
+    // Add card buttons (AI + Manual)
+    const btnAddAi = _container.querySelector('#btn-add-card-ai');
+    if (btnAddAi) btnAddAi.addEventListener('click', _showAddForm);
+    const btnAddManual = _container.querySelector('#btn-add-card-manual');
+    if (btnAddManual) btnAddManual.addEventListener('click', () => _showCardEditorModal(null));
 
     // Prev / Next
     const btnPrev = _container.querySelector('#btn-prev');
@@ -1561,6 +1574,12 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
           _renderApp();
         }
       }
+    });
+
+    // Edit card
+    const btnEdit = _container.querySelector('#btn-edit-card');
+    if (btnEdit) btnEdit.addEventListener('click', () => {
+      _showCardEditorModal(cards[_currentIndex]);
     });
   }
 
@@ -1854,6 +1873,206 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
     _isGenerating = false;
     const overlay = document.getElementById('add-card-overlay');
     if (overlay) overlay.remove();
+  }
+
+  /* ==========================================================
+     CARD EDITOR MODAL — Universal (Manual Add + Edit)
+     Glassmorphism modal for entering/editing card data.
+     @param {Object|null} card — null for manual add; card object for edit
+     ========================================================== */
+
+  function _showCardEditorModal(card) {
+    // Prevent multiple overlays
+    if (document.getElementById('card-editor-overlay')) return;
+
+    const isEdit = !!card;
+    const title = isEdit ? 'Edit Card' : 'New Card';
+    const subtitle = isEdit ? `Editing "${card.term}"` : 'Fill in the fields manually';
+
+    const term = card ? card.term : '';
+    const type = card ? card.type : '';
+    const phonetic = card ? card.phonetic : '';
+    const vietnamese = card ? card.vietnamese : '';
+    const describe = card && card.describe ? card.describe.join('\n') : '';
+    const examples = card && card.examples ? card.examples.join('\n') : '';
+    const synonyms = card && card.synonyms ? card.synonyms.join(', ') : '';
+    const note = card && card.note ? card.note.join('\n') : '';
+
+    const overlay = document.createElement('div');
+    overlay.id = 'card-editor-overlay';
+    overlay.className = 'add-card-overlay';
+    overlay.innerHTML = `
+      <div class="card-editor-modal glass" id="card-editor-modal">
+        <!-- Header -->
+        <div class="generate-modal-header">
+          <div class="generate-modal-icon">
+            <span style="font-size:1.8rem;">${isEdit ? '✏️' : '📝'}</span>
+          </div>
+          <h3 class="generate-modal-title">${title}</h3>
+          <p class="generate-modal-subtitle">${subtitle}</p>
+        </div>
+
+        <!-- Scrollable form body -->
+        <div class="card-editor-body">
+          <div class="card-editor-row">
+            <div class="form-group" style="flex:2;">
+              <label>Term *</label>
+              <input type="text" id="ceditor-term" class="card-editor-input" value="${_esc(term)}" placeholder="e.g. Serendipity" autocomplete="off">
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label>Type / POS</label>
+              <input type="text" id="ceditor-type" class="card-editor-input" value="${_esc(type)}" placeholder="e.g. (n), (adj)" autocomplete="off">
+            </div>
+          </div>
+
+          <div class="card-editor-row">
+            <div class="form-group" style="flex:1;">
+              <label>Phonetic</label>
+              <input type="text" id="ceditor-phonetic" class="card-editor-input" value="${_esc(phonetic)}" placeholder="e.g. /ˌser.ənˈdɪp.ə.ti/" autocomplete="off">
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label>Vietnamese Meaning</label>
+              <input type="text" id="ceditor-vietnamese" class="card-editor-input" value="${_esc(vietnamese)}" placeholder="e.g. sự tình cờ may mắn" autocomplete="off">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Definition</label>
+            <textarea id="ceditor-describe" class="card-editor-textarea" rows="2" placeholder="One definition per line">${_esc(describe)}</textarea>
+          </div>
+
+          <div class="form-group">
+            <label>Examples</label>
+            <textarea id="ceditor-examples" class="card-editor-textarea" rows="2" placeholder="One example sentence per line">${_esc(examples)}</textarea>
+          </div>
+
+          <div class="form-group">
+            <label>Synonyms</label>
+            <input type="text" id="ceditor-synonyms" class="card-editor-input" value="${_esc(synonyms)}" placeholder="Comma-separated, e.g. chance, fortune, luck" autocomplete="off">
+          </div>
+
+          <div class="form-group">
+            <label>Usage Notes</label>
+            <textarea id="ceditor-note" class="card-editor-textarea" rows="2" placeholder="One usage note per line">${_esc(note)}</textarea>
+          </div>
+        </div>
+
+        <!-- Footer actions -->
+        <div class="generate-modal-footer">
+          <button class="btn btn-ghost" id="btn-cancel-editor">Cancel</button>
+          <button class="btn btn-primary" id="btn-save-card">Save Card</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    // --- Close on backdrop click ---
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) _closeCardEditorModal();
+    });
+
+    // --- Close on Escape ---
+    const escHandler = (e) => {
+      if (e.key === 'Escape') {
+        _closeCardEditorModal();
+        document.removeEventListener('keydown', escHandler);
+      }
+    };
+    document.addEventListener('keydown', escHandler);
+
+    // --- Cancel button ---
+    overlay.querySelector('#btn-cancel-editor')
+      .addEventListener('click', _closeCardEditorModal);
+
+    // --- Save button ---
+    overlay.querySelector('#btn-save-card')
+      .addEventListener('click', () => _handleSaveCard(overlay, card));
+
+    // --- Ctrl+Enter to save ---
+    overlay.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        _handleSaveCard(overlay, card);
+      }
+    });
+
+    // Focus first input
+    setTimeout(() => {
+      const inp = overlay.querySelector('#ceditor-term');
+      if (inp) inp.focus();
+    }, 150);
+  }
+
+  function _closeCardEditorModal() {
+    const overlay = document.getElementById('card-editor-overlay');
+    if (overlay) overlay.remove();
+  }
+
+  function _handleSaveCard(overlay, existingCard) {
+    const isEdit = !!existingCard;
+
+    // --- Read form values ---
+    const term = (overlay.querySelector('#ceditor-term')?.value || '').trim();
+    if (!term) {
+      // Highlight the term input
+      const termInput = overlay.querySelector('#ceditor-term');
+      if (termInput) {
+        termInput.style.borderColor = 'var(--danger)';
+        termInput.focus();
+        setTimeout(() => { termInput.style.borderColor = ''; }, 2000);
+      }
+      return;
+    }
+
+    const typeVal       = (overlay.querySelector('#ceditor-type')?.value || '').trim();
+    const phoneticVal   = (overlay.querySelector('#ceditor-phonetic')?.value || '').trim();
+    const vietnameseVal = (overlay.querySelector('#ceditor-vietnamese')?.value || '').trim();
+    const describeRaw   = (overlay.querySelector('#ceditor-describe')?.value || '').trim();
+    const examplesRaw   = (overlay.querySelector('#ceditor-examples')?.value || '').trim();
+    const synonymsRaw   = (overlay.querySelector('#ceditor-synonyms')?.value || '').trim();
+    const noteRaw       = (overlay.querySelector('#ceditor-note')?.value || '').trim();
+
+    // --- Build the card fields ---
+    const cardFields = {
+      term: term,
+      type: typeVal,
+      phonetic: phoneticVal,
+      vietnamese: vietnameseVal,
+      describe: describeRaw ? describeRaw.split('\n').map(s => s.trim()).filter(Boolean) : [],
+      examples: examplesRaw ? examplesRaw.split('\n').map(s => s.trim()).filter(Boolean) : [],
+      synonyms: synonymsRaw ? synonymsRaw.split(',').map(s => s.trim()).filter(Boolean) : [],
+      note: noteRaw ? noteRaw.split('\n').map(s => s.trim()).filter(Boolean) : [],
+      word_family: existingCard ? (existingCard.word_family || {}) : {},
+      idioms: existingCard ? (existingCard.idioms || []) : [],
+      collocations: existingCard ? (existingCard.collocations || []) : []
+    };
+
+    if (isEdit) {
+      // --- Edit mode: preserve SRS progress ---
+      const deck = _getActiveDeck();
+      if (!deck) { _closeCardEditorModal(); return; }
+      deck.cards[_currentIndex] = {
+        ...existingCard,
+        ...cardFields
+      };
+    } else {
+      // --- Manual Add mode: new card with SRS defaults ---
+      const deck = _getActiveDeck();
+      if (!deck) { _closeCardEditorModal(); return; }
+      const newCard = {
+        ...cardFields,
+        repetition: 0,
+        interval: 0,
+        easeFactor: 2.5,
+        nextReviewDate: Date.now()
+      };
+      deck.cards.push(newCard);
+      _currentIndex = deck.cards.length - 1;
+    }
+
+    _saveDecks();
+    _closeCardEditorModal();
+    _renderApp();
   }
 
   /* ==========================================================
