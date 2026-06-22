@@ -41,6 +41,9 @@ const quizModule = (function () {
   // --- AI Generator state ---
   let _aiGenerating     = false;
 
+  // --- Shuffle state ---
+  let _shuffle          = false;
+
   // --- Default sample text (shown in the editor textarea) ---
   const DEFAULT_TEXT = `'IELTS Grammar
 When we went back to the bookstore, the bookseller _ the book we wanted.
@@ -71,6 +74,7 @@ D. Local Councils`;
     _testTimerId = null;
     _testTimeRemaining = 0;
     _testSubmitted = false;
+    _shuffle = false;
     _renderApp();
   }
 
@@ -359,6 +363,7 @@ D. Local Councils`;
     _testMode = false;
     _testTimeRemaining = 0;
     _testSubmitted = false;
+    _shuffle = false;
     _renderApp();
     _container.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
@@ -590,6 +595,21 @@ D. Local Councils`;
             <button class="btn btn-accent" data-mode="test">Start Test</button>
           </div>
         </div>
+
+        <!-- Shuffle Toggle -->
+        <div class="mode-shuffle-row glass-card">
+          <div class="mode-shuffle-info">
+            <span class="mode-shuffle-icon">🔀</span>
+            <div>
+              <span class="mode-shuffle-label">Shuffle Questions</span>
+              <span class="mode-shuffle-hint">Randomize question &amp; option order</span>
+            </div>
+          </div>
+          <label class="toggle-switch" title="Toggle shuffle">
+            <input type="checkbox" id="shuffle-toggle" ${_shuffle ? 'checked' : ''}>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
       </div>
     `;
 
@@ -601,6 +621,13 @@ D. Local Councils`;
     _container.querySelectorAll('[data-mode]').forEach(btn => {
       btn.addEventListener('click', () => {
         const mode = btn.dataset.mode;
+        const shuffleCheckbox = _container.querySelector('#shuffle-toggle');
+        _shuffle = shuffleCheckbox ? shuffleCheckbox.checked : false;
+
+        if (_shuffle) {
+          _shuffleQuizData();
+        }
+
         if (mode === 'practice') {
           _testMode = false;
           _startPlaySession();
@@ -615,6 +642,33 @@ D. Local Councils`;
         }
       });
     });
+  }
+
+  /* ==========================================================
+     SHUFFLE (Fisher-Yates)
+     ========================================================== */
+
+  function _shuffleArray(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function _shuffleQuizData() {
+    if (!_quizData) return;
+
+    _quizData = {
+      sections: _quizData.sections.map(section => ({
+        title: section.title,
+        questions: _shuffleArray(section.questions).map(q => ({
+          text: q.text,
+          options: _shuffleArray(q.options)
+        }))
+      }))
+    };
   }
 
   function _startPlaySession() {
@@ -903,9 +957,10 @@ D. Local Councils`;
       _renderApp();
     });
 
-    // Option clicks
+    // Option clicks — skip if user was highlighting text
     _container.querySelectorAll('.quiz-option:not([disabled])').forEach(btn => {
       btn.addEventListener('click', (e) => {
+        if (window.getSelection().toString().trim().length > 0) return;
         const letter = btn.dataset.letter;
         const si = parseInt(btn.parentElement.dataset.si, 10);
         const qi = parseInt(btn.parentElement.dataset.qi, 10);

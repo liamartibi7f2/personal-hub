@@ -2860,6 +2860,11 @@ body.light-mode .btn-edit-card:hover {
   transition: all var(--duration-fast) var(--ease-out-expo);
   position: relative;
   overflow: hidden;
+  user-select: text !important;
+}
+.quiz-option .option-letter,
+.quiz-option .option-text {
+  user-select: text !important;
 }
 .quiz-option:hover {
   border-color: rgba(255, 255, 255, 0.15);
@@ -3321,6 +3326,40 @@ body.light-mode .btn-edit-card:hover {
   width: 70px;
   padding: 6px 10px;
   text-align: center;
+}
+
+/* Shuffle toggle row */
+.mode-shuffle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-lg) !important;
+  border-radius: var(--radius-md) !important;
+}
+.mode-shuffle-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.mode-shuffle-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+.mode-shuffle-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.03em;
+}
+.mode-shuffle-hint {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  margin-top: 1px;
 }
 
 /* ----------------------------------------------------------
