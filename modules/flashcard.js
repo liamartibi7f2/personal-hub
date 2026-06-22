@@ -433,7 +433,7 @@ const flashcardModule = (function () {
       throw new Error('NO_API_KEY');
     }
 
-    const prompt = `You are an English vocabulary tutor. Return ONLY valid JSON for the word '${word}'.
+const prompt = `You are an English vocabulary tutor. Return ONLY valid JSON for the word '${word}'.
 Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_family, idioms, collocations, clozeSentence.
 - type: short form (n), (v), (adj), (adv)
 - vietnamese: concise Vietnamese meaning
@@ -444,7 +444,7 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
 - word_family: include forms with POS
 - idioms: return up to 2 idioms or set phrases using the word.
 - collocations: return 5 natural collocations
-- clozeSentence: a natural example sentence where the word is replaced by "___" (three underscores)`;
+- clozeSentence: A natural English example sentence. You MUST replace the target vocabulary word in this sentence with EXACTLY three underscores: "___"`;
 
     const body = {
       contents: [
