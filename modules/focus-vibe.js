@@ -23,7 +23,13 @@
     initCalled: false,
     _activeTag: null,
     _visualizer: { bars: null, rafId: null, running: false, targets: [], lastUpdate: 0 },
+    _drag: { active: false, startX: 0, startY: 0, startLeft: 0, startTop: 0, moved: false, _justDragged: false },
   };
+
+  /* ----------------------------------------------------------
+     DRAG-TO-POSITION PERSISTENCE
+     ---------------------------------------------------------- */
+  const POSITION_KEY = 'hub_vibe_position';
 
   /* ----------------------------------------------------------
      DYNAMIC PLAYLIST (localStorage-backed)
@@ -402,6 +408,155 @@
   }
 
   /* ----------------------------------------------------------
+     DRAG SYSTEM (smooth drag-and-drop with click/drag diff)
+     Initiated by grabbing .focus-vibe-trigger (minimized) or
+     .focus-vibe-header (expanded). Position saved to localStorage.
+     ---------------------------------------------------------- */
+
+  function isDragHandle(target) {
+    var trigger = document.getElementById('focus-vibe-trigger');
+    if (trigger && trigger.contains(target)) return true;
+
+    var header = document.querySelector('.focus-vibe-header');
+    if (header && header.contains(target)) {
+      if (target.closest('button')) return false;
+      return true;
+    }
+    return false;
+  }
+
+  function getEventPoint(e) {
+    if (e.touches && e.touches.length > 0) {
+      return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+    if (e.changedTouches && e.changedTouches.length > 0) {
+      return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+    }
+    return { x: e.clientX, y: e.clientY };
+  }
+
+  function clampToViewport(left, top, widget) {
+    var rect = widget.getBoundingClientRect();
+    var maxX = window.innerWidth - rect.width;
+    var maxY = window.innerHeight - rect.height;
+    return {
+      left: Math.max(0, Math.min(left, maxX)),
+      top: Math.max(0, Math.min(top, maxY))
+    };
+  }
+
+  function saveDragPosition(left, top) {
+    try {
+      localStorage.setItem(POSITION_KEY, JSON.stringify({ left: left, top: top }));
+    } catch (_) {}
+  }
+
+  function restoreDragPosition(widget) {
+    try {
+      var raw = localStorage.getItem(POSITION_KEY);
+      if (raw) {
+        var pos = JSON.parse(raw);
+        if (typeof pos.left === 'number' && typeof pos.top === 'number') {
+          var clamped = clampToViewport(pos.left, pos.top, widget);
+          widget.style.left = clamped.left + 'px';
+          widget.style.top = clamped.top + 'px';
+          widget.style.right = 'auto';
+          widget.style.bottom = 'auto';
+        }
+      }
+    } catch (_) {}
+  }
+
+  function onDragStart(e, widget) {
+    if (!isDragHandle(e.target)) return;
+
+    var point = getEventPoint(e);
+    var rect = widget.getBoundingClientRect();
+
+    S._drag.active = true;
+    S._drag.moved = false;
+    S._drag.startX = point.x;
+    S._drag.startY = point.y;
+
+    // Convert right/bottom positioning to left/top on first drag
+    if (!widget.style.left || widget.style.left === 'auto' || widget.style.left === '') {
+      widget.style.left = rect.left + 'px';
+      widget.style.top = rect.top + 'px';
+      widget.style.right = 'auto';
+      widget.style.bottom = 'auto';
+    }
+
+    S._drag.startLeft = parseFloat(widget.style.left) || rect.left;
+    S._drag.startTop = parseFloat(widget.style.top) || rect.top;
+
+    widget.classList.add('dragging');
+
+    if (e.type === 'touchstart') {
+      e.preventDefault();
+    }
+  }
+
+  function onDragMove(e, widget) {
+    if (!S._drag.active) return;
+
+    var point = getEventPoint(e);
+    var dx = point.x - S._drag.startX;
+    var dy = point.y - S._drag.startY;
+
+    if (!S._drag.moved && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
+      S._drag.moved = true;
+    }
+
+    if (S._drag.moved) {
+      var newLeft = S._drag.startLeft + dx;
+      var newTop = S._drag.startTop + dy;
+      var clamped = clampToViewport(newLeft, newTop, widget);
+      widget.style.left = clamped.left + 'px';
+      widget.style.top = clamped.top + 'px';
+    }
+
+    if (e.type === 'touchmove') {
+      e.preventDefault();
+    }
+  }
+
+  function onDragEnd(e, widget) {
+    if (!S._drag.active) return;
+
+    widget.classList.remove('dragging');
+
+    if (S._drag.moved) {
+      saveDragPosition(parseFloat(widget.style.left), parseFloat(widget.style.top));
+      S._drag._justDragged = true;
+      setTimeout(function () { S._drag._justDragged = false; }, 0);
+    }
+
+    S._drag.active = false;
+    S._drag.moved = false;
+  }
+
+  function installDragHandlers(widget) {
+    restoreDragPosition(widget);
+
+    widget.addEventListener('mousedown', function (e) { onDragStart(e, widget); });
+    document.addEventListener('mousemove', function (e) { onDragMove(e, widget); });
+    document.addEventListener('mouseup', function (e) { onDragEnd(e, widget); });
+
+    widget.addEventListener('touchstart', function (e) { onDragStart(e, widget); }, { passive: false });
+    document.addEventListener('touchmove', function (e) { onDragMove(e, widget); }, { passive: false });
+    document.addEventListener('touchend', function (e) { onDragEnd(e, widget); });
+
+    // Capture-phase click: suppress button clicks after a drag
+    widget.addEventListener('click', function (e) {
+      if (S._drag._justDragged) {
+        e.stopPropagation();
+        e.preventDefault();
+        S._drag._justDragged = false;
+      }
+    }, true);
+  }
+
+  /* ----------------------------------------------------------
      RENDER FLOATING WIDGET PILLS (from playlist)
      ---------------------------------------------------------- */
   function renderVibePills() {
@@ -427,6 +582,9 @@
      BIND FLOATING WIDGET EVENTS
      ---------------------------------------------------------- */
   function bindWidgetEvents() {
+    var widget = document.getElementById('focus-vibe-widget');
+    if (widget) installDragHandlers(widget);
+
     var playBtn = document.getElementById('focus-vibe-play');
     if (playBtn) playBtn.addEventListener('click', togglePlay);
 

@@ -4315,6 +4315,14 @@ mark.cyber-hl-pink:hover {
   pointer-events: none;
 }
 
+/* Disable transitions during active drag */
+.focus-vibe-widget.dragging,
+.focus-vibe-widget.dragging .focus-vibe-panel,
+.focus-vibe-widget.dragging .focus-vibe-trigger {
+  transition: none !important;
+  cursor: grabbing !important;
+}
+
 /* ----------------------------------------------------------
    TRIGGER BUTTON (collapsed pill)
    Hidden by default; shown when .minimized is on widget
@@ -4331,7 +4339,7 @@ mark.cyber-hl-pink:hover {
   -webkit-backdrop-filter: blur(16px) saturate(140%);
   color: var(--accent-primary);
   font-size: 1.5rem;
-  cursor: pointer;
+  cursor: grab;
   transition: all var(--duration-base) var(--ease-out-expo);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4),
               0 0 20px rgba(0, 240, 255, 0.12);
@@ -4420,6 +4428,9 @@ mark.cyber-hl-pink:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .focus-vibe-header-left {
   display: flex;
