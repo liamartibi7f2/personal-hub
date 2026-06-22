@@ -76,6 +76,11 @@ D. Local Councils`;
 
   function destroy() {
     _stopTestTimer();
+    _destroyHighlighter();
+    if (_tooltipEl && _tooltipEl.parentNode) {
+      _tooltipEl.parentNode.removeChild(_tooltipEl);
+      _tooltipEl = null;
+    }
     _container = null;
   }
 
@@ -887,6 +892,7 @@ D. Local Councils`;
     const btnBack = _container.querySelector('#btn-back-to-decks');
     if (btnBack) btnBack.addEventListener('click', () => {
       _stopTestTimer();
+      _destroyHighlighter();
       _mode = 'library';
       _quizData = null;
       _currentDeck = null;
@@ -939,6 +945,9 @@ D. Local Councils`;
     if (_testMode && !_testSubmitted) {
       _startTestTimer();
     }
+
+    // Smart text highlighter
+    _initHighlighter();
   }
 
   /* ==========================================================
@@ -999,6 +1008,115 @@ D. Local Councils`;
   function _getCorrectOptionLetter(question) {
     const correct = question.options.find(o => o.isCorrect);
     return correct ? correct.letter : '?';
+  }
+
+  /* ==========================================================
+     SMART TEXT HIGHLIGHTER
+     Medium-style floating tooltip + cyberpunk <mark> wrapping
+     ========================================================== */
+
+  let _tooltipEl = null;
+
+  function _initHighlighter() {
+    _destroyHighlighter();
+
+    const container = _container && _container.querySelector('.quiz-sections-container');
+    if (!container) return;
+
+    container.addEventListener('mouseup', _onHighlighterMouseUp);
+    container.addEventListener('click', _onHighlighterClick);
+  }
+
+  function _destroyHighlighter() {
+    _hideTooltip();
+    const container = _container && _container.querySelector('.quiz-sections-container');
+    if (container) {
+      container.removeEventListener('mouseup', _onHighlighterMouseUp);
+      container.removeEventListener('click', _onHighlighterClick);
+    }
+  }
+
+  function _onHighlighterMouseUp() {
+    setTimeout(() => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || !sel.toString().trim()) {
+        _hideTooltip();
+        return;
+      }
+
+      const container = _container && _container.querySelector('.quiz-sections-container');
+      if (!container) return;
+
+      let node = sel.anchorNode;
+      let inside = false;
+      while (node) {
+        if (node === container) { inside = true; break; }
+        node = node.parentNode;
+      }
+      if (!inside) { _hideTooltip(); return; }
+
+      const range = sel.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      _showTooltip(rect);
+    }, 10);
+  }
+
+  function _showTooltip(rect) {
+    if (!_tooltipEl) {
+      _tooltipEl = document.createElement('button');
+      _tooltipEl.className = 'highlight-tooltip';
+      _tooltipEl.innerHTML = '🖍️';
+      _tooltipEl.setAttribute('aria-label', 'Highlight selection');
+      _tooltipEl.addEventListener('mousedown', _onTooltipMouseDown);
+      document.body.appendChild(_tooltipEl);
+    }
+
+    const top = rect.top + window.scrollY - 46;
+    const left = rect.left + window.scrollX + rect.width / 2 - 19;
+
+    _tooltipEl.style.top = top + 'px';
+    _tooltipEl.style.left = left + 'px';
+    _tooltipEl.classList.add('highlight-tooltip--visible');
+  }
+
+  function _hideTooltip() {
+    if (_tooltipEl) {
+      _tooltipEl.classList.remove('highlight-tooltip--visible');
+    }
+  }
+
+  function _onTooltipMouseDown(e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) return;
+
+    const range = sel.getRangeAt(0);
+    const mark = document.createElement('mark');
+    mark.className = 'cyber-highlight';
+
+    try {
+      range.surroundContents(mark);
+    } catch (_) {
+      const fragment = range.extractContents();
+      mark.appendChild(fragment);
+      range.insertNode(mark);
+    }
+
+    sel.removeAllRanges();
+    _hideTooltip();
+  }
+
+  function _onHighlighterClick(e) {
+    const mark = e.target.closest('mark.cyber-highlight');
+    if (!mark) return;
+
+    const parent = mark.parentNode;
+    while (mark.firstChild) {
+      parent.insertBefore(mark.firstChild, mark);
+    }
+    parent.removeChild(mark);
   }
 
   /* ==========================================================

@@ -3403,6 +3403,89 @@ body.light-mode .btn-edit-card:hover {
 }
 
 /* ----------------------------------------------------------
+   SMART TEXT HIGHLIGHTER — Floating Tooltip + Cyber Highlight
+   ---------------------------------------------------------- */
+
+/* Floating highlight trigger button (Medium-style tooltip) */
+.highlight-tooltip {
+  position: absolute;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-full);
+  background: rgba(18, 18, 30, 0.85);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.25),
+              0 8px 32px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  opacity: 0;
+  transform: translateY(6px) scale(0.9);
+  transition: opacity 180ms var(--ease-out-expo),
+              transform 180ms var(--ease-out-expo);
+  pointer-events: none;
+  user-select: none;
+}
+
+.highlight-tooltip--visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.highlight-tooltip:hover {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 32px rgba(0, 240, 255, 0.45),
+              0 8px 40px rgba(0, 0, 0, 0.6);
+  background: rgba(30, 30, 50, 0.95);
+  transform: translateY(-2px) scale(1.08);
+}
+
+/* Glowing cyberpunk highlight mark */
+mark.cyber-highlight {
+  background: rgba(0, 240, 255, 0.18);
+  color: var(--text-primary);
+  padding: 1px 3px;
+  border-radius: 3px;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.15),
+              inset 0 0 6px rgba(0, 240, 255, 0.06);
+  cursor: pointer;
+  transition: background 150ms var(--ease-out-expo),
+              box-shadow 150ms var(--ease-out-expo);
+}
+
+mark.cyber-highlight:hover {
+  background: rgba(179, 71, 234, 0.25);
+  box-shadow: 0 0 16px rgba(179, 71, 234, 0.3),
+              inset 0 0 8px rgba(179, 71, 234, 0.1);
+}
+
+/* Subtle tooltip arrow pointing down at the selection */
+.highlight-tooltip::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid rgba(0, 240, 255, 0.35);
+  transition: border-top-color 150ms;
+}
+
+.highlight-tooltip:hover::after {
+  border-top-color: var(--accent-primary);
+}
+
+/* ----------------------------------------------------------
    RESPONSIVE — Mobile (≤ 768px)
    Sidebar → floating bottom dock
    ---------------------------------------------------------- */
