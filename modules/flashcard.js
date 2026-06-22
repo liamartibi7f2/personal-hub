@@ -500,7 +500,7 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
       idioms: _ensureArray(parsed.idioms),
       collocations: _ensureArray(parsed.collocations),
       clozeSentence: parsed.clozeSentence || '',
-      // --- SRS defaults for new cards ---
+      imageUrl: parsed.imageUrl || '',
       repetition: 0,
       interval: 0,
       easeFactor: 2.5,
@@ -1016,6 +1016,12 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
                     ${card.note.map(n => `<li>${_esc(n)}</li>`).join('')}
                   </ul>
                 </div>` : ''}
+
+                ${card.imageUrl ? `
+                <div class="card-section">
+                  <span class="card-section-label label-image">🖼️ Visual Memory</span>
+                  <img src="${_esc(card.imageUrl)}" alt="Vocabulary Image" class="card-visual-img" loading="lazy">
+                </div>` : ''}
               </div><!-- /card-back-scroll -->
             </div><!-- /card-back -->
           </div><!-- /card-3d -->
@@ -1526,6 +1532,12 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
                   </ul>
                 </div>` : ''}
 
+                ${card.imageUrl ? `
+                <div class="card-section">
+                  <span class="card-section-label label-image">🖼️ Visual Memory</span>
+                  <img src="${_esc(card.imageUrl)}" alt="Vocabulary Image" class="card-visual-img" loading="lazy">
+                </div>` : ''}
+
                 <!-- SRS Info Footer -->
                 <div class="srs-info-footer">
                   <div class="srs-info-item">
@@ -1995,6 +2007,7 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
     const synonyms = card && card.synonyms ? card.synonyms.join(', ') : '';
     const note = card && card.note ? card.note.join('\n') : '';
     const clozeSentence = card && card.clozeSentence ? card.clozeSentence : '';
+    const imageUrl = card && card.imageUrl ? card.imageUrl : '';
 
     const overlay = document.createElement('div');
     overlay.id = 'card-editor-overlay';
@@ -2052,6 +2065,11 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
           <div class="form-group">
             <label>Usage Notes</label>
             <textarea id="ceditor-note" class="card-editor-textarea" rows="2" placeholder="One usage note per line">${_esc(note)}</textarea>
+          </div>
+
+          <div class="form-group">
+            <label>Image URL (Optional)</label>
+            <input type="text" id="ceditor-image" class="card-editor-input" value="${_esc(imageUrl)}" placeholder="Paste image link here..." autocomplete="off">
           </div>
 
           <div class="form-group">
@@ -2137,6 +2155,7 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
     const synonymsRaw   = (overlay.querySelector('#ceditor-synonyms')?.value || '').trim();
     const noteRaw       = (overlay.querySelector('#ceditor-note')?.value || '').trim();
     const clozeRaw      = (overlay.querySelector('#ceditor-cloze')?.value || '').trim();
+    const imageUrl     = (overlay.querySelector('#ceditor-image')?.value || '').trim();
 
     // --- Build the card fields ---
     const cardFields = {
@@ -2151,7 +2170,8 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
       word_family: existingCard ? (existingCard.word_family || {}) : {},
       idioms: existingCard ? (existingCard.idioms || []) : [],
       collocations: existingCard ? (existingCard.collocations || []) : [],
-      clozeSentence: clozeRaw
+      clozeSentence: clozeRaw,
+      imageUrl: imageUrl
     };
 
     if (isEdit) {
@@ -2231,6 +2251,7 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
         idioms: _ensureArray(card.idioms),
         collocations: _ensureArray(card.collocations),
         clozeSentence: card.clozeSentence || '',
+        imageUrl: card.imageUrl || '',
         ...srsDefaults
       };
     }
@@ -2263,6 +2284,7 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
       idioms,
       collocations: [],
       clozeSentence: card.clozeSentence || '',
+      imageUrl: card.imageUrl || '',
       ...srsDefaults
     };
   }

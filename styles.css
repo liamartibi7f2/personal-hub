@@ -1124,6 +1124,28 @@ ul, ol { list-style: none; }
 .label-idioms        { color: #ff922b;                 background: rgba(255, 146, 43, 0.08); }
 .label-collocations  { color: #20c997;                 background: rgba(32, 201, 151, 0.08); }
 .label-notes         { color: #ff6b6b;                 background: rgba(255, 107, 107, 0.08); }
+.label-image         { color: #ffd93d;                 background: rgba(255, 217, 61, 0.08); }
+
+/* --- Card Back: Visual Image --- */
+.card-visual-img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  object-position: center;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  display: block;
+  margin-top: var(--space-xs);
+  transition: transform var(--duration-base) var(--ease-out-expo),
+              box-shadow var(--duration-base) var(--ease-out-expo);
+}
+
+.card-visual-img:hover {
+  transform: scale(1.02);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5),
+              0 0 20px rgba(255, 217, 61, 0.08);
+}
 
 /* --- Card Back: Phonetic & Vietnamese --- */
 .card-phonetic {
