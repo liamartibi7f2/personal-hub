@@ -3442,86 +3442,176 @@ body.light-mode .btn-edit-card:hover {
 }
 
 /* ----------------------------------------------------------
-   SMART TEXT HIGHLIGHTER — Floating Tooltip + Cyber Highlight
+   SMART TEXT HIGHLIGHTER — Multi-Color Cyberpunk Palette
    ---------------------------------------------------------- */
 
-/* Floating highlight trigger button (Medium-style tooltip) */
-.highlight-tooltip {
+/* Floating horizontal palette */
+.highlight-palette {
   position: absolute;
   z-index: 9999;
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
+  gap: 6px;
+  padding: 8px 12px;
   border-radius: var(--radius-full);
-  background: rgba(18, 18, 30, 0.85);
-  border: 1px solid rgba(0, 240, 255, 0.35);
+  background: rgba(18, 18, 30, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(14px) saturate(160%);
   -webkit-backdrop-filter: blur(14px) saturate(160%);
-  box-shadow: 0 0 20px rgba(0, 240, 255, 0.25),
-              0 8px 32px rgba(0, 0, 0, 0.5);
-  cursor: pointer;
-  font-size: 1rem;
-  line-height: 1;
+  box-shadow: 0 0 28px rgba(0, 0, 0, 0.5),
+              0 8px 32px rgba(0, 0, 0, 0.4);
   opacity: 0;
   transform: translateY(6px) scale(0.9);
   transition: opacity 180ms var(--ease-out-expo),
               transform 180ms var(--ease-out-expo);
   pointer-events: none;
   user-select: none;
+  white-space: nowrap;
 }
 
-.highlight-tooltip--visible {
+.highlight-palette--visible {
   opacity: 1;
   transform: translateY(0) scale(1);
   pointer-events: auto;
 }
 
-.highlight-tooltip:hover {
-  border-color: var(--accent-primary);
-  box-shadow: 0 0 32px rgba(0, 240, 255, 0.45),
-              0 8px 40px rgba(0, 0, 0, 0.6);
-  background: rgba(30, 30, 50, 0.95);
-  transform: translateY(-2px) scale(1.08);
+/* Color swatch button */
+.hl-palette-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  border: 2px solid transparent;
+  background: var(--hl-color);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 120ms var(--ease-out-expo),
+              box-shadow 120ms var(--ease-out-expo),
+              border-color 120ms var(--ease-out-expo);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--hl-color) 40%, transparent),
+              inset 0 1px 2px rgba(255, 255, 255, 0.15);
 }
 
-/* Glowing cyberpunk highlight mark */
-mark.cyber-highlight {
-  background: rgba(0, 240, 255, 0.18);
+.hl-palette-swatch:hover {
+  transform: scale(1.25);
+  border-color: #fff;
+  box-shadow: 0 0 18px var(--hl-color),
+              0 0 32px color-mix(in srgb, var(--hl-color) 60%, transparent);
+}
+
+.hl-palette-swatch:active {
+  transform: scale(0.9);
+}
+
+/* Divider between swatches and clear button */
+.hl-palette-divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* Clear button */
+.hl-palette-clear {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 120ms var(--ease-out-expo);
+}
+
+.hl-palette-clear:hover {
+  color: #fff;
+  border-color: rgba(255, 68, 102, 0.5);
+  background: rgba(255, 68, 102, 0.15);
+  box-shadow: 0 0 12px rgba(255, 68, 102, 0.25);
+}
+
+/* ============================================================
+   CYBER-HL BASE + 5 COLOR VARIANTS
+   ============================================================ */
+
+/* --- Cyan --- */
+mark.cyber-hl-cyan {
+  background: rgba(0, 240, 255, 0.28);
+  border-bottom: 2px solid #00f0ff;
   color: var(--text-primary);
   padding: 1px 3px;
-  border-radius: 3px;
-  box-shadow: 0 0 10px rgba(0, 240, 255, 0.15),
-              inset 0 0 6px rgba(0, 240, 255, 0.06);
+  border-radius: 2px 2px 0 0;
   cursor: pointer;
-  transition: background 150ms var(--ease-out-expo),
-              box-shadow 150ms var(--ease-out-expo);
+  transition: background 120ms, box-shadow 120ms;
+}
+mark.cyber-hl-cyan:hover {
+  background: rgba(0, 240, 255, 0.42);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.25);
 }
 
-mark.cyber-highlight:hover {
-  background: rgba(179, 71, 234, 0.25);
-  box-shadow: 0 0 16px rgba(179, 71, 234, 0.3),
-              inset 0 0 8px rgba(179, 71, 234, 0.1);
+/* --- Purple --- */
+mark.cyber-hl-purple {
+  background: rgba(184, 41, 234, 0.28);
+  border-bottom: 2px solid #b829ea;
+  color: var(--text-primary);
+  padding: 1px 3px;
+  border-radius: 2px 2px 0 0;
+  cursor: pointer;
+  transition: background 120ms, box-shadow 120ms;
+}
+mark.cyber-hl-purple:hover {
+  background: rgba(184, 41, 234, 0.42);
+  box-shadow: 0 0 12px rgba(184, 41, 234, 0.25);
 }
 
-/* Subtle tooltip arrow pointing down at the selection */
-.highlight-tooltip::after {
-  content: '';
-  position: absolute;
-  bottom: -5px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 0;
-  height: 0;
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-top: 6px solid rgba(0, 240, 255, 0.35);
-  transition: border-top-color 150ms;
+/* --- Yellow --- */
+mark.cyber-hl-yellow {
+  background: rgba(253, 224, 71, 0.28);
+  border-bottom: 2px solid #fde047;
+  color: var(--text-primary);
+  padding: 1px 3px;
+  border-radius: 2px 2px 0 0;
+  cursor: pointer;
+  transition: background 120ms, box-shadow 120ms;
+}
+mark.cyber-hl-yellow:hover {
+  background: rgba(253, 224, 71, 0.42);
+  box-shadow: 0 0 12px rgba(253, 224, 71, 0.25);
 }
 
-.highlight-tooltip:hover::after {
-  border-top-color: var(--accent-primary);
+/* --- Green --- */
+mark.cyber-hl-green {
+  background: rgba(0, 255, 102, 0.28);
+  border-bottom: 2px solid #00ff66;
+  color: var(--text-primary);
+  padding: 1px 3px;
+  border-radius: 2px 2px 0 0;
+  cursor: pointer;
+  transition: background 120ms, box-shadow 120ms;
+}
+mark.cyber-hl-green:hover {
+  background: rgba(0, 255, 102, 0.42);
+  box-shadow: 0 0 12px rgba(0, 255, 102, 0.25);
+}
+
+/* --- Pink --- */
+mark.cyber-hl-pink {
+  background: rgba(255, 42, 109, 0.28);
+  border-bottom: 2px solid #ff2a6d;
+  color: var(--text-primary);
+  padding: 1px 3px;
+  border-radius: 2px 2px 0 0;
+  cursor: pointer;
+  transition: background 120ms, box-shadow 120ms;
+}
+mark.cyber-hl-pink:hover {
+  background: rgba(255, 42, 109, 0.42);
+  box-shadow: 0 0 12px rgba(255, 42, 109, 0.25);
 }
 
 /* ----------------------------------------------------------

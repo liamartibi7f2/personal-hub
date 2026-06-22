@@ -1066,9 +1066,16 @@ D. Local Councils`;
   }
 
   /* ==========================================================
-     SMART TEXT HIGHLIGHTER
-     Medium-style floating tooltip + cyberpunk <mark> wrapping
+     SMART TEXT HIGHLIGHTER — Multi-Color Cyberpunk Palette
      ========================================================== */
+
+  const HL_COLORS = [
+    { name: 'cyan',    hex: '#00f0ff' },
+    { name: 'purple',  hex: '#b829ea' },
+    { name: 'yellow',  hex: '#fde047' },
+    { name: 'green',   hex: '#00ff66' },
+    { name: 'pink',    hex: '#ff2a6d' }
+  ];
 
   let _tooltipEl = null;
 
@@ -1118,38 +1125,63 @@ D. Local Councils`;
 
   function _showTooltip(rect) {
     if (!_tooltipEl) {
-      _tooltipEl = document.createElement('button');
-      _tooltipEl.className = 'highlight-tooltip';
-      _tooltipEl.innerHTML = '🖍️';
-      _tooltipEl.setAttribute('aria-label', 'Highlight selection');
-      _tooltipEl.addEventListener('mousedown', _onTooltipMouseDown);
+      _tooltipEl = document.createElement('div');
+      _tooltipEl.className = 'highlight-palette';
+
+      let swatchesHtml = HL_COLORS.map(c =>
+        `<button class="hl-palette-swatch" data-hl-color="${c.name}"
+                 style="--hl-color:${c.hex}" aria-label="Highlight ${c.name}"></button>`
+      ).join('');
+
+      _tooltipEl.innerHTML = swatchesHtml + `
+        <span class="hl-palette-divider"></span>
+        <button class="hl-palette-clear" aria-label="Clear highlights in selection">✕</button>
+      `;
+
+      _tooltipEl.addEventListener('mousedown', _onPaletteMouseDown);
       document.body.appendChild(_tooltipEl);
     }
 
-    const top = rect.top + window.scrollY - 46;
-    const left = rect.left + window.scrollX + rect.width / 2 - 19;
+    const top = rect.top + window.scrollY - 50;
+    const left = rect.left + window.scrollX + rect.width / 2 - _tooltipEl.offsetWidth / 2;
 
     _tooltipEl.style.top = top + 'px';
     _tooltipEl.style.left = left + 'px';
-    _tooltipEl.classList.add('highlight-tooltip--visible');
+    _tooltipEl.classList.add('highlight-palette--visible');
   }
 
   function _hideTooltip() {
     if (_tooltipEl) {
-      _tooltipEl.classList.remove('highlight-tooltip--visible');
+      _tooltipEl.classList.remove('highlight-palette--visible');
     }
   }
 
-  function _onTooltipMouseDown(e) {
+  function _onPaletteMouseDown(e) {
     e.preventDefault();
     e.stopPropagation();
 
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed) return;
 
+    // Clear button — remove highlights within selection
+    const clearBtn = e.target.closest('.hl-palette-clear');
+    if (clearBtn) {
+      _clearHighlightsInSelection(sel);
+      sel.removeAllRanges();
+      _hideTooltip();
+      return;
+    }
+
+    // Color swatch — apply highlight
+    const swatch = e.target.closest('.hl-palette-swatch');
+    if (!swatch) return;
+
+    const color = swatch.dataset.hlColor;
+    if (!color) return;
+
     const range = sel.getRangeAt(0);
     const mark = document.createElement('mark');
-    mark.className = 'cyber-highlight';
+    mark.className = 'cyber-hl cyber-hl-' + color;
 
     try {
       range.surroundContents(mark);
@@ -1163,8 +1195,27 @@ D. Local Councils`;
     _hideTooltip();
   }
 
+  function _clearHighlightsInSelection(sel) {
+    const range = sel.getRangeAt(0);
+    const container = _container && _container.querySelector('.quiz-sections-container');
+    if (!container) return;
+
+    // Walk all .cyber-hl marks intersecting the selection and unwrap them
+    const marks = container.querySelectorAll('mark.cyber-hl');
+    for (let i = marks.length - 1; i >= 0; i--) {
+      const m = marks[i];
+      if (range.intersectsNode(m)) {
+        const parent = m.parentNode;
+        while (m.firstChild) {
+          parent.insertBefore(m.firstChild, m);
+        }
+        parent.removeChild(m);
+      }
+    }
+  }
+
   function _onHighlighterClick(e) {
-    const mark = e.target.closest('mark.cyber-highlight');
+    const mark = e.target.closest('mark.cyber-hl');
     if (!mark) return;
 
     const parent = mark.parentNode;
