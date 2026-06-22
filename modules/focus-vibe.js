@@ -185,8 +185,7 @@
     }
 
     if (event.data === YT.PlayerState.ENDED) {
-      S.player.seekTo(0);
-      S.player.playVideo();
+      playNextTrack();
     }
   }
 
@@ -246,6 +245,39 @@
     } else {
       loadYouTubeAPI();
     }
+  }
+
+  /* ----------------------------------------------------------
+     NEXT TRACK (sequential playback with loop)
+     ---------------------------------------------------------- */
+  function playNextTrack() {
+    var playlist = getPlaylist();
+    var activeTag = S._activeTag || null;
+
+    // Use filtered list if a tag is active
+    var activeList = activeTag
+      ? playlist.filter(function (item) { return (item.tags || []).indexOf(activeTag) !== -1; })
+      : playlist;
+
+    if (activeList.length === 0) {
+      // Fallback to full playlist if filter yields nothing
+      activeList = playlist;
+    }
+    if (activeList.length === 0) return;
+
+    var currentIdx = -1;
+    for (var i = 0; i < activeList.length; i++) {
+      if (activeList[i].videoId === S.currentVideoId) {
+        currentIdx = i;
+        break;
+      }
+    }
+
+    // If current track not in active list, start from first
+    var nextIdx = currentIdx >= 0 ? (currentIdx + 1) % activeList.length : 0;
+    var next = activeList[nextIdx];
+
+    loadVideo(next.videoId, next.name);
   }
 
   /* ----------------------------------------------------------
@@ -397,6 +429,9 @@
   function bindWidgetEvents() {
     var playBtn = document.getElementById('focus-vibe-play');
     if (playBtn) playBtn.addEventListener('click', togglePlay);
+
+    var nextBtn = document.getElementById('focus-vibe-next');
+    if (nextBtn) nextBtn.addEventListener('click', playNextTrack);
 
     var volSlider = document.getElementById('focus-vibe-volume');
     if (volSlider) {
@@ -793,6 +828,7 @@
     togglePlay: togglePlay,
     setVolume: setVolume,
     loadVideo: loadVideo,
+    playNextTrack: playNextTrack,
     getState: function () { return { isPlaying: S.isPlaying, currentVibe: S.currentVibe }; },
   };
 

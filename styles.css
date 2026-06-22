@@ -4565,6 +4565,32 @@ mark.cyber-hl-pink:hover {
   50% { box-shadow: 0 0 32px rgba(0, 240, 255, 0.5), 0 0 48px rgba(0, 240, 255, 0.15); }
 }
 
+/* Next Track button — matches play button with purple accent */
+.focus-vibe-next-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--accent-secondary);
+  background: rgba(179, 71, 234, 0.1);
+  color: var(--accent-secondary);
+  font-size: 0.95rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+  box-shadow: 0 0 16px rgba(179, 71, 234, 0.12);
+}
+.focus-vibe-next-btn:hover {
+  background: rgba(179, 71, 234, 0.2);
+  box-shadow: 0 0 24px rgba(179, 71, 234, 0.25);
+  transform: scale(1.05);
+}
+.focus-vibe-next-btn:active {
+  transform: scale(0.9);
+}
+
 /* Volume control */
 .focus-vibe-volume-wrap {
   flex: 1;
@@ -6143,6 +6169,21 @@ html.light-mode .studio-main-btn:hover,
 body.light-mode .studio-main-btn:hover {
   background: rgba(0, 119, 182, 0.15);
   box-shadow: 0 0 20px rgba(0, 119, 182, 0.15);
+}
+
+/* ── Deck play button ── */
+/* ── Next button (light mode, purple accent) ── */
+html.light-mode .focus-vibe-next-btn,
+body.light-mode .focus-vibe-next-btn {
+  background: rgba(124, 58, 237, 0.08);
+  border-color: var(--accent-secondary);
+  color: var(--accent-secondary);
+  box-shadow: 0 0 12px rgba(124, 58, 237, 0.08);
+}
+html.light-mode .focus-vibe-next-btn:hover,
+body.light-mode .focus-vibe-next-btn:hover {
+  background: rgba(124, 58, 237, 0.15);
+  box-shadow: 0 0 20px rgba(124, 58, 237, 0.15);
 }
 
 /* ── Deck play button ── */
