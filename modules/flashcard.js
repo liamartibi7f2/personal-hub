@@ -81,7 +81,8 @@ const flashcardModule = (function () {
         'ephemeral fame',
         'ephemeral moment',
         'ephemeral existence'
-      ]
+      ],
+      clozeSentence: 'The beauty of cherry blossoms is ___, lasting only a few days.'
     },
     {
       term: 'Ubiquitous',
@@ -112,7 +113,8 @@ const flashcardModule = (function () {
         'ubiquitous computing',
         'ubiquitous access',
         'ubiquitous advertising'
-      ]
+      ],
+      clozeSentence: 'Smartphones have become ___ in modern society.'
     },
     {
       term: 'Pragmatic',
@@ -143,7 +145,8 @@ const flashcardModule = (function () {
         'pragmatic view',
         'pragmatic decision',
         'pragmatic reason'
-      ]
+      ],
+      clozeSentence: 'We need a ___ approach to solve this budget crisis.'
     }
   ];
 
@@ -431,7 +434,7 @@ const flashcardModule = (function () {
     }
 
     const prompt = `You are an English vocabulary tutor. Return ONLY valid JSON for the word '${word}'.
-Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_family, idioms, collocations.
+Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_family, idioms, collocations, clozeSentence.
 - type: short form (n), (v), (adj), (adv)
 - vietnamese: concise Vietnamese meaning
 - describe: RETURN A LIST of distinct short meanings (each <= 12 words)
@@ -440,7 +443,8 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
 - synonyms: up to 5
 - word_family: include forms with POS
 - idioms: return up to 2 idioms or set phrases using the word.
-- collocations: return 5 natural collocations`;
+- collocations: return 5 natural collocations
+- clozeSentence: a natural example sentence where the word is replaced by "___" (three underscores)`;
 
     const body = {
       contents: [
@@ -495,6 +499,7 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
       word_family: parsed.word_family || {},
       idioms: _ensureArray(parsed.idioms),
       collocations: _ensureArray(parsed.collocations),
+      clozeSentence: parsed.clozeSentence || '',
       // --- SRS defaults for new cards ---
       repetition: 0,
       interval: 0,
@@ -905,18 +910,33 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
           <button class="srs-btn-end-session" id="btn-end-session">End Session</button>
         </div>
 
-        ${deck ? `<p style="font-family:var(--font-mono);font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;">Deck: ${_esc(deck.title)}</p>` : ''}
+        ${deck ? '<p style="font-family:var(--font-mono);font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;">Deck: ' + _esc(deck.title) + '</p>' : ''}
 
         <!-- 3D Card -->
         <div class="card-stage" id="card-stage">
           <div class="card-3d" id="card-3d">
             <!-- ============ FRONT FACE ============ -->
+            ${card.clozeSentence ? `
+            <div class="card-face card-front card-front-cloze">
+              <div class="cloze-sentence">
+                <span>${_esc(card.clozeSentence.split('___')[0] || '')}</span>
+                <input type="text" id="cloze-input" class="cyber-cloze-input" placeholder="Type answer..." autocomplete="off">
+                <span>${_esc(card.clozeSentence.split('___')[1] || '')}</span>
+              </div>
+              <div class="cloze-actions">
+                <button id="cloze-check-btn" class="cloze-btn cloze-btn-check">Check</button>
+                <button id="cloze-reveal-btn" class="cloze-btn cloze-btn-reveal">Reveal (Give up)</button>
+              </div>
+              <div id="cloze-feedback"></div>
+            </div>
+            ` : `
             <div class="card-face card-front">
               <span class="card-term">${_esc(card.term)}</span>
-              ${card.type ? `<span class="card-pos">${_esc(card.type)}</span>` : ''}
-              ${card.phonetic ? `<span class="card-phonetic-front">${_esc(card.phonetic)}</span>` : ''}
+              ${card.type ? '<span class="card-pos">' + _esc(card.type) + '</span>' : ''}
+              ${card.phonetic ? '<span class="card-phonetic-front">' + _esc(card.phonetic) + '</span>' : ''}
               <span class="card-hint">Click to flip</span>
             </div>
+            `}
 
             <!-- ============ BACK FACE ============ -->
             <div class="card-face card-back">
@@ -1041,34 +1061,120 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
   function _bindStudyEvents(cardIdx) {
     if (!_container) return;
 
-    // Card flip
     const card3d = _container.querySelector('#card-3d');
     const panel = _container.querySelector('#srs-assessment-panel');
+    const clozeInput = _container.querySelector('#cloze-input');
+    const isCloze = !!clozeInput;
 
     if (card3d && panel) {
-      // Click to flip
-      card3d.addEventListener('click', () => {
-        if (!_cardFlipped) {
+
+      if (isCloze) {
+        // --- Cloze mode: lock normal flip ---
+
+        // Prevent click-to-flip on the card (cloze input captures clicks)
+        card3d.addEventListener('click', (e) => {
+          if (!_cardFlipped && e.target !== clozeInput) {
+            clozeInput.focus();
+          }
+        });
+
+        // Prevent spacebar flip when cloze input is focused
+        const spaceHandler = (e) => {
+          if ((e.key === ' ' || e.key === 'Spacebar') && !_cardFlipped) {
+            if (e.target === clozeInput) return; // allow typing space in input
+            e.preventDefault();
+            clozeInput.focus();
+          }
+        };
+        document.addEventListener('keydown', spaceHandler);
+
+        // --- Cloze: flip helper ---
+        const _doFlip = () => {
           _cardFlipped = true;
           card3d.classList.add('flipped');
-          // Reveal assessment panel with a slight delay for the flip
           setTimeout(() => panel.classList.add('revealed'), 150);
-        }
-      });
+        };
 
-      // Space bar also flips
-      const spaceHandler = (e) => {
-        if (e.key === ' ' || e.key === 'Spacebar') {
-          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-          e.preventDefault();
+        // --- Cloze: Check answer ---
+        const _checkCloze = () => {
+          if (_cardFlipped) return;
+          const cards = _getActiveCards();
+          const card = cards[cardIdx];
+          const userAnswer = _normalizeStr(clozeInput.value);
+          const correctAnswer = _normalizeStr(card.term);
+          const feedback = _container.querySelector('#cloze-feedback');
+
+          if (userAnswer === correctAnswer) {
+            if (feedback) {
+              feedback.textContent = 'Correct!';
+              feedback.className = 'cloze-feedback-correct';
+            }
+            setTimeout(() => {
+              _doFlip();
+            }, 400);
+          } else {
+            if (feedback) {
+              feedback.textContent = 'Incorrect, try again!';
+              feedback.className = 'cloze-feedback-incorrect';
+            }
+            clozeInput.value = '';
+            clozeInput.focus();
+          }
+        };
+
+        // Enter key on input
+        clozeInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            _checkCloze();
+          }
+        });
+
+        // Check button
+        const checkBtn = _container.querySelector('#cloze-check-btn');
+        if (checkBtn) checkBtn.addEventListener('click', _checkCloze);
+
+        // Reveal button
+        const revealBtn = _container.querySelector('#cloze-reveal-btn');
+        if (revealBtn) {
+          revealBtn.addEventListener('click', () => {
+            if (_cardFlipped) return;
+            const feedback = _container.querySelector('#cloze-feedback');
+            if (feedback) {
+              feedback.textContent = 'Revealed';
+              feedback.className = 'cloze-feedback-incorrect';
+            }
+            _doFlip();
+          });
+        }
+
+        // Focus input after render
+        setTimeout(() => clozeInput.focus(), 200);
+
+      } else {
+        // --- Normal mode: click/space to flip ---
+
+        card3d.addEventListener('click', () => {
           if (!_cardFlipped) {
             _cardFlipped = true;
             card3d.classList.add('flipped');
             setTimeout(() => panel.classList.add('revealed'), 150);
           }
-        }
-      };
-      document.addEventListener('keydown', spaceHandler);
+        });
+
+        const spaceHandler = (e) => {
+          if (e.key === ' ' || e.key === 'Spacebar') {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            e.preventDefault();
+            if (!_cardFlipped) {
+              _cardFlipped = true;
+              card3d.classList.add('flipped');
+              setTimeout(() => panel.classList.add('revealed'), 150);
+            }
+          }
+        };
+        document.addEventListener('keydown', spaceHandler);
+      }
     }
 
     // Assessment buttons — also allow number keys 1-4
@@ -1092,7 +1198,7 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
       });
     });
 
-    // End session button → back to deck library
+    // End session button
     const btnEnd = _container.querySelector('#btn-end-session');
     if (btnEnd) {
       btnEnd.addEventListener('click', () => {
@@ -1787,22 +1893,13 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
     try {
       const cardData = await _generateCardData(word);
 
-      // Add card to the ACTIVE deck
-      const deck = _getActiveDeck();
-      if (deck) {
-        deck.cards.push(cardData);
-        _saveDecks();
-        _currentIndex = deck.cards.length - 1;
-      }
+      _isGenerating = false;
+      _setGenerateLoading(overlay, false);
+      _clearStatus();
 
-      // Success feedback
-      _showStatus('success', `"${word}" added to your deck!`);
-
-      // Close modal after a brief pause (so user sees success)
-      setTimeout(() => {
-        _closeAddForm();
-        _renderApp(); // Go back to browse mode
-      }, 600);
+      // Close the generate modal and open the card editor with AI data pre-filled
+      _closeAddForm();
+      _showCardEditorModal(cardData, true); // true = prefill mode (saves as NEW card)
 
     } catch (err) {
       _isGenerating = false;
@@ -1881,13 +1978,13 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
      @param {Object|null} card — null for manual add; card object for edit
      ========================================================== */
 
-  function _showCardEditorModal(card) {
+  function _showCardEditorModal(card, isPrefill) {
     // Prevent multiple overlays
     if (document.getElementById('card-editor-overlay')) return;
 
-    const isEdit = !!card;
-    const title = isEdit ? 'Edit Card' : 'New Card';
-    const subtitle = isEdit ? `Editing "${card.term}"` : 'Fill in the fields manually';
+    const isEdit = !!card && !isPrefill;
+    const title = isPrefill ? 'Review AI Card' : (isEdit ? 'Edit Card' : 'New Card');
+    const subtitle = isPrefill ? 'Edit fields below, then save to your deck' : (isEdit ? `Editing "${card.term}"` : 'Fill in the fields manually');
 
     const term = card ? card.term : '';
     const type = card ? card.type : '';
@@ -1897,6 +1994,7 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
     const examples = card && card.examples ? card.examples.join('\n') : '';
     const synonyms = card && card.synonyms ? card.synonyms.join(', ') : '';
     const note = card && card.note ? card.note.join('\n') : '';
+    const clozeSentence = card && card.clozeSentence ? card.clozeSentence : '';
 
     const overlay = document.createElement('div');
     overlay.id = 'card-editor-overlay';
@@ -1955,6 +2053,12 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
             <label>Usage Notes</label>
             <textarea id="ceditor-note" class="card-editor-textarea" rows="2" placeholder="One usage note per line">${_esc(note)}</textarea>
           </div>
+
+          <div class="form-group">
+            <label>Cloze Sentence (Fill-in-the-blank)</label>
+            <textarea id="ceditor-cloze" class="card-editor-textarea" rows="2" placeholder="Example sentence with ___ where the word goes, e.g. We need a ___ approach to solve this.">${_esc(clozeSentence)}</textarea>
+            <span style="font-family:var(--font-mono);font-size:0.6rem;color:var(--text-muted);">Use ___ (three underscores) as placeholder for the target word.</span>
+          </div>
         </div>
 
         <!-- Footer actions -->
@@ -1986,13 +2090,14 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
       .addEventListener('click', _closeCardEditorModal);
 
     // --- Save button ---
+    const cardToSave = isPrefill ? null : card;
     overlay.querySelector('#btn-save-card')
-      .addEventListener('click', () => _handleSaveCard(overlay, card));
+      .addEventListener('click', () => _handleSaveCard(overlay, cardToSave));
 
     // --- Ctrl+Enter to save ---
     overlay.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        _handleSaveCard(overlay, card);
+        _handleSaveCard(overlay, cardToSave);
       }
     });
 
@@ -2031,6 +2136,7 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
     const examplesRaw   = (overlay.querySelector('#ceditor-examples')?.value || '').trim();
     const synonymsRaw   = (overlay.querySelector('#ceditor-synonyms')?.value || '').trim();
     const noteRaw       = (overlay.querySelector('#ceditor-note')?.value || '').trim();
+    const clozeRaw      = (overlay.querySelector('#ceditor-cloze')?.value || '').trim();
 
     // --- Build the card fields ---
     const cardFields = {
@@ -2044,7 +2150,8 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
       note: noteRaw ? noteRaw.split('\n').map(s => s.trim()).filter(Boolean) : [],
       word_family: existingCard ? (existingCard.word_family || {}) : {},
       idioms: existingCard ? (existingCard.idioms || []) : [],
-      collocations: existingCard ? (existingCard.collocations || []) : []
+      collocations: existingCard ? (existingCard.collocations || []) : [],
+      clozeSentence: clozeRaw
     };
 
     if (isEdit) {
@@ -2087,6 +2194,14 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
   }
 
   /**
+   * Normalize a string for comparison: lowercase, trim whitespace,
+   * collapse multiple spaces, remove leading/trailing punctuation noise.
+   */
+  function _normalizeStr(str) {
+    return (str || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  /**
    * Normalize a card object to the new Gemini-compatible format
    * AND ensure SRS fields are present (migration).
    * Handles migration of old-format cards and adds SRS defaults.
@@ -2115,6 +2230,7 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
         word_family: card.word_family || {},
         idioms: _ensureArray(card.idioms),
         collocations: _ensureArray(card.collocations),
+        clozeSentence: card.clozeSentence || '',
         ...srsDefaults
       };
     }
@@ -2146,6 +2262,7 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
       word_family: {},
       idioms,
       collocations: [],
+      clozeSentence: card.clozeSentence || '',
       ...srsDefaults
     };
   }
