@@ -203,22 +203,24 @@ const notesModule = (function () {
   //   RENDER — Sidebar
   // ============================================================
 
-  function _renderFolders() {
+function _renderFolders() {
+    if (!_data || !_data.folders) return;
     _folderList.innerHTML = _data.folders.map(f => `
-      <button class="notes-folder-item${f.id === _activeFolder.id ? ' active' : ''}" data-folder-id="${_escHtml(f.id)}">
+      <button class="notes-folder-item${(_activeFolder && f.id === _activeFolder.id) ? ' active' : ''}" data-folder-id="${_escHtml(f.id)}">
         <svg class="notes-folder-icon" width="14" height="14" viewBox="0 0 20 20" fill="none">
           <path d="M2 5a2 2 0 012-2h4l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V5z" fill="currentColor" opacity="0.3"/>
           <path d="M2 5a2 2 0 012-2h4l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V5z" stroke="currentColor" stroke-width="1.2" fill="none"/>
         </svg>
         <span>${_escHtml(f.name)}</span>
-        <span class="notes-folder-count">${f.notes.length}</span>
+        <span class="notes-folder-count">${f.notes ? f.notes.length : 0}</span>
       </button>
     `).join('');
   }
 
   function _renderNoteList() {
+    if (!_activeFolder || !_activeFolder.notes) return;
     _sidebarNotes.innerHTML = _activeFolder.notes.map(n => `
-      <button class="notes-note-item${n.id === _activeNote?.id ? ' active' : ''}" data-note-id="${_escHtml(n.id)}">
+      <button class="notes-note-item${(_activeNote && n.id === _activeNote.id) ? ' active' : ''}" data-note-id="${_escHtml(n.id)}">
         <span class="notes-note-title">${_escHtml(n.title || 'Untitled')}</span>
         <span class="notes-note-date">${_formatDate(n.updatedAt)}</span>
       </button>
