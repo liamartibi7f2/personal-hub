@@ -2,11 +2,6 @@
    HUB.OS — modules/notes.js
    Notion-like rich text notes module with folder organization,
    auto-save, slash commands, and a floating formatting toolbar.
-
-   Module contract:
-     - id: 'notes'
-     - render(container) -> injects the notes UI
-     - destroy()        -> cleans up event listeners & intervals
    ============================================================ */
 
 const notesModule = (function () {
@@ -33,7 +28,8 @@ const notesModule = (function () {
     savingIndicator: null,
     emptyState:      null,
     editorPane:      null,
-    addBtn:          null
+    addBtn:          null,
+    addFolderBtn:    null
   };
 
   // Bound handler references for cleanup
@@ -52,16 +48,26 @@ const notesModule = (function () {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && Array.isArray(parsed.folders) && parsed.folders.length > 0) {
+          // BỘ LỌC RÁC: Tự động xóa các note lỗi (null/undefined) do bị crash ở các phiên bản trước
+          parsed.folders.forEach(function(f) {
+            if (f.notes && Array.isArray(f.notes)) {
+              f.notes = f.notes.filter(function(n) { return n && n.id; });
+            } else {
+              f.notes = [];
+            }
+          });
           _data = parsed;
           return;
         }
       }
     } catch (_) { /* ignore */ }
+    
+    // Tạo dữ liệu mặc định nếu chưa có
     _data = {
       folders: [{
         id: _uid(),
         name: 'Personal',
-        notes: [_createNote('Welcome', 'Welcome to Notes!\n\nTry typing /h1, /h2, or /h3 followed by space to insert headings.')]
+        notes: [_buildNoteObject('Welcome', 'Welcome to Notes!<br><br>Try typing /h1, /h2, or /h3 followed by space to insert headings.')]
       }]
     };
     _persist();
@@ -102,7 +108,8 @@ const notesModule = (function () {
     return Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 9);
   }
 
-  function _createNote(title, content) {
+  // ĐÃ SỬA LỖI TRÙNG TÊN: Hàm này dùng để tạo dữ liệu Note
+  function _buildNoteObject(title, content) {
     return {
       id: _uid(),
       title: title || 'Untitled',
@@ -135,22 +142,30 @@ const notesModule = (function () {
 
     container.innerHTML =
       '<div class="tab-content hub-notes-app">' +
-        '<!-- Left Pane — Sidebar -->' +
+        '' +
         '<aside class="hub-notes-sidebar glass" id="hn-sidebar">' +
           '<div class="hub-notes-sidebar-header">' +
             '<span class="hub-notes-sidebar-title">Notes</span>' +
-            '<button class="hub-notes-btn-add" id="hn-btn-add" title="New Note" aria-label="New Note">' +
-              '<svg width="16" height="16" viewBox="0 0 16 16" fill="none">' +
-                '<path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
-              '</svg>' +
-            '</button>' +
+            '<div class="hub-notes-sidebar-actions">' +
+              '<button class="hub-notes-btn-add" id="hn-btn-add-folder" title="New Desk" aria-label="New Desk">' +
+                '<svg width="14" height="14" viewBox="0 0 16 16" fill="none">' +
+                  '<path d="M2 6l6-4 6 4v7a1 1 0 01-1 1H3a1 1 0 01-1-1V6z" stroke="currentColor" stroke-width="1.3" fill="none"/>' +
+                  '<path d="M8 10v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
+                '</svg>' +
+              '</button>' +
+              '<button class="hub-notes-btn-add" id="hn-btn-add" title="New Note" aria-label="New Note">' +
+                '<svg width="16" height="16" viewBox="0 0 16 16" fill="none">' +
+                  '<path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
+                '</svg>' +
+              '</button>' +
+            '</div>' +
           '</div>' +
           '<div class="hub-notes-folder-list" id="hn-folder-list"></div>' +
           '<div class="hub-notes-divider"></div>' +
           '<div class="hub-notes-note-list" id="hn-note-list"></div>' +
           '<div class="hub-notes-saving" id="hn-saving">Saved</div>' +
         '</aside>' +
-        '<!-- Right Pane — Editor -->' +
+        '' +
         '<main class="hub-notes-editor-pane" id="hn-editor-pane">' +
           '<div class="hub-notes-editor-area">' +
             '<input type="text" class="hub-notes-title-input" id="hn-title-input" placeholder="Untitled" spellcheck="false" />' +
@@ -166,7 +181,7 @@ const notesModule = (function () {
             '<p class="hub-notes-empty-sub">Create a new note to get started</p>' +
           '</div>' +
         '</main>' +
-        '<!-- Floating Formatting Toolbar -->' +
+        '' +
         '<div class="hub-notes-float-toolbar" id="hn-float-toolbar" style="display:none">' +
           '<button class="hub-notes-tb-btn" data-cmd="bold" title="Bold" aria-label="Bold"><b>B</b></button>' +
           '<button class="hub-notes-tb-btn" data-cmd="italic" title="Italic" aria-label="Italic"><i>I</i></button>' +
@@ -185,6 +200,7 @@ const notesModule = (function () {
     _el.emptyState      = _qs('hn-empty-state');
     _el.editorPane      = _qs('hn-editor-pane');
     _el.addBtn          = _qs('hn-btn-add');
+    _el.addFolderBtn    = _qs('hn-btn-add-folder');
 
     // Render lists
     _renderFolders();
@@ -193,6 +209,7 @@ const notesModule = (function () {
 
     // Bind all events
     _bindAddNote();
+    _bindAddFolder();
     _bindEditorEvents();
     _bindFormatToolbar();
     _bindFolderClicks();
@@ -208,14 +225,14 @@ const notesModule = (function () {
     var html = '';
     for (var i = 0; i < _data.folders.length; i++) {
       var f = _data.folders[i];
-      var activeClass = (f.id === _activeFolder.id) ? ' hub-notes-active' : '';
+      var activeClass = (_activeFolder && f.id === _activeFolder.id) ? ' hub-notes-active' : '';
       html += '<button class="hub-notes-folder-item' + activeClass + '" data-folder-id="' + _escHtml(f.id) + '">' +
         '<svg class="hub-notes-folder-icon" width="14" height="14" viewBox="0 0 20 20" fill="none">' +
           '<path d="M2 5a2 2 0 012-2h4l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V5z" fill="currentColor" opacity="0.3"/>' +
           '<path d="M2 5a2 2 0 012-2h4l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V5z" stroke="currentColor" stroke-width="1.2" fill="none"/>' +
         '</svg>' +
         '<span>' + _escHtml(f.name) + '</span>' +
-        '<span class="hub-notes-folder-count">' + f.notes.length + '</span>' +
+        '<span class="hub-notes-folder-count">' + (f.notes ? f.notes.length : 0) + '</span>' +
       '</button>';
     }
     el.innerHTML = html;
@@ -231,6 +248,7 @@ const notesModule = (function () {
     var html = '';
     for (var i = 0; i < _activeFolder.notes.length; i++) {
       var n = _activeFolder.notes[i];
+      if (!n) continue; // Safety check
       var activeClass = (_activeNote && n.id === _activeNote.id) ? ' hub-notes-active' : '';
       html += '<button class="hub-notes-note-item' + activeClass + '" data-note-id="' + _escHtml(n.id) + '">' +
         '<span class="hub-notes-note-title">' + _escHtml(n.title || 'Untitled') + '</span>' +
@@ -284,9 +302,10 @@ const notesModule = (function () {
   //   ACTIONS — CRUD
   // ============================================================
 
-  function _createNote() {
+  // ĐÃ SỬA LỖI TRÙNG TÊN: Đổi tên thành _handleAddNote
+  function _handleAddNote() {
     if (!_activeFolder) return;
-    var note = _createNote('Untitled', '');
+    var note = _buildNoteObject('Untitled', '');
     note.folderId = _activeFolder.id;
     _activeFolder.notes.unshift(note);
     _activeNote = note;
@@ -301,7 +320,7 @@ const notesModule = (function () {
 
   function _deleteNote(noteId) {
     if (!_activeFolder) return;
-    var idx = _activeFolder.notes.findIndex(function (n) { return n.id === noteId; });
+    var idx = _activeFolder.notes.findIndex(function (n) { return n && n.id === noteId; });
     if (idx === -1) return;
     _activeFolder.notes.splice(idx, 1);
 
@@ -312,6 +331,75 @@ const notesModule = (function () {
     _renderNoteList();
     _loadNoteIntoEditor();
     _renderFolders();
+  }
+
+  // ============================================================
+  //   FOLDER MANAGEMENT
+  // ============================================================
+
+  function _handleAddFolder() {
+    var name = prompt('Enter new desk name:');
+    if (!name || !name.trim()) return;
+    var folder = {
+      id: _uid(),
+      name: name.trim(),
+      notes: []
+    };
+    _data.folders.push(folder);
+    _activeFolder = folder;
+    _activeNote = null;
+    _persist();
+    _renderFolders();
+    _renderNoteList();
+    _loadNoteIntoEditor();
+  }
+
+  function _renameFolder(folderId) {
+    var folder = null;
+    for (var i = 0; i < _data.folders.length; i++) {
+      if (_data.folders[i].id === folderId) { folder = _data.folders[i]; break; }
+    }
+    if (!folder) return;
+    var name = prompt('Rename desk:', folder.name);
+    if (!name || !name.trim() || name.trim() === folder.name) return;
+    folder.name = name.trim();
+    _persist();
+    _renderFolders();
+  }
+
+  function _deleteFolder(folderId) {
+    if (!confirm('Delete this desk and all its notes?')) return;
+    var idx = -1;
+    for (var i = 0; i < _data.folders.length; i++) {
+      if (_data.folders[i].id === folderId) { idx = i; break; }
+    }
+    if (idx === -1) return;
+    _data.folders.splice(idx, 1);
+
+    // Fallback: if no folders remain, create default Personal
+    if (_data.folders.length === 0) {
+      _data.folders.push({
+        id: _uid(),
+        name: 'Personal',
+        notes: []
+      });
+    }
+
+    // If the deleted folder was active, switch to first available
+    if (_activeFolder && _activeFolder.id === folderId) {
+      _activeFolder = _data.folders[0];
+      _activeNote = _activeFolder.notes[0] || null;
+    }
+    _persist();
+    _renderFolders();
+    _renderNoteList();
+    _loadNoteIntoEditor();
+  }
+
+  function _bindAddFolder() {
+    if (_el.addFolderBtn) {
+      _el.addFolderBtn.addEventListener('click', _handleAddFolder);
+    }
   }
 
   // ============================================================
@@ -338,7 +426,7 @@ const notesModule = (function () {
     range.deleteContents();
 
     var heading = document.createElement(tag);
-    heading.innerHTML = '​';
+    heading.innerHTML = '&#8203;'; // Dấu cách tàng hình an toàn
     range.insertNode(heading);
 
     range.selectNodeContents(heading);
@@ -356,7 +444,7 @@ const notesModule = (function () {
 
   function _bindAddNote() {
     if (_el.addBtn) {
-      _el.addBtn.addEventListener('click', _createNote);
+      _el.addBtn.addEventListener('click', _handleAddNote);
     }
   }
 
@@ -377,6 +465,21 @@ const notesModule = (function () {
       _renderFolders();
       _renderNoteList();
       _loadNoteIntoEditor();
+    });
+
+    // Double-click to rename folder
+    list.addEventListener('dblclick', function (e) {
+      var item = e.target.closest('.hub-notes-folder-item');
+      if (!item) return;
+      _renameFolder(item.getAttribute('data-folder-id'));
+    });
+
+    // Right-click to delete folder
+    list.addEventListener('contextmenu', function (e) {
+      var item = e.target.closest('.hub-notes-folder-item');
+      if (!item) return;
+      e.preventDefault();
+      _deleteFolder(item.getAttribute('data-folder-id'));
     });
   }
 
@@ -428,7 +531,7 @@ const notesModule = (function () {
       _el.editor.addEventListener('keydown', function (e) {
         if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'N' || e.key === 'n')) {
           e.preventDefault();
-          _createNote();
+          _handleAddNote();
         }
       });
     }
@@ -453,7 +556,10 @@ const notesModule = (function () {
         var note = null;
         if (_activeFolder) {
           for (var i = 0; i < _activeFolder.notes.length; i++) {
-            if (_activeFolder.notes[i].id === nid) { note = _activeFolder.notes[i]; break; }
+            if (_activeFolder.notes[i] && _activeFolder.notes[i].id === nid) { 
+              note = _activeFolder.notes[i]; 
+              break; 
+            }
           }
         }
         if (note) {
@@ -581,7 +687,7 @@ const notesModule = (function () {
     });
   }
 
-  function _updateToolbarPosition() {
+function _updateToolbarPosition() {
     var sel = window.getSelection();
     var text = sel ? sel.toString().trim() : '';
     if (text.length === 0 || !sel || !sel.rangeCount || !_el.editor || !_el.toolbar) {
@@ -589,7 +695,7 @@ const notesModule = (function () {
       return;
     }
 
-    // Check selection is inside our editor
+    // Kiểm tra xem đoạn bôi đen có nằm trong editor không
     var node = sel.anchorNode;
     var inside = false;
     while (node) {
@@ -609,15 +715,18 @@ const notesModule = (function () {
       return;
     }
 
-    var editorRect = _el.editor.getBoundingClientRect();
-    if (!editorRect) { _hideToolbar(); return; }
+    // Ép thanh menu dùng tọa độ "Fixed" (Bám dính chính xác theo màn hình)
+    _el.toolbar.style.position = 'fixed';
+    _el.toolbar.style.display = 'flex'; // Bật hiển thị trước để đo chiều rộng
 
-    var top  = rect.top - editorRect.top - 48;
-    var left = rect.left - editorRect.left + (rect.width / 2);
+    var tbWidth = _el.toolbar.offsetWidth || 140;
+    
+    // Tính toán: Nổi lên đúng 45px ngay trên đầu chữ bôi đen, và nằm ngay chính giữa
+    var top  = rect.top - 45;
+    var left = rect.left + (rect.width / 2) - (tbWidth / 2);
 
-    _el.toolbar.style.display = 'flex';
-    _el.toolbar.style.top  = Math.max(4, top) + 'px';
-    _el.toolbar.style.left = Math.max(0, left) + 'px';
+    _el.toolbar.style.top  = Math.max(10, top) + 'px';
+    _el.toolbar.style.left = Math.max(10, left) + 'px';
     _el.toolbar.classList.add('hub-notes-toolbar--visible');
   }
 
@@ -666,7 +775,8 @@ const notesModule = (function () {
     // Clear all refs
     _el = {
       sidebarNotes: null, folderList: null, titleInput: null, editor: null,
-      toolbar: null, savingIndicator: null, emptyState: null, editorPane: null, addBtn: null
+      toolbar: null, savingIndicator: null, emptyState: null, editorPane: null,
+      addBtn: null, addFolderBtn: null
     };
     _boundDocMouseup  = null;
     _boundDocMousedown = null;

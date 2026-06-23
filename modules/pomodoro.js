@@ -2,8 +2,8 @@
    HUB.OS — modules/pomodoro.js
    Pomodoro timer with circular SVG progress ring,
    focus/break modes, premium settings modal, professional
-   statistics dashboard with weekly chart, 5-profile custom
-   synthesized sound engine, and localStorage persistence.
+   statistics dashboard with weekly chart, classic alarm +
+   5 custom URL audio slots, and localStorage persistence.
 
    Module contract:
      - id: 'pomodoro'
@@ -25,9 +25,14 @@ const pomodoroModule = (function () {
     focus: 25,
     shortBreak: 5,
     longBreak: 15,
-    soundProfile: 'cyber_synth',
+    soundProfile: 'classic_alarm',
     autoStartBreaks: false,
-    autoStartFocus: false
+    autoStartFocus: false,
+    customUrl1: '',
+    customUrl2: '',
+    customUrl3: '',
+    customUrl4: '',
+    customUrl5: ''
   };
 
   // --- Default stats structure ---
@@ -120,6 +125,18 @@ const pomodoroModule = (function () {
     try {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(_settings));
     } catch (_) { /* ignore */ }
+  }
+
+  function _escHtml(str) {
+    if (typeof str !== 'string') return '';
+    var d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  function _getVal(id) {
+    var el = document.getElementById(id);
+    return el ? el.value : '';
   }
 
   // =============================================================
@@ -670,32 +687,48 @@ const pomodoroModule = (function () {
     `;
   }
 
-  /** Render the sound profile selector field */
+  /** Render the sound profile selector + custom URL fields */
   function _renderSoundField() {
-    const profiles = [
+    var profiles = [
       { key: 'classic_alarm', label: 'Classic Alarm' },
-      { key: 'soft_chime',   label: 'Soft Chime' },
-      { key: 'cyber_synth',  label: 'Cyber Synth' },
-      { key: 'success_ding', label: 'Success Ding' },
-      { key: 'zen_bell',     label: 'Zen Bell' }
+      { key: 'custom_1',      label: 'Custom 1' },
+      { key: 'custom_2',      label: 'Custom 2' },
+      { key: 'custom_3',      label: 'Custom 3' },
+      { key: 'custom_4',      label: 'Custom 4' },
+      { key: 'custom_5',      label: 'Custom 5' }
     ];
-    const current = _settings.soundProfile || 'cyber_synth';
+    var current = _settings.soundProfile || 'classic_alarm';
 
-    return `
-      <div class="settings-field">
-        <label class="settings-field-label">Sound Effect</label>
-        <div class="settings-sound-row">
-          <div class="settings-select-wrap glass-card" style="flex:1;padding:0;border-radius:var(--radius-sm);">
-            <select id="input-soundProfile" class="settings-sound-select">
-              ${profiles.map(p => `
-                <option value="${p.key}"${p.key === current ? ' selected' : ''}>${p.label}</option>
-              `).join('')}
-            </select>
-          </div>
-          <button class="btn-test-sound" id="btn-test-sound" title="Test selected sound" aria-label="Test sound">${'🔊'}</button>
-        </div>
-      </div>
-    `;
+    var profileOpts = '';
+    for (var pi = 0; pi < profiles.length; pi++) {
+      var p = profiles[pi];
+      profileOpts += '<option value="' + p.key + '"' + (p.key === current ? ' selected' : '') + '>' + p.label + '</option>';
+    }
+
+    var urlInputs = '';
+    for (var ui = 1; ui <= 5; ui++) {
+      urlInputs += '<div class="hub-pomodoro-url-row">' +
+        '<label class="hub-pomodoro-url-label" for="input-customUrl' + ui + '">Link ' + ui + '</label>' +
+        '<input type="url" class="hub-pomodoro-url-input" id="input-customUrl' + ui + '" value="' + _escHtml(_settings['customUrl' + ui] || '') + '" placeholder="https://example.com/audio' + ui + '.mp3" />' +
+      '</div>';
+    }
+
+    return '' +
+      '<div class="settings-field">' +
+        '<label class="settings-field-label">Sound Effect</label>' +
+        '<div class="hub-pomodoro-sound-row">' +
+          '<div class="settings-select-wrap glass-card" style="flex:1;padding:0;border-radius:var(--radius-sm);">' +
+            '<select id="input-soundProfile" class="settings-sound-select">' +
+              profileOpts +
+            '</select>' +
+          '</div>' +
+          '<button class="btn-test-sound" id="btn-test-sound" title="Test selected sound" aria-label="Test sound">🔊</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="hub-pomodoro-url-section">' +
+        '<label class="settings-field-label" style="display:block;margin-bottom:var(--space-sm);">Custom Audio Links</label>' +
+        urlInputs +
+      '</div>';
   }
 
   /** Render a single settings field with stepper controls */
@@ -794,7 +827,7 @@ const pomodoroModule = (function () {
     if (btnTestSound) {
       btnTestSound.addEventListener('click', () => {
         const select = _container.querySelector('#input-soundProfile');
-        const profile = select ? select.value : 'cyber_synth';
+        const profile = select ? select.value : 'classic_alarm';
         _playSound(profile);
       });
     }
@@ -853,14 +886,16 @@ const pomodoroModule = (function () {
 
   function _saveSettingsHandler() {
     // Read values from the modal inputs
-    const focusVal      = parseInt(document.getElementById('input-focus')?.value, 10);
-    const shortBreakVal = parseInt(document.getElementById('input-shortBreak')?.value, 10);
-    const longBreakVal  = parseInt(document.getElementById('input-longBreak')?.value, 10);
-    const soundVal      = document.getElementById('input-soundProfile')?.value;
+    var focusVal      = parseInt(_getVal('input-focus'), 10);
+    var shortBreakVal = parseInt(_getVal('input-shortBreak'), 10);
+    var longBreakVal  = parseInt(_getVal('input-longBreak'), 10);
+    var soundVal      = _getVal('input-soundProfile');
 
     // Read auto-start toggles
-    _settings.autoStartBreaks = document.getElementById('input-autoStartBreaks')?.checked || false;
-    _settings.autoStartFocus  = document.getElementById('input-autoStartFocus')?.checked  || false;
+    var autoStartBreaksEl = document.getElementById('input-autoStartBreaks');
+    var autoStartFocusEl  = document.getElementById('input-autoStartFocus');
+    _settings.autoStartBreaks = autoStartBreaksEl ? autoStartBreaksEl.checked : false;
+    _settings.autoStartFocus  = autoStartFocusEl  ? autoStartFocusEl.checked  : false;
 
     // Validate and clamp
     _settings.focus      = Math.max(1, Math.min(120, focusVal || DEFAULT_SETTINGS.focus));
@@ -868,9 +903,15 @@ const pomodoroModule = (function () {
     _settings.longBreak  = Math.max(1, Math.min(60, longBreakVal || DEFAULT_SETTINGS.longBreak));
 
     // Sound profile — only accept known keys
-    const validSounds = ['classic_alarm', 'soft_chime', 'cyber_synth', 'success_ding', 'zen_bell'];
-    if (soundVal && validSounds.includes(soundVal)) {
+    var validSounds = ['classic_alarm', 'custom_1', 'custom_2', 'custom_3', 'custom_4', 'custom_5'];
+    if (soundVal && validSounds.indexOf(soundVal) !== -1) {
       _settings.soundProfile = soundVal;
+    }
+
+    // Save custom URL fields
+    for (var i = 1; i <= 5; i++) {
+      var input = document.getElementById('input-customUrl' + i);
+      _settings['customUrl' + i] = input ? input.value.trim() : '';
     }
 
     _saveSettings();
@@ -1044,148 +1085,89 @@ const pomodoroModule = (function () {
   }
 
   // =============================================================
-  //  AUDIO: Custom Sound Engine (5 profiles, pure Web Audio API)
+  //  AUDIO: Classic alarm + 5 Custom URL slots
   // =============================================================
 
   /**
-   * Play a synthesized notification sound by profile name.
-   * All sounds are procedurally generated — no external files.
-   * @param {'classic_alarm'|'soft_chime'|'cyber_synth'|'success_ding'|'zen_bell'} profile
+   * Play the selected sound profile.
+   * - 'classic_alarm': synthesized beep sequence (Web Audio API).
+   * - 'custom_N':      play the URL from settings; fallback to classic on error.
    */
   function _playSound(profile) {
+    if (profile === 'classic_alarm') {
+      _playClassicAlarm();
+      return;
+    }
+
+    // Custom slot: extract the index from 'custom_1' .. 'custom_5'
+    var match = profile.match(/^custom_(\d)$/);
+    if (!match) {
+      _playClassicAlarm();
+      return;
+    }
+
+    var idx       = parseInt(match[1], 10);
+    var url       = _settings['customUrl' + idx] || '';
+    var trimmedUrl = url.trim();
+
+    if (!trimmedUrl) {
+      _playClassicAlarm();
+      return;
+    }
+
     try {
-      if (!_audioCtx) {
-        _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      var audio = new Audio(trimmedUrl);
+      var playPromise = audio.play();
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(function () {
+          _playClassicAlarm();
+        });
       }
-      const ctx = _audioCtx;
-      const now = ctx.currentTime;
+    } catch (_) {
+      _playClassicAlarm();
+    }
+  }
 
-      // Ensure context is running (browsers suspend inactive AudioContexts)
-      if (ctx.state === 'suspended') ctx.resume();
+  /**
+   * Synthesize a classic multi-beep alarm via Web Audio API.
+   * Used as default and as fallback when a custom URL fails.
+   */
+  function _playClassicAlarm() {
+    try {
+      var ctx = _getAudioContext();
+      var now = ctx.currentTime;
 
-      // Shared master gain — prevents clipping when multiple oscillators stack
-      const master = ctx.createGain();
+      var master = ctx.createGain();
       master.gain.setValueAtTime(0.18, now);
       master.connect(ctx.destination);
 
-      switch (profile) {
-        // ── 1. Classic Alarm — digital multi-beep (square wave, urgent) ──
-        case 'classic_alarm':
-          [880, 1100, 880, 1100, 1320].forEach((freq, i) => {
-            const t = now + i * 0.18;
-            const osc = ctx.createOscillator();
-            const g = ctx.createGain();
-            osc.type = 'square';
-            osc.frequency.setValueAtTime(freq, t);
-            g.gain.setValueAtTime(0.25, t);
-            g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
-            osc.connect(g); g.connect(master);
-            osc.start(t); osc.stop(t + 0.25);
-          });
-          break;
-
-        // ── 2. Soft Chime — ascending bell-like sine arpeggio ──
-        case 'soft_chime':
-          [523, 659, 784, 1047].forEach((freq, i) => {
-            const t = now + i * 0.2;
-            const osc = ctx.createOscillator();
-            const g = ctx.createGain();
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(freq, t);
-            g.gain.setValueAtTime(0.22, t);
-            g.gain.exponentialRampToValueAtTime(0.3, t + 0.04);
-            g.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
-            osc.connect(g); g.connect(master);
-            osc.start(t); osc.stop(t + 0.75);
-          });
-          break;
-
-        // ── 3. Cyber Synth — neon sweep + chord (cyberpunk UI match) ──
-        case 'cyber_synth':
-          // Low sweep riser
-          (() => {
-            const osc = ctx.createOscillator();
-            const g = ctx.createGain();
-            osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(80, now);
-            osc.frequency.exponentialRampToValueAtTime(600, now + 0.35);
-            g.gain.setValueAtTime(0.08, now);
-            g.gain.exponentialRampToValueAtTime(0.12, now + 0.15);
-            g.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
-            osc.connect(g); g.connect(master);
-            osc.start(now); osc.stop(now + 0.6);
-          })();
-          // High chord stab
-          [1047, 1319, 1568].forEach((freq, i) => {
-            const t = now + 0.25 + i * 0.06;
-            const osc = ctx.createOscillator();
-            const g = ctx.createGain();
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(freq, t);
-            g.gain.setValueAtTime(0.15, t);
-            g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
-            osc.connect(g); g.connect(master);
-            osc.start(t); osc.stop(t + 0.45);
-          });
-          break;
-
-        // ── 4. Success Ding — positive "level-up" melody ──
-        case 'success_ding':
-          [523, 659, 784, 659, 1047].forEach((freq, i) => {
-            const t = now + i * 0.12;
-            const osc = ctx.createOscillator();
-            const g = ctx.createGain();
-            osc.type = i === 4 ? 'triangle' : 'sine';
-            osc.frequency.setValueAtTime(freq, t);
-            g.gain.setValueAtTime(0.2, t);
-            g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
-            osc.connect(g); g.connect(master);
-            osc.start(t); osc.stop(t + 0.35);
-          });
-          break;
-
-        // ── 5. Zen Bell — deep gong/bowl, slow-motion fade ──
-        case 'zen_bell':
-          // Main low gong tone
-          (() => {
-            const osc = ctx.createOscillator();
-            const g = ctx.createGain();
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(147, now);
-            osc.frequency.setTargetAtTime(138, now + 0.15, 0.4);
-            g.gain.setValueAtTime(0.35, now);
-            g.gain.exponentialRampToValueAtTime(0.25, now + 0.4);
-            g.gain.exponentialRampToValueAtTime(0.001, now + 2.5);
-            osc.connect(g); g.connect(master);
-            osc.start(now); osc.stop(now + 2.8);
-          })();
-          // Subtle harmonic overtones
-          [196, 294, 392].forEach((freq, i) => {
-            const osc = ctx.createOscillator();
-            const g = ctx.createGain();
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(freq, now + i * 0.03);
-            g.gain.setValueAtTime(0.08, now + i * 0.03);
-            g.gain.exponentialRampToValueAtTime(0.001, now + 2.2);
-            osc.connect(g); g.connect(master);
-            osc.start(now + i * 0.03); osc.stop(now + 2.5);
-          });
-          break;
-
-        default:
-          // Fallback: simple sine beep
-          (() => {
-            const osc = ctx.createOscillator();
-            const g = ctx.createGain();
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(880, now);
-            g.gain.setValueAtTime(0.15, now);
-            g.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-            osc.connect(g); g.connect(master);
-            osc.start(now); osc.stop(now + 0.35);
-          })();
+      // Multi-beep: ascending square wave
+      var freqs = [880, 1100, 880, 1100, 1320];
+      for (var i = 0; i < freqs.length; i++) {
+        var t = now + i * 0.18;
+        var osc = ctx.createOscillator();
+        var g = ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(freqs[i], t);
+        g.gain.setValueAtTime(0.25, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+        osc.connect(g);
+        g.connect(master);
+        osc.start(t);
+        osc.stop(t + 0.25);
       }
-    } catch (_) { /* Audio unsupported — fail silently */ }
+    } catch (_) { /* audio unavailable */ }
+  }
+
+  /** Lazy-init and return a shared AudioContext */
+  function _getAudioContext() {
+    if (!_audioCtx) {
+      _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (_audioCtx.state === 'suspended') {
+      _audioCtx.resume();
+    }
+    return _audioCtx;
   }
 
   // =============================================================
