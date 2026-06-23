@@ -218,7 +218,9 @@ function _renderFolders() {
   }
 
   function _renderNoteList() {
+    // Lớp khiên bảo vệ: Nếu không có thư mục nào thì dừng lại ngay, không báo lỗi
     if (!_activeFolder || !_activeFolder.notes) return;
+    
     _sidebarNotes.innerHTML = _activeFolder.notes.map(n => `
       <button class="notes-note-item${(_activeNote && n.id === _activeNote.id) ? ' active' : ''}" data-note-id="${_escHtml(n.id)}">
         <span class="notes-note-title">${_escHtml(n.title || 'Untitled')}</span>
