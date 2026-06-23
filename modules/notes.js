@@ -246,23 +246,32 @@ function _renderFolders() {
   //   RENDER — Editor
   // ============================================================
 
-  function _loadNoteIntoEditor() {
+function _loadNoteIntoEditor() {
+    const emptyState = document.getElementById('notes-empty-state');
+    const editorPane = document.getElementById('notes-editor-pane');
+
+    // Nếu không có Note nào đang được chọn
     if (!_activeNote) {
-      _titleInput.style.display = 'none';
-      _editor.style.display = 'none';
-      document.getElementById('notes-empty-state').style.display = '';
-      document.getElementById('notes-editor-pane').classList.add('notes-editor--empty');
+      if (_titleInput) _titleInput.style.display = 'none';
+      if (_editor) _editor.style.display = 'none';
+      if (emptyState) emptyState.style.display = '';
+      if (editorPane) editorPane.classList.add('notes-editor--empty');
       return;
     }
-    document.getElementById('notes-empty-state').style.display = 'none';
-    document.getElementById('notes-editor-pane').classList.remove('notes-editor--empty');
-    _titleInput.style.display = '';
-    _editor.style.display = '';
 
-    _titleInput.value = _activeNote.title;
-
-    // Set innerHTML (trusted content from localStorage — same origin)
-    _editor.innerHTML = _activeNote.content || '';
+    // Nếu CÓ Note đang được chọn
+    if (emptyState) emptyState.style.display = 'none';
+    if (editorPane) editorPane.classList.remove('notes-editor--empty');
+    
+    if (_titleInput) {
+      _titleInput.style.display = '';
+      _titleInput.value = _activeNote.title;
+    }
+    
+    if (_editor) {
+      _editor.style.display = '';
+      _editor.innerHTML = _activeNote.content || '';
+    }
 
     _updateNoteListDate();
   }
