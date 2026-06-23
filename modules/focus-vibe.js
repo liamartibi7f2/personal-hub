@@ -657,12 +657,13 @@
     return filtered.map(function (v) {
       var activeClass = v.videoId === S.currentVideoId ? ' studio-vibe-active' : '';
       var statusText = v.videoId === S.currentVideoId ? (S.isPlaying ? '🔊 Playing' : '⏸ Paused') : '';
-      var deleteBtn = v._default
+      var actionBtns = v._default
         ? ''
-        : '<button class="studio-vibe-card-delete" data-delete-id="' + v.id + '" title="Remove from library" aria-label="Remove from library">🗑</button>';
+        : '<button class="studio-vibe-card-edit" data-edit-id="' + v.id + '" title="Edit track" aria-label="Edit track">✏️</button>' +
+          '<button class="studio-vibe-card-delete" data-delete-id="' + v.id + '" title="Remove from library" aria-label="Remove from library">🗑</button>';
 
       return '<div class="studio-vibe-card glass-card' + activeClass + '" data-video-id="' + v.videoId + '" data-vibe-name="' + v.name + '" data-id="' + v.id + '">' +
-        deleteBtn +
+        '<div class="studio-vibe-card-actions">' + actionBtns + '</div>' +
         '<div class="studio-vibe-card-icon">' + v.icon + '</div>' +
         '<div class="studio-vibe-card-name">' + v.name + '</div>' +
         '<div class="studio-vibe-card-tags">' + (v.tags || []).map(function (t) { return '#' + t; }).join(' ') + '</div>' +
@@ -695,6 +696,55 @@
   /* ----------------------------------------------------------
      STUDIO PAGE — DELETE & SAVE LOGIC
      ---------------------------------------------------------- */
+  function editVibeInLibrary(id) {
+    var playlist = getPlaylist();
+    var idx = -1;
+    for (var i = 0; i < playlist.length; i++) {
+      if (playlist[i].id === id) { idx = i; break; }
+    }
+    if (idx === -1) return;
+    if (playlist[idx]._default) return;
+
+    var track = playlist[idx];
+    var newName = prompt('Edit Title:', track.name);
+    if (newName === null) return; // cancelled
+    newName = newName.trim();
+    if (!newName) return;
+
+    var newIcon = prompt('Edit Icon (Emoji):', track.icon);
+    if (newIcon === null) return;
+    newIcon = newIcon.trim();
+    if (!newIcon || newIcon.length > 4) newIcon = '🎵';
+
+    var newTags = prompt('Edit Tags (comma-separated):', (track.tags || []).join(', '));
+    if (newTags === null) return;
+    newTags = newTags.split(',').map(function (t) { return t.trim().toLowerCase(); }).filter(Boolean);
+    if (newTags.length === 0) newTags = ['uncategorized'];
+
+    track.name = newName;
+    track.icon = newIcon;
+    track.tags = newTags;
+
+    savePlaylist(playlist);
+
+    // If the active tag was removed from this track, clear the filter
+    if (S._activeTag && track.tags.indexOf(S._activeTag) === -1) {
+      S._activeTag = null;
+    }
+
+    refreshTagFilters();
+    refreshVibeGrid();
+
+    // If the edited track was playing, update the now-playing label
+    if (track.videoId === S.currentVideoId) {
+      S.currentVibe = newName;
+      var label = document.getElementById('focus-vibe-label');
+      if (label) label.textContent = newName;
+      var studioLabel = document.getElementById('studio-now-label');
+      if (studioLabel) studioLabel.textContent = newName;
+    }
+  }
+
   function deleteVibeFromLibrary(id) {
     var playlist = getPlaylist();
     var idx = -1;
@@ -890,6 +940,14 @@
     var vibeGrid = container.querySelector('#studio-vibe-grid');
     if (vibeGrid) {
       vibeGrid.addEventListener('click', function (e) {
+        // Edit button
+        var editBtn = e.target.closest('.studio-vibe-card-edit');
+        if (editBtn) {
+          e.stopPropagation();
+          editVibeInLibrary(editBtn.dataset.editId);
+          return;
+        }
+
         // Delete button
         var deleteBtn = e.target.closest('.studio-vibe-card-delete');
         if (deleteBtn) {

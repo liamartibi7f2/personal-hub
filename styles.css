@@ -5146,10 +5146,38 @@ mark.cyber-hl-pink:hover {
   line-height: 1.4;
   min-height: 1.4em;
 }
-.studio-vibe-card-delete {
+.studio-vibe-card-actions {
   position: absolute;
   top: 8px;
   right: 8px;
+  display: flex;
+  gap: 2px;
+}
+.studio-vibe-card-edit {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 0.7rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--duration-fast), background var(--duration-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+.studio-vibe-card:hover .studio-vibe-card-edit,
+.studio-vibe-card:focus-within .studio-vibe-card-edit {
+  opacity: 1;
+}
+.studio-vibe-card-edit:hover {
+  background: rgba(0, 240, 255, 0.15);
+}
+.studio-vibe-card-delete {
+  position: static;
   width: 24px;
   height: 24px;
   padding: 0;
