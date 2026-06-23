@@ -2816,6 +2816,38 @@ body.light-mode .btn-edit-card:hover {
   box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.1);
 }
 
+/* Vietnamese instructional text below sound selector */
+.hub-pomodoro-instructions {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: var(--space-xs) 0;
+  padding: var(--space-sm);
+  background: rgba(0, 240, 255, 0.04);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--glass-border);
+}
+
+/* Mobile responsive: stack URL rows vertically on small screens */
+@media (max-width: 768px) {
+  .hub-pomodoro-url-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+  .hub-pomodoro-url-label {
+    min-width: auto;
+    font-size: 0.7rem;
+  }
+  .hub-pomodoro-url-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    font-size: 0.85rem;
+  }
+}
+
 /* ----------------------------------------------------------
    QUIZ MODULE STYLES
    ---------------------------------------------------------- */

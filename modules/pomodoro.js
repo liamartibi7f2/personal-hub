@@ -709,7 +709,7 @@ const pomodoroModule = (function () {
     for (var ui = 1; ui <= 5; ui++) {
       urlInputs += '<div class="hub-pomodoro-url-row">' +
         '<label class="hub-pomodoro-url-label" for="input-customUrl' + ui + '">Link ' + ui + '</label>' +
-        '<input type="url" class="hub-pomodoro-url-input" id="input-customUrl' + ui + '" value="' + _escHtml(_settings['customUrl' + ui] || '') + '" placeholder="https://example.com/audio' + ui + '.mp3" />' +
+        '<input type="url" class="hub-pomodoro-url-input" id="input-customUrl' + ui + '" value="' + _escHtml(_settings['customUrl' + ui] || '') + '" placeholder="https://www.myinstants.com/en/instant/..." />' +
       '</div>';
     }
 
@@ -724,6 +724,7 @@ const pomodoroModule = (function () {
           '</div>' +
           '<button class="btn-test-sound" id="btn-test-sound" title="Test selected sound" aria-label="Test sound">🔊</button>' +
         '</div>' +
+        '<p class="hub-pomodoro-instructions">Hướng dẫn: Truy cập myinstants.com, bấm vào một âm thanh bất kỳ, bấm nút \'Copy Link\' hoặc sao chép URL trên trình duyệt rồi dán vào các ô Custom bên dưới.</p>' +
       '</div>' +
       '<div class="hub-pomodoro-url-section">' +
         '<label class="settings-field-label" style="display:block;margin-bottom:var(--space-sm);">Custom Audio Links</label>' +
@@ -1115,8 +1116,15 @@ const pomodoroModule = (function () {
       return;
     }
 
+    // --- MyInstants smart converter ---
+    var playUrl = trimmedUrl;
+    var myinstantsMatch = trimmedUrl.match(/myinstants\.com.*\/instant\/([^\/\?]+)/);
+    if (myinstantsMatch) {
+      playUrl = 'https://www.myinstants.com/media/sounds/' + myinstantsMatch[1] + '.mp3';
+    }
+
     try {
-      var audio = new Audio(trimmedUrl);
+      var audio = new Audio(playUrl);
       var playPromise = audio.play();
       if (playPromise && typeof playPromise.catch === 'function') {
         playPromise.catch(function () {
