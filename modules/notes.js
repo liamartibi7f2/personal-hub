@@ -273,6 +273,7 @@ function _loadNoteIntoEditor() {
       _editor.innerHTML = _activeNote.content || '';
     }
 
+   
     _updateNoteListDate();
   }
 
