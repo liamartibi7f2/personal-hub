@@ -274,20 +274,37 @@ const notesModule = (function () {
   //   ACTIONS — CRUD
   // ============================================================
 
-  function _createNote() {
-    const note = _createNote('Untitled', '');
-    note.folderId = _activeFolder.id;
-    _activeFolder.notes.unshift(note);
+function _createNote() {
+    // Sửa lỗi tự gọi chính nó (Infinite Recursion) bằng cách tạo Object trực tiếp
+    const note = {
+      id: 'note_' + Date.now().toString(36),
+      title: 'Untitled',
+      content: '',
+      folderId: _activeFolder ? _activeFolder.id : 'default',
+      updatedAt: Date.now()
+    };
+    
+    if (_activeFolder && _activeFolder.notes) {
+      _activeFolder.notes.unshift(note);
+    }
+    
     _activeNote = note;
     _persist();
     _renderNoteList();
     _loadNoteIntoEditor();
     _renderFolders();
-    // Focus title immediately
-    setTimeout(() => _titleInput?.focus(), 50);
+    
+    // Loại bỏ cú pháp ?. gây lỗi Syntax Error
+    setTimeout(() => {
+      if (typeof _titleInput !== 'undefined' && _titleInput) {
+        _titleInput.focus();
+      }
+    }, 50);
   }
 
   function _deleteNote(noteId) {
+    if (!_activeFolder || !_activeFolder.notes) return;
+    
     const idx = _activeFolder.notes.findIndex(n => n.id === noteId);
     if (idx === -1) return;
     _activeFolder.notes.splice(idx, 1);
@@ -300,7 +317,7 @@ const notesModule = (function () {
     _loadNoteIntoEditor();
     _renderFolders();
   }
-
+   
   // ============================================================
   //   SLASH COMMANDS
   // ============================================================
