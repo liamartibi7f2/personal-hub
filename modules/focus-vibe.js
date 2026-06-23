@@ -22,6 +22,7 @@
     youtubeLoading: false,
     initCalled: false,
     _activeTag: null,
+    _currentPlaylist: [],
     _visualizer: { bars: null, rafId: null, running: false, targets: [], lastUpdate: 0 },
     _drag: { active: false, startX: 0, startY: 0, startLeft: 0, startTop: 0, moved: false, _justDragged: false },
   };
@@ -254,21 +255,26 @@
   }
 
   /* ----------------------------------------------------------
-     NEXT TRACK (sequential playback with loop)
+     CURRENT PLAYLIST (tag-filtered subset used for next/prev)
      ---------------------------------------------------------- */
-  function playNextTrack() {
+  function rebuildCurrentPlaylist() {
     var playlist = getPlaylist();
     var activeTag = S._activeTag || null;
-
-    // Use filtered list if a tag is active
-    var activeList = activeTag
+    S._currentPlaylist = activeTag
       ? playlist.filter(function (item) { return (item.tags || []).indexOf(activeTag) !== -1; })
-      : playlist;
-
-    if (activeList.length === 0) {
-      // Fallback to full playlist if filter yields nothing
-      activeList = playlist;
+      : playlist.slice();
+    if (S._currentPlaylist.length === 0) {
+      S._currentPlaylist = playlist.slice();
     }
+  }
+
+  /* ----------------------------------------------------------
+     NEXT TRACK (sequential playback with tag-based loop)
+     ---------------------------------------------------------- */
+  function playNextTrack() {
+    rebuildCurrentPlaylist();
+    var activeList = S._currentPlaylist;
+
     if (activeList.length === 0) return;
 
     var currentIdx = -1;
@@ -680,6 +686,7 @@
   function refreshVibeGrid() {
     var container = document.getElementById('studio-vibe-grid');
     if (!container) return;
+    rebuildCurrentPlaylist();
     var playlist = getPlaylist();
     var activeTag = S._activeTag || null;
     container.innerHTML = renderVibeGridHTML(playlist, activeTag);
@@ -719,7 +726,7 @@
     refreshVibeGrid();
   }
 
-  function saveNewVibe(urlInput, title, tagsStr) {
+  function saveNewVibe(urlInput, title, iconStr, tagsStr) {
     var videoId = extractVideoId(urlInput);
     var urlField = document.getElementById('studio-add-url');
 
@@ -752,11 +759,14 @@
     var tags = (tagsStr || '').split(',').map(function (t) { return t.trim().toLowerCase(); }).filter(Boolean);
     if (tags.length === 0) tags = ['uncategorized'];
 
+    var icon = (iconStr || '').trim();
+    if (!icon || icon.length > 4) icon = '🎵';
+
     var newVibe = {
       id: 'custom_' + Date.now().toString(36),
       name: name,
       videoId: videoId,
-      icon: '🎵',
+      icon: icon,
       tags: tags,
     };
 
@@ -767,9 +777,11 @@
     // Clear form
     var uf = document.getElementById('studio-add-url');
     var tf = document.getElementById('studio-add-title');
+    var icf = document.getElementById('studio-add-icon');
     var gf = document.getElementById('studio-add-tags');
     if (uf) uf.value = '';
     if (tf) tf.value = '';
+    if (icf) icf.value = '';
     if (gf) gf.value = '';
 
     // Reset filter to show all
@@ -819,6 +831,7 @@
             '<div class="studio-add-form">' +
               '<input type="text" id="studio-add-url" class="focus-vibe-url-input" placeholder="YouTube URL or Video ID" spellcheck="false">' +
               '<input type="text" id="studio-add-title" class="focus-vibe-url-input" placeholder="Title for this vibe" spellcheck="false">' +
+              '<input type="text" id="studio-add-icon" class="focus-vibe-url-input" placeholder="Icon (Emoji): 🎵 🌧️" spellcheck="false" maxlength="4">' +
               '<input type="text" id="studio-add-tags" class="focus-vibe-url-input" placeholder="Tags: lofi, focus, chill" spellcheck="false">' +
               '<button id="studio-add-save" class="btn btn-primary studio-save-btn">💾 Save to Library &amp; Play</button>' +
             '</div>' +
@@ -912,14 +925,15 @@
     var saveBtn = container.querySelector('#studio-add-save');
     var urlInput = container.querySelector('#studio-add-url');
     var titleInput = container.querySelector('#studio-add-title');
+    var iconInput = container.querySelector('#studio-add-icon');
     var tagsInput = container.querySelector('#studio-add-tags');
 
     if (saveBtn && urlInput && titleInput) {
       var doSave = function () {
-        saveNewVibe(urlInput.value, titleInput.value, tagsInput ? tagsInput.value : '');
+        saveNewVibe(urlInput.value, titleInput.value, iconInput ? iconInput.value : '', tagsInput ? tagsInput.value : '');
       };
       saveBtn.addEventListener('click', doSave);
-      [urlInput, titleInput, tagsInput].forEach(function (input) {
+      [urlInput, titleInput, iconInput, tagsInput].forEach(function (input) {
         if (input) {
           input.addEventListener('keydown', function (e) {
             if (e.key === 'Enter') doSave();
