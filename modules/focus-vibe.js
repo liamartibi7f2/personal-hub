@@ -645,7 +645,7 @@
     return html;
   }
 
-  function renderVibeGridHTML(playlist, filterTag) {
+function renderVibeGridHTML(playlist, filterTag) {
     var filtered = filterTag
       ? playlist.filter(function (item) { return (item.tags || []).indexOf(filterTag) !== -1; })
       : playlist;
@@ -657,13 +657,12 @@
     return filtered.map(function (v) {
       var activeClass = v.videoId === S.currentVideoId ? ' studio-vibe-active' : '';
       var statusText = v.videoId === S.currentVideoId ? (S.isPlaying ? '🔊 Playing' : '⏸ Paused') : '';
-      var actionBtns = v._default
-        ? ''
-        : '<button class="studio-vibe-card-edit" data-edit-id="' + v.id + '" title="Edit track" aria-label="Edit track">✏️</button>' +
-          '<button class="studio-vibe-card-delete" data-delete-id="' + v.id + '" title="Remove from library" aria-label="Remove from library">🗑</button>';
+      
+      var editBtn = '<button class="studio-vibe-card-edit" data-edit-id="' + v.id + '" title="Edit track" style="background:transparent; border:none; cursor:pointer; font-size:1.1rem; padding:0; transition: transform 0.2s;">✏️</button>';
+      var deleteBtn = '<button class="studio-vibe-card-delete" data-delete-id="' + v.id + '" title="Remove" style="background:transparent; border:none; cursor:pointer; font-size:1.1rem; padding:0; transition: transform 0.2s;">🗑️</button>';
 
-      return '<div class="studio-vibe-card glass-card' + activeClass + '" data-video-id="' + v.videoId + '" data-vibe-name="' + v.name + '" data-id="' + v.id + '">' +
-        '<div class="studio-vibe-card-actions">' + actionBtns + '</div>' +
+      return '<div class="studio-vibe-card glass-card' + activeClass + '" data-video-id="' + v.videoId + '" data-vibe-name="' + v.name + '" data-id="' + v.id + '" style="position: relative;">' +
+        '<div style="position: absolute; top: 12px; right: 12px; display: flex; gap: 10px; z-index: 10;">' + editBtn + deleteBtn + '</div>' +
         '<div class="studio-vibe-card-icon">' + v.icon + '</div>' +
         '<div class="studio-vibe-card-name">' + v.name + '</div>' +
         '<div class="studio-vibe-card-tags">' + (v.tags || []).map(function (t) { return '#' + t; }).join(' ') + '</div>' +
