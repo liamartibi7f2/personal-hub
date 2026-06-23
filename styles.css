@@ -6683,21 +6683,19 @@ body.light-mode .theme-toggle-btn:hover {
 }
 
 /* ==========================================================
-   NOTES MODULE — Split-pane layout, sidebar, editor,
-   floating toolbar, slash-command typography.
+   NOTES MODULE (hub-notes- prefix for CSS isolation)
    ========================================================== */
 
 /* ── App Root ── */
-.notes-app {
+.hub-notes-app {
   display: flex;
   gap: var(--space-lg);
   height: calc(100vh - var(--space-2xl) * 2);
   min-height: 480px;
-  animation: fadeSlideIn var(--duration-base) var(--ease-out-expo);
 }
 
 /* ── Left Sidebar ── */
-.notes-sidebar {
+.hub-notes-sidebar {
   width: 260px;
   flex-shrink: 0;
   display: flex;
@@ -6706,7 +6704,7 @@ body.light-mode .theme-toggle-btn:hover {
   overflow: hidden;
 }
 
-.notes-sidebar-header {
+.hub-notes-sidebar-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -6714,7 +6712,7 @@ body.light-mode .theme-toggle-btn:hover {
   border-bottom: 1px solid var(--glass-border);
 }
 
-.notes-sidebar-title {
+.hub-notes-sidebar-title {
   font-family: var(--font-mono);
   font-size: 0.82rem;
   font-weight: 600;
@@ -6723,7 +6721,7 @@ body.light-mode .theme-toggle-btn:hover {
   text-transform: uppercase;
 }
 
-.notes-btn-add {
+.hub-notes-btn-add {
   width: 28px;
   height: 28px;
   border-radius: var(--radius-sm);
@@ -6736,23 +6734,23 @@ body.light-mode .theme-toggle-btn:hover {
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease-out-expo);
 }
-.notes-btn-add:hover {
+.hub-notes-btn-add:hover {
   color: var(--accent-primary);
   border-color: var(--accent-primary);
   background: rgba(0, 240, 255, 0.08);
   box-shadow: 0 0 10px rgba(0, 240, 255, 0.15);
 }
-.notes-btn-add:active {
+.hub-notes-btn-add:active {
   transform: scale(0.9);
 }
 
 /* ── Folder List ── */
-.notes-folder-list {
+.hub-notes-folder-list {
   padding: var(--space-sm);
   border-bottom: 1px solid var(--glass-border);
 }
 
-.notes-folder-item {
+.hub-notes-folder-item {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
@@ -6767,35 +6765,35 @@ body.light-mode .theme-toggle-btn:hover {
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease-out-expo);
 }
-.notes-folder-item:hover {
+.hub-notes-folder-item:hover {
   color: var(--text-primary);
   background: var(--glass-highlight);
 }
-.notes-folder-item.active {
+.hub-notes-folder-item.hub-notes-active {
   color: var(--accent-primary);
   background: rgba(0, 240, 255, 0.08);
   box-shadow: inset 0 0 0 1px rgba(0, 240, 255, 0.15);
 }
 
-.notes-folder-icon {
+.hub-notes-folder-icon {
   flex-shrink: 0;
 }
 
-.notes-folder-count {
+.hub-notes-folder-count {
   margin-left: auto;
   font-size: 0.7rem;
   color: var(--text-muted);
 }
 
 /* ── Divider ── */
-.notes-divider {
+.hub-notes-divider {
   height: 1px;
   background: var(--glass-border);
   margin: 0 var(--space-sm);
 }
 
 /* ── Note List ── */
-.notes-note-list {
+.hub-notes-note-list {
   flex: 1;
   overflow-y: auto;
   padding: var(--space-sm);
@@ -6804,7 +6802,7 @@ body.light-mode .theme-toggle-btn:hover {
   gap: 2px;
 }
 
-.notes-note-item {
+.hub-notes-note-item {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -6818,18 +6816,18 @@ body.light-mode .theme-toggle-btn:hover {
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease-out-expo);
 }
-.notes-note-item:hover {
+.hub-notes-note-item:hover {
   background: var(--glass-highlight);
 }
-.notes-note-item.active {
+.hub-notes-note-item.hub-notes-active {
   background: rgba(0, 240, 255, 0.06);
   box-shadow: inset 0 0 0 1px rgba(0, 240, 255, 0.12);
 }
-.notes-note-item.active .notes-note-title {
+.hub-notes-note-item.hub-notes-active .hub-notes-note-title {
   color: var(--accent-primary);
 }
 
-.notes-note-title {
+.hub-notes-note-title {
   font-family: var(--font-mono);
   font-size: 0.78rem;
   font-weight: 500;
@@ -6839,14 +6837,24 @@ body.light-mode .theme-toggle-btn:hover {
   text-overflow: ellipsis;
 }
 
-.notes-note-date {
+.hub-notes-note-date {
   font-size: 0.65rem;
   color: var(--text-muted);
   font-family: var(--font-mono);
 }
 
+/* Empty list state */
+.hub-notes-empty-list {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-align: center;
+  padding: var(--space-lg) var(--space-sm);
+  font-style: italic;
+}
+
 /* ── Saving Indicator ── */
-.notes-saving {
+.hub-notes-saving {
   padding: var(--space-sm) var(--space-md);
   font-size: 0.65rem;
   font-family: var(--font-mono);
@@ -6855,12 +6863,12 @@ body.light-mode .theme-toggle-btn:hover {
   text-align: right;
   transition: color var(--duration-fast) var(--ease-out-expo);
 }
-.notes-saving--active {
+.hub-notes-saving--active {
   color: var(--accent-primary);
 }
 
 /* ── Right Pane ── */
-.notes-editor-pane {
+.hub-notes-editor-pane {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -6868,7 +6876,7 @@ body.light-mode .theme-toggle-btn:hover {
   position: relative;
 }
 
-.notes-editor-area {
+.hub-notes-editor-area {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -6882,7 +6890,7 @@ body.light-mode .theme-toggle-btn:hover {
 }
 
 /* ── Empty State ── */
-.notes-empty-state {
+.hub-notes-empty-state {
   position: absolute;
   inset: 0;
   display: flex;
@@ -6894,25 +6902,25 @@ body.light-mode .theme-toggle-btn:hover {
   pointer-events: none;
 }
 
-.notes-empty-icon {
+.hub-notes-empty-icon {
   opacity: 0.3;
   width: 48px;
   height: 48px;
 }
 
-.notes-empty-title {
+.hub-notes-empty-title {
   font-family: var(--font-mono);
   font-size: 0.9rem;
   color: var(--text-secondary);
 }
 
-.notes-empty-sub {
+.hub-notes-empty-sub {
   font-size: 0.78rem;
   color: var(--text-muted);
 }
 
 /* ── Title Input ── */
-.notes-title-input {
+.hub-notes-title-input {
   display: block;
   width: 100%;
   border: none;
@@ -6926,13 +6934,13 @@ body.light-mode .theme-toggle-btn:hover {
   margin-bottom: var(--space-md);
   outline: none;
 }
-.notes-title-input::placeholder {
+.hub-notes-title-input::placeholder {
   color: var(--text-muted);
   opacity: 0.5;
 }
 
 /* ── Rich Text Editor ── */
-#note-editor {
+#hn-editor {
   flex: 1;
   min-height: 200px;
   outline: none;
@@ -6943,8 +6951,7 @@ body.light-mode .theme-toggle-btn:hover {
   word-wrap: break-word;
 }
 
-/* Placeholder pseudo-element for empty editor */
-#note-editor:empty::before {
+#hn-editor:empty::before {
   content: attr(data-placeholder);
   color: var(--text-muted);
   opacity: 0.4;
@@ -6952,7 +6959,7 @@ body.light-mode .theme-toggle-btn:hover {
 }
 
 /* ── Editor Typography (h1 / h2 / h3 / p) ── */
-#note-editor h1 {
+#hn-editor h1 {
   font-family: var(--font-mono);
   font-size: 1.8rem;
   font-weight: 700;
@@ -6962,7 +6969,7 @@ body.light-mode .theme-toggle-btn:hover {
   letter-spacing: -0.02em;
 }
 
-#note-editor h2 {
+#hn-editor h2 {
   font-family: var(--font-mono);
   font-size: 1.4rem;
   font-weight: 600;
@@ -6971,7 +6978,7 @@ body.light-mode .theme-toggle-btn:hover {
   margin: 0.5em 0 0.25em;
 }
 
-#note-editor h3 {
+#hn-editor h3 {
   font-family: var(--font-mono);
   font-size: 1.15rem;
   font-weight: 600;
@@ -6982,21 +6989,21 @@ body.light-mode .theme-toggle-btn:hover {
   padding-left: var(--space-sm);
 }
 
-#note-editor p {
+#hn-editor p {
   margin: 0.4em 0;
 }
 
-#note-editor ul,
-#note-editor ol {
+#hn-editor ul,
+#hn-editor ol {
   padding-left: 1.5em;
   margin: 0.4em 0;
 }
 
-#note-editor li {
+#hn-editor li {
   margin: 0.2em 0;
 }
 
-#note-editor blockquote {
+#hn-editor blockquote {
   border-left: 3px solid var(--accent-primary);
   padding-left: var(--space-md);
   color: var(--text-secondary);
@@ -7006,7 +7013,7 @@ body.light-mode .theme-toggle-btn:hover {
 }
 
 /* ── Floating Formatting Toolbar ── */
-.notes-float-toolbar {
+.hub-notes-float-toolbar {
   display: none;
   position: absolute;
   z-index: 200;
@@ -7022,11 +7029,11 @@ body.light-mode .theme-toggle-btn:hover {
   pointer-events: auto;
 }
 
-.notes-toolbar--visible {
+.hub-notes-toolbar--visible {
   display: flex;
 }
 
-.notes-tb-btn {
+.hub-notes-tb-btn {
   width: 30px;
   height: 30px;
   border: none;
@@ -7041,126 +7048,126 @@ body.light-mode .theme-toggle-btn:hover {
   justify-content: center;
   transition: all var(--duration-fast) var(--ease-out-expo);
 }
-.notes-tb-btn:hover {
+.hub-notes-tb-btn:hover {
   color: var(--text-primary);
   background: var(--glass-highlight);
 }
-.notes-tb-btn:active {
+.hub-notes-tb-btn:active {
   background: rgba(0, 240, 255, 0.12);
   color: var(--accent-primary);
 }
 
-.notes-tb-highlight {
+.hub-notes-tb-highlight {
   font-weight: 700;
   color: var(--accent-primary) !important;
 }
-.notes-tb-highlight:hover {
+.hub-notes-tb-highlight:hover {
   text-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
 }
 
 /* ── Light mode overrides ── */
-html.light-mode .notes-btn-add:hover,
-body.light-mode .notes-btn-add:hover {
+html.light-mode .hub-notes-btn-add:hover,
+body.light-mode .hub-notes-btn-add:hover {
   color: var(--accent-primary);
   border-color: var(--accent-primary);
   box-shadow: 0 0 8px rgba(0, 119, 182, 0.1);
 }
 
-html.light-mode .notes-folder-item.active,
-body.light-mode .notes-folder-item.active {
+html.light-mode .hub-notes-folder-item.hub-notes-active,
+body.light-mode .hub-notes-folder-item.hub-notes-active {
   color: var(--accent-primary);
   background: rgba(0, 119, 182, 0.08);
   box-shadow: inset 0 0 0 1px rgba(0, 119, 182, 0.15);
 }
 
-html.light-mode .notes-note-item.active,
-body.light-mode .notes-note-item.active {
+html.light-mode .hub-notes-note-item.hub-notes-active,
+body.light-mode .hub-notes-note-item.hub-notes-active {
   background: rgba(0, 119, 182, 0.06);
   box-shadow: inset 0 0 0 1px rgba(0, 119, 182, 0.1);
 }
 
-html.light-mode .notes-note-item.active .notes-note-title,
-body.light-mode .notes-note-item.active .notes-note-title {
+html.light-mode .hub-notes-note-item.hub-notes-active .hub-notes-note-title,
+body.light-mode .hub-notes-note-item.hub-notes-active .hub-notes-note-title {
   color: var(--accent-primary);
 }
 
-html.light-mode .notes-editor-area,
-body.light-mode .notes-editor-area {
+html.light-mode .hub-notes-editor-area,
+body.light-mode .hub-notes-editor-area {
   background: rgba(255, 255, 255, 0.55);
 }
 
-html.light-mode .notes-title-input,
-body.light-mode .notes-title-input {
+html.light-mode .hub-notes-title-input,
+body.light-mode .hub-notes-title-input {
   color: var(--text-primary);
 }
 
-html.light-mode #note-editor h1,
-body.light-mode #note-editor h1 {
+html.light-mode #hn-editor h1,
+body.light-mode #hn-editor h1 {
   color: var(--accent-primary);
 }
 
-html.light-mode #note-editor h2,
-body.light-mode #note-editor h2 {
+html.light-mode #hn-editor h2,
+body.light-mode #hn-editor h2 {
   color: var(--accent-secondary);
 }
 
-html.light-mode #note-editor h3,
-body.light-mode #note-editor h3 {
+html.light-mode #hn-editor h3,
+body.light-mode #hn-editor h3 {
   border-left-color: var(--accent-primary);
 }
 
-html.light-mode .notes-float-toolbar,
-body.light-mode .notes-float-toolbar {
+html.light-mode .hub-notes-float-toolbar,
+body.light-mode .hub-notes-float-toolbar {
   background: rgba(255, 255, 255, 0.92);
   box-shadow: var(--shadow-md);
   border-color: rgba(0, 0, 0, 0.1);
 }
 
-html.light-mode .notes-tb-btn:hover,
-body.light-mode .notes-tb-btn:hover {
+html.light-mode .hub-notes-tb-btn:hover,
+body.light-mode .hub-notes-tb-btn:hover {
   background: rgba(0, 0, 0, 0.05);
 }
 
-html.light-mode .notes-tb-btn:active,
-body.light-mode .notes-tb-btn:active {
+html.light-mode .hub-notes-tb-btn:active,
+body.light-mode .hub-notes-tb-btn:active {
   background: rgba(0, 119, 182, 0.1);
   color: var(--accent-primary);
 }
 
-html.light-mode .notes-sidebar,
-body.light-mode .notes-sidebar {
+html.light-mode .hub-notes-sidebar,
+body.light-mode .hub-notes-sidebar {
   background: rgba(255, 255, 255, 0.7);
 }
 
-html.light-mode .notes-saving--active,
-body.light-mode .notes-saving--active {
+html.light-mode .hub-notes-saving--active,
+body.light-mode .hub-notes-saving--active {
   color: var(--accent-primary);
 }
 
 /* ── Mobile: collapse sidebar ── */
 @media (max-width: 768px) {
-  .notes-app {
+  .hub-notes-app {
     flex-direction: column;
     height: auto;
     min-height: 100%;
   }
 
-  .notes-sidebar {
+  .hub-notes-sidebar {
     width: 100%;
     max-height: 240px;
     border-radius: var(--radius-md);
   }
 
-  .notes-editor-pane {
+  .hub-notes-editor-pane {
     min-height: 400px;
   }
 
-  .notes-editor-area {
+  .hub-notes-editor-area {
     padding: var(--space-md);
     border-radius: var(--radius-md);
   }
 
-  .notes-title-input {
+  .hub-notes-title-input {
     font-size: 1.4rem;
   }
 }
