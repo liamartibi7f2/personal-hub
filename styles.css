@@ -316,6 +316,44 @@ ul, ol { list-style: none; }
   50% { opacity: 0.4; }
 }
 
+/* Backup/settings button inside sidebar-nav — pushes to bottom on desktop */
+#nav-list .sidebar-settings-btn {
+  margin-top: auto;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 12px var(--space-md);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+  position: relative;
+}
+#nav-list .sidebar-settings-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: var(--space-md);
+  right: var(--space-md);
+  height: 1px;
+  background: var(--glass-border);
+}
+#nav-list .sidebar-settings-btn:hover {
+  color: var(--accent-primary);
+  background: rgba(0, 240, 255, 0.08);
+  box-shadow: none;
+}
+#nav-list .sidebar-settings-btn:active {
+  transform: scale(0.97);
+}
+
 /* Sidebar settings/backup icon button */
 .sidebar-settings-btn {
   width: 32px;
@@ -3971,6 +4009,41 @@ mark.cyber-hl-pink:hover {
 
   .sidebar-footer {
     display: none;
+  }
+
+  /* Backup/settings btn inside nav — becomes a dock icon on mobile */
+  #nav-list .sidebar-settings-btn {
+    margin-top: 0;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 10px;
+    font-size: 0.6rem;
+    border-radius: var(--radius-sm);
+    width: auto;
+    height: auto;
+    border: none;
+    color: var(--text-muted);
+    background: transparent;
+    /* No separator line on mobile */
+    flex: 0 0 auto;
+    order: 999; /* Push to the right end of the dock */
+  }
+  #nav-list .sidebar-settings-btn::before {
+    display: none;
+  }
+  #nav-list .sidebar-settings-btn:hover {
+    color: var(--accent-primary);
+    background: rgba(0, 240, 255, 0.08);
+    border-color: transparent;
+    box-shadow: none;
+  }
+  #nav-list .sidebar-settings-btn:active {
+    transform: scale(0.9);
+  }
+  /* The SVG icon should match nav-icon sizing on mobile */
+  #nav-list .sidebar-settings-btn .sidebar-settings-icon {
+    width: 24px;
+    height: 24px;
   }
 
   /* Main content — full width with bottom padding for the dock */
