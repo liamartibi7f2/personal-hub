@@ -32,11 +32,11 @@ const pomodoroModule = (function () {
   ];
 
   const SOUND_URLS = {
-    undertale: './undertale.mp3',
-    minecraft: './minecraft.mp3',
-    steven:    './steven.mp3',
-    bell1:     './bell1.mp3',
-    bell2:     './bell2.mp3'
+    undertale: './assets/undertale.mp3',
+    minecraft: './assets/minecraft.mp3',
+    steven:    './assets/steven.mp3',
+    bell1:     './assets/bell1.mp3',
+    bell2:     './assets/bell2.mp3'
   };
 
   // --- Default settings (in minutes) ---

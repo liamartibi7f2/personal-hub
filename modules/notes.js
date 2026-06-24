@@ -506,6 +506,43 @@ const notesModule = (function () {
       });
     }
 
+    // Anti-Base64 Defense: block pasted images and embedded Base64 images
+    if (_el.editor) {
+      _el.editor.addEventListener('paste', function (e) {
+        var items = e.clipboardData && e.clipboardData.items;
+        if (items) {
+          for (var i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image') !== -1) {
+              e.preventDefault();
+              alert('⚠️ Hub.OS Protocol: Direct image pasting is disabled to protect the 5MB storage limit. Please use an Image URL instead.');
+              return;
+            }
+          }
+        }
+        var html = e.clipboardData && e.clipboardData.getData('text/html');
+        if (html && html.indexOf('src="data:image/') !== -1) {
+          e.preventDefault();
+          alert('⚠️ Hub.OS Protocol: Hidden Base64 image detected in pasted content. Please use an Image URL instead.');
+        }
+      });
+    }
+
+    // Anti-Base64 Defense: block dropped images
+    if (_el.editor) {
+      _el.editor.addEventListener('drop', function (e) {
+        var files = e.dataTransfer && e.dataTransfer.files;
+        if (files) {
+          for (var i = 0; i < files.length; i++) {
+            if (files[i].type.indexOf('image') !== -1) {
+              e.preventDefault();
+              alert('⚠️ Hub.OS Protocol: Drag & drop for images is not supported in the Offline version.');
+              return;
+            }
+          }
+        }
+      });
+    }
+
     // Slash commands on keyup
     if (_el.editor) {
       _el.editor.addEventListener('keyup', function (e) {
