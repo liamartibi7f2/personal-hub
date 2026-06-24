@@ -32,11 +32,11 @@ const pomodoroModule = (function () {
   ];
 
   const SOUND_URLS = {
-    undertale: 'https://www.myinstants.com/media/sounds/undertale-phone-ring-96331.mp3',
-    minecraft: 'https://www.myinstants.com/media/sounds/minecraft-drinking-sound-35393.mp3',
-    steven:    'https://www.myinstants.com/media/sounds/steven-universe-ringtone-19547.mp3',
-    bell1:     'https://www.myinstants.com/media/sounds/bell-ring-37079.mp3',
-    bell2:     'https://www.myinstants.com/media/sounds/bell-ringing-68816.mp3'
+    undertale: './assets/undertale.mp3',
+    minecraft: './assets/minecraft.mp3',
+    steven:    './assets/steven.mp3',
+    bell1:     './assets/bell1.mp3',
+    bell2:     './assets/bell2.mp3'
   };
 
   // --- Default settings (in minutes) ---
