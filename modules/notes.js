@@ -8,7 +8,6 @@ const notesModule = (function () {
   'use strict';
 
   // ── Constants ──
-  const STORAGE_KEY = 'hub_notes';
   const SAVE_DELAY  = 400;
 
   // ── Private state ──
@@ -42,27 +41,24 @@ const notesModule = (function () {
   //   STORAGE
   // ============================================================
 
-  function _loadData() {
+  async function _loadData() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.folders) && parsed.folders.length > 0) {
-          // BỘ LỌC RÁC: Tự động xóa các note lỗi (null/undefined) do bị crash ở các phiên bản trước
-          parsed.folders.forEach(function(f) {
-            if (f.notes && Array.isArray(f.notes)) {
-              f.notes = f.notes.filter(function(n) { return n && n.id; });
-            } else {
-              f.notes = [];
-            }
-          });
-          _data = parsed;
-          return;
-        }
+      const data = await HubDB.loadNotesData();
+      if (data && Array.isArray(data.folders) && data.folders.length > 0) {
+        // Clean corrupted notes (null/undefined) from previous crashes
+        data.folders.forEach(function(f) {
+          if (f.notes && Array.isArray(f.notes)) {
+            f.notes = f.notes.filter(function(n) { return n && n.id; });
+          } else {
+            f.notes = [];
+          }
+        });
+        _data = data;
+        return;
       }
     } catch (_) { /* ignore */ }
-    
-    // Tạo dữ liệu mặc định nếu chưa có
+
+    // Default data if nothing stored
     _data = {
       folders: [{
         id: _uid(),
@@ -70,21 +66,24 @@ const notesModule = (function () {
         notes: [_buildNoteObject('Welcome', 'Welcome to Notes!<br><br>Try typing /h1, /h2, or /h3 followed by space to insert headings.')]
       }]
     };
-    _persist();
+    await _persist();
   }
 
-  function _persist() {
+  async function _persist() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(_data));
-    } catch (_) { /* quota exceeded */ }
+      await HubDB.saveNotesData(_data);
+    } catch (_) { /* fallback handled internally by HubDB */ }
   }
 
   function _scheduleSave() {
     if (_saveTimer) clearTimeout(_saveTimer);
     _showSaving(true);
     _saveTimer = setTimeout(function () {
-      _persist();
-      _showSaving(false);
+      _persist().then(function () {
+        _showSaving(false);
+      }).catch(function () {
+        _showSaving(false);
+      });
       _saveTimer = null;
     }, SAVE_DELAY);
   }
@@ -134,9 +133,9 @@ const notesModule = (function () {
   //   RENDER — Entry Point
   // ============================================================
 
-  function render(container) {
+  async function render(container) {
     _container = container;
-    _loadData();
+    await _loadData();
     _activeFolder = _data.folders[0];
     _activeNote   = _activeFolder.notes[0] || null;
 
@@ -779,7 +778,7 @@ function _updateToolbarPosition() {
   //   SAVE — Force immediate persist
   // ============================================================
 
-  function _saveImmediate() {
+  async function _saveImmediate() {
     if (_saveTimer) {
       clearTimeout(_saveTimer);
       _saveTimer = null;
@@ -788,7 +787,7 @@ function _updateToolbarPosition() {
       _activeNote.title   = _el.titleInput.value || 'Untitled';
       _activeNote.content = _el.editor.innerHTML;
     }
-    _persist();
+    await _persist();
     _showSaving(false);
   }
 
@@ -797,7 +796,8 @@ function _updateToolbarPosition() {
   // ============================================================
 
   function destroy() {
-    _saveImmediate();
+    // Fire-and-forget save on destroy; no need to block teardown
+    _saveImmediate().catch(function () {});
     if (_saveTimer) {
       clearTimeout(_saveTimer);
       _saveTimer = null;
