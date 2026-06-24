@@ -19,7 +19,7 @@ const pomodoroModule = (function () {
   const SESSIONS_KEY  = 'hub_pomodoro_sessions';
   const REFERENCE_KEY = 'hub_pomodoro_ref';
   const STATS_KEY     = 'hub_pomodoro_stats';
-  const ALARM_LOOP_MS = 1500;
+  const ALARM_LOOP_MS = 2000;
 
   // --- Hardcoded Sound Profiles ---
   const SOUND_PROFILES = [
@@ -32,11 +32,11 @@ const pomodoroModule = (function () {
   ];
 
   const SOUND_URLS = {
-    undertale: './assets/undertale.mp3',
-    minecraft: './assets/minecraft.mp3',
-    steven:    './assets/steven.mp3',
-    bell1:     './assets/bell1.mp3',
-    bell2:     './assets/bell2.mp3'
+    undertale: './undertale.mp3',
+    minecraft: './minecraft.mp3',
+    steven:    './steven.mp3',
+    bell1:     './bell1.mp3',
+    bell2:     './bell2.mp3'
   };
 
   // --- Default settings (in minutes) ---
