@@ -2089,6 +2089,36 @@ body.light-mode .btn-edit-card:hover {
   color: var(--text-primary);
 }
 
+/* Stop Alarm button — cyberpunk glowing red, hidden by default */
+.hub-pomodoro-stop-alarm {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  border: 2px solid rgba(255, 68, 102, 0.8);
+  background: rgba(255, 68, 102, 0.12);
+  color: rgba(255, 68, 102, 0.9);
+  font-size: 1rem;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+  box-shadow: 0 0 15px rgba(255, 68, 102, 0.5);
+  animation: hub-pomodoro-alarm-pulse 1s ease-in-out infinite;
+}
+.hub-pomodoro-stop-alarm:hover {
+  background: rgba(255, 68, 102, 0.25);
+  box-shadow: 0 0 25px rgba(255, 68, 102, 0.7);
+  transform: scale(1.1);
+}
+.hub-pomodoro-stop-alarm:active {
+  transform: scale(0.9);
+}
+@keyframes hub-pomodoro-alarm-pulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(255, 68, 102, 0.4); }
+  50%      { box-shadow: 0 0 22px rgba(255, 68, 102, 0.7); }
+}
+
 /* Prominent Settings button (in top bar) */
 .settings-btn {
   display: flex;

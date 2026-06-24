@@ -2,13 +2,13 @@
    HUB.OS — modules/pomodoro.js
    Pomodoro timer with circular SVG progress ring,
    focus/break modes, premium settings modal, professional
-   statistics dashboard with weekly chart, classic alarm +
-   5 custom URL audio slots, and localStorage persistence.
+   statistics dashboard with weekly chart, and looping
+   audio alarm with 5 hardcoded URL profiles + classic beep.
 
    Module contract:
      - id: 'pomodoro'
-     - render(container) → injects the timer + stats UI
-     - destroy()        → cleans up intervals and state
+     - render(container) -> injects the timer + stats UI
+     - destroy()        -> cleans up intervals and state
    ============================================================ */
 
 const pomodoroModule = (function () {
@@ -19,20 +19,34 @@ const pomodoroModule = (function () {
   const SESSIONS_KEY  = 'hub_pomodoro_sessions';
   const REFERENCE_KEY = 'hub_pomodoro_ref';
   const STATS_KEY     = 'hub_pomodoro_stats';
+  const ALARM_LOOP_MS = 1500;
+
+  // --- Hardcoded Sound Profiles ---
+  const SOUND_PROFILES = [
+    { key: 'classic',    label: 'Classic' },
+    { key: 'undertale',  label: 'Undertale' },
+    { key: 'minecraft',  label: 'Minecraft' },
+    { key: 'steven',     label: 'Steven Universe' },
+    { key: 'bell1',      label: 'Bell 1' },
+    { key: 'bell2',      label: 'Bell 2' }
+  ];
+
+  const SOUND_URLS = {
+    undertale: 'https://www.myinstants.com/media/sounds/undertale-phone-ring-96331.mp3',
+    minecraft: 'https://www.myinstants.com/media/sounds/minecraft-drinking-sound-35393.mp3',
+    steven:    'https://www.myinstants.com/media/sounds/steven-universe-ringtone-19547.mp3',
+    bell1:     'https://www.myinstants.com/media/sounds/bell-ring-37079.mp3',
+    bell2:     'https://www.myinstants.com/media/sounds/bell-ringing-68816.mp3'
+  };
 
   // --- Default settings (in minutes) ---
   const DEFAULT_SETTINGS = {
     focus: 25,
     shortBreak: 5,
     longBreak: 15,
-    soundProfile: 'classic_alarm',
+    soundProfile: 'classic',
     autoStartBreaks: false,
-    autoStartFocus: false,
-    customUrl1: '',
-    customUrl2: '',
-    customUrl3: '',
-    customUrl4: '',
-    customUrl5: ''
+    autoStartFocus: false
   };
 
   // --- Default stats structure ---
@@ -45,7 +59,7 @@ const pomodoroModule = (function () {
 
   // --- SVG ring geometry ---
   const RING_RADIUS        = 120;
-  const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS; // ≈ 753.98
+  const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS; // ~ 753.98
 
   // --- Modes ---
   const MODES = [
@@ -55,18 +69,21 @@ const pomodoroModule = (function () {
   ];
 
   // --- Private state ---
-  let _settings       = { ...DEFAULT_SETTINGS };
-  let _currentMode    = 'focus';
-  let _secondsRemaining = 0;
-  let _totalSeconds   = 0;
-  let _isRunning      = false;
-  let _timerInterval  = null;
-  let _container      = null;
-  let _audioCtx       = null;
-  let _settingsOpen   = false;   // Tracks settings modal visibility
-  let _escapeHandler  = null;    // Reference for cleanup
-  let _chartRange     = 'week';  // 'week' | 'month' | 'year'
-  let _lastTickTime   = null;    // Date.now() anchor for delta-based timing
+  let _settings          = { ...DEFAULT_SETTINGS };
+  let _currentMode       = 'focus';
+  let _secondsRemaining  = 0;
+  let _totalSeconds      = 0;
+  let _isRunning         = false;
+  let _timerInterval     = null;
+  let _alarmInterval     = null;    // 1500ms loop handle
+  let _alarmAudio        = null;    // current Audio instance
+  let _alarmRinging      = false;   // tracks alarm state for UI
+  let _container         = null;
+  let _audioCtx          = null;
+  let _settingsOpen      = false;
+  let _escapeHandler     = null;
+  let _chartRange        = 'week';
+  let _lastTickTime      = null;
 
   // =============================================================
   //  PUBLIC API
@@ -88,18 +105,14 @@ const pomodoroModule = (function () {
   }
 
   function destroy() {
-    // Persist the current timer state so it survives SPA tab switches.
-    // IMPORTANT: do NOT call _pauseTimer() — it sets _isRunning = false
-    // which would kill background execution. We only clear the browser
-    // interval handle; the logical timer stays running.
     _saveTimerState();
+    _stopAlarmInternal();
 
     if (_timerInterval) {
       clearInterval(_timerInterval);
       _timerInterval = null;
     }
 
-    // Remove global escape handler if present
     if (_escapeHandler) {
       document.removeEventListener('keydown', _escapeHandler);
       _escapeHandler = null;
@@ -143,11 +156,6 @@ const pomodoroModule = (function () {
   //  STATS ENGINE
   // =============================================================
 
-  /**
-   * Load stats from localStorage, merging with defaults.
-   * Handles corrupted or missing data gracefully.
-   * @returns {Object} stats object
-   */
   function _loadStats() {
     try {
       const stored = localStorage.getItem(STATS_KEY);
@@ -164,14 +172,12 @@ const pomodoroModule = (function () {
     return { ...DEFAULT_STATS, dailyHistory: {} };
   }
 
-  /** Persist stats to localStorage */
   function _saveStats(stats) {
     try {
       localStorage.setItem(STATS_KEY, JSON.stringify(stats));
     } catch (_) { /* ignore */ }
   }
 
-  /** Return a 'YYYY-MM-DD' key for a given Date */
   function _getDateKey(date) {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -179,10 +185,6 @@ const pomodoroModule = (function () {
     return `${y}-${m}-${d}`;
   }
 
-  /**
-   * Record a completed focus session in the stats.
-   * Called automatically when the focus timer hits 0:00.
-   */
   function _recordFocusCompletion() {
     const stats    = _loadStats();
     const todayKey = _getDateKey(new Date());
@@ -195,25 +197,16 @@ const pomodoroModule = (function () {
     _saveStats(stats);
   }
 
-  /**
-   * Calculate current daily streak.
-   * Counts consecutive days backwards from the most recent
-   * completion date (today or yesterday).
-   * @returns {number} streak count
-   */
   function _calculateStreak() {
     const stats = _loadStats();
     const todayKey     = _getDateKey(new Date());
     const yesterdayKey = _getDateKey(new Date(Date.now() - 86400000));
 
-    // Get all dates with completions, sorted newest first
     const dates = Object.keys(stats.dailyHistory)
       .filter(d => (stats.dailyHistory[d] || 0) > 0)
       .sort((a, b) => b.localeCompare(a));
 
     if (dates.length === 0) return 0;
-
-    // The most recent completion must be today or yesterday
     if (dates[0] !== todayKey && dates[0] !== yesterdayKey) return 0;
 
     let streak = 1;
@@ -231,10 +224,6 @@ const pomodoroModule = (function () {
     return streak;
   }
 
-  /**
-   * Build an array of the last 7 days with focus minutes per day.
-   * @returns {Array<{date, dayName, minutes, isToday}>}
-   */
   function _getWeeklyData() {
     const stats = _loadStats();
     const now   = new Date();
@@ -255,20 +244,14 @@ const pomodoroModule = (function () {
     return days;
   }
 
-  /**
-   * Build monthly chart data: last 30 days grouped into 4 weekly buckets.
-   * Each bucket aggregates ~7 days of focus minutes.
-   * @returns {Array<{label: string, minutes: number, isCurrent: boolean}>}
-   */
   function _getMonthlyData() {
     const stats = _loadStats();
     const now   = new Date();
     const weeks = [];
 
-    // Walk backwards in 7-day chunks: Week 4 (oldest) → Week 1 (current)
     for (let w = 3; w >= 0; w--) {
       let weekMinutes = 0;
-      const endDay  = new Date(now.getFullYear(), now.getMonth(), now.getDate() - w * 7);
+      const endDay   = new Date(now.getFullYear(), now.getMonth(), now.getDate() - w * 7);
       const startDay = new Date(endDay.getFullYear(), endDay.getMonth(), endDay.getDate() - 6);
 
       for (let d = new Date(startDay); d <= endDay; d.setDate(d.getDate() + 1)) {
@@ -277,30 +260,25 @@ const pomodoroModule = (function () {
         weekMinutes += Math.floor(seconds / 60);
       }
 
-      // Format label like "Jun 1-7"
       const sLabel = startDay.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       const eLabel = endDay.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
       weeks.push({
-        label:     `${sLabel}–${eLabel}`,
+        label:      `${sLabel}–${eLabel}`,
         shortLabel: `W${4 - w}`,
-        minutes:   weekMinutes,
-        isCurrent: w === 0
+        minutes:    weekMinutes,
+        isCurrent:  w === 0
       });
     }
 
     return weeks;
   }
 
-  /**
-   * Build yearly chart data: 12 months of the current year.
-   * @returns {Array<{label: string, minutes: number, isCurrent: boolean}>}
-   */
   function _getYearlyData() {
     const stats     = _loadStats();
     const now       = new Date();
     const year      = now.getFullYear();
-    const monthNow  = now.getMonth(); // 0-indexed
+    const monthNow  = now.getMonth();
     const months    = [];
 
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -309,7 +287,6 @@ const pomodoroModule = (function () {
     for (let m = 0; m < 12; m++) {
       let monthMinutes = 0;
 
-      // Iterate every day in this month
       const daysInMonth = new Date(year, m + 1, 0).getDate();
       for (let day = 1; day <= daysInMonth; day++) {
         const d       = new Date(year, m, day);
@@ -328,10 +305,6 @@ const pomodoroModule = (function () {
     return months;
   }
 
-  /**
-   * Unified data getter based on current chart range.
-   * @returns {{ bars: Array, chartLabel: string }}
-   */
   function _getChartData() {
     if (_chartRange === 'month') {
       return {
@@ -345,7 +318,6 @@ const pomodoroModule = (function () {
         chartLabel: `${new Date().getFullYear()} · Focus Hours`
       };
     }
-    // Default: week
     return {
       bars:       _getWeeklyData(),
       chartLabel: 'This Week · Focus Minutes'
@@ -390,7 +362,6 @@ const pomodoroModule = (function () {
 
         _isRunning = true;
         _lastTickTime = Date.now();
-        // Interval will be started by _renderApp()
       } else {
         _secondsRemaining = state.remaining;
         _isRunning = false;
@@ -422,10 +393,10 @@ const pomodoroModule = (function () {
   function _renderApp() {
     if (!_container) return;
 
-    const minutes  = Math.floor(_secondsRemaining / 60);
-    const seconds  = _secondsRemaining % 60;
-    const timeStr  = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-    const progress = _totalSeconds > 0
+    const minutes   = Math.floor(_secondsRemaining / 60);
+    const seconds   = _secondsRemaining % 60;
+    const timeStr   = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    const progress  = _totalSeconds > 0
       ? (_totalSeconds - _secondsRemaining) / _totalSeconds
       : 0;
     const dashOffset = RING_CIRCUMFERENCE * (1 - progress);
@@ -465,7 +436,6 @@ const pomodoroModule = (function () {
           `).join('')}
         </div>
 
-        <!-- Prominent Settings button with gear icon -->
         <button class="settings-btn glass" id="btn-settings-top" title="Customize timer durations" aria-label="Open timer settings">
           <svg width="16" height="16" viewBox="0 0 18 18" fill="none" class="settings-btn-icon">
             <circle cx="9" cy="9" r="2.5" stroke="currentColor" stroke-width="1.4"/>
@@ -539,6 +509,13 @@ const pomodoroModule = (function () {
               <rect x="12" y="3" width="2" height="10" rx="0.5" fill="currentColor"/>
             </svg>
           </button>
+          <button class="hub-pomodoro-stop-alarm" id="btn-stop-alarm" title="Stop Alarm" style="display:${_alarmRinging ? 'flex' : 'none'}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+              <line x1="1" y1="1" x2="23" y2="23"/>
+            </svg>
+          </button>
         </div>
       </div>
     `;
@@ -553,13 +530,11 @@ const pomodoroModule = (function () {
     const streak     = _calculateStreak();
     const chartData  = _getChartData();
 
-    // Format total focus time → "Xh Ym"
     const totalMin = Math.floor(stats.totalFocusSeconds / 60);
     const hours    = Math.floor(totalMin / 60);
     const mins     = totalMin % 60;
     const focusTimeStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
 
-    // Chart: compute bar heights. For year view: show hours instead of minutes.
     const isYearView = _chartRange === 'year';
     const maxValue   = Math.max(...chartData.bars.map(d => d.minutes), 1);
 
@@ -567,7 +542,6 @@ const pomodoroModule = (function () {
       <div class="pomodoro-stats">
         <h4 class="stats-heading">Performance Metrics</h4>
 
-        <!-- Metric cards -->
         <div class="stats-grid">
           <div class="stat-card-mini glass-card">
             <span class="stat-icon">⏱️</span>
@@ -586,7 +560,6 @@ const pomodoroModule = (function () {
           </div>
         </div>
 
-        <!-- Chart with time-range toggle -->
         <div class="weekly-chart glass-card">
           <div class="chart-header-row">
             <h5 class="chart-heading">${chartData.chartLabel}</h5>
@@ -633,7 +606,6 @@ const pomodoroModule = (function () {
            id="settings-overlay" role="dialog" aria-modal="true" aria-label="Timer settings">
 
         <div class="settings-modal glass">
-          <!-- Header -->
           <div class="settings-modal-header">
             <div class="settings-modal-title-group">
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none" class="settings-modal-icon-svg">
@@ -646,7 +618,6 @@ const pomodoroModule = (function () {
             <button class="settings-close-btn" id="btn-settings-close" aria-label="Close settings">✕</button>
           </div>
 
-          <!-- Body: Duration inputs -->
           <div class="settings-body">
             ${_renderAutoStartToggles()}
             ${_renderSoundField()}
@@ -656,7 +627,6 @@ const pomodoroModule = (function () {
             ${_renderSettingsField('Long Break', 'longBreak', _settings.longBreak, 1, 60)}
           </div>
 
-          <!-- Footer: Actions -->
           <div class="settings-modal-footer">
             <button class="btn btn-ghost" id="btn-cancel-settings">Cancel</button>
             <button class="btn btn-primary" id="btn-save-settings">Save Settings</button>
@@ -667,7 +637,6 @@ const pomodoroModule = (function () {
     `;
   }
 
-  /** Render auto-start toggle switches */
   function _renderAutoStartToggles() {
     return `
       <div class="settings-field settings-field--row">
@@ -687,30 +656,14 @@ const pomodoroModule = (function () {
     `;
   }
 
-  /** Render the sound profile selector + custom URL fields */
+  /** Render the sound profile dropdown (no custom URL inputs) */
   function _renderSoundField() {
-    var profiles = [
-      { key: 'classic_alarm', label: 'Classic Alarm' },
-      { key: 'custom_1',      label: 'Custom 1' },
-      { key: 'custom_2',      label: 'Custom 2' },
-      { key: 'custom_3',      label: 'Custom 3' },
-      { key: 'custom_4',      label: 'Custom 4' },
-      { key: 'custom_5',      label: 'Custom 5' }
-    ];
-    var current = _settings.soundProfile || 'classic_alarm';
+    var current = _settings.soundProfile || 'classic';
 
     var profileOpts = '';
-    for (var pi = 0; pi < profiles.length; pi++) {
-      var p = profiles[pi];
+    for (var pi = 0; pi < SOUND_PROFILES.length; pi++) {
+      var p = SOUND_PROFILES[pi];
       profileOpts += '<option value="' + p.key + '"' + (p.key === current ? ' selected' : '') + '>' + p.label + '</option>';
-    }
-
-    var urlInputs = '';
-    for (var ui = 1; ui <= 5; ui++) {
-      urlInputs += '<div class="hub-pomodoro-url-row">' +
-        '<label class="hub-pomodoro-url-label" for="input-customUrl' + ui + '">Link ' + ui + '</label>' +
-        '<input type="url" class="hub-pomodoro-url-input" id="input-customUrl' + ui + '" value="' + _escHtml(_settings['customUrl' + ui] || '') + '" placeholder="https://www.myinstants.com/en/instant/..." />' +
-      '</div>';
     }
 
     return '' +
@@ -724,15 +677,9 @@ const pomodoroModule = (function () {
           '</div>' +
           '<button class="btn-test-sound" id="btn-test-sound" title="Test selected sound" aria-label="Test sound">🔊</button>' +
         '</div>' +
-        '<p class="hub-pomodoro-instructions">Hướng dẫn: Truy cập myinstants.com, bấm vào một âm thanh bất kỳ, bấm nút \'Copy Link\' hoặc sao chép URL trên trình duyệt rồi dán vào các ô Custom bên dưới.</p>' +
-      '</div>' +
-      '<div class="hub-pomodoro-url-section">' +
-        '<label class="settings-field-label" style="display:block;margin-bottom:var(--space-sm);">Custom Audio Links</label>' +
-        urlInputs +
       '</div>';
   }
 
-  /** Render a single settings field with stepper controls */
   function _renderSettingsField(label, key, value, min, max) {
     return `
       <div class="settings-field">
@@ -763,60 +710,64 @@ const pomodoroModule = (function () {
 
     // --- Mode toggle buttons ---
     _container.querySelectorAll('.mode-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const mode = btn.dataset.mode;
+      btn.addEventListener('click', function () {
+        var mode = this.dataset.mode;
         if (mode === _currentMode) return;
         _switchMode(mode);
       });
     });
 
     // --- Timer controls ---
-    const btnToggle = _container.querySelector('#btn-toggle');
+    var btnToggle = _container.querySelector('#btn-toggle');
     if (btnToggle) btnToggle.addEventListener('click', _toggleTimer);
 
-    const btnReset = _container.querySelector('#btn-reset');
+    var btnReset = _container.querySelector('#btn-reset');
     if (btnReset) btnReset.addEventListener('click', _resetTimer);
 
-    const btnSkip = _container.querySelector('#btn-skip');
+    var btnSkip = _container.querySelector('#btn-skip');
     if (btnSkip) btnSkip.addEventListener('click', _skipTimer);
 
+    // --- Stop Alarm button ---
+    var btnStopAlarm = _container.querySelector('#btn-stop-alarm');
+    if (btnStopAlarm) btnStopAlarm.addEventListener('click', _stopAlarm);
+
     // --- Settings: open (both buttons) ---
-    const btnSettings = _container.querySelector('#btn-settings');
+    var btnSettings = _container.querySelector('#btn-settings');
     if (btnSettings) btnSettings.addEventListener('click', _openSettings);
 
-    const btnSettingsTop = _container.querySelector('#btn-settings-top');
+    var btnSettingsTop = _container.querySelector('#btn-settings-top');
     if (btnSettingsTop) btnSettingsTop.addEventListener('click', _openSettings);
 
     // --- Settings: close ---
-    const btnClose = _container.querySelector('#btn-settings-close');
+    var btnClose = _container.querySelector('#btn-settings-close');
     if (btnClose) btnClose.addEventListener('click', _closeSettings);
 
     // --- Settings: cancel ---
-    const btnCancel = _container.querySelector('#btn-cancel-settings');
+    var btnCancel = _container.querySelector('#btn-cancel-settings');
     if (btnCancel) btnCancel.addEventListener('click', _closeSettings);
 
     // --- Settings: save ---
-    const btnSave = _container.querySelector('#btn-save-settings');
+    var btnSave = _container.querySelector('#btn-save-settings');
     if (btnSave) btnSave.addEventListener('click', _saveSettingsHandler);
 
     // --- Settings: backdrop click ---
-    const overlay = _container.querySelector('#settings-overlay');
+    var overlay = _container.querySelector('#settings-overlay');
     if (overlay) {
-      overlay.addEventListener('click', (e) => {
+      overlay.addEventListener('click', function (e) {
         if (e.target === overlay) _closeSettings();
       });
     }
 
     // --- Settings: stepper buttons ---
     _container.querySelectorAll('.stepper-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const target = btn.dataset.target;
-        const dir    = parseInt(btn.dataset.dir, 10);
-        const input  = _container.querySelector(`#input-${target}`);
+      btn.addEventListener('click', function () {
+        var target = this.dataset.target;
+        var dir    = parseInt(this.dataset.dir, 10);
+        var input  = _container.querySelector('#input-' + target);
         if (input) {
-          const min  = parseInt(input.getAttribute('min'), 10) || 1;
-          const max  = parseInt(input.getAttribute('max'), 10) || 120;
-          let val    = parseInt(input.value, 10) || 0;
+          var min  = parseInt(input.getAttribute('min'), 10) || 1;
+          var max  = parseInt(input.getAttribute('max'), 10) || 120;
+          var val  = parseInt(input.value, 10) || 0;
           val = Math.max(min, Math.min(max, val + dir));
           input.value = val;
         }
@@ -824,12 +775,13 @@ const pomodoroModule = (function () {
     });
 
     // --- Settings: test sound button ---
-    const btnTestSound = _container.querySelector('#btn-test-sound');
+    var btnTestSound = _container.querySelector('#btn-test-sound');
     if (btnTestSound) {
-      btnTestSound.addEventListener('click', () => {
-        const select = _container.querySelector('#input-soundProfile');
-        const profile = select ? select.value : 'classic_alarm';
-        _playSound(profile);
+      btnTestSound.addEventListener('click', function () {
+        var select = _container.querySelector('#input-soundProfile');
+        var profile = select ? select.value : 'classic';
+        // Test plays once (single audio, no looping)
+        _playTestSound(profile);
       });
     }
 
@@ -837,13 +789,11 @@ const pomodoroModule = (function () {
     if (_escapeHandler) {
       document.removeEventListener('keydown', _escapeHandler);
     }
-    _escapeHandler = (e) => {
+    _escapeHandler = function (e) {
       if (e.key === 'Escape' && _settingsOpen) {
         _closeSettings();
       }
-      // Space to toggle timer (only when settings are closed)
       if ((e.key === ' ' || e.key === 'Spacebar') && !_settingsOpen) {
-        // Don't intercept if user is typing in an input
         if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
         e.preventDefault();
         _toggleTimer();
@@ -853,8 +803,8 @@ const pomodoroModule = (function () {
 
     // --- Chart range toggle pills ---
     _container.querySelectorAll('.chart-range-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const range = btn.dataset.range;
+      btn.addEventListener('click', function () {
+        var range = this.dataset.range;
         if (!range || range === _chartRange) return;
         _chartRange = range;
         _renderApp();
@@ -868,63 +818,51 @@ const pomodoroModule = (function () {
 
   function _openSettings() {
     _settingsOpen = true;
-    const overlay = document.getElementById('settings-overlay');
+    var overlay = document.getElementById('settings-overlay');
     if (overlay) {
       overlay.classList.add('settings-overlay--visible');
-      // Focus the first input for convenience
-      const firstInput = overlay.querySelector('input');
-      if (firstInput) setTimeout(() => firstInput.focus(), 100);
+      var firstInput = overlay.querySelector('input');
+      if (firstInput) setTimeout(function () { firstInput.focus(); }, 100);
     }
   }
 
   function _closeSettings() {
     _settingsOpen = false;
-    const overlay = document.getElementById('settings-overlay');
+    var overlay = document.getElementById('settings-overlay');
     if (overlay) {
       overlay.classList.remove('settings-overlay--visible');
     }
   }
 
   function _saveSettingsHandler() {
-    // Read values from the modal inputs
     var focusVal      = parseInt(_getVal('input-focus'), 10);
     var shortBreakVal = parseInt(_getVal('input-shortBreak'), 10);
     var longBreakVal  = parseInt(_getVal('input-longBreak'), 10);
     var soundVal      = _getVal('input-soundProfile');
 
-    // Read auto-start toggles
     var autoStartBreaksEl = document.getElementById('input-autoStartBreaks');
     var autoStartFocusEl  = document.getElementById('input-autoStartFocus');
     _settings.autoStartBreaks = autoStartBreaksEl ? autoStartBreaksEl.checked : false;
     _settings.autoStartFocus  = autoStartFocusEl  ? autoStartFocusEl.checked  : false;
 
-    // Validate and clamp
     _settings.focus      = Math.max(1, Math.min(120, focusVal || DEFAULT_SETTINGS.focus));
     _settings.shortBreak = Math.max(1, Math.min(60, shortBreakVal || DEFAULT_SETTINGS.shortBreak));
     _settings.longBreak  = Math.max(1, Math.min(60, longBreakVal || DEFAULT_SETTINGS.longBreak));
 
-    // Sound profile — only accept known keys
-    var validSounds = ['classic_alarm', 'custom_1', 'custom_2', 'custom_3', 'custom_4', 'custom_5'];
-    if (soundVal && validSounds.indexOf(soundVal) !== -1) {
+    // Validate sound profile against known keys
+    var validKeys = SOUND_PROFILES.map(function (p) { return p.key; });
+    if (soundVal && validKeys.indexOf(soundVal) !== -1) {
       _settings.soundProfile = soundVal;
-    }
-
-    // Save custom URL fields
-    for (var i = 1; i <= 5; i++) {
-      var input = document.getElementById('input-customUrl' + i);
-      _settings['customUrl' + i] = input ? input.value.trim() : '';
     }
 
     _saveSettings();
 
-    // Reset the timer to match the new duration for the current mode
     _pauseTimer();
-    const settingKey = MODES.find(m => m.key === _currentMode).settingKey;
+    var settingKey = MODES.find(function (m) { return m.key === _currentMode; }).settingKey;
     _setDuration(_settings[settingKey]);
     _isRunning = false;
     _clearTimerState();
 
-    // Close modal and re-render
     _closeSettings();
     _renderApp();
   }
@@ -936,7 +874,7 @@ const pomodoroModule = (function () {
   function _switchMode(mode) {
     _pauseTimer();
     _currentMode = mode;
-    const settingKey = MODES.find(m => m.key === mode).settingKey;
+    var settingKey = MODES.find(function (m) { return m.key === mode; }).settingKey;
     _setDuration(_settings[settingKey]);
     _isRunning = false;
     _clearTimerState();
@@ -954,7 +892,7 @@ const pomodoroModule = (function () {
 
   function _startTimer() {
     if (_secondsRemaining <= 0) {
-      const settingKey = MODES.find(m => m.key === _currentMode).settingKey;
+      var settingKey = MODES.find(function (m) { return m.key === _currentMode; }).settingKey;
       _setDuration(_settings[settingKey]);
     }
     _isRunning = true;
@@ -974,7 +912,7 @@ const pomodoroModule = (function () {
 
   function _resetTimer() {
     _pauseTimer();
-    const settingKey = MODES.find(m => m.key === _currentMode).settingKey;
+    var settingKey = MODES.find(function (m) { return m.key === _currentMode; }).settingKey;
     _setDuration(_settings[settingKey]);
     _clearTimerState();
     _renderApp();
@@ -988,33 +926,31 @@ const pomodoroModule = (function () {
 
   function _startInterval() {
     if (_timerInterval) clearInterval(_timerInterval);
-    _timerInterval = setInterval(() => {
-      const now   = Date.now();
-      const delta = (now - _lastTickTime) / 1000;   // seconds elapsed since last tick
+    _timerInterval = setInterval(function () {
+      var now   = Date.now();
+      var delta = (now - _lastTickTime) / 1000;
       _lastTickTime = now;
 
       if (delta > 0) {
         _secondsRemaining = Math.max(0, _secondsRemaining - delta);
       }
 
-      // Timer completed — guard against oversleep past end time
       if (_secondsRemaining <= 0) {
         _secondsRemaining = 0;
         _onTimerComplete();
         return;
       }
 
-      // Efficient DOM updates (no full re-render)
-      const displaySeconds = Math.ceil(_secondsRemaining);
-      const timeEl = document.getElementById('timer-time');
-      const ringEl = document.getElementById('ring-progress');
+      var displaySeconds = Math.ceil(_secondsRemaining);
+      var timeEl = document.getElementById('timer-time');
+      var ringEl = document.getElementById('ring-progress');
       if (timeEl) {
-        const m = Math.floor(displaySeconds / 60);
-        const s = displaySeconds % 60;
-        timeEl.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        var m = Math.floor(displaySeconds / 60);
+        var s = displaySeconds % 60;
+        timeEl.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
       }
       if (ringEl) {
-        const p = (_totalSeconds - _secondsRemaining) / _totalSeconds;
+        var p = (_totalSeconds - _secondsRemaining) / _totalSeconds;
         ringEl.style.strokeDashoffset = RING_CIRCUMFERENCE * (1 - Math.min(1, p));
       }
 
@@ -1023,7 +959,7 @@ const pomodoroModule = (function () {
   }
 
   // =============================================================
-  //  TIMER COMPLETION (stats hook is here)
+  //  TIMER COMPLETION
   // =============================================================
 
   function _onTimerComplete() {
@@ -1033,28 +969,25 @@ const pomodoroModule = (function () {
 
     // --- STATS HOOK: only record focus completions ---
     if (_currentMode === 'focus') {
-      _incrementSessions();       // backward-compat dashboard counter
-      _recordFocusCompletion();   // detailed stats (total time, daily history, streak)
+      _incrementSessions();
+      _recordFocusCompletion();
     }
 
-    // Audio and notification work regardless of which SPA tab is active
-    _playSound(_settings.soundProfile);
+    // Start the looping alarm
+    _playAlarm(_settings.soundProfile);
     _showNotification();
 
     // --- AUTO-TRANSITION ---
-    // Focus → Break (if enabled)
     if (_currentMode === 'focus' && _settings.autoStartBreaks) {
-      const stats     = _loadStats();
-      const breakMode = stats.completedPomodoros % 4 === 0 ? 'longBreak' : 'shortBreak';
+      var stats     = _loadStats();
+      var breakMode = stats.completedPomodoros % 4 === 0 ? 'longBreak' : 'shortBreak';
       _currentMode = breakMode;
-      _setDuration(_settings[MODES.find(m => m.key === breakMode).settingKey]);
+      _setDuration(_settings[MODES.find(function (m) { return m.key === breakMode; }).settingKey]);
       _startTimer();
-      // Only re-render if user is actively viewing the Pomodoro tab
       if (_container) _renderApp();
       return;
     }
 
-    // Break → Focus (if enabled)
     if ((_currentMode === 'shortBreak' || _currentMode === 'longBreak') && _settings.autoStartFocus) {
       _currentMode = 'focus';
       _setDuration(_settings.focus);
@@ -1063,84 +996,56 @@ const pomodoroModule = (function () {
       return;
     }
 
-    // Full re-render to refresh the stats dashboard with updated numbers
     if (_container) {
       _renderApp();
-      // Pulse animation on the updated stat values
       _pulseStatValues();
     }
   }
 
-  /**
-   * Briefly add a glow pulse class to stat values after an update.
-   * The CSS animation handles the visual effect.
-   */
   function _pulseStatValues() {
-    ['stat-focus-time', 'stat-completed', 'stat-streak'].forEach(id => {
-      const el = document.getElementById(id);
+    ['stat-focus-time', 'stat-completed', 'stat-streak'].forEach(function (id) {
+      var el = document.getElementById(id);
       if (el) {
         el.classList.add('stat-pulse');
-        setTimeout(() => el.classList.remove('stat-pulse'), 600);
+        setTimeout(function () { el.classList.remove('stat-pulse'); }, 600);
       }
     });
   }
 
   // =============================================================
-  //  AUDIO: Classic alarm + 5 Custom URL slots
+  //  AUDIO ENGINE: Looping alarm with 6 profiles
   // =============================================================
 
   /**
-   * Play the selected sound profile.
-   * - 'classic_alarm': synthesized beep sequence (Web Audio API).
-   * - 'custom_N':      play the URL from settings; fallback to classic on error.
+   * Start the looping alarm.
+   * - 'classic': synthesized beep via Web Audio API (looping every 1.5s)
+   * - Others:    hardcoded URL, replayed every 1.5s via setInterval
    */
-  function _playSound(profile) {
-    if (profile === 'classic_alarm') {
-      _playClassicAlarm();
-      return;
+  function _playAlarm(profile) {
+    _alarmRinging = true;
+
+    if (profile === 'classic') {
+      _startLoopingClassic();
+    } else {
+      _startLoopingUrl(profile);
     }
 
-    // Custom slot: extract the index from 'custom_1' .. 'custom_5'
-    var match = profile.match(/^custom_(\d)$/);
-    if (!match) {
-      _playClassicAlarm();
-      return;
-    }
-
-    var idx       = parseInt(match[1], 10);
-    var url       = _settings['customUrl' + idx] || '';
-    var trimmedUrl = url.trim();
-
-    if (!trimmedUrl) {
-      _playClassicAlarm();
-      return;
-    }
-
-    // --- MyInstants smart converter ---
-    var playUrl = trimmedUrl;
-    var myinstantsMatch = trimmedUrl.match(/myinstants\.com.*\/instant\/([^\/\?]+)/);
-    if (myinstantsMatch) {
-      playUrl = 'https://www.myinstants.com/media/sounds/' + myinstantsMatch[1] + '.mp3';
-    }
-
-    try {
-      var audio = new Audio(playUrl);
-      var playPromise = audio.play();
-      if (playPromise && typeof playPromise.catch === 'function') {
-        playPromise.catch(function () {
-          _playClassicAlarm();
-        });
-      }
-    } catch (_) {
-      _playClassicAlarm();
-    }
+    // Show the stop alarm button
+    var btn = document.getElementById('btn-stop-alarm');
+    if (btn) btn.style.display = 'flex';
   }
 
-  /**
-   * Synthesize a classic multi-beep alarm via Web Audio API.
-   * Used as default and as fallback when a custom URL fails.
-   */
-  function _playClassicAlarm() {
+  /** Start a 1500ms looping classic beep via Web Audio API */
+  function _startLoopingClassic() {
+    _playClassicBeepOnce();
+
+    _alarmInterval = setInterval(function () {
+      _playClassicBeepOnce();
+    }, ALARM_LOOP_MS);
+  }
+
+  /** Play one burst of the classic alarm beep sequence */
+  function _playClassicBeepOnce() {
     try {
       var ctx = _getAudioContext();
       var now = ctx.currentTime;
@@ -1149,7 +1054,6 @@ const pomodoroModule = (function () {
       master.gain.setValueAtTime(0.18, now);
       master.connect(ctx.destination);
 
-      // Multi-beep: ascending square wave
       var freqs = [880, 1100, 880, 1100, 1320];
       for (var i = 0; i < freqs.length; i++) {
         var t = now + i * 0.18;
@@ -1167,7 +1071,94 @@ const pomodoroModule = (function () {
     } catch (_) { /* audio unavailable */ }
   }
 
-  /** Lazy-init and return a shared AudioContext */
+  /** Start a 1500ms looping audio from a hardcoded URL profile */
+  function _startLoopingUrl(profile) {
+    var url = SOUND_URLS[profile];
+    if (!url) return;
+
+    try {
+      _alarmAudio = new Audio(url);
+
+      // Force-play once
+      var playPromise = _alarmAudio.play();
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(function () {
+          // URL failed to load, fallback to classic
+          _stopAlarmInternal();
+          _startLoopingClassic();
+        });
+      }
+
+      // Every 1500ms, reset and replay the audio
+      _alarmInterval = setInterval(function () {
+        if (_alarmAudio) {
+          try {
+            _alarmAudio.currentTime = 0;
+            var pp = _alarmAudio.play();
+            if (pp && typeof pp.catch === 'function') {
+              pp.catch(function () { /* ignore autoplay failures on repeats */ });
+            }
+          } catch (_) { /* ignore */ }
+        }
+      }, ALARM_LOOP_MS);
+    } catch (_) {
+      // If Audio creation fails, fallback to classic
+      _startLoopingClassic();
+    }
+  }
+
+  /**
+   * Stop the alarm: clear interval, pause audio, hide button.
+   * Called when the user clicks the "Stop Alarm" button.
+   */
+  function _stopAlarm() {
+    _stopAlarmInternal();
+
+    // Hide the stop alarm button
+    var btn = document.getElementById('btn-stop-alarm');
+    if (btn) btn.style.display = 'none';
+  }
+
+  /** Internal cleanup of all alarm resources (no UI updates) */
+  function _stopAlarmInternal() {
+    _alarmRinging = false;
+
+    if (_alarmInterval) {
+      clearInterval(_alarmInterval);
+      _alarmInterval = null;
+    }
+
+    if (_alarmAudio) {
+      try {
+        _alarmAudio.pause();
+        _alarmAudio.currentTime = 0;
+        _alarmAudio.src = '';
+      } catch (_) { /* ignore */ }
+      _alarmAudio = null;
+    }
+  }
+
+  /**
+   * Play a sound once for the "Test" button (no looping).
+   */
+  function _playTestSound(profile) {
+    if (profile === 'classic') {
+      _playClassicBeepOnce();
+      return;
+    }
+
+    var url = SOUND_URLS[profile];
+    if (!url) return;
+
+    try {
+      var audio = new Audio(url);
+      var pp = audio.play();
+      if (pp && typeof pp.catch === 'function') {
+        pp.catch(function () { /* test play failed silently */ });
+      }
+    } catch (_) { /* ignore */ }
+  }
+
   function _getAudioContext() {
     if (!_audioCtx) {
       _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1186,9 +1177,9 @@ const pomodoroModule = (function () {
     if (!('Notification' in window)) return;
 
     if (Notification.permission === 'granted') {
-      const label = MODES.find(m => m.key === _currentMode).label;
+      var label = MODES.find(function (m) { return m.key === _currentMode; }).label;
       new Notification('Hub OS — Pomodoro', {
-        body: `${label} session complete!`,
+        body: label + ' session complete!',
         icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="45" fill="%2300f0ff"/></svg>'
       });
     } else if (Notification.permission === 'default') {
@@ -1202,7 +1193,7 @@ const pomodoroModule = (function () {
 
   function _incrementSessions() {
     try {
-      const count = parseInt(localStorage.getItem(SESSIONS_KEY) || '0', 10);
+      var count = parseInt(localStorage.getItem(SESSIONS_KEY) || '0', 10);
       localStorage.setItem(SESSIONS_KEY, count + 1);
     } catch (_) { /* ignore */ }
   }
@@ -1213,12 +1204,12 @@ const pomodoroModule = (function () {
   return {
     id:   'pomodoro',
     name: 'Pomodoro',
-    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-      <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5"/>
-      <polyline points="10,5 10,10 14,12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>`,
-    render,
-    destroy
+    icon: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none">' +
+      '<circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5"/>' +
+      '<polyline points="10,5 10,10 14,12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+    '</svg>',
+    render: render,
+    destroy: destroy
   };
 
 })();
