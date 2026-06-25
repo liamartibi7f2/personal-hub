@@ -729,19 +729,22 @@ const notesModule = (function () {
     };
 
     _boundDocMousedown = function (e) {
-      if (!_el.editor || !_el.toolbar) return;
-      if (_el.editor.contains(e.target) || _el.toolbar.contains(e.target)) return;
+      if (!_el.editor || !_el.toolbar || !e) return;
+      var t = e.target;
+      if (!t) return;
+      if (_el.editor.contains(t) || _el.toolbar.contains(t)) return;
       _hideToolbar();
     };
 
     _boundDocKeyup = function (e) {
-      if (e.key.startsWith('Arrow') && e.shiftKey) {
+      var k = e && e.key;
+      if (k && typeof k === 'string' && k.startsWith('Arrow') && e.shiftKey) {
         _updateToolbarPosition();
       }
     };
 
     _boundDocKeydown = function (e) {
-      if (e.key === 'Escape') _hideToolbar();
+      if (e && e.key === 'Escape') _hideToolbar();
     };
 
     document.addEventListener('mouseup', _boundDocMouseup);

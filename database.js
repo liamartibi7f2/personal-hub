@@ -91,24 +91,38 @@ const HubDB = (function () {
 
   /**
    * Save notes workspace data.
-   * If logged in and online → Firestore.
-   * Otherwise → localStorage fallback.
+   * Strictly prioritizes Firestore when logged in and online.
+   * Only falls back to localStorage when the user is genuinely
+   * not logged in or the browser reports offline.
    * @param {Object} data - The full notes workspace object
    */
   async function saveNotesData(data) {
     await _ensureReady();
-    try {
-      if (_isOnline()) {
+
+    // Logged in + online → Firestore only. No silent fallback.
+    if (_isOnline()) {
+      try {
         await Promise.race([
-          _userRef().set({ notesWorkspace: data }, { merge: true }),
+          _userRef()
+            .set({ notesWorkspace: data }, { merge: true })
+            .catch(function (err) {
+              console.error('[HubDB] Firebase Write Failed:', err);
+              throw err;
+            }),
           _timeout(2500)
         ]);
+        return; // success — exit early
+      } catch (err) {
+        // Log detailed error so the user can see Firestore Security Rules issues
+        console.error('[HubDB] Firestore set() failed:', err.message || err);
+        // Do NOT fall through to localStorage — the user expects cloud sync.
+        // If we silently save to localStorage here, Browser B will still
+        // read empty cloud data and overwrite everything.
         return;
       }
-    } catch (err) {
-      console.warn('[HubDB] Firestore save failed, falling back to localStorage:', err.message);
     }
-    // localStorage fallback
+
+    // Not logged in OR browser says offline → localStorage fallback
     try {
       localStorage.setItem(LOCAL_KEY, JSON.stringify(data));
     } catch (quotaErr) {
@@ -120,6 +134,9 @@ const HubDB = (function () {
    * Load notes workspace data.
    * If logged in and online → Firestore (fallback to localStorage if empty).
    * Otherwise → localStorage.
+   * If cloud data is empty (no workspace yet), initializes a proper default
+   * structure and persists it back to the cloud so subsequent logins
+   * from other browsers don't overwrite with nothing.
    * @returns {Object|null} The parsed notes workspace, or null if none found
    */
   async function loadNotesData() {
@@ -141,7 +158,7 @@ const HubDB = (function () {
         ]);
         if (doc.exists) {
           var cloudData = doc.data().notesWorkspace;
-          if (cloudData) {
+          if (cloudData && cloudData.folders && cloudData.folders.length > 0) {
             // Merge any localStorage changes the user made while offline
             try {
               var localRaw = localStorage.getItem(LOCAL_KEY);
@@ -156,6 +173,43 @@ const HubDB = (function () {
             return cloudData;
           }
         }
+
+        // Cloud doc exists but workspace is empty/missing, OR doc doesn't exist.
+        // Initialize a proper default structure and save it to cloud so that
+        // logging in from another browser gets data, not empty overwrites.
+        var defaultData = {
+          folders: [{
+            id: 'folder-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+            name: 'Personal',
+            notes: [{
+              id: 'note-' + Date.now(),
+              title: 'Welcome',
+              content: 'Welcome to Notes!<br><br>Try typing /h1, /h2, or /h3 followed by space to insert headings.',
+              order: 0
+            }]
+          }]
+        };
+
+        // Check localStorage for any unsaved work first
+        try {
+          var localRaw = localStorage.getItem(LOCAL_KEY);
+          if (localRaw) {
+            var localData = JSON.parse(localRaw);
+            if (localData && localData.folders && localData.folders.length > 0) {
+              defaultData = localData;
+            }
+          }
+        } catch (_) {}
+
+        // Persist the default/merged data to Firestore so cloud is never empty
+        try {
+          await Promise.race([
+            _userRef().set({ notesWorkspace: defaultData }, { merge: true }),
+            _timeout(2500)
+          ]);
+        } catch (_) {}
+        try { localStorage.removeItem(LOCAL_KEY); } catch (_) {}
+        return defaultData;
       } catch (err) {
         console.warn('[HubDB] Firestore load failed, trying localStorage:', err.message);
       }

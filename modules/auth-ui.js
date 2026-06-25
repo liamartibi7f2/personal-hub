@@ -257,9 +257,21 @@
 
   // ── Logout ──
   function _logout() {
+    // 1) Clear all local Hub caches so no stale data remains visible
+    try { localStorage.removeItem('hub_notes'); } catch (_) {}
+    try { localStorage.removeItem('hub_quiz_scores'); } catch (_) {}
+    try { localStorage.removeItem('flashcard_data'); } catch (_) {}
+    try { localStorage.removeItem('pomodoro_state'); } catch (_) {}
+
+    // 2) Sign out of Firebase
     firebase.auth().signOut().catch(function (err) {
       console.warn('[AuthUI] signOut error:', err.message);
     });
+
+    // 3) Force a full page reload to reset all in-memory module state.
+    //    This is the safest way to clear every IIFE closure variable,
+    //    DOM listeners, and interval timers across all modules.
+    window.location.reload();
   }
 
   // ── Listen to Firebase auth state ──
