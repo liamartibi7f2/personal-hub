@@ -7367,3 +7367,477 @@ body.light-mode .hub-notes-saving--active {
     font-size: 1.4rem;
   }
 }
+
+/* ============================================================
+   AUTH — Cyberpunk Auth Modal & Login Button
+   ============================================================ */
+
+/* ── Sidebar Login Button (desktop) ── */
+.cyber-login-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--duration-base) var(--ease-out-expo);
+  overflow: hidden;
+}
+.cyber-login-btn:hover {
+  color: var(--accent-primary);
+  border-color: rgba(0, 240, 255, 0.25);
+  background: rgba(0, 240, 255, 0.08);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.2);
+}
+.cyber-login-btn:active {
+  transform: scale(0.9);
+}
+.cyber-login-icon {
+  flex-shrink: 0;
+  transition: transform var(--duration-base) var(--ease-out-expo);
+}
+.cyber-login-btn:hover .cyber-login-icon {
+  transform: translateX(2px);
+}
+.cyber-login-label {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  max-width: 0;
+  overflow: hidden;
+  transition: max-width 0.3s var(--ease-out-expo);
+}
+.cyber-login-btn--active {
+  width: auto;
+  padding: 0 10px;
+  border-color: rgba(0, 240, 255, 0.15);
+  background: rgba(0, 240, 255, 0.06);
+}
+.cyber-login-btn--active .cyber-login-label {
+  max-width: 80px;
+}
+.cyber-login-btn--admin {
+  border-color: rgba(179, 71, 234, 0.4);
+  background: rgba(179, 71, 234, 0.1);
+  box-shadow: 0 0 14px rgba(179, 71, 234, 0.2);
+}
+.cyber-login-btn--admin:hover {
+  border-color: var(--accent-secondary);
+  box-shadow: 0 0 20px rgba(179, 71, 234, 0.4);
+}
+
+/* ── Mobile Login Button (inside nav dock) ── */
+.cyber-login-btn-mobile {
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  font-size: 0.6rem;
+  width: auto;
+  height: auto;
+  border-radius: var(--radius-sm);
+}
+.cyber-login-btn-mobile .nav-icon {
+  width: 24px;
+  height: 24px;
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cyber-login-btn-mobile svg {
+  width: 20px;
+  height: 20px;
+}
+.cyber-login-btn-mobile.cyber-login-btn--active {
+  color: var(--accent-primary);
+  background: rgba(0, 240, 255, 0.08);
+}
+
+/* ── Status indicator — auth state ── */
+.status-indicator--auth .status-dot {
+  background: var(--accent-primary);
+  box-shadow: 0 0 6px var(--accent-primary), 0 0 12px rgba(0, 240, 255, 0.3);
+  animation: pulse-dot-auth 2s ease-in-out infinite;
+}
+@keyframes pulse-dot-auth {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--accent-primary); }
+  50% { opacity: 0.6; box-shadow: 0 0 14px var(--accent-primary), 0 0 24px rgba(0, 240, 255, 0.2); }
+}
+
+/* ── Admin Badge ── */
+.cyber-admin-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  margin-bottom: 6px;
+  border-radius: var(--radius-sm);
+  background: rgba(179, 71, 234, 0.12);
+  border: 1px solid rgba(179, 71, 234, 0.3);
+  animation: adminBadgeIn 0.4s var(--ease-out-expo);
+}
+.cyber-admin-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-secondary);
+  box-shadow: 0 0 8px var(--accent-secondary);
+  flex-shrink: 0;
+}
+.cyber-admin-badge-text {
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  font-weight: 700;
+  color: var(--accent-secondary);
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 12px rgba(179, 71, 234, 0.4);
+  white-space: nowrap;
+}
+@keyframes adminBadgeIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Modal Overlay ── */
+.cyber-auth-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  background: rgba(4, 4, 12, 0.75);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-base) var(--ease-out-expo);
+}
+.cyber-auth-overlay--visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ── Modal Box ── */
+.cyber-auth-box {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  padding: var(--space-2xl) var(--space-xl);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--glass-border);
+  background: rgba(10, 10, 20, 0.92);
+  box-shadow: 0 20px 80px rgba(0, 0, 0, 0.6), 0 0 60px rgba(0, 240, 255, 0.04);
+  transform: scale(0.92) translateY(16px);
+  transition: transform var(--duration-base) var(--ease-out-expo),
+              box-shadow var(--duration-base) var(--ease-out-expo);
+}
+.cyber-auth-overlay--visible .cyber-auth-box {
+  transform: scale(1) translateY(0);
+}
+
+/* Glowing top border accent */
+.cyber-auth-box::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 40px;
+  right: 40px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent-primary), var(--accent-secondary), transparent);
+  border-radius: 2px;
+  filter: blur(1px);
+}
+
+/* ── Close button ── */
+.cyber-auth-close {
+  position: absolute;
+  top: var(--space-md);
+  right: var(--space-md);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+  z-index: 1;
+}
+.cyber-auth-close:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: rgba(255, 68, 102, 0.1);
+  box-shadow: 0 0 12px rgba(255, 68, 102, 0.2);
+}
+
+/* ── Header ── */
+.cyber-auth-header {
+  text-align: center;
+  margin-bottom: var(--space-xl);
+}
+.cyber-auth-lock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-md);
+  color: var(--accent-primary);
+  filter: drop-shadow(0 0 8px rgba(0, 240, 255, 0.3));
+}
+.cyber-auth-title {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.15em;
+  margin-bottom: 4px;
+}
+.cyber-auth-sub {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+/* ── Input field ── */
+.cyber-field {
+  position: relative;
+  margin-bottom: var(--space-lg);
+}
+.cyber-input {
+  width: 100%;
+  padding: 14px 14px 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  letter-spacing: 0.03em;
+  outline: none;
+  transition: background var(--duration-fast) var(--ease-out-expo);
+  position: relative;
+  z-index: 1;
+}
+.cyber-input:focus {
+  background: rgba(0, 240, 255, 0.04);
+}
+.cyber-input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px rgba(10, 10, 20, 0.95) inset !important;
+  -webkit-text-fill-color: var(--text-primary) !important;
+  caret-color: var(--text-primary);
+}
+
+/* Bottom line (replaces border) */
+.cyber-input-line {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--glass-border);
+  transition: all var(--duration-base) var(--ease-out-expo);
+}
+.cyber-input:focus ~ .cyber-input-line {
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.3), 0 0 24px rgba(179, 71, 234, 0.15);
+}
+
+/* Floating label */
+.cyber-label {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  pointer-events: none;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+  z-index: 0;
+}
+.cyber-input:focus ~ .cyber-label,
+.cyber-input:not(:placeholder-shown) ~ .cyber-label {
+  top: -8px;
+  left: 0;
+  font-size: 0.55rem;
+  color: var(--accent-primary);
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
+}
+.cyber-input:focus ~ .cyber-label {
+  color: var(--accent-primary);
+}
+.cyber-input:not(:placeholder-shown) ~ .cyber-label {
+  color: var(--text-secondary);
+}
+
+/* ── Error message ── */
+.cyber-auth-error {
+  min-height: 20px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--danger);
+  text-shadow: 0 0 8px rgba(255, 68, 102, 0.3);
+  margin-bottom: var(--space-sm);
+  text-align: center;
+  letter-spacing: 0.03em;
+}
+
+/* ── Buttons ── */
+.cyber-auth-btns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.cyber-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: 14px 20px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  overflow: hidden;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+  border: 1px solid;
+}
+.cyber-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.cyber-btn:disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+/* Primary (Login / Register) */
+.cyber-btn-primary {
+  color: #000;
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.2);
+}
+.cyber-btn-primary:hover:not(:disabled) {
+  box-shadow: 0 0 40px rgba(0, 240, 255, 0.4), inset 0 0 20px rgba(0, 240, 255, 0.1);
+  transform: translateY(-2px);
+}
+.cyber-btn-primary:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* Secondary (Toggle register/login) */
+.cyber-btn-secondary {
+  color: var(--text-secondary);
+  background: transparent;
+  border-color: var(--glass-border);
+}
+.cyber-btn-secondary:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Glitch effect overlay on primary btn */
+.cyber-btn-glitch {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(0, 240, 255, 0.15) 30%,
+    rgba(179, 71, 234, 0.15) 60%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  transition: opacity var(--duration-fast) var(--ease-out-expo);
+}
+.cyber-btn-primary:hover:not(:disabled) .cyber-btn-glitch {
+  opacity: 1;
+  animation: cyberBtnSweep 0.8s linear infinite;
+}
+@keyframes cyberBtnSweep {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* ── Mobile modal adjustments ── */
+@media (max-width: 768px) {
+  .cyber-auth-box {
+    padding: var(--space-xl) var(--space-lg);
+    max-width: 360px;
+  }
+  .cyber-auth-title {
+    font-size: 0.9rem;
+  }
+  .cyber-input {
+    font-size: 0.85rem;
+  }
+  .cyber-btn {
+    padding: 12px 16px;
+    font-size: 0.72rem;
+  }
+}
+
+/* ── Light mode overrides ── */
+html.light-mode .cyber-auth-box,
+body.light-mode .cyber-auth-box {
+  background: rgba(245, 245, 250, 0.97);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+html.light-mode .cyber-input,
+body.light-mode .cyber-input {
+  background: rgba(0, 0, 0, 0.03);
+  color: #111;
+}
+html.light-mode .cyber-input:focus,
+body.light-mode .cyber-input:focus {
+  background: rgba(0, 119, 182, 0.04);
+}
+html.light-mode .cyber-input:-webkit-autofill,
+body.light-mode .cyber-input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px rgba(245, 245, 250, 0.95) inset !important;
+  -webkit-text-fill-color: #111 !important;
+}
+html.light-mode .cyber-label,
+body.light-mode .cyber-label {
+  color: rgba(0, 0, 0, 0.45);
+}
+html.light-mode .cyber-input:focus ~ .cyber-label,
+body.light-mode .cyber-input:focus ~ .cyber-label {
+  color: var(--accent-primary);
+}
+html.light-mode .cyber-admin-badge,
+body.light-mode .cyber-admin-badge {
+  background: rgba(124, 58, 237, 0.08);
+  border-color: rgba(124, 58, 237, 0.25);
+}
+html.light-mode .cyber-admin-badge-text,
+body.light-mode .cyber-admin-badge-text {
+  color: var(--accent-secondary);
+}
+html.light-mode .cyber-auth-overlay,
+body.light-mode .cyber-auth-overlay {
+  background: rgba(220, 220, 235, 0.75);
+}
