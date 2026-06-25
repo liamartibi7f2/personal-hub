@@ -62,8 +62,12 @@ const HubDB = (function () {
    */
   async function _ensureReady() {
     if (!_app) return; // never initialised → localStorage only
+    // Don't wait more than 3s for Firebase auth to initialise
     try {
-      await _auth._authReady;
+      await Promise.race([
+        _auth._authReady,
+        new Promise(function (r) { setTimeout(r, 3000); })
+      ]);
     } catch (_) {}
   }
 
@@ -78,6 +82,13 @@ const HubDB = (function () {
 
   // ── Public API ──
 
+  // Timeout helper: rejects after ms if the promise doesn't settle
+  function _timeout(ms) {
+    return new Promise(function (_, reject) {
+      setTimeout(function () { reject(new Error('timeout')); }, ms);
+    });
+  }
+
   /**
    * Save notes workspace data.
    * If logged in and online → Firestore.
@@ -88,10 +99,10 @@ const HubDB = (function () {
     await _ensureReady();
     try {
       if (_isOnline()) {
-        await _userRef().set(
-          { notesWorkspace: data },
-          { merge: true }
-        );
+        await Promise.race([
+          _userRef().set({ notesWorkspace: data }, { merge: true }),
+          _timeout(2500)
+        ]);
         return;
       }
     } catch (err) {
@@ -112,11 +123,22 @@ const HubDB = (function () {
    * @returns {Object|null} The parsed notes workspace, or null if none found
    */
   async function loadNotesData() {
+    // Fast-path: if browser says offline, skip auth wait + Firestore entirely
+    if (navigator.onLine === false) {
+      try {
+        var raw = localStorage.getItem(LOCAL_KEY);
+        if (raw) return JSON.parse(raw);
+      } catch (_) {}
+      return null;
+    }
     await _ensureReady();
-    // Try Firestore first when online
+    // Try Firestore first when online (with 2.5s timeout)
     if (_isOnline()) {
       try {
-        var doc = await _userRef().get();
+        var doc = await Promise.race([
+          _userRef().get(),
+          _timeout(2500)
+        ]);
         if (doc.exists) {
           var cloudData = doc.data().notesWorkspace;
           if (cloudData) {

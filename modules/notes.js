@@ -74,17 +74,22 @@ const notesModule = (function () {
 
   async function _persist() {
     _showSaving(true, 'SYNCING TO CLOUD...');
+    // Safety net: force "Saved" after 8s to prevent stuck indicator
+    var safetyTimer = setTimeout(function () {
+      _showSaving(false);
+    }, 8000);
     try {
       await HubDB.saveNotesData(_data);
+      clearTimeout(safetyTimer);
       _showSaving(false);
     } catch (_) {
+      clearTimeout(safetyTimer);
       _showSaving(false);
     }
   }
 
   function _scheduleSave() {
     if (_saveTimer) clearTimeout(_saveTimer);
-    _showSaving(true);
     _saveTimer = setTimeout(function () {
       _persist().then(function () {
       }).catch(function () {

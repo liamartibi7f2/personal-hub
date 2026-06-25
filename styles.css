@@ -189,8 +189,19 @@ ul, ol { list-style: none; }
   display: flex;
   flex-direction: column;
   z-index: 100;
-  overflow: hidden;
+  overflow: visible;
   transition: transform var(--duration-base) var(--ease-out-expo);
+}
+
+/* Brand area: stays at top */
+.sidebar-brand {
+  flex-shrink: 0;
+}
+
+/* Nav area: fills remaining space */
+.sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
 }
 
 /* Brand area */
@@ -307,9 +318,17 @@ ul, ol { list-style: none; }
   width: 7px;
   height: 7px;
   border-radius: var(--radius-full);
+  background: var(--text-muted);
+  transition: background var(--duration-base), box-shadow var(--duration-base);
+}
+.status-dot--online {
   background: var(--success);
   box-shadow: 0 0 6px var(--success);
   animation: pulse-dot 2s ease-in-out infinite;
+}
+.status-dot--offline {
+  background: var(--danger);
+  box-shadow: 0 0 6px var(--danger);
 }
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; }
@@ -7476,13 +7495,16 @@ body.light-mode .hub-notes-saving--active {
 .cyber-admin-badge {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 4px 10px;
-  margin-bottom: 6px;
-  border-radius: var(--radius-sm);
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 0;
   background: rgba(179, 71, 234, 0.12);
-  border: 1px solid rgba(179, 71, 234, 0.3);
+  border-top: 1px solid rgba(179, 71, 234, 0.25);
+  border-bottom: 1px solid rgba(179, 71, 234, 0.25);
   animation: adminBadgeIn 0.4s var(--ease-out-expo);
+  flex-shrink: 0;
 }
 .cyber-admin-badge-dot {
   width: 6px;

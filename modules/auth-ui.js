@@ -342,25 +342,37 @@
       badge.innerHTML =
         '<span class="cyber-admin-badge-dot"></span>' +
         '<span class="cyber-admin-badge-text">[SYSTEM ADMIN] ACCESS GRANTED</span>';
-      var statusEl = document.querySelector('.sidebar-footer .status-indicator');
-      if (statusEl && statusEl.parentNode) {
-        statusEl.parentNode.insertBefore(badge, statusEl);
+      // Insert at the bottom of the sidebar, above the footer
+      var sidebar = document.getElementById('sidebar');
+      var footer  = document.querySelector('.sidebar-footer');
+      if (sidebar && footer) {
+        sidebar.insertBefore(badge, footer);
       }
     } else if (!show && existing) {
       existing.remove();
     }
   }
 
-  // ── Update sidebar status dot text ──
+  // ── Update sidebar status dot + label ──
   function _updateSidebarStatus() {
     var label = document.querySelector('.status-label');
-    if (!label) return;
-    if (_currentUser) {
-      label.textContent = 'Cloud Sync';
-      label.closest('.status-indicator')?.classList.add('status-indicator--auth');
-    } else {
-      label.textContent = 'Offline';
-      label.closest('.status-indicator')?.classList.remove('status-indicator--auth');
+    var dot   = document.querySelector('.status-dot');
+    if (!label || !dot) return;
+
+    var isAuthed = !!(firebase.auth().currentUser);
+
+    // Dot colour
+    dot.classList.remove('status-dot--online', 'status-dot--offline');
+    dot.classList.add(isAuthed ? 'status-dot--online' : 'status-dot--offline');
+
+    // Label
+    label.textContent = isAuthed ? 'Cloud Sync' : 'Offline';
+
+    // Status-indicator container
+    var indicator = label.closest('.status-indicator');
+    if (indicator) {
+      indicator.classList.toggle('status-indicator--auth', isAuthed);
+      indicator.setAttribute('title', isAuthed ? 'Authenticated' : 'Offline');
     }
   }
 
