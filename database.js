@@ -292,10 +292,16 @@ const HubDB = (function () {
     try {
       if (_isOnline()) {
         await Promise.race([
-          _db.collection('shared_quizzes').doc(code).set(deckData),
+          _db.collection('shared_quizzes').doc(code).set(deckData)
+            .catch(function (err) {
+              console.error('[HubDB] Share Error — Firestore write rejected:', err);
+              throw err;
+            }),
           _timeout(2500)
         ]);
         return code;
+      } else {
+        console.warn('[HubDB] Cannot share — user is offline or not authenticated. Falling back to localStorage.');
       }
     } catch (err) {
       console.warn('[HubDB] Firestore share failed:', err.message);
@@ -305,6 +311,7 @@ const HubDB = (function () {
       var shared = JSON.parse(localStorage.getItem('hub_shared_quizzes') || '{}');
       shared[code] = deckData;
       localStorage.setItem('hub_shared_quizzes', JSON.stringify(shared));
+      console.log('[HubDB] Quiz shared to localStorage (offline mode). Code:', code);
     } catch (_) {}
     return code;
   }
@@ -316,32 +323,55 @@ const HubDB = (function () {
    */
   async function importSharedQuiz(shareCode) {
     var code = (shareCode || '').trim().toUpperCase();
-    if (!code) return null;
+    if (!code || code.length !== 6) throw new Error('Invalid code: must be exactly 6 characters');
 
     await _ensureReady();
     try {
       if (_isOnline()) {
         var doc = await Promise.race([
-          _db.collection('shared_quizzes').doc(code).get(),
+          _db.collection('shared_quizzes').doc(code).get()
+            .catch(function (err) {
+              console.error('[HubDB] Import Error — Firestore read rejected (permission denied?):', err);
+              throw new Error('Permission denied: Firestore rejected the read. Check security rules.');
+            }),
           _timeout(2500)
         ]);
-        if (doc.exists) {
-          var data = doc.data();
-          if (data && data.sections && data.sections.length > 0) {
-            return data;
-          }
+        if (!doc.exists) {
+          console.warn('[HubDB] Import Error — code "' + code + '" not found in shared_quizzes');
+          throw new Error('Quiz not found: "' + code + '" does not exist.');
         }
-        return null;
+        var data = doc.data();
+        if (!data || !data.sections || data.sections.length === 0) {
+          console.warn('[HubDB] Import Error — document exists but has no quiz data');
+          throw new Error('Quiz data is empty or corrupted.');
+        }
+        return data;
+      } else {
+        console.warn('[HubDB] Cannot import — user is offline or not authenticated. Trying localStorage fallback.');
       }
     } catch (err) {
-      console.warn('[HubDB] Firestore import failed:', err.message);
+      // Re-throw Firestore/timeout errors for the caller to handle
+      if (err.message && (err.message.indexOf('Quiz not found') !== -1 ||
+          err.message.indexOf('Permission denied') !== -1 ||
+          err.message.indexOf('Invalid code') !== -1 ||
+          err.message.indexOf('quiz data is empty') !== -1)) {
+        throw err;
+      }
+      console.warn('[HubDB] Firestore import failed:', err.message || err);
     }
+
     // Offline fallback: check localStorage
     try {
       var shared = JSON.parse(localStorage.getItem('hub_shared_quizzes') || '{}');
-      return shared[code] || null;
-    } catch (_) {}
-    return null;
+      var localData = shared[code];
+      if (localData) {
+        console.log('[HubDB] Quiz imported from localStorage (offline mode). Code:', code);
+        return localData;
+      }
+      throw new Error('Quiz not found: "' + code + '" does not exist (localStorage fallback also empty).');
+    } catch (_) {
+      throw new Error('Quiz not found: "' + code + '" does not exist (localStorage fallback also empty).');
+    }
   }
 
   /**

@@ -76,7 +76,7 @@ D. Local Councils`;
     _testSubmitted = false;
     _shuffle = false;
     _renderApp();
-    _checkUrlImport();
+    checkUrlForSharedQuiz();
   }
 
   function destroy() {
@@ -1239,11 +1239,22 @@ D. Local Councils`;
         return;
       }
 
-      // Add imported deck to local library
+      // Duplicate check: prevent importing the same deck twice
       var decks = _loadDecks();
+      var deckTitle = (deckData.title || 'Imported Deck').trim();
+      var duplicate = decks.some(function (d) {
+        return d.title.toLowerCase() === deckTitle.toLowerCase();
+      });
+      if (duplicate) {
+        statusEl.textContent = 'Deck "' + deckTitle + '" already exists in your library.';
+        statusEl.className = 'hub-quiz-import-status hub-quiz-import-status--error';
+        return;
+      }
+
+      // Add imported deck to local library
       var newDeck = {
         id: String(Date.now()),
-        title: (deckData.title || 'Imported Deck').trim(),
+        title: deckTitle,
         sections: deckData.sections || [],
         createdAt: Date.now(),
         imported: true
@@ -1258,11 +1269,11 @@ D. Local Councils`;
       input.value = '';
       setTimeout(function () {
         _renderLibraryMode();
-        _showToast('Deck "' + newDeck.title + '" imported!');
+        _showToast('Deck "' + deckTitle + '" imported!');
       }, 800);
     } catch (err) {
-      console.warn('[Quiz] Import failed:', err);
-      statusEl.textContent = 'Network error. Please try again.';
+      console.error('[Quiz] Import failed:', err.message || err);
+      statusEl.textContent = err.message || 'Network error. Please try again.';
       statusEl.className = 'hub-quiz-import-status hub-quiz-import-status--error';
     }
   }
@@ -1297,53 +1308,91 @@ D. Local Councils`;
 
   /* ==========================================================
      URL AUTO-IMPORT
-     Check for ?quiz=XXXXXX on page load
+     Check for ?quiz=XXXXXX on page load.
+     Retries up to 20 times (10 seconds) until HubDB is ready
+     and Firebase auth is resolved.
      ========================================================== */
 
-  function _checkUrlImport() {
+  function checkUrlForSharedQuiz() {
     var params = new URLSearchParams(window.location.search);
     var code = params.get('quiz');
     if (!code || code.trim().length !== 6) return;
 
     var cleanCode = code.trim().toUpperCase();
+    var attempts = 0;
+    var maxAttempts = 20;
 
-    // We need to wait for HubDB to be ready, then try import
-    // Since this runs inside the module, we schedule it via setTimeout
-    setTimeout(async function () {
-      try {
-        await HubDB.waitForReady();
-        var deckData = await HubDB.importSharedQuiz(cleanCode);
-        if (deckData) {
-          var decks = _loadDecks();
-          var newDeck = {
-            id: String(Date.now()),
-            title: (deckData.title || 'Imported Deck').trim(),
-            sections: deckData.sections || [],
-            createdAt: Date.now(),
-            imported: true
-          };
-          decks.unshift(newDeck);
-          _saveDecks(decks);
-
-          // Clear URL without reload
-          history.replaceState(null, '', window.location.pathname);
-
-          // Re-render if we're on the quiz tab
-          if (_container) {
-            _renderLibraryMode();
-            _showToast('Deck "' + newDeck.title + '" imported from shared link!');
-          }
-        } else {
-          // Show error toast if code was invalid
-          _showToast('Shared quiz code not found: ' + cleanCode);
-          history.replaceState(null, '', window.location.pathname);
+    function _tryImport() {
+      attempts++;
+      // Guard: only proceed if we're on the quiz tab
+      if (!_container) {
+        if (attempts < maxAttempts) {
+          setTimeout(_tryImport, 500);
         }
-      } catch (err) {
-        console.warn('[Quiz] URL import failed:', err);
-        history.replaceState(null, '', window.location.pathname);
-        _showToast('Failed to import shared quiz.');
+        return;
       }
-    }, 500);
+
+      var auth = HubDB.getAuthStatus();
+
+      // Not ready yet — retry until HubDB is initialised or auth settles
+      if (!auth && attempts < maxAttempts) {
+        setTimeout(_tryImport, 500);
+        return;
+      }
+
+      // Timeout: give up after maxAttempts
+      var proceed = function () {
+        _performUrlImport(cleanCode);
+      };
+
+      if (attempts >= maxAttempts) {
+        proceed();
+        return;
+      }
+
+      // HubDB ready — proceed
+      proceed();
+    }
+
+    setTimeout(_tryImport, 300);
+  }
+
+  async function _performUrlImport(cleanCode) {
+    try {
+      var deckData = await HubDB.importSharedQuiz(cleanCode);
+
+      // Duplicate check before adding
+      var decks = _loadDecks();
+      var duplicate = decks.some(function (d) {
+        return d.title.toLowerCase() === (deckData.title || 'Imported Deck').trim().toLowerCase();
+      });
+      if (duplicate) {
+        _showToast('Deck "' + (deckData.title || 'Imported Deck').trim() + '" already exists in your library.');
+        history.replaceState(null, '', window.location.pathname);
+        return;
+      }
+
+      var newDeck = {
+        id: String(Date.now()),
+        title: (deckData.title || 'Imported Deck').trim(),
+        sections: deckData.sections || [],
+        createdAt: Date.now(),
+        imported: true
+      };
+      decks.unshift(newDeck);
+      _saveDecks(decks);
+
+      history.replaceState(null, '', window.location.pathname);
+
+      if (_container) {
+        _renderLibraryMode();
+        _showToast('Deck "' + newDeck.title + '" imported from shared link!');
+      }
+    } catch (err) {
+      console.error('[Quiz] URL import failed:', err.message || err);
+      history.replaceState(null, '', window.location.pathname);
+      _showToast(err.message || 'Failed to import shared quiz.');
+    }
   }
 
   /* ==========================================================
