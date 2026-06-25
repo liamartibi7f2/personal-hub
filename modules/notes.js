@@ -16,6 +16,8 @@ const notesModule = (function () {
   let _activeNote   = null;
   let _container    = null;
   let _saveTimer    = null;
+  let _isDataLoaded = false;
+  let _autoSaveEnabled = true;
 
   // Cached DOM refs
   let _el = {
@@ -28,7 +30,9 @@ const notesModule = (function () {
     emptyState:      null,
     editorPane:      null,
     addBtn:          null,
-    addFolderBtn:    null
+    addFolderBtn:    null,
+    manualSaveBtn:   null,
+    saveFeedback:    null
   };
 
   // Bound handler references for cleanup
@@ -56,6 +60,7 @@ const notesModule = (function () {
         // Only accept if at least one folder exists
         if (data.folders.length > 0) {
           _data = data;
+          _isDataLoaded = true;
           return;
         }
       }
@@ -69,10 +74,14 @@ const notesModule = (function () {
         notes: [_buildNoteObject('Welcome', 'Welcome to Notes!<br><br>Try typing /h1, /h2, or /h3 followed by space to insert headings.')]
       }]
     };
+    _isDataLoaded = true;
     await _persist();
   }
 
-  async function _persist() {
+  async function _persist(force) {
+    if (!_isDataLoaded) return;
+    if (!force && !_autoSaveEnabled) return;
+
     _showSaving(true, 'SYNCING TO CLOUD...');
     // Safety net: force "Saved" after 8s to prevent stuck indicator
     var safetyTimer = setTimeout(function () {
@@ -187,6 +196,17 @@ const notesModule = (function () {
           '<div class="hub-notes-saving" id="hn-saving">Saved</div>' +
         '</aside>' +
         '<main class="hub-notes-editor-pane" id="hn-editor-pane">' +
+          '<div class="hub-notes-editor-toolbar">' +
+            '<button class="hub-notes-save-btn" id="hn-btn-manual-save" title="Save now" aria-label="Save notes">' +
+              '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" class="hub-notes-save-icon">' +
+                '<path d="M13 3H3a1 1 0 00-1 1v8a1 1 0 001 1h10a1 1 0 001-1V5l-3-2z" stroke="currentColor" stroke-width="1.4" fill="none"/>' +
+                '<path d="M11 3v3H5V3" stroke="currentColor" stroke-width="1.4" fill="none"/>' +
+                '<circle cx="8" cy="10" r="1.5" stroke="currentColor" stroke-width="1.3" fill="none"/>' +
+              '</svg>' +
+              '<span class="hub-notes-save-label">Save</span>' +
+            '</button>' +
+            '<span class="hub-notes-save-feedback" id="hn-save-feedback"></span>' +
+          '</div>' +
           '<div class="hub-notes-editor-area">' +
             '<input type="text" class="hub-notes-title-input" id="hn-title-input" placeholder="Untitled" spellcheck="false" />' +
             '<div class="hub-notes-editor" id="hn-editor" contenteditable="true" data-placeholder="Start writing... /h1 /h2 /h3 for headings"></div>' +
@@ -216,6 +236,8 @@ const notesModule = (function () {
     _el.editor          = _qs('hn-editor');
     _el.toolbar         = _qs('hn-float-toolbar');
     _el.savingIndicator = _qs('hn-saving');
+    _el.manualSaveBtn   = _qs('hn-btn-manual-save');
+    _el.saveFeedback    = _qs('hn-save-feedback');
     _el.emptyState      = _qs('hn-empty-state');
     _el.editorPane      = _qs('hn-editor-pane');
     _el.addBtn          = _qs('hn-btn-add');
@@ -232,6 +254,7 @@ const notesModule = (function () {
     _bindEditorEvents();
     _bindFormatToolbar();
     _bindFolderClicks();
+    _bindManualSave();
   }
 
   // ============================================================
@@ -807,8 +830,48 @@ function _updateToolbarPosition() {
       _activeNote.title   = _el.titleInput.value || 'Untitled';
       _activeNote.content = _el.editor.innerHTML;
     }
-    await _persist();
+    await _persist(true);
     _showSaving(false);
+  }
+
+  // ============================================================
+  //   SAVE — Manual save button
+  // ============================================================
+
+  function _bindManualSave() {
+    var btn = document.getElementById('hn-btn-manual-save');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      // Flush editor state into _activeNote
+      if (_activeNote && _el.titleInput && _el.editor) {
+        _activeNote.title   = _el.titleInput.value || 'Untitled';
+        _activeNote.content = _el.editor.innerHTML;
+      }
+      if (_saveTimer) {
+        clearTimeout(_saveTimer);
+        _saveTimer = null;
+      }
+      _persist(true).then(function () {
+        var el = document.getElementById('hn-save-feedback');
+        if (el) {
+          el.textContent = 'Saved!';
+          el.classList.add('hub-notes-save-feedback--show');
+          setTimeout(function () { el.classList.remove('hub-notes-save-feedback--show'); }, 2000);
+        }
+      }).catch(function () {});
+    });
+  }
+
+  // ============================================================
+  //   AUTO-SAVE TOGGLE (called from backup modal)
+  // ============================================================
+
+  function getAutoSaveEnabled() {
+    return _autoSaveEnabled;
+  }
+
+  function setAutoSaveEnabled(val) {
+    _autoSaveEnabled = !!val;
   }
 
   // ============================================================
@@ -852,6 +915,8 @@ function _updateToolbarPosition() {
   return {
     id: 'notes',
     name: 'Notes',
+    getAutoSaveEnabled: getAutoSaveEnabled,
+    setAutoSaveEnabled: setAutoSaveEnabled,
     icon: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none">' +
       '<path d="M4 3h12a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1z" stroke="currentColor" stroke-width="1.3"/>' +
       '<path d="M6 7h8M6 10h6M6 13h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>' +

@@ -305,6 +305,8 @@ ul, ol { list-style: none; }
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-sm);
+  flex-wrap: nowrap;
 }
 .status-indicator {
   display: flex;
@@ -5609,6 +5611,20 @@ mark.cyber-hl-pink:hover {
   gap: var(--space-md);
 }
 
+/* Auto-save toggle row */
+.backup-section--auto-save {
+  padding-top: var(--space-md);
+  margin-top: var(--space-sm);
+  border-top: 1px solid var(--glass-border);
+}
+
+.backup-section--auto-save .backup-section-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
 /* Section */
 .backup-section {
   display: flex;
@@ -7080,6 +7096,122 @@ body.light-mode .theme-toggle-btn:hover {
 }
 .hub-notes-saving--active {
   color: var(--accent-primary);
+}
+
+/* ── Editor Toolbar & Cyberpunk Save Button ── */
+.hub-notes-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-xs);
+  margin-bottom: var(--space-xs);
+}
+
+.hub-notes-save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-primary);
+  background: rgba(0, 240, 255, 0.06);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+  position: relative;
+  overflow: hidden;
+}
+
+.hub-notes-save-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(0, 240, 255, 0.12) 0%,
+    transparent 50%,
+    rgba(179, 71, 234, 0.08) 100%
+  );
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out-expo);
+}
+
+.hub-notes-save-btn:hover {
+  color: #fff;
+  background: rgba(0, 240, 255, 0.12);
+  border-color: var(--accent-primary);
+  box-shadow:
+    0 0 14px rgba(0, 240, 255, 0.3),
+    0 0 30px rgba(0, 240, 255, 0.08),
+    inset 0 0 12px rgba(0, 240, 255, 0.05);
+  transform: translateY(-1px);
+}
+
+.hub-notes-save-btn:hover::before {
+  opacity: 1;
+}
+
+.hub-notes-save-btn:active {
+  transform: scale(0.95);
+  box-shadow:
+    0 0 8px rgba(0, 240, 255, 0.15),
+    inset 0 0 16px rgba(0, 240, 255, 0.08);
+}
+
+.hub-notes-save-icon {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  transition: transform var(--duration-fast) var(--ease-out-expo);
+  flex-shrink: 0;
+}
+
+.hub-notes-save-btn:hover .hub-notes-save-icon {
+  transform: scale(1.1);
+}
+
+.hub-notes-save-label {
+  font-size: 0.65rem;
+}
+
+/* Save feedback text */
+.hub-notes-save-feedback {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: #00f0ff;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.hub-notes-save-feedback--show {
+  opacity: 1;
+}
+
+html.light-mode .hub-notes-save-btn,
+body.light-mode .hub-notes-save-btn {
+  color: #008080;
+  background: rgba(0, 128, 128, 0.04);
+  border-color: rgba(0, 128, 128, 0.2);
+}
+
+html.light-mode .hub-notes-save-btn:hover,
+body.light-mode .hub-notes-save-btn:hover {
+  color: #005f5f;
+  background: rgba(0, 128, 128, 0.08);
+  border-color: #008080;
+  box-shadow:
+    0 0 8px rgba(0, 128, 128, 0.15),
+    inset 0 0 8px rgba(0, 128, 128, 0.04);
+}
+
+html.light-mode .hub-notes-save-feedback,
+body.light-mode .hub-notes-save-feedback {
+  color: #008080;
 }
 
 /* ── Right Pane ── */

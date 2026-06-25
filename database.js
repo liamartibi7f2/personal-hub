@@ -181,12 +181,23 @@ const HubDB = (function () {
         // Entire folder doesn't exist in cloud → add it
         cloud.folders.push(localFolder);
       } else if (localFolder.notes && localFolder.notes.length) {
-        // Merge individual notes that don't exist in cloud
+        // Merge individual notes that don't exist in cloud.
+        // PROTECT: if a local note is empty and the cloud note has content,
+        // do NOT overwrite the cloud content — keep the richer version.
         localFolder.notes.forEach(function (localNote) {
+          if (!localNote) return;
           var noteMatch = match.notes.find(function (n) { return n && n.id === localNote.id; });
           if (!noteMatch) {
             match.notes.push(localNote);
+          } else if (!localNote.content || !localNote.content.trim()) {
+            // Local note is empty → keep the cloud version (it has content)
+            // Do nothing — cloud note already has the richer content
+          } else if (!noteMatch.content || !noteMatch.content.trim()) {
+            // Cloud note is empty but local has content → keep local version
+            noteMatch.content = localNote.content;
+            if (localNote.title) noteMatch.title = localNote.title;
           }
+          // If both have content, keep the cloud version (most recently synced)
         });
       }
     });

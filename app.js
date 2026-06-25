@@ -222,6 +222,9 @@ function _initBackupModal() {
     _setBackupStatus('', '');
   });
 
+  // --- Auto-save toggle ---
+  _initAutoSaveToggle();
+
   // --- Close helpers ---
   function _close() {
     overlay.classList.remove('backup-overlay--visible');
@@ -376,6 +379,39 @@ function _importBackup(fileInput) {
   };
 
   reader.readAsText(file);
+}
+
+/**
+ * Initialize the auto-save toggle in the backup modal.
+ * Reads the initial state from the notes module and persists preference to localStorage.
+ */
+function _initAutoSaveToggle() {
+  const toggle = document.getElementById('btn-auto-save-toggle');
+  if (!toggle) return;
+
+  // Restore persisted preference
+  try {
+    const saved = localStorage.getItem('hub_notes_autosave');
+    if (saved !== null) {
+      const checked = saved === 'true';
+      toggle.checked = checked;
+      // Sync with notes module if it's registered
+      if (typeof notesModule !== 'undefined' && notesModule.setAutoSaveEnabled) {
+        notesModule.setAutoSaveEnabled(checked);
+      }
+    }
+  } catch (_) {}
+
+  // On change, update notes module + persist
+  toggle.addEventListener('change', function () {
+    const checked = toggle.checked;
+    if (typeof notesModule !== 'undefined' && notesModule.setAutoSaveEnabled) {
+      notesModule.setAutoSaveEnabled(checked);
+    }
+    try {
+      localStorage.setItem('hub_notes_autosave', checked ? 'true' : 'false');
+    } catch (_) {}
+  });
 }
 
 /**
