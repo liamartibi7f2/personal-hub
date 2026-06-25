@@ -8,14 +8,14 @@
 const HubDB = (function () {
   'use strict';
 
-  // ⚠️  REPLACE with your Firebase project config
   const firebaseConfig = {
-    apiKey: 'YOUR_API_KEY',
-    authDomain: 'YOUR_PROJECT.firebaseapp.com',
-    projectId: 'YOUR_PROJECT_ID',
-    storageBucket: 'YOUR_PROJECT.appspot.com',
-    messagingSenderId: 'YOUR_SENDER_ID',
-    appId: 'YOUR_APP_ID'
+    apiKey: 'AIzaSyDOxiG1_ATb7_ERh34J4YLOdC8hu5_SYJ0',
+    authDomain: 'hubos-6b7ac.firebaseapp.com',
+    projectId: 'hubos-6b7ac',
+    storageBucket: 'hubos-6b7ac.firebasestorage.app',
+    messagingSenderId: '951576381184',
+    appId: '1:951576381184:web:f9840a882ec1fd2500d5e5',
+    measurementId: 'G-77QKMV18LQ'
   };
 
   // ── Private state ──
@@ -41,18 +41,31 @@ const HubDB = (function () {
       }
     });
 
-    // Track auth state
-    _auth.onAuthStateChanged(function (user) {
-      _user = user;
+    // Track auth state — resolve a pending promise on first fire
+    _auth._authReady = new Promise(function (resolve) {
+      _auth.onAuthStateChanged(function (user) {
+        _user = user;
+        _ready = true;
+        resolve();
+      });
     });
-
-    _ready = true;
   } catch (err) {
     _initError = err;
     console.warn('[HubDB] Firebase init failed, falling back to localStorage:', err.message);
   }
 
   // ── Helpers ──
+
+  /**
+   * Wait for Firebase auth to settle before any read/write.
+   * If Firebase never initialised, resolves immediately (localStorage path).
+   */
+  async function _ensureReady() {
+    if (!_app) return; // never initialised → localStorage only
+    try {
+      await _auth._authReady;
+    } catch (_) {}
+  }
 
   function _isOnline() {
     return _ready && _user && navigator.onLine !== false;
@@ -72,6 +85,7 @@ const HubDB = (function () {
    * @param {Object} data - The full notes workspace object
    */
   async function saveNotesData(data) {
+    await _ensureReady();
     try {
       if (_isOnline()) {
         await _userRef().set(
@@ -98,6 +112,7 @@ const HubDB = (function () {
    * @returns {Object|null} The parsed notes workspace, or null if none found
    */
   async function loadNotesData() {
+    await _ensureReady();
     // Try Firestore first when online
     if (_isOnline()) {
       try {
@@ -171,7 +186,8 @@ const HubDB = (function () {
   return {
     saveNotesData: saveNotesData,
     loadNotesData: loadNotesData,
-    getAuthStatus: getAuthStatus
+    getAuthStatus: getAuthStatus,
+    waitForReady: _ensureReady
   };
 
 })();

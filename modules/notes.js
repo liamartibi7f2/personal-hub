@@ -44,7 +44,7 @@ const notesModule = (function () {
   async function _loadData() {
     try {
       const data = await HubDB.loadNotesData();
-      if (data && Array.isArray(data.folders) && data.folders.length > 0) {
+      if (data && Array.isArray(data.folders)) {
         // Clean corrupted notes (null/undefined) from previous crashes
         data.folders.forEach(function(f) {
           if (f.notes && Array.isArray(f.notes)) {
@@ -53,8 +53,11 @@ const notesModule = (function () {
             f.notes = [];
           }
         });
-        _data = data;
-        return;
+        // Only accept if at least one folder exists
+        if (data.folders.length > 0) {
+          _data = data;
+          return;
+        }
       }
     } catch (_) { /* ignore */ }
 
@@ -70,9 +73,13 @@ const notesModule = (function () {
   }
 
   async function _persist() {
+    _showSaving(true, 'SYNCING TO CLOUD...');
     try {
       await HubDB.saveNotesData(_data);
-    } catch (_) { /* fallback handled internally by HubDB */ }
+      _showSaving(false);
+    } catch (_) {
+      _showSaving(false);
+    }
   }
 
   function _scheduleSave() {
@@ -80,18 +87,16 @@ const notesModule = (function () {
     _showSaving(true);
     _saveTimer = setTimeout(function () {
       _persist().then(function () {
-        _showSaving(false);
       }).catch(function () {
-        _showSaving(false);
       });
       _saveTimer = null;
     }, SAVE_DELAY);
   }
 
-  function _showSaving(active) {
+  function _showSaving(active, customMsg) {
     var el = _el.savingIndicator;
     if (!el) return;
-    el.textContent = active ? 'Saving...' : 'Saved';
+    el.textContent = active ? (customMsg || 'Saving...') : 'Saved';
     if (active) {
       el.classList.add('hub-notes-saving--active');
     } else {
@@ -135,13 +140,25 @@ const notesModule = (function () {
 
   async function render(container) {
     _container = container;
+
+    // 1) Show loading state immediately
+    container.innerHTML =
+      '<div class="tab-content hub-notes-app" style="display:flex;align-items:center;justify-content:center;min-height:300px">' +
+        '<div class="hub-notes-loading" style="font-family:var(--font-mono);color:var(--text-muted);font-size:0.85rem">' +
+          '<span class="hub-notes-loading-dot">●</span> Loading workspace...' +
+        '</div>' +
+      '</div>';
+
+    // 2) Await data (async — may hit Firestore)
     await _loadData();
+
+    // 3) Initialize active selections
     _activeFolder = _data.folders[0];
     _activeNote   = _activeFolder.notes[0] || null;
 
+    // 4) Overwrite with real Notes UI
     container.innerHTML =
       '<div class="tab-content hub-notes-app">' +
-        '' +
         '<aside class="hub-notes-sidebar glass" id="hn-sidebar">' +
           '<div class="hub-notes-sidebar-header">' +
             '<span class="hub-notes-sidebar-title">Notes</span>' +
@@ -164,7 +181,6 @@ const notesModule = (function () {
           '<div class="hub-notes-note-list" id="hn-note-list"></div>' +
           '<div class="hub-notes-saving" id="hn-saving">Saved</div>' +
         '</aside>' +
-        '' +
         '<main class="hub-notes-editor-pane" id="hn-editor-pane">' +
           '<div class="hub-notes-editor-area">' +
             '<input type="text" class="hub-notes-title-input" id="hn-title-input" placeholder="Untitled" spellcheck="false" />' +
@@ -180,7 +196,6 @@ const notesModule = (function () {
             '<p class="hub-notes-empty-sub">Create a new note to get started</p>' +
           '</div>' +
         '</main>' +
-        '' +
         '<div class="hub-notes-float-toolbar" id="hn-float-toolbar" style="display:none">' +
           '<button class="hub-notes-tb-btn" data-cmd="bold" title="Bold" aria-label="Bold"><b>B</b></button>' +
           '<button class="hub-notes-tb-btn" data-cmd="italic" title="Italic" aria-label="Italic"><i>I</i></button>' +
@@ -189,7 +204,7 @@ const notesModule = (function () {
         '</div>' +
       '</div>';
 
-    // Cache all DOM refs
+    // 5) Cache all DOM refs
     _el.sidebarNotes    = _qs('hn-note-list');
     _el.folderList      = _qs('hn-folder-list');
     _el.titleInput      = _qs('hn-title-input');
@@ -201,12 +216,12 @@ const notesModule = (function () {
     _el.addBtn          = _qs('hn-btn-add');
     _el.addFolderBtn    = _qs('hn-btn-add-folder');
 
-    // Render lists
+    // 6) Render lists
     _renderFolders();
     _renderNoteList();
     _loadNoteIntoEditor();
 
-    // Bind all events
+    // 7) Bind all events
     _bindAddNote();
     _bindAddFolder();
     _bindEditorEvents();
