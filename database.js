@@ -171,6 +171,16 @@ const HubDB = (function () {
   }
 
   /**
+   * Sign in with Google popup.
+   * @returns {Promise<UserCredential>}
+   */
+  async function loginWithGoogle() {
+    await _ensureReady();
+    var provider = new firebase.auth.GoogleAuthProvider();
+    return _auth.signInWithPopup(provider);
+  }
+
+  /**
    * Get current auth status.
    * @returns {{ loggedIn: boolean, uid: string|null }}
    */
@@ -186,6 +196,7 @@ const HubDB = (function () {
   return {
     saveNotesData: saveNotesData,
     loadNotesData: loadNotesData,
+    loginWithGoogle: loginWithGoogle,
     getAuthStatus: getAuthStatus,
     waitForReady: _ensureReady
   };
