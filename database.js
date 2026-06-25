@@ -224,6 +224,85 @@ const HubDB = (function () {
     };
   }
 
+  // ── Quiz Sharing ──
+
+  /**
+   * Share a quiz deck to Firestore by generating a unique 6-char code.
+   * @param {Object} deckData - The quiz deck data to share
+   * @returns {Promise<string>} The generated share code
+   */
+  async function shareQuizDeck(deckData) {
+    await _ensureReady();
+    var code = _generateShareCode();
+    // Save with the share code as document ID in 'shared_quizzes' collection
+    try {
+      if (_isOnline()) {
+        await Promise.race([
+          _db.collection('shared_quizzes').doc(code).set(deckData),
+          _timeout(2500)
+        ]);
+        return code;
+      }
+    } catch (err) {
+      console.warn('[HubDB] Firestore share failed:', err.message);
+    }
+    // Offline fallback: store in localStorage
+    try {
+      var shared = JSON.parse(localStorage.getItem('hub_shared_quizzes') || '{}');
+      shared[code] = deckData;
+      localStorage.setItem('hub_shared_quizzes', JSON.stringify(shared));
+    } catch (_) {}
+    return code;
+  }
+
+  /**
+   * Import a shared quiz deck by its 6-character share code.
+   * @param {string} shareCode - The 6-char alphanumeric code
+   * @returns {Promise<Object|null>} The quiz deck data, or null if not found
+   */
+  async function importSharedQuiz(shareCode) {
+    var code = (shareCode || '').trim().toUpperCase();
+    if (!code) return null;
+
+    await _ensureReady();
+    try {
+      if (_isOnline()) {
+        var doc = await Promise.race([
+          _db.collection('shared_quizzes').doc(code).get(),
+          _timeout(2500)
+        ]);
+        if (doc.exists) {
+          var data = doc.data();
+          if (data && data.sections && data.sections.length > 0) {
+            return data;
+          }
+        }
+        return null;
+      }
+    } catch (err) {
+      console.warn('[HubDB] Firestore import failed:', err.message);
+    }
+    // Offline fallback: check localStorage
+    try {
+      var shared = JSON.parse(localStorage.getItem('hub_shared_quizzes') || '{}');
+      return shared[code] || null;
+    } catch (_) {}
+    return null;
+  }
+
+  /**
+   * Generate a random 6-character alphanumeric code (uppercase letters + digits).
+   * Retries up to 5 times if the code already exists in shared_quizzes.
+   */
+  function _generateShareCode() {
+    var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude O,0,I,1 for readability
+    var code = '';
+    for (var i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  }
+
   // ── Expose public API ──
 
   return {
@@ -231,7 +310,9 @@ const HubDB = (function () {
     loadNotesData: loadNotesData,
     loginWithGoogle: loginWithGoogle,
     getAuthStatus: getAuthStatus,
-    waitForReady: _ensureReady
+    waitForReady: _ensureReady,
+    shareQuizDeck: shareQuizDeck,
+    importSharedQuiz: importSharedQuiz
   };
 
 })();

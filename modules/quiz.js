@@ -76,6 +76,7 @@ D. Local Councils`;
     _testSubmitted = false;
     _shuffle = false;
     _renderApp();
+    _checkUrlImport();
   }
 
   function destroy() {
@@ -216,6 +217,15 @@ D. Local Councils`;
                     </svg>
                     Play
                   </button>
+                  <button class="hub-quiz-share-btn" data-action="share" data-deck-id="${_escAttr(deck.id)}"
+                          title="Share this deck" aria-label="Share ${_escAttr(deck.title)}">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path d="M6 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0z" fill="currentColor"/>
+                      <path d="M11 4a2 2 0 1 1-4 0 2 2 0 0 1 4 0z" fill="currentColor"/>
+                      <path d="M11 12a2 2 0 1 1-4 0 2 2 0 0 1 4 0z" fill="currentColor"/>
+                      <path d="M6.5 7l3-2M6.5 9l3 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                    </svg>
+                  </button>
                 </div>
               </div>
             `;
@@ -262,6 +272,54 @@ D. Local Councils`;
           </div>
         `}
 
+        <!-- Import / Join Section -->
+        <div class="hub-quiz-import-section glass-card">
+          <div class="hub-quiz-import-header">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style="flex-shrink:0;">
+              <path d="M9 14V4M5 8l4-4 4 4" stroke="var(--accent-primary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M3 11v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3" stroke="var(--accent-primary)" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <span class="hub-quiz-import-title">Import Shared Deck</span>
+          </div>
+          <div class="hub-quiz-import-row">
+            <span class="hub-quiz-import-prefix">#</span>
+            <input type="text" id="hub-quiz-import-input" class="hub-quiz-import-input"
+                   placeholder="ENTER ACCESS CODE" maxlength="6" spellcheck="false" autocomplete="off">
+            <button class="hub-quiz-import-btn" id="hub-quiz-import-btn">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Import
+            </button>
+          </div>
+          <div class="hub-quiz-import-status" id="hub-quiz-import-status"></div>
+        </div>
+
+        <!-- Share Modal (hidden by default) -->
+        <div class="hub-quiz-share-overlay" id="hub-quiz-share-overlay" style="display:none;">
+          <div class="hub-quiz-share-modal glass-card">
+            <div class="hub-quiz-share-header">
+              <h3 class="hub-quiz-share-title">Deck Shared</h3>
+              <button class="hub-quiz-share-close" id="hub-quiz-share-close" aria-label="Close">&times;</button>
+            </div>
+            <div class="hub-quiz-share-body">
+              <p class="hub-quiz-share-desc">Share this code or link with others to let them import this deck.</p>
+              <div class="hub-quiz-share-code-display" id="hub-quiz-share-code-display">------</div>
+              <div class="hub-quiz-share-link-row">
+                <input type="text" class="hub-quiz-share-link-input" id="hub-quiz-share-link-input" readonly
+                       placeholder="https://...">
+                <button class="hub-quiz-share-copy-btn" id="hub-quiz-share-copy-btn">
+                  Copy Link
+                </button>
+              </div>
+              <div class="hub-quiz-share-feedback" id="hub-quiz-share-feedback"></div>
+            </div>
+            <div class="hub-quiz-share-footer">
+              <button class="btn btn-ghost" id="hub-quiz-share-done">Done</button>
+            </div>
+          </div>
+        </div>
+
         <!-- AI Generator Modal (hidden by default) -->
         <div class="ai-modal-overlay" id="ai-modal-overlay" style="display:none;">
           <div class="ai-modal glass-card">
@@ -305,12 +363,20 @@ D. Local Councils`;
     if (btnCreate)  btnCreate.addEventListener('click', () => { _mode = 'editor'; _renderApp(); });
     if (btnCreateFirst) btnCreateFirst.addEventListener('click', () => { _mode = 'editor'; _renderApp(); });
 
-    // Play and Delete buttons on deck cards
+    // Play, Share, and Delete buttons on deck cards
     _container.querySelectorAll('[data-action="play"]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const id = btn.dataset.deckId;
         _handlePlayDeck(id);
+      });
+    });
+
+    _container.querySelectorAll('[data-action="share"]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.deckId;
+        _handleShareDeck(id);
       });
     });
 
@@ -340,6 +406,56 @@ D. Local Councils`;
     }
     if (btnAIGenerate) {
       btnAIGenerate.addEventListener('click', () => _handleAIGenerate());
+    }
+
+    // --- Import quiz events ---
+    const importBtn = _container.querySelector('#hub-quiz-import-btn');
+    const importInput = _container.querySelector('#hub-quiz-import-input');
+    if (importBtn && importInput) {
+      importBtn.addEventListener('click', () => _handleImportQuiz());
+      importInput.addEventListener('keydown', (e) => {
+        // Auto-uppercase as user types
+        if (e.key >= 'a' && e.key <= 'z') {
+          setTimeout(() => {
+            importInput.value = importInput.value.toUpperCase();
+          }, 0);
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          _handleImportQuiz();
+        }
+      });
+    }
+
+    // --- Share modal close events ---
+    const shareOverlay = _container.querySelector('#hub-quiz-share-overlay');
+    const shareClose = _container.querySelector('#hub-quiz-share-close');
+    const shareDone = _container.querySelector('#hub-quiz-share-done');
+    if (shareClose) shareClose.addEventListener('click', () => { if (shareOverlay) shareOverlay.style.display = 'none'; });
+    if (shareDone) shareDone.addEventListener('click', () => { if (shareOverlay) shareOverlay.style.display = 'none'; });
+    if (shareOverlay) {
+      shareOverlay.addEventListener('click', (e) => { if (e.target === shareOverlay) shareOverlay.style.display = 'none'; });
+    }
+
+    // --- Copy link button ---
+    const copyBtn = _container.querySelector('#hub-quiz-share-copy-btn');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', () => {
+        const linkInput = _container.querySelector('#hub-quiz-share-link-input');
+        if (!linkInput) return;
+        linkInput.select();
+        linkInput.setSelectionRange(0, 99999);
+        try {
+          document.execCommand('copy');
+          const fb = _container.querySelector('#hub-quiz-share-feedback');
+          if (fb) {
+            fb.textContent = '✓ Link copied to clipboard!';
+            fb.style.color = 'var(--success)';
+            fb.style.textShadow = '0 0 8px rgba(68, 255, 136, 0.5)';
+            setTimeout(() => { if (fb) fb.textContent = ''; }, 3000);
+          }
+        } catch (_) {}
+      });
     }
   }
 
@@ -1054,6 +1170,180 @@ D. Local Councils`;
       }
     }
     _renderPlayMode();
+  }
+
+  /* ==========================================================
+     SHARE & IMPORT HANDLERS
+     ========================================================== */
+
+  async function _handleShareDeck(deckId) {
+    const deck = _getDeckById(deckId);
+    if (!deck) return;
+
+    // Build a clean deck object to share (no local id/createdAt)
+    const shareData = {
+      title: deck.title,
+      sections: deck.sections,
+      sharedAt: Date.now()
+    };
+
+    // Show loading state
+    const overlay = document.getElementById('hub-quiz-share-overlay');
+    if (!overlay) return;
+    const codeDisplay = document.getElementById('hub-quiz-share-code-display');
+    const linkInput = document.getElementById('hub-quiz-share-link-input');
+    const feedbackEl = document.getElementById('hub-quiz-share-feedback');
+    if (codeDisplay) codeDisplay.textContent = 'GENERATING...';
+    if (feedbackEl) feedbackEl.textContent = '';
+
+    try {
+      var shareCode = await HubDB.shareQuizDeck(shareData);
+      if (codeDisplay) codeDisplay.textContent = shareCode;
+      var shareUrl = window.location.origin + window.location.pathname.replace(/\/+$/, '') + '/?quiz=' + shareCode;
+      if (linkInput) {
+        linkInput.value = shareUrl;
+        // Select contents after show
+        setTimeout(() => { linkInput.select(); }, 300);
+      }
+      overlay.style.display = 'flex';
+    } catch (err) {
+      console.warn('[Quiz] Share failed:', err);
+      if (codeDisplay) codeDisplay.textContent = 'ERROR';
+      if (feedbackEl) {
+        feedbackEl.textContent = 'Failed to share deck. Check your connection.';
+        feedbackEl.style.color = 'var(--danger)';
+      }
+    }
+  }
+
+  async function _handleImportQuiz() {
+    const input = document.getElementById('hub-quiz-import-input');
+    const statusEl = document.getElementById('hub-quiz-import-status');
+    if (!input || !statusEl) return;
+
+    var code = input.value.trim().toUpperCase();
+    if (!code || code.length !== 6) {
+      statusEl.textContent = 'Enter a valid 6-character code';
+      statusEl.className = 'hub-quiz-import-status hub-quiz-import-status--error';
+      return;
+    }
+
+    statusEl.textContent = 'Importing...';
+    statusEl.className = 'hub-quiz-import-status hub-quiz-import-status--loading';
+
+    try {
+      var deckData = await HubDB.importSharedQuiz(code);
+      if (!deckData) {
+        statusEl.textContent = 'Code not found. Check the code and try again.';
+        statusEl.className = 'hub-quiz-import-status hub-quiz-import-status--error';
+        return;
+      }
+
+      // Add imported deck to local library
+      var decks = _loadDecks();
+      var newDeck = {
+        id: String(Date.now()),
+        title: (deckData.title || 'Imported Deck').trim(),
+        sections: deckData.sections || [],
+        createdAt: Date.now(),
+        imported: true
+      };
+      decks.unshift(newDeck);
+      _saveDecks(decks);
+
+      statusEl.textContent = '✓ Deck imported successfully!';
+      statusEl.className = 'hub-quiz-import-status hub-quiz-import-status--success';
+
+      // Clear input and re-render library
+      input.value = '';
+      setTimeout(function () {
+        _renderLibraryMode();
+        _showToast('Deck "' + newDeck.title + '" imported!');
+      }, 800);
+    } catch (err) {
+      console.warn('[Quiz] Import failed:', err);
+      statusEl.textContent = 'Network error. Please try again.';
+      statusEl.className = 'hub-quiz-import-status hub-quiz-import-status--error';
+    }
+  }
+
+  /* ==========================================================
+     TOAST NOTIFICATION
+     ========================================================== */
+
+  function _showToast(message) {
+    var existing = document.querySelector('.hub-quiz-toast');
+    if (existing && existing.parentNode) {
+      existing.parentNode.removeChild(existing);
+    }
+
+    var toast = document.createElement('div');
+    toast.className = 'hub-quiz-toast';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    // Trigger animation
+    requestAnimationFrame(function () {
+      toast.classList.add('hub-quiz-toast--visible');
+    });
+
+    setTimeout(function () {
+      toast.classList.remove('hub-quiz-toast--visible');
+      setTimeout(function () {
+        if (toast.parentNode) toast.parentNode.removeChild(toast);
+      }, 400);
+    }, 3500);
+  }
+
+  /* ==========================================================
+     URL AUTO-IMPORT
+     Check for ?quiz=XXXXXX on page load
+     ========================================================== */
+
+  function _checkUrlImport() {
+    var params = new URLSearchParams(window.location.search);
+    var code = params.get('quiz');
+    if (!code || code.trim().length !== 6) return;
+
+    var cleanCode = code.trim().toUpperCase();
+
+    // We need to wait for HubDB to be ready, then try import
+    // Since this runs inside the module, we schedule it via setTimeout
+    setTimeout(async function () {
+      try {
+        await HubDB.waitForReady();
+        var deckData = await HubDB.importSharedQuiz(cleanCode);
+        if (deckData) {
+          var decks = _loadDecks();
+          var newDeck = {
+            id: String(Date.now()),
+            title: (deckData.title || 'Imported Deck').trim(),
+            sections: deckData.sections || [],
+            createdAt: Date.now(),
+            imported: true
+          };
+          decks.unshift(newDeck);
+          _saveDecks(decks);
+
+          // Clear URL without reload
+          history.replaceState(null, '', window.location.pathname);
+
+          // Re-render if we're on the quiz tab
+          if (_container) {
+            _renderLibraryMode();
+            _showToast('Deck "' + newDeck.title + '" imported from shared link!');
+          }
+        } else {
+          // Show error toast if code was invalid
+          _showToast('Shared quiz code not found: ' + cleanCode);
+          history.replaceState(null, '', window.location.pathname);
+        }
+      } catch (err) {
+        console.warn('[Quiz] URL import failed:', err);
+        history.replaceState(null, '', window.location.pathname);
+        _showToast('Failed to import shared quiz.');
+      }
+    }, 500);
   }
 
   /* ==========================================================
