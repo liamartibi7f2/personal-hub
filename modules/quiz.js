@@ -427,14 +427,24 @@ D. Local Councils`;
       });
     }
 
-    // --- Share modal close events ---
-    const shareOverlay = _container.querySelector('#hub-quiz-share-overlay');
-    const shareClose = _container.querySelector('#hub-quiz-share-close');
-    const shareDone = _container.querySelector('#hub-quiz-share-done');
-    if (shareClose) shareClose.addEventListener('click', () => { if (shareOverlay) shareOverlay.style.display = 'none'; });
-    if (shareDone) shareDone.addEventListener('click', () => { if (shareOverlay) shareOverlay.style.display = 'none'; });
-    if (shareOverlay) {
-      shareOverlay.addEventListener('click', (e) => { if (e.target === shareOverlay) shareOverlay.style.display = 'none'; });
+    // --- Share modal close events (use _container.query for reliability) ---
+    var shareOverlay2 = _container.querySelector('#hub-quiz-share-overlay');
+    var shareClose = _container.querySelector('#hub-quiz-share-close');
+    var shareDone = _container.querySelector('#hub-quiz-share-done');
+    if (shareOverlay2 && shareClose) {
+      shareClose.addEventListener('click', function () {
+        shareOverlay2.style.display = 'none';
+      });
+    }
+    if (shareOverlay2 && shareDone) {
+      shareDone.addEventListener('click', function () {
+        shareOverlay2.style.display = 'none';
+      });
+    }
+    if (shareOverlay2) {
+      shareOverlay2.addEventListener('click', function (e) {
+        if (e.target === shareOverlay2) shareOverlay2.style.display = 'none';
+      });
     }
 
     // --- Copy link button ---
@@ -1178,7 +1188,10 @@ D. Local Councils`;
 
   async function _handleShareDeck(deckId) {
     const deck = _getDeckById(deckId);
-    if (!deck) return;
+    if (!deck) {
+      console.warn('[Quiz] _handleShareDeck — deck not found:', deckId);
+      return;
+    }
 
     // Build a clean deck object to share (no local id/createdAt)
     const shareData = {
@@ -1187,29 +1200,51 @@ D. Local Councils`;
       sharedAt: Date.now()
     };
 
+    // Lock share buttons to prevent double-clicks while generating
+    var shareBtns = _container ? _container.querySelectorAll('[data-action="share"]') : [];
+    for (var si = 0; si < shareBtns.length; si++) { shareBtns[si].disabled = true; }
+
+    // Find modal elements
+    var overlay = document.getElementById('hub-quiz-share-overlay');
+    var codeDisplay = document.getElementById('hub-quiz-share-code-display');
+    var linkInput = document.getElementById('hub-quiz-share-link-input');
+    var feedbackEl = document.getElementById('hub-quiz-share-feedback');
+
+    if (!overlay) {
+      console.warn('[Quiz] Share overlay element (#hub-quiz-share-overlay) not found in DOM');
+      _showToast('Share modal unavailable — please reload the page.');
+      for (var s2 = 0; s2 < shareBtns.length; s2++) { shareBtns[s2].disabled = false; }
+      return;
+    }
+
     // Show loading state
-    const overlay = document.getElementById('hub-quiz-share-overlay');
-    if (!overlay) return;
-    const codeDisplay = document.getElementById('hub-quiz-share-code-display');
-    const linkInput = document.getElementById('hub-quiz-share-link-input');
-    const feedbackEl = document.getElementById('hub-quiz-share-feedback');
     if (codeDisplay) codeDisplay.textContent = 'GENERATING...';
     if (feedbackEl) feedbackEl.textContent = '';
 
     try {
+      console.log('[Quiz] Calling HubDB.shareQuizDeck...');
       var shareCode = await HubDB.shareQuizDeck(shareData);
+      console.log('[Quiz] Share code received:', shareCode);
+
+      // Populate the modal fields
       if (codeDisplay) codeDisplay.textContent = shareCode;
       var shareUrl = window.location.origin + window.location.pathname.replace(/\/+$/, '') + '/?quiz=' + shareCode;
       if (linkInput) {
         linkInput.value = shareUrl;
-        // Select contents after show
-        setTimeout(() => { linkInput.select(); }, 300);
       }
+
+      // Open the modal
       overlay.style.display = 'flex';
+      console.log('[Quiz] Share overlay display set to flex');
+
+      // Select link text after the DOM has painted
+      if (linkInput) {
+        setTimeout(function () { linkInput.select(); }, 350);
+      }
     } catch (err) {
       console.warn('[Quiz] Share failed:', err);
       if (codeDisplay) codeDisplay.textContent = 'ERROR';
-      // Show error in the visible import-status field instead of hidden overlay
+      // Show error in the visible import-status field
       var importStatus = document.getElementById('hub-quiz-import-status');
       if (importStatus) {
         importStatus.textContent = err.message || 'Failed to share deck. Check your connection.';
@@ -1222,6 +1257,10 @@ D. Local Councils`;
         feedbackEl.textContent = err.message || 'Failed to share deck. Check your connection.';
         feedbackEl.style.color = 'var(--danger)';
       }
+      _showToast('Share failed: ' + (err.message || 'Check connection'));
+    } finally {
+      // Re-enable share buttons
+      for (var s3 = 0; s3 < shareBtns.length; s3++) { shareBtns[s3].disabled = false; }
     }
   }
 
