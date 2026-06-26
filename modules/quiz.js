@@ -1209,8 +1209,17 @@ D. Local Councils`;
     } catch (err) {
       console.warn('[Quiz] Share failed:', err);
       if (codeDisplay) codeDisplay.textContent = 'ERROR';
+      // Show error in the visible import-status field instead of hidden overlay
+      var importStatus = document.getElementById('hub-quiz-import-status');
+      if (importStatus) {
+        importStatus.textContent = err.message || 'Failed to share deck. Check your connection.';
+        importStatus.className = 'hub-quiz-import-status hub-quiz-import-status--error';
+        setTimeout(function () {
+          if (importStatus) importStatus.textContent = '';
+        }, 6000);
+      }
       if (feedbackEl) {
-        feedbackEl.textContent = 'Failed to share deck. Check your connection.';
+        feedbackEl.textContent = err.message || 'Failed to share deck. Check your connection.';
         feedbackEl.style.color = 'var(--danger)';
       }
     }
