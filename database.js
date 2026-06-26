@@ -288,32 +288,23 @@ const HubDB = (function () {
   async function shareQuizDeck(deckData) {
     await _ensureReady();
     var code = _generateShareCode();
-    // Save with the share code as document ID in 'shared_quizzes' collection
     try {
-      if (_isOnline()) {
-        await Promise.race([
-          _db.collection('shared_quizzes').doc(code).set(deckData)
-            .catch(function (err) {
-              console.error('[HubDB] Share Error — Firestore write rejected:', err);
-              throw err;
-            }),
-          _timeout(2500)
-        ]);
-        return code;
-      } else {
-        console.warn('[HubDB] Cannot share — user is offline or not authenticated. Falling back to localStorage.');
+      if (!_isOnline()) {
+        throw new Error('You must be logged in to the Cloud to share a deck.');
       }
+      await Promise.race([
+        _db.collection('shared_quizzes').doc(code).set(deckData)
+          .catch(function (err) {
+            console.error('[HubDB] Share Error — Firestore write rejected:', err);
+            throw err;
+          }),
+        _timeout(2500)
+      ]);
+      return code;
     } catch (err) {
-      console.warn('[HubDB] Firestore share failed:', err.message);
+      console.error('[HubDB] Firestore share failed:', err.message || err);
+      throw err;
     }
-    // Offline fallback: store in localStorage
-    try {
-      var shared = JSON.parse(localStorage.getItem('hub_shared_quizzes') || '{}');
-      shared[code] = deckData;
-      localStorage.setItem('hub_shared_quizzes', JSON.stringify(shared));
-      console.log('[HubDB] Quiz shared to localStorage (offline mode). Code:', code);
-    } catch (_) {}
-    return code;
   }
 
   /**
@@ -327,7 +318,7 @@ const HubDB = (function () {
 
     await _ensureReady();
     try {
-      if (_isOnline()) {
+      if (_ready && navigator.onLine !== false) {
         var doc = await Promise.race([
           _db.collection('shared_quizzes').doc(code).get()
             .catch(function (err) {
@@ -347,7 +338,7 @@ const HubDB = (function () {
         }
         return data;
       } else {
-        console.warn('[HubDB] Cannot import — user is offline or not authenticated. Trying localStorage fallback.');
+        console.warn('[HubDB] Cannot import — browser is offline. Trying localStorage fallback.');
       }
     } catch (err) {
       // Re-throw Firestore/timeout errors for the caller to handle
@@ -360,7 +351,7 @@ const HubDB = (function () {
       console.warn('[HubDB] Firestore import failed:', err.message || err);
     }
 
-    // Offline fallback: check localStorage
+    // Offline-only fallback: check localStorage
     try {
       var shared = JSON.parse(localStorage.getItem('hub_shared_quizzes') || '{}');
       var localData = shared[code];
