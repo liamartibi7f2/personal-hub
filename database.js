@@ -470,13 +470,20 @@ const HubDB = (function () {
           decks: []
         };
 
-        // Check localStorage for any unsaved work first
+        // Check localStorage for any unsaved work first.
+        // Filter out auto-generated "Default Deck" templates that have no cards.
         try {
           var localRaw = localStorage.getItem(FLASHCARD_KEY);
           if (localRaw) {
             var localData = JSON.parse(localRaw);
             if (localData && localData.decks && localData.decks.length > 0) {
-              defaultFlashcardData = localData;
+              // Strip default templates before using local data as default
+              localData.decks = localData.decks.filter(function (d) {
+                return !(d.title === 'Default Deck' && (!d.cards || d.cards.length === 0));
+              });
+              if (localData.decks.length > 0) {
+                defaultFlashcardData = localData;
+              }
             }
           }
         } catch (_) {}
@@ -506,15 +513,46 @@ const HubDB = (function () {
   /**
    * Merge any decks/cards that exist locally but not in the cloud.
    * This prevents data loss when the user adds cards offline.
+   *
+   * IMPORTANT: Skips auto-generated "Default Deck" templates to prevent
+   * the offline default from cloning itself on every cloud sync.
    */
   function _mergeLocalFlashcardsIntoCloud(cloud, local) {
     if (!local || !local.decks || !cloud || !cloud.decks) return;
+    // Build a set of existing deck IDs + titles for fast duplicate check
+    var cloudIds = {};
+    var cloudTitles = {};
+    cloud.decks.forEach(function (d) {
+      if (d.id) cloudIds[d.id] = true;
+      if (d.title) cloudTitles[d.title.toLowerCase().trim()] = true;
+    });
+
+    local.decks.forEach(function (localDeck) {
+      // 1) Skip auto-generated default templates (empty "Default Deck" that
+      //    the module creates on first visit when localStorage is empty).
+      //    These have title "Default Deck" and no real cards.
+      if (localDeck.title === 'Default Deck' && (!localDeck.cards || localDeck.cards.length === 0)) {
+        return; // ignore — this is the offline auto-generated stub
+      }
+
+      // 2) Skip if a deck with the exact same ID already exists in the cloud
+      if (localDeck.id && cloudIds[localDeck.id]) return;
+
+      // 3) Skip if a deck with the exact same title already exists in the cloud
+      //    (case-insensitive, trimmed)
+      var titleKey = localDeck.title ? localDeck.title.toLowerCase().trim() : '';
+      if (titleKey && cloudTitles[titleKey]) return;
+
+      // Deck is genuinely new → add it to the cloud
+      cloud.decks.push(localDeck);
+      cloudIds[localDeck.id] = true;
+      cloudTitles[titleKey] = true;
+    });
+
+    // Now merge cards for decks that already existed in cloud (same ID)
     local.decks.forEach(function (localDeck) {
       var match = cloud.decks.find(function (d) { return d.id === localDeck.id; });
-      if (!match) {
-        // Entire deck doesn't exist in cloud → add it
-        cloud.decks.push(localDeck);
-      } else if (localDeck.cards && localDeck.cards.length) {
+      if (match && localDeck.cards && localDeck.cards.length) {
         // Merge individual cards that don't exist in cloud.
         // PROTECT: if a local card is empty and the cloud card has content,
         // do NOT overwrite the cloud content — keep the richer version.
