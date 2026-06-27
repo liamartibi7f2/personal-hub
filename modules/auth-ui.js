@@ -273,6 +273,8 @@
     try { localStorage.removeItem('hub_flashcards'); } catch (_) {}
     try { localStorage.removeItem('quiz_decks'); } catch (_) {}
     try { localStorage.removeItem('hub_quiz_scores'); } catch (_) {}
+    try { localStorage.removeItem('hub_focus_data'); } catch (_) {}
+    try { localStorage.removeItem('hub_focus_playlist'); } catch (_) {}
     try { localStorage.removeItem('flashcard_data'); } catch (_) {}
     try { localStorage.removeItem('hub_flashcard_reviewed'); } catch (_) {}
     try { localStorage.removeItem('pomodoro_state'); } catch (_) {}

@@ -23,9 +23,17 @@
     initCalled: false,
     _activeTag: null,
     _currentPlaylist: [],
+    _playlistCache: null,   // Cached playlist array (loaded from HubDB)
+    _focusDataLoaded: false, // Whether HubDB data has been loaded
     _visualizer: { bars: null, rafId: null, running: false, targets: [], lastUpdate: 0 },
     _drag: { active: false, startX: 0, startY: 0, startLeft: 0, startTop: 0, moved: false, _justDragged: false },
+    _pageUnloading: false,
   };
+
+  // ── Ghost save guard ──
+  window.addEventListener('beforeunload', function () {
+    S._pageUnloading = true;
+  });
 
   /* ----------------------------------------------------------
      DRAG-TO-POSITION PERSISTENCE
@@ -33,32 +41,81 @@
   const POSITION_KEY = 'hub_vibe_position';
 
   /* ----------------------------------------------------------
-     DYNAMIC PLAYLIST (localStorage-backed)
+     HUBDB BACKED PLAYLIST
      ---------------------------------------------------------- */
-  const PLAYLIST_KEY = 'hub_focus_playlist';
-
   const DEFAULT_PLAYLIST = [
     { id: 'lofi',      name: 'Lofi Beats',        videoId: 'X4VbdwhkE10', icon: '🎹', tags: ['lofi', 'focus', 'chill'], _default: true },
     { id: 'cyberpunk', name: 'Cyberpunk Ambient', videoId: 'gIWsboTllGA', icon: '🤖', tags: ['cyberpunk', 'focus', 'dark'], _default: true },
     { id: 'rain',      name: 'Rain & Thunder',    videoId: 'mPZkdNFkNps', icon: '🌧️', tags: ['rain', 'nature', 'relax'], _default: true },
   ];
 
-  function getPlaylist() {
+  /**
+   * Initialize focus state from HubDB (Firestore when online,
+   * localStorage fallback). Called once at startup.
+   */
+  async function _loadFocusState() {
+    if (S._focusDataLoaded) return;
     try {
-      var raw = localStorage.getItem(PLAYLIST_KEY);
-      if (raw) {
-        var parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      var data = await HubDB.loadFocusData();
+      if (data) {
+        // Apply loaded state to the global S object
+        if (data.volume !== undefined) {
+          S.volume = data.volume / 100; // stored as 0-100, used as 0-1
+        }
+        if (data.lastStation) {
+          S.currentVibe = data.lastStation;
+        }
+        if (Array.isArray(data.playlist) && data.playlist.length > 0) {
+          S._playlistCache = data.playlist;
+        }
       }
     } catch (_) {}
-    savePlaylist(DEFAULT_PLAYLIST);
-    return DEFAULT_PLAYLIST.slice();
+    S._focusDataLoaded = true;
+  }
+
+  /**
+   * Persist the current focus state (volume, lastStation, playlist)
+   * to HubDB. Fire-and-forget.
+   */
+  function _saveFocusState() {
+    if (S._pageUnloading) return;
+    var data = {
+      customLinks: [],
+      lastStation: S.currentVibe || 'Lofi Beats',
+      volume: Math.round(S.volume * 100),
+      playlist: S._playlistCache || getPlaylistFromCache()
+    };
+    HubDB.saveFocusData(data).catch(function () {});
+  }
+
+  /**
+   * Get the playlist — from cache if loaded, fallback to localStorage
+   * (backwards compat), else defaults.
+   */
+  function getPlaylist() {
+    if (S._playlistCache) return S._playlistCache;
+    // Fallback to old localStorage key (migration)
+    try {
+      var raw = localStorage.getItem('hub_focus_playlist');
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          S._playlistCache = parsed;
+          return parsed;
+        }
+      }
+    } catch (_) {}
+    S._playlistCache = DEFAULT_PLAYLIST.slice();
+    return S._playlistCache;
+  }
+
+  function getPlaylistFromCache() {
+    return S._playlistCache || DEFAULT_PLAYLIST.slice();
   }
 
   function savePlaylist(playlist) {
-    try {
-      localStorage.setItem(PLAYLIST_KEY, JSON.stringify(playlist));
-    } catch (_) {}
+    S._playlistCache = playlist;
+    _saveFocusState();
   }
 
   function getAllTags() {
@@ -1025,8 +1082,22 @@ function renderVibeGridHTML(playlist, filterTag) {
     name: 'Focus Vibe',
     icon: '🎧',
 
-    render: function (container) {
+    render: async function (container) {
+      // 1) Show loading state immediately
+      container.innerHTML =
+        '<div class="tab-content" style="display:flex;align-items:center;justify-content:center;min-height:300px">' +
+          '<div style="font-family:var(--font-mono);color:var(--text-muted);font-size:0.85rem">' +
+            '<span style="color:var(--accent-cyan)">●</span> Loading your vibes...' +
+          '</div>' +
+        '</div>';
+
+      // 2) Await cloud/offline data
+      await _loadFocusState();
+
+      // 3) Init the floating widget (runs only once)
       initWidget();
+
+      // 4) Render studio page
       renderStudioPage(container);
     },
 
@@ -1044,11 +1115,11 @@ function renderVibeGridHTML(playlist, filterTag) {
   /* ----------------------------------------------------------
      AUTO-INIT on DOMContentLoaded
      ---------------------------------------------------------- */
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initWidget);
-  } else {
+  // Load focus state first, then init the floating widget (once)
+  (async function autoInit() {
+    await _loadFocusState();
     initWidget();
-  }
+  })();
 
   /* ----------------------------------------------------------
      EXPOSE FOR CROSS-MODULE ACCESS

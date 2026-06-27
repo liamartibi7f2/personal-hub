@@ -677,6 +677,177 @@ const HubDB = (function () {
 
   // ── Expose public API ──
 
+  // ── Focus Vibe ──
+
+  const FOCUS_KEY = 'hub_focus_data';
+
+  /**
+   * Save focus vibe data (playlist, volume, last station, custom links).
+   * Strictly prioritizes Firestore when logged in and online.
+   * Only falls back to localStorage when the user is genuinely
+   * not logged in or the browser reports offline.
+   * @param {Object} data - The full focus data object
+   */
+  async function saveFocusData(data) {
+    await _ensureReady();
+
+    // Logged in + online → Firestore only. No silent fallback.
+    if (_isOnline()) {
+      try {
+        await Promise.race([
+          _userRef()
+            .set({ focusData: data }, { merge: true })
+            .catch(function (err) {
+              console.error('[HubDB] Firebase Write Failed:', err);
+              throw err;
+            }),
+          _timeout(2500)
+        ]);
+        return;
+      } catch (err) {
+        console.error('[HubDB] Firestore set() failed:', err.message || err);
+        return;
+      }
+    }
+
+    // Not logged in OR browser says offline → localStorage fallback
+    try {
+      localStorage.setItem(FOCUS_KEY, JSON.stringify(data));
+    } catch (quotaErr) {
+      console.error('[HubDB] localStorage quota exceeded');
+    }
+  }
+
+  /**
+   * Load focus vibe data.
+   * If logged in and online → Firestore (fallback to localStorage if empty).
+   * Otherwise → localStorage.
+   * If cloud data is empty, initializes a default structure
+   * and persists it back to the cloud so subsequent logins
+   * from other browsers don't overwrite with nothing.
+   * @returns {Object} The parsed focus data, or default structure
+   */
+  async function loadFocusData() {
+    // Fast-path: if browser says offline, skip auth wait + Firestore entirely
+    if (navigator.onLine === false) {
+      try {
+        var raw = localStorage.getItem(FOCUS_KEY);
+        if (raw) return JSON.parse(raw);
+      } catch (_) {}
+      return null;
+    }
+    await _ensureReady();
+    // Try Firestore first when online (with 2.5s timeout)
+    if (_isOnline()) {
+      try {
+        var doc = await Promise.race([
+          _userRef().get(),
+          _timeout(2500)
+        ]);
+        if (doc.exists) {
+          var cloudData = doc.data().focusData;
+          if (cloudData && cloudData.customLinks) {
+            // Merge any localStorage changes the user made while offline
+            try {
+              var localRaw = localStorage.getItem(FOCUS_KEY);
+              if (localRaw) {
+                _mergeLocalFocusIntoCloud(cloudData, JSON.parse(localRaw));
+                // Persist the merged result back to Firestore silently
+                _userRef().set({ focusData: cloudData }, { merge: true }).catch(function () {});
+              }
+            } catch (_) {}
+            // Clear local copy after successful cloud read + merge
+            try { localStorage.removeItem(FOCUS_KEY); } catch (_) {}
+            return cloudData;
+          }
+        }
+
+        // Cloud doc exists but focusData is empty/missing, OR doc doesn't exist.
+        // Initialize a default structure and save it to cloud so that
+        // logging in from another browser gets data, not empty overwrites.
+        var defaultFocusData = {
+          customLinks: [],
+          lastStation: 'lofi',
+          volume: 50,
+          playlist: []
+        };
+
+        // Check localStorage for any unsaved work first
+        try {
+          var localRaw = localStorage.getItem(FOCUS_KEY);
+          if (localRaw) {
+            var localData = JSON.parse(localRaw);
+            if (localData && localData.customLinks) {
+              defaultFocusData = localData;
+            }
+          }
+        } catch (_) {}
+
+        // Also merge the old `hub_focus_playlist` key if it exists (migration)
+        try {
+          var oldPlaylistRaw = localStorage.getItem('hub_focus_playlist');
+          if (oldPlaylistRaw) {
+            var oldPlaylist = JSON.parse(oldPlaylistRaw);
+            if (Array.isArray(oldPlaylist) && oldPlaylist.length > 0 && (!defaultFocusData.playlist || defaultFocusData.playlist.length === 0)) {
+              defaultFocusData.playlist = oldPlaylist;
+            }
+            try { localStorage.removeItem('hub_focus_playlist'); } catch (_) {}
+          }
+        } catch (_) {}
+
+        // Persist the default/merged data to Firestore so cloud is never empty
+        try {
+          await Promise.race([
+            _userRef().set({ focusData: defaultFocusData }, { merge: true }),
+            _timeout(2500)
+          ]);
+        } catch (_) {}
+        try { localStorage.removeItem(FOCUS_KEY); } catch (_) {}
+        return defaultFocusData;
+      } catch (err) {
+        console.warn('[HubDB] Firestore load failed, trying localStorage:', err.message);
+      }
+    }
+
+    // localStorage fallback
+    try {
+      var raw = localStorage.getItem(FOCUS_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return null;
+  }
+
+  /**
+   * Merge any local focus changes (customLinks, playlist, volume, etc.)
+   * that exist locally but not in the cloud.
+   */
+  function _mergeLocalFocusIntoCloud(cloud, local) {
+    if (!local || !cloud) return;
+    // Merge customLinks — add any that don't exist in cloud
+    if (local.customLinks && Array.isArray(local.customLinks) && local.customLinks.length > 0) {
+      if (!cloud.customLinks) cloud.customLinks = local.customLinks;
+      local.customLinks.forEach(function (localLink) {
+        if (!cloud.customLinks.some(function (c) { return c === localLink; })) {
+          cloud.customLinks.push(localLink);
+        }
+      });
+    }
+    // Merge playlist entries — add any custom entries missing from cloud
+    if (local.playlist && Array.isArray(local.playlist) && local.playlist.length > 0) {
+      if (!cloud.playlist) cloud.playlist = local.playlist;
+      local.playlist.forEach(function (localEntry) {
+        if (!cloud.playlist.some(function (c) { return c.id === localEntry.id; })) {
+          cloud.playlist.push(localEntry);
+        }
+      });
+    }
+    // Prefer the most recent volume / lastStation
+    if (typeof local.volume === 'number') cloud.volume = local.volume;
+    if (local.lastStation) cloud.lastStation = local.lastStation;
+  }
+
+  // ── Expose public API ──
+
   return {
     saveNotesData: saveNotesData,
     loadNotesData: loadNotesData,
@@ -684,6 +855,8 @@ const HubDB = (function () {
     loadFlashcardsData: loadFlashcardsData,
     saveQuizData: saveQuizData,
     loadQuizData: loadQuizData,
+    saveFocusData: saveFocusData,
+    loadFocusData: loadFocusData,
     loginWithGoogle: loginWithGoogle,
     getAuthStatus: getAuthStatus,
     waitForReady: _ensureReady,
