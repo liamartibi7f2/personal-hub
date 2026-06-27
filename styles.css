@@ -8431,3 +8431,37 @@ body.light-mode .cyber-btn-google:hover:not(:disabled) {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* =============================================================
+   MOBILE RESPONSIVE: Foundation (Step 1)
+   Base layout resets for < 768px screens.
+   Sidebar will be hidden in Step 2; this just preps the
+   containers for full-width mobile display.
+   ============================================================= */
+@media (max-width: 768px) {
+  /* Force the root app shell to fill the screen edge-to-edge */
+  .app-layout {
+    width: 100vw;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Main content: override desktop margins/padding so it spans
+     the full viewport width. Already handled by the existing
+     768px media query above (line ~4071), this reinforces it. */
+  .main-content {
+    width: 100%;
+    margin-left: 0;
+    padding: var(--space-lg) var(--space-md) calc(var(--dock-height) + var(--space-xl));
+  }
+
+  /* Slightly smaller body text for readability on small screens */
+  html {
+    font-size: 15px;
+  }
+
+  /* Reduce heading sizes that may overflow on mobile */
+  .brand-text {
+    font-size: 1rem;
+  }
+}
