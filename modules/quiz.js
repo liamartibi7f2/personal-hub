@@ -20,7 +20,6 @@ const quizModule = (function () {
   'use strict';
 
   // --- Constants ---
-  const DECKS_KEY   = 'quiz_decks';      // Persisted deck library
   const SCORE_KEY   = 'hub_quiz_scores'; // Total quiz sessions (dashboard stat)
 
   // --- Private state ---
@@ -30,6 +29,8 @@ const quizModule = (function () {
   let _currentDeck  = null;        // The deck object being played (has id, title, sections)
   let _answeredMap  = {};          // key: "sectionIdx-questionIdx" → 'correct'|'incorrect'|'revealed'
   let _selectedMap  = {};          // key: "sectionIdx-questionIdx" → option letter user picked
+  let _decks        = null;        // In-memory array of all decks (loaded once from HubDB)
+  let _pageUnloading = false;      // Prevents ghost saves during page reload
 
   // --- Test Mode state ---
   let _testMode         = false;
@@ -43,6 +44,13 @@ const quizModule = (function () {
 
   // --- Shuffle state ---
   let _shuffle          = false;
+
+  // ── Ghost save guard ──
+  // The moment the browser starts unloading (page reload / tab close),
+  // mark _pageUnloading so no async save callback will fire a write.
+  window.addEventListener('beforeunload', function () {
+    _pageUnloading = true;
+  });
 
   // --- Default sample text (shown in the editor textarea) ---
   const DEFAULT_TEXT = `'IELTS Grammar
@@ -63,8 +71,20 @@ D. Local Councils`;
      RENDER / DESTROY (module contract)
      ========================================================== */
 
-  function render(container) {
+  async function render(container) {
     _container = container;
+
+    // 1) Show loading state immediately
+    container.innerHTML =
+      '<div class="tab-content quiz-app" style="display:flex;align-items:center;justify-content:center;min-height:300px">' +
+        '<div class="hub-notes-loading" style="font-family:var(--font-mono);color:var(--text-muted);font-size:0.85rem">' +
+          '<span class="hub-notes-loading-dot">●</span> Loading decks...' +
+        '</div>' +
+      '</div>';
+
+    // 2) Await data (async — may hit Firestore)
+    await _loadDecksAsync();
+
     _mode = 'library';
     _quizData = null;
     _currentDeck = null;
@@ -86,6 +106,7 @@ D. Local Councils`;
       _tooltipEl.parentNode.removeChild(_tooltipEl);
       _tooltipEl = null;
     }
+    _decks = null;
     _container = null;
   }
 
@@ -112,67 +133,70 @@ D. Local Councils`;
   }
 
   /* ==========================================================
-     DECK MANAGEMENT (localStorage CRUD)
+     DECK MANAGEMENT (HubDB cloud sync with localStorage fallback)
      ========================================================== */
 
   /**
-   * Load all saved decks from localStorage.
-   * @returns {Array<{id, title, sections, createdAt}>}
+   * Load all saved decks from HubDB (Firestore when online,
+   * localStorage fallback otherwise). Populates the in-memory
+   * `_decks` array used by all CRUD operations in this session.
    */
-  function _loadDecks() {
+  async function _loadDecksAsync() {
     try {
-      const stored = localStorage.getItem(DECKS_KEY);
-      return stored ? JSON.parse(stored) : [];
-    } catch (_) { return []; }
+      var data = await HubDB.loadQuizData();
+      if (data && Array.isArray(data.decks)) {
+        _decks = data.decks;
+      } else {
+        _decks = [];
+      }
+    } catch (_) {
+      _decks = [];
+    }
   }
 
   /**
-   * Save the full decks array to localStorage.
-   * @param {Array} decks
+   * Save the current in-memory decks array to HubDB.
+   * Fire-and-forget — callers don't need to await.
    */
-  function _saveDecks(decks) {
-    try {
-      localStorage.setItem(DECKS_KEY, JSON.stringify(decks));
-    } catch (_) { /* Storage full or unavailable — silently ignore */ }
+  function _saveDecks() {
+    if (_pageUnloading) return; // Prevent ghost saves during page reload
+    HubDB.saveQuizData({ decks: _decks }).catch(function () {});
   }
 
   /**
-   * Add a new deck to the library.
+   * Add a new deck to the in-memory array and persist.
    * @param {string} title
    * @param {Object} parsed — output of parseQuizText(): { sections, errors }
    * @returns {Object} the newly created deck
    */
   function _addDeck(title, parsed) {
-    const decks = _loadDecks();
-    const deck = {
+    var deck = {
       id: String(Date.now()),
       title: title.trim(),
       sections: parsed.sections,
       createdAt: Date.now()
     };
-    decks.unshift(deck); // Newest first
-    _saveDecks(decks);
+    _decks.unshift(deck); // Newest first
+    _saveDecks();
     return deck;
   }
 
   /**
-   * Delete a deck by its id.
+   * Delete a deck by its id from the in-memory array and persist.
    * @param {string} id
    */
   function _deleteDeck(id) {
-    const decks = _loadDecks();
-    const filtered = decks.filter(d => d.id !== id);
-    _saveDecks(filtered);
+    _decks = _decks.filter(function (d) { return d.id !== id; });
+    _saveDecks();
   }
 
   /**
-   * Retrieve a single deck by id.
+   * Retrieve a single deck by id from the in-memory array.
    * @param {string} id
    * @returns {Object|undefined}
    */
   function _getDeckById(id) {
-    const decks = _loadDecks();
-    return decks.find(d => d.id === id);
+    return _decks.find(function (d) { return d.id === id; });
   }
 
   /* ==========================================================
@@ -183,8 +207,8 @@ D. Local Councils`;
   function _renderLibraryMode() {
     if (!_container) return;
 
-    const decks = _loadDecks();
-    const hasDecks = decks.length > 0;
+    var decks = _decks || [];
+    var hasDecks = decks.length > 0;
 
     let gridHtml = '';
 
@@ -1288,9 +1312,8 @@ D. Local Councils`;
       }
 
       // Duplicate check: prevent importing the same deck twice
-      var decks = _loadDecks();
       var deckTitle = (deckData.title || 'Imported Deck').trim();
-      var duplicate = decks.some(function (d) {
+      var duplicate = _decks.some(function (d) {
         return d.title.toLowerCase() === deckTitle.toLowerCase();
       });
       if (duplicate) {
@@ -1307,8 +1330,8 @@ D. Local Councils`;
         createdAt: Date.now(),
         imported: true
       };
-      decks.unshift(newDeck);
-      _saveDecks(decks);
+      _decks.unshift(newDeck);
+      _saveDecks();
 
       statusEl.textContent = '✓ Deck imported successfully!';
       statusEl.className = 'hub-quiz-import-status hub-quiz-import-status--success';
@@ -1410,8 +1433,7 @@ D. Local Councils`;
       var deckData = await HubDB.importSharedQuiz(cleanCode);
 
       // Duplicate check before adding
-      var decks = _loadDecks();
-      var duplicate = decks.some(function (d) {
+      var duplicate = _decks.some(function (d) {
         return d.title.toLowerCase() === (deckData.title || 'Imported Deck').trim().toLowerCase();
       });
       if (duplicate) {
@@ -1427,8 +1449,8 @@ D. Local Councils`;
         createdAt: Date.now(),
         imported: true
       };
-      decks.unshift(newDeck);
-      _saveDecks(decks);
+      _decks.unshift(newDeck);
+      _saveDecks();
 
       history.replaceState(null, '', window.location.pathname);
 

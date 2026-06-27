@@ -535,6 +535,146 @@ const HubDB = (function () {
     });
   }
 
+  // ── Quiz ──
+
+  const QUIZ_KEY = 'quiz_decks';
+
+  /**
+   * Save quiz workspace data.
+   * Strictly prioritizes Firestore when logged in and online.
+   * Only falls back to localStorage when the user is genuinely
+   * not logged in or the browser reports offline.
+   * @param {Object} data - The full quiz data object ({ decks: [...] })
+   */
+  async function saveQuizData(data) {
+    await _ensureReady();
+
+    // Logged in + online → Firestore only. No silent fallback.
+    if (_isOnline()) {
+      try {
+        await Promise.race([
+          _userRef()
+            .set({ quizData: data }, { merge: true })
+            .catch(function (err) {
+              console.error('[HubDB] Firebase Write Failed:', err);
+              throw err;
+            }),
+          _timeout(2500)
+        ]);
+        return;
+      } catch (err) {
+        console.error('[HubDB] Firestore set() failed:', err.message || err);
+        return;
+      }
+    }
+
+    // Not logged in OR browser says offline → localStorage fallback
+    try {
+      localStorage.setItem(QUIZ_KEY, JSON.stringify(data.decks));
+    } catch (quotaErr) {
+      console.error('[HubDB] localStorage quota exceeded');
+    }
+  }
+
+  /**
+   * Load quiz workspace data.
+   * If logged in and online → Firestore (fallback to localStorage if empty).
+   * Otherwise → localStorage.
+   * If cloud data is empty (no workspace yet), initializes a default structure
+   * and persists it back to the cloud so subsequent logins
+   * from other browsers don't overwrite with nothing.
+   * @returns {Object|null} The parsed quiz data, or default structure
+   */
+  async function loadQuizData() {
+    // Fast-path: if browser says offline, skip auth wait + Firestore entirely
+    if (navigator.onLine === false) {
+      try {
+        var raw = localStorage.getItem(QUIZ_KEY);
+        if (raw) return { decks: JSON.parse(raw) };
+      } catch (_) {}
+      return { decks: [] };
+    }
+    await _ensureReady();
+    // Try Firestore first when online (with 2.5s timeout)
+    if (_isOnline()) {
+      try {
+        var doc = await Promise.race([
+          _userRef().get(),
+          _timeout(2500)
+        ]);
+        if (doc.exists) {
+          var cloudData = doc.data().quizData;
+          if (cloudData && cloudData.decks && cloudData.decks.length > 0) {
+            // Merge any localStorage changes the user made while offline
+            try {
+              var localRaw = localStorage.getItem(QUIZ_KEY);
+              if (localRaw) {
+                _mergeLocalQuizIntoCloud(cloudData, { decks: JSON.parse(localRaw) });
+                // Persist the merged result back to Firestore silently
+                _userRef().set({ quizData: cloudData }, { merge: true }).catch(function () {});
+              }
+            } catch (_) {}
+            // Clear local copy after successful cloud read + merge
+            try { localStorage.removeItem(QUIZ_KEY); } catch (_) {}
+            return cloudData;
+          }
+        }
+
+        // Cloud doc exists but quizData is empty/missing, OR doc doesn't exist.
+        // Initialize a default structure and save it to cloud so that
+        // logging in from another browser gets data, not empty overwrites.
+        var defaultQuizData = {
+          decks: []
+        };
+
+        // Check localStorage for any unsaved work first
+        try {
+          var localRaw = localStorage.getItem(QUIZ_KEY);
+          if (localRaw) {
+            var localData = { decks: JSON.parse(localRaw) };
+            if (localData.decks && localData.decks.length > 0) {
+              defaultQuizData = localData;
+            }
+          }
+        } catch (_) {}
+
+        // Persist the default/merged data to Firestore so cloud is never empty
+        try {
+          await Promise.race([
+            _userRef().set({ quizData: defaultQuizData }, { merge: true }),
+            _timeout(2500)
+          ]);
+        } catch (_) {}
+        try { localStorage.removeItem(QUIZ_KEY); } catch (_) {}
+        return defaultQuizData;
+      } catch (err) {
+        console.warn('[HubDB] Firestore load failed, trying localStorage:', err.message);
+      }
+    }
+
+    // localStorage fallback
+    try {
+      var raw = localStorage.getItem(QUIZ_KEY);
+      if (raw) return { decks: JSON.parse(raw) };
+    } catch (_) {}
+    return { decks: [] };
+  }
+
+  /**
+   * Merge any quiz decks that exist locally but not in the cloud.
+   * This prevents data loss when the user adds decks offline.
+   */
+  function _mergeLocalQuizIntoCloud(cloud, local) {
+    if (!local || !local.decks || !cloud || !cloud.decks) return;
+    local.decks.forEach(function (localDeck) {
+      var match = cloud.decks.find(function (d) { return d.id === localDeck.id; });
+      if (!match) {
+        // Entire deck doesn't exist in cloud → add it
+        cloud.decks.push(localDeck);
+      }
+    });
+  }
+
   // ── Expose public API ──
 
   return {
@@ -542,6 +682,8 @@ const HubDB = (function () {
     loadNotesData: loadNotesData,
     saveFlashcardsData: saveFlashcardsData,
     loadFlashcardsData: loadFlashcardsData,
+    saveQuizData: saveQuizData,
+    loadQuizData: loadQuizData,
     loginWithGoogle: loginWithGoogle,
     getAuthStatus: getAuthStatus,
     waitForReady: _ensureReady,
