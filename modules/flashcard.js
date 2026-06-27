@@ -15,7 +15,6 @@ const flashcardModule = (function () {
   'use strict';
 
   // --- Constants ---
-  const STORAGE_KEY   = 'hub_flashcards';
   const REVIEWED_KEY  = 'hub_flashcard_reviewed';
   const API_KEY_CONST = ''; // <-- PASTE YOUR GEMINI API KEY HERE, or set via the modal gear
   const API_KEY_STORE = 'hub_gemini_api_key';
@@ -43,6 +42,7 @@ const flashcardModule = (function () {
   let _currentIndex   = 0;          // Which card we're viewing (browse mode, within active deck)
   let _container      = null;       // Reference to the DOM container for cleanup
   let _isGenerating   = false;      // Prevent double-submit (Gemini API)
+  let _pageUnloading  = false;      // Prevents ghost saves during page reload
 
   // --- SRS state ---
   let _mode           = 'library';  // 'library' | 'study' | 'browse'
@@ -51,6 +51,14 @@ const flashcardModule = (function () {
   let _cardFlipped    = false;      // Whether the card is flipped in study mode
 
   // --- Default starter cards (new Gemini-compatible format) ---
+
+  // ── Ghost save guard ──
+  // The moment the browser starts unloading (page reload / tab close),
+  // mark _pageUnloading so no async save callback will fire a write.
+  window.addEventListener('beforeunload', function () {
+    _pageUnloading = true;
+  });
+
   const DEFAULT_CARDS = [
     {
       term: 'Ephemeral',
@@ -154,9 +162,20 @@ const flashcardModule = (function () {
      RENDER / DESTROY (module contract)
      ========================================================== */
 
-  function render(container) {
+  async function render(container) {
     _container = container;
-    _loadDecks();
+
+    // 1) Show loading state immediately
+    container.innerHTML =
+      '<div class="tab-content flashcard-app" style="display:flex;align-items:center;justify-content:center;min-height:300px">' +
+        '<div class="hub-notes-loading" style="font-family:var(--font-mono);color:var(--text-muted);font-size:0.85rem">' +
+          '<span class="hub-notes-loading-dot">●</span> Loading flashcards...' +
+        '</div>' +
+      '</div>';
+
+    // 2) Await data (async — may hit Firestore)
+    await _loadDecksAsync();
+
     _currentIndex = 0;
     _mode = 'library';
     _activeDeckId = null;
@@ -198,29 +217,32 @@ const flashcardModule = (function () {
      LOAD / SAVE DECKS (with automatic migration)
      ========================================================== */
 
-  function _loadDecks() {
+  /**
+   * Load decks from HubDB (Firestore when online + authenticated,
+   * fallback to localStorage otherwise).
+   */
+  async function _loadDecksAsync() {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // Detect format: deck array has 'cards' property; legacy flat array has 'term'
-          if (parsed[0].cards !== undefined) {
-            // Already in deck format — normalize all cards
-            _decks = parsed.map(deck => ({
-              id: deck.id || ('deck_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8)),
-              title: deck.title || 'Untitled Deck',
-              cards: (deck.cards || []).map(_normalizeCard)
-            }));
-          } else if (parsed[0].term !== undefined) {
+      var data = await HubDB.loadFlashcardsData();
+      if (data && Array.isArray(data.decks)) {
+        if (data.decks.length > 0) {
+          // Detect format: each deck has 'cards' property
+          if (data.decks[0].cards !== undefined) {
+            _decks = data.decks.map(function (deck) {
+              return {
+                id: deck.id || ('deck_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8)),
+                title: deck.title || 'Untitled Deck',
+                cards: (deck.cards || []).map(_normalizeCard)
+              };
+            });
+          } else if (data.decks[0].term !== undefined) {
             // Legacy flat card array — migrate to a "Default Deck"
             _decks = [{
               id: 'deck_default_migrated',
               title: 'Default Deck',
-              cards: parsed.map(_normalizeCard)
+              cards: data.decks.map(_normalizeCard)
             }];
-            _saveDecks(); // Persist the migration
+            await HubDB.saveFlashcardsData({ decks: _decks });
           } else {
             _decks = [];
           }
@@ -235,16 +257,21 @@ const flashcardModule = (function () {
       _decks = [{
         id: 'deck_default_' + Date.now(),
         title: 'Default Deck',
-        cards: DEFAULT_CARDS.map(c => _normalizeCard({ ...c }))
+        cards: DEFAULT_CARDS.map(function (c) { return _normalizeCard({ ...c }); })
       }];
-      _saveDecks();
+      await HubDB.saveFlashcardsData({ decks: _decks });
     }
   }
 
+  /**
+   * Save decks to HubDB (Firestore when online, localStorage fallback).
+   * Fire-and-forget wrapper for callers that don't need to await.
+   */
   function _saveDecks() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(_decks));
-    } catch (_) { /* ignore */ }
+    if (_pageUnloading) return; // Prevent ghost saves during page reload
+    // Fire-and-forget: the async save is handled internally;
+    // we don't need UI to block on it.
+    HubDB.saveFlashcardsData({ decks: _decks }).catch(function () {});
   }
 
   /* ==========================================================

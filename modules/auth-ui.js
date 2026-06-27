@@ -270,8 +270,10 @@
   function _logout() {
     // 1) Clear all local Hub caches so no stale data remains visible
     try { localStorage.removeItem('hub_notes'); } catch (_) {}
+    try { localStorage.removeItem('hub_flashcards'); } catch (_) {}
     try { localStorage.removeItem('hub_quiz_scores'); } catch (_) {}
     try { localStorage.removeItem('flashcard_data'); } catch (_) {}
+    try { localStorage.removeItem('hub_flashcard_reviewed'); } catch (_) {}
     try { localStorage.removeItem('pomodoro_state'); } catch (_) {}
 
     // 2) Sign out of Firebase — await the promise, THEN reload
