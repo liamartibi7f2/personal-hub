@@ -15,11 +15,18 @@ const pomodoroModule = (function () {
   'use strict';
 
   // --- Constants ---
-  const SETTINGS_KEY  = 'hub_pomodoro_settings';
-  const SESSIONS_KEY  = 'hub_pomodoro_sessions';
   const REFERENCE_KEY = 'hub_pomodoro_ref';
-  const STATS_KEY     = 'hub_pomodoro_stats';
   const ALARM_LOOP_MS = 2000;
+
+  // --- In-memory cloud-backed data ---
+  let _pomodoroData      = null;  // unified settings + stats from HubDB
+  let _pomodoroDataLoaded = false;
+  let _pageUnloading     = false;
+
+  // ── Ghost save guard ──
+  window.addEventListener('beforeunload', function () {
+    _pageUnloading = true;
+  });
 
   // --- Hardcoded Sound Profiles ---
   const SOUND_PROFILES = [
@@ -89,12 +96,31 @@ const pomodoroModule = (function () {
   //  PUBLIC API
   // =============================================================
 
-  function render(container) {
+  async function render(container) {
     _container = container;
-    _loadSettings();
     _settingsOpen = false;
 
-    // Try to restore a running timer from localStorage
+    // 1) Show loading state immediately
+    container.innerHTML =
+      '<div class="tab-content" style="display:flex;align-items:center;justify-content:center;min-height:300px">' +
+        '<div style="font-family:var(--font-mono);color:var(--text-muted);font-size:0.85rem">' +
+          '<span style="color:var(--accent-cyan)">●</span> Loading timer...' +
+        '</div>' +
+      '</div>';
+
+    // 2) Await cloud/offline data
+    await _loadPomodoroDataAsync();
+
+    // 3) Sync the local _settings from the loaded data
+    var s = _getSettings();
+    _settings.focus      = s.focus;
+    _settings.shortBreak = s.shortBreak;
+    _settings.longBreak  = s.longBreak;
+    _settings.soundProfile     = s.soundProfile;
+    _settings.autoStartBreaks  = s.autoStartBreaks;
+    _settings.autoStartFocus   = s.autoStartFocus;
+
+    // 4) Try to restore a running timer from localStorage
     if (!_restoreTimerState()) {
       _currentMode = 'focus';
       _setDuration(_settings.focus);
@@ -122,60 +148,84 @@ const pomodoroModule = (function () {
   }
 
   // =============================================================
-  //  SETTINGS ENGINE
+  //  HUBDB DATA LAYER
   // =============================================================
 
-  function _loadSettings() {
+  /**
+   * Load pomodoro data from HubDB (Firestore when online,
+   * localStorage fallback). Called once at module init.
+   */
+  async function _loadPomodoroDataAsync() {
+    if (_pomodoroDataLoaded) return;
     try {
-      const stored = localStorage.getItem(SETTINGS_KEY);
-      if (stored) {
-        _settings = { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
+      var data = await HubDB.loadPomodoroData();
+      if (data) {
+        _pomodoroData = data;
       }
-    } catch (_) { /* ignore */ }
+    } catch (_) {}
+    if (!_pomodoroData) {
+      _pomodoroData = {
+        work: 25,
+        shortBreak: 5,
+        longBreak: 15,
+        soundProfile: 'classic',
+        autoStartBreaks: false,
+        autoStartFocus: false,
+        totalFocusMinutes: 0,
+        completedSessions: 0,
+        dailyHistory: {},
+        lastCompletedDate: null
+      };
+    }
+    _pomodoroDataLoaded = true;
   }
 
-  function _saveSettings() {
-    try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(_settings));
-    } catch (_) { /* ignore */ }
+  /**
+   * Persist the current _pomodoroData via HubDB. Fire-and-forget.
+   */
+  function _savePomodoroData() {
+    if (_pageUnloading) return;
+    if (!_pomodoroData) return;
+    HubDB.savePomodoroData(_pomodoroData).catch(function () {});
   }
 
-  function _escHtml(str) {
-    if (typeof str !== 'string') return '';
-    var d = document.createElement('div');
-    d.textContent = str;
-    return d.innerHTML;
+  /**
+   * Get current settings from in-memory _pomodoroData.
+   * Returns a plain object compatible with the old _settings shape.
+   */
+  function _getSettings() {
+    if (!_pomodoroData) {
+      return { focus: 25, shortBreak: 5, longBreak: 15, soundProfile: 'classic', autoStartBreaks: false, autoStartFocus: false };
+    }
+    return {
+      focus: _pomodoroData.work || 25,
+      shortBreak: _pomodoroData.shortBreak || 5,
+      longBreak: _pomodoroData.longBreak || 15,
+      soundProfile: _pomodoroData.soundProfile || 'classic',
+      autoStartBreaks: !!_pomodoroData.autoStartBreaks,
+      autoStartFocus: !!_pomodoroData.autoStartFocus
+    };
+  }
+
+  /**
+   * Get current stats from in-memory _pomodoroData.
+   * Returns a plain object compatible with the old stats shape.
+   */
+  function _getStats() {
+    if (!_pomodoroData) {
+      return { totalFocusSeconds: 0, completedPomodoros: 0, dailyHistory: {}, lastCompletedDate: null };
+    }
+    return {
+      totalFocusSeconds: (_pomodoroData.totalFocusMinutes || 0) * 60,
+      completedPomodoros: _pomodoroData.completedSessions || 0,
+      dailyHistory: _pomodoroData.dailyHistory || {},
+      lastCompletedDate: _pomodoroData.lastCompletedDate || null
+    };
   }
 
   function _getVal(id) {
     var el = document.getElementById(id);
     return el ? el.value : '';
-  }
-
-  // =============================================================
-  //  STATS ENGINE
-  // =============================================================
-
-  function _loadStats() {
-    try {
-      const stored = localStorage.getItem(STATS_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        return {
-          totalFocusSeconds: parsed.totalFocusSeconds || 0,
-          completedPomodoros: parsed.completedPomodoros || 0,
-          dailyHistory: parsed.dailyHistory || {},
-          lastCompletedDate: parsed.lastCompletedDate || null
-        };
-      }
-    } catch (_) { /* ignore */ }
-    return { ...DEFAULT_STATS, dailyHistory: {} };
-  }
-
-  function _saveStats(stats) {
-    try {
-      localStorage.setItem(STATS_KEY, JSON.stringify(stats));
-    } catch (_) { /* ignore */ }
   }
 
   function _getDateKey(date) {
@@ -186,19 +236,21 @@ const pomodoroModule = (function () {
   }
 
   function _recordFocusCompletion() {
-    const stats    = _loadStats();
+    if (!_pomodoroData) return;
     const todayKey = _getDateKey(new Date());
+    const focusMinutes = Math.round(_totalSeconds / 60);
 
-    stats.totalFocusSeconds += _totalSeconds;
-    stats.completedPomodoros += 1;
-    stats.dailyHistory[todayKey] = (stats.dailyHistory[todayKey] || 0) + _totalSeconds;
-    stats.lastCompletedDate = todayKey;
+    _pomodoroData.totalFocusMinutes = (_pomodoroData.totalFocusMinutes || 0) + focusMinutes;
+    _pomodoroData.completedSessions = (_pomodoroData.completedSessions || 0) + 1;
+    if (!_pomodoroData.dailyHistory) _pomodoroData.dailyHistory = {};
+    _pomodoroData.dailyHistory[todayKey] = (_pomodoroData.dailyHistory[todayKey] || 0) + focusMinutes;
+    _pomodoroData.lastCompletedDate = todayKey;
 
-    _saveStats(stats);
+    _savePomodoroData();
   }
 
   function _calculateStreak() {
-    const stats = _loadStats();
+    const stats = _getStats();
     const todayKey     = _getDateKey(new Date());
     const yesterdayKey = _getDateKey(new Date(Date.now() - 86400000));
 
@@ -225,7 +277,7 @@ const pomodoroModule = (function () {
   }
 
   function _getWeeklyData() {
-    const stats = _loadStats();
+    const stats = _getStats();
     const now   = new Date();
     const days  = [];
 
@@ -245,7 +297,7 @@ const pomodoroModule = (function () {
   }
 
   function _getMonthlyData() {
-    const stats = _loadStats();
+    const stats = _getStats();
     const now   = new Date();
     const weeks = [];
 
@@ -275,7 +327,7 @@ const pomodoroModule = (function () {
   }
 
   function _getYearlyData() {
-    const stats     = _loadStats();
+    const stats     = _getStats();
     const now       = new Date();
     const year      = now.getFullYear();
     const monthNow  = now.getMonth();
@@ -526,7 +578,7 @@ const pomodoroModule = (function () {
   // ---------------------------------------------------------
 
   function _renderStatsDashboard() {
-    const stats      = _loadStats();
+    const stats      = _getStats();
     const streak     = _calculateStreak();
     const chartData  = _getChartData();
 
@@ -855,7 +907,21 @@ const pomodoroModule = (function () {
       _settings.soundProfile = soundVal;
     }
 
-    _saveSettings();
+    // Sync _pomodoroData with the updated settings so _savePomodoroData persists them
+    if (_pomodoroData) {
+      _pomodoroData.work = _settings.focus;
+      _pomodoroData.shortBreak = _settings.shortBreak;
+      _pomodoroData.longBreak = _settings.longBreak;
+      _pomodoroData.soundProfile = _settings.soundProfile;
+      _pomodoroData.autoStartBreaks = _settings.autoStartBreaks;
+      _pomodoroData.autoStartFocus = _settings.autoStartFocus;
+    }
+
+    _savePomodoroData();
+
+    // Also update legacy localStorage keys for dashboard / other modules
+    try { localStorage.setItem('hub_pomodoro_settings', JSON.stringify(_settings)); } catch (_) {}
+    try { localStorage.setItem('hub_pomodoro_sessions', String(_pomodoroData ? _pomodoroData.completedSessions : 0)); } catch (_) {}
 
     _pauseTimer();
     var settingKey = MODES.find(function (m) { return m.key === _currentMode; }).settingKey;
@@ -979,7 +1045,7 @@ const pomodoroModule = (function () {
 
     // --- AUTO-TRANSITION ---
     if (_currentMode === 'focus' && _settings.autoStartBreaks) {
-      var stats     = _loadStats();
+      var stats     = _getStats();
       var breakMode = stats.completedPomodoros % 4 === 0 ? 'longBreak' : 'shortBreak';
       _currentMode = breakMode;
       _setDuration(_settings[MODES.find(function (m) { return m.key === breakMode; }).settingKey]);
@@ -1193,8 +1259,8 @@ const pomodoroModule = (function () {
 
   function _incrementSessions() {
     try {
-      var count = parseInt(localStorage.getItem(SESSIONS_KEY) || '0', 10);
-      localStorage.setItem(SESSIONS_KEY, count + 1);
+      var count = _pomodoroData ? _pomodoroData.completedSessions : parseInt(localStorage.getItem('hub_pomodoro_sessions') || '0', 10);
+      localStorage.setItem('hub_pomodoro_sessions', String(count));
     } catch (_) { /* ignore */ }
   }
 

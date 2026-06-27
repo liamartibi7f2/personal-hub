@@ -846,6 +846,179 @@ const HubDB = (function () {
     if (local.lastStation) cloud.lastStation = local.lastStation;
   }
 
+  // ── Pomodoro ──
+
+  const POMODORO_KEY = 'hub_pomodoro_data';
+
+  const DEFAULT_POMODORO_DATA = {
+    work: 25,
+    shortBreak: 5,
+    longBreak: 15,
+    soundProfile: 'classic',
+    autoStartBreaks: false,
+    autoStartFocus: false,
+    totalFocusMinutes: 0,
+    completedSessions: 0,
+    dailyHistory: {},
+    lastCompletedDate: null
+  };
+
+  /**
+   * Save pomodoro timer data (settings + stats).
+   * Strictly prioritizes Firestore when logged in and online.
+   * Only falls back to localStorage when the user is genuinely
+   * not logged in or the browser reports offline.
+   * @param {Object} data - The pomodoro data object
+   */
+  async function savePomodoroData(data) {
+    await _ensureReady();
+
+    // Logged in + online → Firestore only. No silent fallback.
+    if (_isOnline()) {
+      try {
+        await Promise.race([
+          _userRef()
+            .set({ pomodoroData: data }, { merge: true })
+            .catch(function (err) {
+              console.error('[HubDB] Firebase Write Failed:', err);
+              throw err;
+            }),
+          _timeout(2500)
+        ]);
+        return;
+      } catch (err) {
+        console.error('[HubDB] Firestore set() failed:', err.message || err);
+        return;
+      }
+    }
+
+    // Not logged in OR browser says offline → localStorage fallback
+    try {
+      localStorage.setItem(POMODORO_KEY, JSON.stringify(data));
+    } catch (quotaErr) {
+      console.error('[HubDB] localStorage quota exceeded');
+    }
+  }
+
+  /**
+   * Load pomodoro timer data.
+   * If logged in and online → Firestore (fallback to localStorage if empty).
+   * Otherwise → localStorage.
+   * If cloud data is empty, initializes a default structure
+   * and persists it back to the cloud so subsequent logins
+   * from other browsers don't overwrite with nothing.
+   * @returns {Object} The parsed pomodoro data, or default structure
+   */
+  async function loadPomodoroData() {
+    // Fast-path: if browser says offline, skip auth wait + Firestore entirely
+    if (navigator.onLine === false) {
+      try {
+        var raw = localStorage.getItem(POMODORO_KEY);
+        if (raw) return { ...DEFAULT_POMODORO_DATA, ...JSON.parse(raw) };
+      } catch (_) {}
+      return { ...DEFAULT_POMODORO_DATA };
+    }
+    await _ensureReady();
+    // Try Firestore first when online (with 2.5s timeout)
+    if (_isOnline()) {
+      try {
+        var doc = await Promise.race([
+          _userRef().get(),
+          _timeout(2500)
+        ]);
+        if (doc.exists) {
+          var cloudData = doc.data().pomodoroData;
+          if (cloudData && (typeof cloudData.totalFocusMinutes === 'number' || cloudData.work)) {
+            // Merge any localStorage changes the user made while offline
+            try {
+              var localRaw = localStorage.getItem(POMODORO_KEY);
+              if (localRaw) {
+                _mergeLocalPomodoroIntoCloud(cloudData, JSON.parse(localRaw));
+                // Persist the merged result back to Firestore silently
+                _userRef().set({ pomodoroData: cloudData }, { merge: true }).catch(function () {});
+              }
+            } catch (_) {}
+            // Clear local copy after successful cloud read + merge
+            try { localStorage.removeItem(POMODORO_KEY); } catch (_) {}
+            return { ...DEFAULT_POMODORO_DATA, ...cloudData };
+          }
+        }
+
+        // Cloud doc exists but pomodoroData is empty/missing, OR doc doesn't exist.
+        // Initialize a default structure and save it to cloud so that
+        // logging in from another browser gets data, not empty overwrites.
+        var defaultPomodoroData = { ...DEFAULT_POMODORO_DATA };
+
+        // Check localStorage for any unsaved work first
+        try {
+          var localRaw = localStorage.getItem(POMODORO_KEY);
+          if (localRaw) {
+            var localData = JSON.parse(localRaw);
+            if (localData && (typeof localData.totalFocusMinutes === 'number' || localData.work)) {
+              defaultPomodoroData = { ...defaultPomodoroData, ...localData };
+            }
+          }
+        } catch (_) {}
+
+        // Persist the default/merged data to Firestore so cloud is never empty
+        try {
+          await Promise.race([
+            _userRef().set({ pomodoroData: defaultPomodoroData }, { merge: true }),
+            _timeout(2500)
+          ]);
+        } catch (_) {}
+        try { localStorage.removeItem(POMODORO_KEY); } catch (_) {}
+        return defaultPomodoroData;
+      } catch (err) {
+        console.warn('[HubDB] Firestore load failed, trying localStorage:', err.message);
+      }
+    }
+
+    // localStorage fallback
+    try {
+      var raw = localStorage.getItem(POMODORO_KEY);
+      if (raw) return { ...DEFAULT_POMODORO_DATA, ...JSON.parse(raw) };
+    } catch (_) {}
+    return { ...DEFAULT_POMODORO_DATA };
+  }
+
+  /**
+   * Merge any local pomodoro data changes into the cloud data.
+   * This prevents data loss when the user completes sessions offline.
+   * Merges completion stats cumulatively, prefers local settings
+   * (most recently changed).
+   */
+  function _mergeLocalPomodoroIntoCloud(cloud, local) {
+    if (!local || !cloud) return;
+    // Merge cumulative stats (additive — count each completed session once)
+    if (typeof local.totalFocusMinutes === 'number') {
+      cloud.totalFocusMinutes = Math.max(cloud.totalFocusMinutes || 0, local.totalFocusMinutes);
+    }
+    if (typeof local.completedSessions === 'number') {
+      cloud.completedSessions = Math.max(cloud.completedSessions || 0, local.completedSessions);
+    }
+    // Merge daily history (local sessions not yet recorded in cloud)
+    if (local.dailyHistory && typeof local.dailyHistory === 'object') {
+      if (!cloud.dailyHistory) cloud.dailyHistory = {};
+      Object.keys(local.dailyHistory).forEach(function (dateKey) {
+        var localVal = local.dailyHistory[dateKey];
+        var cloudVal = cloud.dailyHistory[dateKey] || 0;
+        cloud.dailyHistory[dateKey] = Math.max(localVal, cloudVal);
+      });
+    }
+    // Prefer local lastCompletedDate if it's more recent
+    if (local.lastCompletedDate && (!cloud.lastCompletedDate || local.lastCompletedDate > cloud.lastCompletedDate)) {
+      cloud.lastCompletedDate = local.lastCompletedDate;
+    }
+    // Prefer local settings (most recently changed)
+    if (typeof local.work === 'number') cloud.work = local.work;
+    if (typeof local.shortBreak === 'number') cloud.shortBreak = local.shortBreak;
+    if (typeof local.longBreak === 'number') cloud.longBreak = local.longBreak;
+    if (local.soundProfile) cloud.soundProfile = local.soundProfile;
+    if (typeof local.autoStartBreaks === 'boolean') cloud.autoStartBreaks = local.autoStartBreaks;
+    if (typeof local.autoStartFocus === 'boolean') cloud.autoStartFocus = local.autoStartFocus;
+  }
+
   // ── Expose public API ──
 
   return {
@@ -857,6 +1030,8 @@ const HubDB = (function () {
     loadQuizData: loadQuizData,
     saveFocusData: saveFocusData,
     loadFocusData: loadFocusData,
+    savePomodoroData: savePomodoroData,
+    loadPomodoroData: loadPomodoroData,
     loginWithGoogle: loginWithGoogle,
     getAuthStatus: getAuthStatus,
     waitForReady: _ensureReady,

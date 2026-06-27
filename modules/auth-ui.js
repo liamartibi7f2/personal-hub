@@ -278,6 +278,11 @@
     try { localStorage.removeItem('flashcard_data'); } catch (_) {}
     try { localStorage.removeItem('hub_flashcard_reviewed'); } catch (_) {}
     try { localStorage.removeItem('pomodoro_state'); } catch (_) {}
+    try { localStorage.removeItem('hub_pomodoro_data'); } catch (_) {}
+    try { localStorage.removeItem('hub_pomodoro_settings'); } catch (_) {}
+    try { localStorage.removeItem('hub_pomodoro_sessions'); } catch (_) {}
+    try { localStorage.removeItem('hub_pomodoro_ref'); } catch (_) {}
+    try { localStorage.removeItem('hub_pomodoro_stats'); } catch (_) {}
 
     // 2) Sign out of Firebase — await the promise, THEN reload
     //    This prevents the race where the page reloads while auth
