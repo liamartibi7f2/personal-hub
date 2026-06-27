@@ -554,9 +554,9 @@
 
     widget.classList.add('dragging');
 
-    if (e.type === 'touchstart') {
-      e.preventDefault();
-    }
+    // Do NOT preventDefault in touchstart — let the natural touchend→click
+    // flow happen for taps. Only touchmove will prevent scrolling once
+    // an actual drag is detected.
   }
 
   function onDragMove(e, widget) {
@@ -576,10 +576,10 @@
       var clamped = clampToViewport(newLeft, newTop, widget);
       widget.style.left = clamped.left + 'px';
       widget.style.top = clamped.top + 'px';
-    }
-
-    if (e.type === 'touchmove') {
-      e.preventDefault();
+      // Only prevent scroll once we've actually started dragging
+      if (e.type === 'touchmove') {
+        e.preventDefault();
+      }
     }
   }
 
@@ -605,7 +605,7 @@
     document.addEventListener('mousemove', function (e) { onDragMove(e, widget); });
     document.addEventListener('mouseup', function (e) { onDragEnd(e, widget); });
 
-    widget.addEventListener('touchstart', function (e) { onDragStart(e, widget); }, { passive: false });
+    widget.addEventListener('touchstart', function (e) { onDragStart(e, widget); }, { passive: true });
     document.addEventListener('touchmove', function (e) { onDragMove(e, widget); }, { passive: false });
     document.addEventListener('touchend', function (e) { onDragEnd(e, widget); });
 
