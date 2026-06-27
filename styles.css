@@ -8666,4 +8666,88 @@ body.light-mode .cyber-btn-google:hover:not(:disabled) {
     padding: 8px 12px;
     padding-right: 32px;
   }
+
+  /* =============================================================
+     FLASHCARDS & QUIZ — MOBILE RESPONSIVE
+     Shared deck-card, deck-grid, deck-create-btn are already
+     handled above. These rules add missing mobile fixes.
+     ============================================================= */
+
+  /* Deck card — full width and proper box sizing */
+  .deck-card {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Deck card action buttons — wrap so they don't squish */
+  .deck-card-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* "Create New Deck" button — already has width:100% from
+     existing rules; reinforce with full-width padding */
+  .deck-create-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 15px;
+  }
+
+  /* Quiz: Import section — wrap the input+button row */
+  .hub-quiz-import-row {
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+  }
+  .hub-quiz-import-input {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+
+  /* =============================================================
+     FOCUS VIBE — MOBILE RESPONSIVE
+     Studio vibe grid (3→1 column) already handled above.
+     ============================================================= */
+
+  /* Vibe cards — full width inside single-column grid */
+  .studio-vibe-card {
+    width: 100%;
+    box-sizing: border-box;
+    padding: var(--space-md);
+  }
+
+  /* Category tags — keep wrapped with even spacing */
+  .studio-tag-filter {
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-start;
+  }
+
+  /* Studio now-playing card — stack on mobile */
+  .studio-session-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-md);
+  }
+
+  /* Add-to-library form — full width inputs */
+  .studio-add-form {
+    gap: var(--space-sm);
+  }
+  .studio-add-form input {
+    width: 100%;
+  }
+
+  /* Studio title smaller */
+  .studio-title {
+    font-size: 1.2rem;
+  }
+  .studio-subtitle {
+    font-size: 0.72rem;
+  }
+
+  /* Floating widget — narrower on very small screens */
+  .focus-vibe-panel {
+    width: 300px;
+    right: 10px;
+  }
 }
