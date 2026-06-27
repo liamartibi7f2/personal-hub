@@ -18,6 +18,7 @@ const notesModule = (function () {
   let _saveTimer    = null;
   let _isDataLoaded = false;
   let _autoSaveEnabled = true;
+  let _pageUnloading = false; // Prevents ghost saves during page reload
 
   // Cached DOM refs
   let _el = {
@@ -34,6 +35,17 @@ const notesModule = (function () {
     manualSaveBtn:   null,
     saveFeedback:    null
   };
+
+  // ── Ghost save guard ──
+  // The moment the browser starts unloading (page reload / tab close),
+  // mark _pageUnloading so no setTimeout callback will fire a write.
+  window.addEventListener('beforeunload', function () {
+    _pageUnloading = true;
+    if (_saveTimer) {
+      clearTimeout(_saveTimer);
+      _saveTimer = null;
+    }
+  });
 
   // Bound handler references for cleanup
   let _boundDocMouseup  = null;
@@ -81,6 +93,7 @@ const notesModule = (function () {
   async function _persist(force) {
     if (!_isDataLoaded) return;
     if (!force && !_autoSaveEnabled) return;
+    if (_pageUnloading) return; // Prevent ghost saves during page reload
 
     _showSaving(true, 'SYNCING TO CLOUD...');
     // Safety net: force "Saved" after 8s to prevent stuck indicator
@@ -98,6 +111,7 @@ const notesModule = (function () {
   }
 
   function _scheduleSave() {
+    if (_pageUnloading) return; // Don't schedule saves during page reload
     if (_saveTimer) clearTimeout(_saveTimer);
     _saveTimer = setTimeout(function () {
       _persist().then(function () {

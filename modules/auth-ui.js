@@ -219,15 +219,22 @@
 
     promise
       .then(function () {
-        _closeModal();
-        _resetInactivityTimer();
+        // ── HARD RELOAD: force page reload so all modules re-initialise ──
+        // Clearing localStorage before reload ensures the fresh start
+        // won't be polluted by stale local data.
+        try { localStorage.removeItem('hub_notes'); } catch (_) {}
+        window.location.reload();
       })
       .catch(function (err) {
         errorEl.textContent = err.message;
       })
       .finally(function () {
-        submitBtn.disabled = false;
-        submitBtn.querySelector('.cyber-btn-text').textContent = _isRegisterMode ? 'REGISTER' : 'LOGIN';
+        // Only re-enable button if we are NOT reloading (error path)
+        // If there's no error and reload is imminent, this is moot.
+        if (!firebase.auth().currentUser) {
+          submitBtn.disabled = false;
+          submitBtn.querySelector('.cyber-btn-text').textContent = _isRegisterMode ? 'REGISTER' : 'LOGIN';
+        }
       });
   }
 
@@ -241,8 +248,9 @@
 
     HubDB.loginWithGoogle()
       .then(function () {
-        _closeModal();
-        _resetInactivityTimer();
+        // ── HARD RELOAD: force page reload so all modules re-initialise ──
+        try { localStorage.removeItem('hub_notes'); } catch (_) {}
+        window.location.reload();
       })
       .catch(function (err) {
         if (err.code !== 'auth/popup-closed-by-user') {
@@ -250,8 +258,11 @@
         }
       })
       .finally(function () {
-        googleBtn.disabled = false;
-        googleBtn.querySelector('.cyber-btn-text').textContent = 'Continue with Google';
+        // Only re-enable button if we are NOT reloading (error path)
+        if (!firebase.auth().currentUser) {
+          googleBtn.disabled = false;
+          googleBtn.querySelector('.cyber-btn-text').textContent = 'Continue with Google';
+        }
       });
   }
 
@@ -263,15 +274,18 @@
     try { localStorage.removeItem('flashcard_data'); } catch (_) {}
     try { localStorage.removeItem('pomodoro_state'); } catch (_) {}
 
-    // 2) Sign out of Firebase
-    firebase.auth().signOut().catch(function (err) {
-      console.warn('[AuthUI] signOut error:', err.message);
-    });
-
-    // 3) Force a full page reload to reset all in-memory module state.
-    //    This is the safest way to clear every IIFE closure variable,
-    //    DOM listeners, and interval timers across all modules.
-    window.location.reload();
+    // 2) Sign out of Firebase — await the promise, THEN reload
+    //    This prevents the race where the page reloads while auth
+    //    is still in a half-signed-out state.
+    firebase.auth().signOut()
+      .then(function () {
+        window.location.reload();
+      })
+      .catch(function (err) {
+        console.warn('[AuthUI] signOut error:', err.message);
+        // Even if signOut fails, force a reload to reset state
+        window.location.reload();
+      });
   }
 
   // ── Listen to Firebase auth state ──
