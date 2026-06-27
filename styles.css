@@ -8520,4 +8520,150 @@ body.light-mode .cyber-btn-google:hover:not(:disabled) {
   .nav-item .cyber-login-label {
     display: none !important;
   }
+
+  /* =============================================================
+     POMODORO — MOBILE RESPONSIVE
+     ============================================================= */
+
+  /* ── Timer ring ── */
+  .timer-ring-container {
+    width: 220px;
+    height: 220px;
+  }
+  .timer-time {
+    font-size: 2.6rem;
+  }
+  .timer-label {
+    font-size: 0.6rem;
+  }
+
+  /* ── Controls ── */
+  .timer-controls {
+    gap: var(--space-sm);
+  }
+  .timer-btn-main {
+    width: 48px;
+    height: 48px;
+    font-size: 1.1rem;
+  }
+  .timer-btn-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 0.85rem;
+  }
+  .hub-pomodoro-stop-alarm {
+    width: 32px;
+    height: 32px;
+    font-size: 0.85rem;
+  }
+
+  /* ── Top bar: mode toggles + settings ── */
+  .pomodoro-topbar {
+    gap: var(--space-sm);
+    flex-wrap: nowrap;
+  }
+  .mode-toggle {
+    gap: 2px;
+    padding: 3px;
+  }
+  .mode-btn {
+    padding: 6px 10px;
+    font-size: 0.65rem;
+  }
+  .settings-btn {
+    padding: 6px 10px;
+  }
+  .settings-btn span {
+    display: none;
+  }
+
+  /* ── Timer container gap ── */
+  .timer-container {
+    gap: var(--space-md);
+  }
+
+  /* ── Stats / metrics cards ── */
+  .pomodoro-stats {
+    max-width: 100%;
+  }
+  .stats-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  .stat-card-mini {
+    padding: var(--space-sm) 4px !important;
+  }
+  .stat-value {
+    font-size: 1rem;
+  }
+  .stat-icon {
+    font-size: 1.1rem;
+  }
+  .stat-label {
+    font-size: 0.52rem;
+  }
+
+  /* ── Weekly chart ── */
+  .weekly-chart {
+    padding: var(--space-sm) var(--space-md) !important;
+  }
+  .chart-header-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-xs);
+    margin-bottom: var(--space-sm);
+  }
+  .chart-heading {
+    font-size: 0.55rem;
+  }
+  .chart-range-toggle {
+    gap: 2px;
+  }
+  .chart-range-btn {
+    padding: 4px 8px;
+    font-size: 0.55rem;
+  }
+  .chart-bars {
+    height: 70px;
+    gap: 3px;
+    padding-top: 12px;
+  }
+  .chart-bar {
+    max-width: 20px;
+  }
+  .chart-bar-value {
+    font-size: 0.48rem;
+  }
+  .chart-bar-label {
+    font-size: 0.5rem;
+  }
+
+  /* ── Settings modal ── */
+  .settings-modal {
+    max-width: 100%;
+    margin: 0 var(--space-sm);
+    padding: var(--space-lg) var(--space-md);
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .settings-modal-header h3 {
+    font-size: 0.78rem;
+  }
+  .settings-field-label {
+    font-size: 0.6rem;
+  }
+  .stepper-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 0.85rem;
+  }
+  .stepper-input {
+    font-size: 0.8rem;
+    padding: 6px 8px;
+  }
+  .settings-sound-select {
+    font-size: 0.72rem;
+    padding: 8px 12px;
+    padding-right: 32px;
+  }
 }
