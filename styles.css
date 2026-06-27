@@ -8433,35 +8433,91 @@ body.light-mode .cyber-btn-google:hover:not(:disabled) {
 }
 
 /* =============================================================
-   MOBILE RESPONSIVE: Foundation (Step 1)
-   Base layout resets for < 768px screens.
-   Sidebar will be hidden in Step 2; this just preps the
-   containers for full-width mobile display.
+   MOBILE RESPONSIVE: Bottom Navigation Dock (Step 1 + 2)
+   Transforms the desktop sidebar into a fixed bottom dock.
+   Navigation icons only — text labels hidden, brand + admin
+   badge hidden, footer hidden.
    ============================================================= */
 @media (max-width: 768px) {
-  /* Force the root app shell to fill the screen edge-to-edge */
+  /* ── Foundation layout ── */
   .app-layout {
     width: 100vw;
     min-height: 100vh;
     overflow-x: hidden;
   }
 
-  /* Main content: override desktop margins/padding so it spans
-     the full viewport width. Already handled by the existing
-     768px media query above (line ~4071), this reinforces it. */
   .main-content {
     width: 100%;
     margin-left: 0;
-    padding: var(--space-lg) var(--space-md) calc(var(--dock-height) + var(--space-xl));
+    padding: var(--space-lg) var(--space-md) 90px !important;
   }
 
-  /* Slightly smaller body text for readability on small screens */
   html {
     font-size: 15px;
   }
 
-  /* Reduce heading sizes that may overflow on mobile */
+  /* ── Sidebar → Bottom Dock ── */
+  .sidebar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: var(--dock-height, 70px);
+    flex-direction: row;
+    border-right: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--bg-surface, #12121a);
+    z-index: 1000;
+    padding: 0;
+    border-radius: 0;           /* override desktop rounded corners */
+    top: auto;                  /* unset desktop top positioning */
+  }
+
+  /* ── Hide desktop-only elements ── */
+  .sidebar-brand,
+  .sidebar-footer,
+  .cyber-admin-badge,
   .brand-text {
-    font-size: 1rem;
+    display: none !important;
+  }
+
+  /* ── Nav wrapper → horizontal flex row ── */
+  .sidebar-nav {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-around;
+    align-items: center;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 0;
+  }
+
+  /* ── Nav item → compact icon-only button ── */
+  .nav-item {
+    flex: 1;
+    justify-content: center;
+    padding: 8px 4px;
+    border-radius: 0;
+    min-width: 0;
+    gap: 0;
+  }
+  .nav-item:active {
+    transform: none;
+  }
+  /* Remove the active left-border indicator (not suitable for dock) */
+  .nav-item.active::before {
+    display: none;
+  }
+
+  /* ── Hide text labels inside nav items (icons only) ── */
+  .nav-item > span:not(.nav-icon) {
+    display: none !important;
+  }
+  .nav-item .cyber-login-label {
+    display: none !important;
   }
 }
