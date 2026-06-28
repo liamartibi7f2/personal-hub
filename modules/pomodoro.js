@@ -2,8 +2,14 @@
    HUB.OS — modules/pomodoro.js
    Pomodoro timer with circular SVG progress ring,
    focus/break modes, premium settings modal, professional
-   statistics dashboard with weekly chart, and looping
+   statistics dashboard with weekly chart, looping
    audio alarm with 5 hardcoded URL profiles + classic beep.
+
+   FEATURES:
+     - Cycle System (4 Pomodoros → Long Break)
+     - Penalty 1: "Sleeping on Victory" (Grace Period after breaks)
+     - Penalty 2: "Giving up halfway" (Early Cancel detection)
+     - Prodex event dispatch for success/fail
 
    Module contract:
      - id: 'pomodoro'
@@ -17,9 +23,10 @@ const pomodoroModule = (function () {
   // --- Constants ---
   const REFERENCE_KEY = 'hub_pomodoro_ref';
   const ALARM_LOOP_MS = 2000;
+  const GRACE_SECONDS = 60; // 1-minute grace period
 
   // --- In-memory cloud-backed data ---
-  let _pomodoroData      = null;  // unified settings + stats from HubDB
+  let _pomodoroData      = null;
   let _pomodoroDataLoaded = false;
   let _pageUnloading     = false;
 
@@ -82,15 +89,26 @@ const pomodoroModule = (function () {
   let _totalSeconds      = 0;
   let _isRunning         = false;
   let _timerInterval     = null;
-  let _alarmInterval     = null;    // 1500ms loop handle
-  let _alarmAudio        = null;    // current Audio instance
-  let _alarmRinging      = false;   // tracks alarm state for UI
+  let _alarmInterval     = null;
+  let _alarmAudio        = null;
+  let _alarmRinging      = false;
   let _container         = null;
   let _audioCtx          = null;
   let _settingsOpen      = false;
   let _escapeHandler     = null;
   let _chartRange        = 'week';
   let _lastTickTime      = null;
+
+  // --- Cycle System ---
+  let _currentCycle      = 0;   // completed pomodoros this cycle block
+  let _targetCycles      = 4;   // pomodoros before a long break
+
+  // --- Grace Period ---
+  let _inGracePeriod     = false; // currently counting down the 60s grace
+
+  // --- Early Cancel ---
+  let _focusStartTime    = null; // Date.now() when a focus session starts
+  let _isFocusSession    = false;
 
   // =============================================================
   //  PUBLIC API
@@ -125,6 +143,10 @@ const pomodoroModule = (function () {
       _currentMode = 'focus';
       _setDuration(_settings.focus);
       _isRunning = false;
+      _currentCycle = 0;
+      _inGracePeriod = false;
+      _focusStartTime = null;
+      _isFocusSession = false;
     }
 
     _renderApp();
@@ -151,10 +173,6 @@ const pomodoroModule = (function () {
   //  HUBDB DATA LAYER
   // =============================================================
 
-  /**
-   * Load pomodoro data from HubDB (Firestore when online,
-   * localStorage fallback). Called once at module init.
-   */
   async function _loadPomodoroDataAsync() {
     if (_pomodoroDataLoaded) return;
     try {
@@ -180,19 +198,12 @@ const pomodoroModule = (function () {
     _pomodoroDataLoaded = true;
   }
 
-  /**
-   * Persist the current _pomodoroData via HubDB. Fire-and-forget.
-   */
   function _savePomodoroData() {
     if (_pageUnloading) return;
     if (!_pomodoroData) return;
     HubDB.savePomodoroData(_pomodoroData).catch(function () {});
   }
 
-  /**
-   * Get current settings from in-memory _pomodoroData.
-   * Returns a plain object compatible with the old _settings shape.
-   */
   function _getSettings() {
     if (!_pomodoroData) {
       return { focus: 25, shortBreak: 5, longBreak: 15, soundProfile: 'classic', autoStartBreaks: false, autoStartFocus: false };
@@ -207,10 +218,6 @@ const pomodoroModule = (function () {
     };
   }
 
-  /**
-   * Get current stats from in-memory _pomodoroData.
-   * Returns a plain object compatible with the old stats shape.
-   */
   function _getStats() {
     if (!_pomodoroData) {
       return { totalFocusSeconds: 0, completedPomodoros: 0, dailyHistory: {}, lastCompletedDate: null };
@@ -245,6 +252,11 @@ const pomodoroModule = (function () {
     if (!_pomodoroData.dailyHistory) _pomodoroData.dailyHistory = {};
     _pomodoroData.dailyHistory[todayKey] = (_pomodoroData.dailyHistory[todayKey] || 0) + focusMinutes;
     _pomodoroData.lastCompletedDate = todayKey;
+
+    /* Prodex: notify the Chrome extension content script */
+    try {
+      document.dispatchEvent(new CustomEvent('prodex-pomodoro-complete'));
+    } catch (_e) { /* extension not present — noop */ }
 
     _savePomodoroData();
   }
@@ -383,11 +395,15 @@ const pomodoroModule = (function () {
   function _saveTimerState() {
     try {
       localStorage.setItem(REFERENCE_KEY, JSON.stringify({
-        mode:      _currentMode,
-        remaining: _secondsRemaining,
-        total:     _totalSeconds,
-        running:   _isRunning,
-        timestamp: Date.now()
+        mode:          _currentMode,
+        remaining:     _secondsRemaining,
+        total:         _totalSeconds,
+        running:       _isRunning,
+        timestamp:     Date.now(),
+        cycle:         _currentCycle,
+        gracePeriod:   _inGracePeriod,
+        focusStart:    _focusStartTime,
+        isFocus:       _isFocusSession
       }));
     } catch (_) { /* ignore */ }
   }
@@ -402,6 +418,12 @@ const pomodoroModule = (function () {
 
       _currentMode  = state.mode || 'focus';
       _totalSeconds = state.total;
+
+      // Restore cycle / grace / focus state
+      if (typeof state.cycle !== 'undefined')     _currentCycle   = state.cycle;
+      if (typeof state.gracePeriod !== 'undefined') _inGracePeriod = state.gracePeriod;
+      if (typeof state.focusStart !== 'undefined')  _focusStartTime = state.focusStart;
+      if (typeof state.isFocus !== 'undefined')     _isFocusSession = state.isFocus;
 
       if (state.running && state.timestamp) {
         const elapsed       = Math.floor((Date.now() - state.timestamp) / 1000);
@@ -505,6 +527,20 @@ const pomodoroModule = (function () {
   // ---------------------------------------------------------
 
   function _renderTimerSection(timeStr, dashOffset, modeInfo) {
+    // Grace period label override
+    var modeLabel = modeInfo.label;
+    if (_inGracePeriod) {
+      modeLabel = '⚠ Grace Period';
+    }
+
+    // Cycle display
+    var cycleHtml = '';
+    if (_currentCycle > 0 || _currentMode === 'focus') {
+      cycleHtml = '<div class="timer-cycle" id="timer-cycle" style="font-family:var(--font-mono);font-size:0.65rem;color:var(--text-muted);text-align:center;letter-spacing:0.06em;margin-bottom:4px;">' +
+        'Cycle ' + (_currentCycle + 1) + '/' + _targetCycles +
+      '</div>';
+    }
+
     return `
       <div class="timer-container">
 
@@ -517,12 +553,15 @@ const pomodoroModule = (function () {
           </svg>
         </button>
 
+        <!-- Cycle indicator -->
+        ${cycleHtml}
+
         <!-- SVG ring -->
         <div class="timer-ring-container">
           <svg class="timer-ring-svg" viewBox="0 0 260 260">
             <circle class="timer-ring-bg"
                     cx="130" cy="130" r="${RING_RADIUS}"/>
-            <circle class="timer-ring-progress${_currentMode !== 'focus' ? ' break-mode' : ''}"
+            <circle class="timer-ring-progress${_currentMode !== 'focus' ? ' break-mode' : ''}${_inGracePeriod ? ' grace-mode' : ''}"
                     id="ring-progress"
                     cx="130" cy="130" r="${RING_RADIUS}"
                     stroke-dasharray="${RING_CIRCUMFERENCE}"
@@ -531,7 +570,7 @@ const pomodoroModule = (function () {
 
           <div class="timer-display">
             <div class="timer-time" id="timer-time">${timeStr}</div>
-            <div class="timer-label">${modeInfo.label}</div>
+            <div class="timer-label">${modeLabel}</div>
           </div>
         </div>
 
@@ -708,7 +747,6 @@ const pomodoroModule = (function () {
     `;
   }
 
-  /** Render the sound profile dropdown (no custom URL inputs) */
   function _renderSoundField() {
     var current = _settings.soundProfile || 'classic';
 
@@ -765,6 +803,10 @@ const pomodoroModule = (function () {
       btn.addEventListener('click', function () {
         var mode = this.dataset.mode;
         if (mode === _currentMode) return;
+        // Clearing grace period or focus tracking when user manually switches
+        _inGracePeriod = false;
+        _focusStartTime = null;
+        _isFocusSession = false;
         _switchMode(mode);
       });
     });
@@ -832,7 +874,6 @@ const pomodoroModule = (function () {
       btnTestSound.addEventListener('click', function () {
         var select = _container.querySelector('#input-soundProfile');
         var profile = select ? select.value : 'classic';
-        // Test plays once (single audio, no looping)
         _playTestSound(profile);
       });
     }
@@ -901,13 +942,11 @@ const pomodoroModule = (function () {
     _settings.shortBreak = Math.max(1, Math.min(60, shortBreakVal || DEFAULT_SETTINGS.shortBreak));
     _settings.longBreak  = Math.max(1, Math.min(60, longBreakVal || DEFAULT_SETTINGS.longBreak));
 
-    // Validate sound profile against known keys
     var validKeys = SOUND_PROFILES.map(function (p) { return p.key; });
     if (soundVal && validKeys.indexOf(soundVal) !== -1) {
       _settings.soundProfile = soundVal;
     }
 
-    // Sync _pomodoroData with the updated settings so _savePomodoroData persists them
     if (_pomodoroData) {
       _pomodoroData.work = _settings.focus;
       _pomodoroData.shortBreak = _settings.shortBreak;
@@ -919,7 +958,6 @@ const pomodoroModule = (function () {
 
     _savePomodoroData();
 
-    // Also update legacy localStorage keys for dashboard / other modules
     try { localStorage.setItem('hub_pomodoro_settings', JSON.stringify(_settings)); } catch (_) {}
     try { localStorage.setItem('hub_pomodoro_sessions', String(_pomodoroData ? _pomodoroData.completedSessions : 0)); } catch (_) {}
 
@@ -927,6 +965,9 @@ const pomodoroModule = (function () {
     var settingKey = MODES.find(function (m) { return m.key === _currentMode; }).settingKey;
     _setDuration(_settings[settingKey]);
     _isRunning = false;
+    _inGracePeriod = false;
+    _focusStartTime = null;
+    _isFocusSession = false;
     _clearTimerState();
 
     _closeSettings();
@@ -943,6 +984,9 @@ const pomodoroModule = (function () {
     var settingKey = MODES.find(function (m) { return m.key === mode; }).settingKey;
     _setDuration(_settings[settingKey]);
     _isRunning = false;
+    _inGracePeriod = false;
+    _focusStartTime = null;
+    _isFocusSession = false;
     _clearTimerState();
     _renderApp();
   }
@@ -957,10 +1001,36 @@ const pomodoroModule = (function () {
   }
 
   function _startTimer() {
+    // If in grace period, user clicked Start to begin Focus early — clear grace
+    if (_inGracePeriod) {
+      _inGracePeriod = false;
+      _currentMode = 'focus';
+      _setDuration(_settings.focus);
+      _isFocusSession = true;
+      _focusStartTime = Date.now();
+      _isRunning = true;
+      _lastTickTime = Date.now();
+      _startInterval();
+      _saveTimerState();
+      // Re-render to show Focus mode
+      if (_container) _renderApp();
+      return;
+    }
+
     if (_secondsRemaining <= 0) {
       var settingKey = MODES.find(function (m) { return m.key === _currentMode; }).settingKey;
       _setDuration(_settings[settingKey]);
     }
+
+    // Track focus session start for Penalty 2
+    if (_currentMode === 'focus') {
+      _isFocusSession = true;
+      _focusStartTime = Date.now();
+    } else {
+      _isFocusSession = false;
+      _focusStartTime = null;
+    }
+
     _isRunning = true;
     _lastTickTime = Date.now();
     _startInterval();
@@ -977,7 +1047,24 @@ const pomodoroModule = (function () {
   }
 
   function _resetTimer() {
+    // ── Penalty 2: "Giving up halfway" (Early Cancel) ──
+    if (_currentMode === 'focus' && _isFocusSession && _focusStartTime !== null) {
+      const elapsedSeconds = (Date.now() - _focusStartTime) / 1000;
+      if (elapsedSeconds > 60) {
+        // User is giving up — dispatch fail event
+        try {
+          document.dispatchEvent(new CustomEvent('prodex-pomodoro-fail'));
+        } catch (_e) { /* noop */ }
+        // Reset cycle counter
+        _currentCycle = 0;
+      }
+      // elapsed <= 60s: accidental click, just reset normally
+    }
+
     _pauseTimer();
+    _inGracePeriod = false;
+    _focusStartTime = null;
+    _isFocusSession = false;
     var settingKey = MODES.find(function (m) { return m.key === _currentMode; }).settingKey;
     _setDuration(_settings[settingKey]);
     _clearTimerState();
@@ -985,7 +1072,21 @@ const pomodoroModule = (function () {
   }
 
   function _skipTimer() {
+    // ── Penalty 2: "Giving up halfway" also applies to Skip ──
+    if (_currentMode === 'focus' && _isFocusSession && _focusStartTime !== null) {
+      const elapsedSeconds = (Date.now() - _focusStartTime) / 1000;
+      if (elapsedSeconds > 60) {
+        try {
+          document.dispatchEvent(new CustomEvent('prodex-pomodoro-fail'));
+        } catch (_e) { /* noop */ }
+        _currentCycle = 0;
+      }
+    }
+
     _pauseTimer();
+    _inGracePeriod = false;
+    _focusStartTime = null;
+    _isFocusSession = false;
     _secondsRemaining = 0;
     _onTimerComplete();
   }
@@ -1032,36 +1133,97 @@ const pomodoroModule = (function () {
     _pauseTimer();
     _clearTimerState();
     _secondsRemaining = 0;
+    _isFocusSession = false;
+    _focusStartTime = null;
 
-    // --- STATS HOOK: only record focus completions ---
+    // ==========================================
+    //  CASE 1: Focus session completed (success)
+    // ==========================================
     if (_currentMode === 'focus') {
       _incrementSessions();
       _recordFocusCompletion();
-    }
 
-    // Start the looping alarm
-    _playAlarm(_settings.soundProfile);
-    _showNotification();
+      // -- Cycle System --
+      _currentCycle = (_currentCycle + 1) % _targetCycles;
 
-    // --- AUTO-TRANSITION ---
-    if (_currentMode === 'focus' && _settings.autoStartBreaks) {
-      var stats     = _getStats();
-      var breakMode = stats.completedPomodoros % 4 === 0 ? 'longBreak' : 'shortBreak';
-      _currentMode = breakMode;
-      _setDuration(_settings[MODES.find(function (m) { return m.key === breakMode; }).settingKey]);
-      _startTimer();
-      if (_container) _renderApp();
+      // Dispatch success event
+      try {
+        document.dispatchEvent(new CustomEvent('prodex-pomodoro-success'));
+      } catch (_e) { /* noop */ }
+
+      // Alarm sound
+      _playAlarm(_settings.soundProfile);
+      _showNotification();
+
+      // Auto-transition to break
+      if (_settings.autoStartBreaks) {
+        var breakMode = (_currentCycle === 0) ? 'longBreak' : 'shortBreak';
+        _currentMode = breakMode;
+        _setDuration(_settings[MODES.find(function (m) { return m.key === breakMode; }).settingKey]);
+        _startTimer();
+        if (_container) _renderApp();
+        return;
+      }
+
+      if (_container) {
+        _renderApp();
+        _pulseStatValues();
+      }
       return;
     }
 
-    if ((_currentMode === 'shortBreak' || _currentMode === 'longBreak') && _settings.autoStartFocus) {
+    // ==========================================
+    //  CASE 2: Break session completed
+    //  → Enter "Grace Period" (Penalty 1)
+    // ==========================================
+    if (_currentMode === 'shortBreak' || _currentMode === 'longBreak') {
+      // Alarm sound
+      _playAlarm(_settings.soundProfile);
+      _showNotification();
+
+      // Enter 60-second grace period
+      _inGracePeriod = true;
+      _totalSeconds = GRACE_SECONDS;
+      _secondsRemaining = GRACE_SECONDS;
+      _currentMode = 'shortBreak'; // keep display mode but label changes
+      _isRunning = true;
+      _lastTickTime = Date.now();
+      _startInterval();
+      _saveTimerState();
+
+      if (_container) {
+        _renderApp();
+      }
+      return;
+    }
+
+    // ==========================================
+    //  CASE 3: Grace period expired (Penalty 1)
+    // ==========================================
+    if (_inGracePeriod) {
+      _inGracePeriod = false;
+
+      // Dispatch fail event
+      try {
+        document.dispatchEvent(new CustomEvent('prodex-pomodoro-fail'));
+      } catch (_e) { /* noop */ }
+
+      // Reset cycle to zero
+      _currentCycle = 0;
+
+      // Revert to default Focus mode
       _currentMode = 'focus';
       _setDuration(_settings.focus);
-      _startTimer();
-      if (_container) _renderApp();
+      _isRunning = false;
+      _clearTimerState();
+
+      if (_container) {
+        _renderApp();
+      }
       return;
     }
 
+    // Fallback: just re-render
     if (_container) {
       _renderApp();
       _pulseStatValues();
@@ -1082,11 +1244,6 @@ const pomodoroModule = (function () {
   //  AUDIO ENGINE: Looping alarm with 6 profiles
   // =============================================================
 
-  /**
-   * Start the looping alarm.
-   * - 'classic': synthesized beep via Web Audio API (looping every 1.5s)
-   * - Others:    hardcoded URL, replayed every 1.5s via setInterval
-   */
   function _playAlarm(profile) {
     _alarmRinging = true;
 
@@ -1096,12 +1253,10 @@ const pomodoroModule = (function () {
       _startLoopingUrl(profile);
     }
 
-    // Show the stop alarm button
     var btn = document.getElementById('btn-stop-alarm');
     if (btn) btn.style.display = 'flex';
   }
 
-  /** Start a 1500ms looping classic beep via Web Audio API */
   function _startLoopingClassic() {
     _playClassicBeepOnce();
 
@@ -1110,7 +1265,6 @@ const pomodoroModule = (function () {
     }, ALARM_LOOP_MS);
   }
 
-  /** Play one burst of the classic alarm beep sequence */
   function _playClassicBeepOnce() {
     try {
       var ctx = _getAudioContext();
@@ -1137,7 +1291,6 @@ const pomodoroModule = (function () {
     } catch (_) { /* audio unavailable */ }
   }
 
-  /** Start a 1500ms looping audio from a hardcoded URL profile */
   function _startLoopingUrl(profile) {
     var url = SOUND_URLS[profile];
     if (!url) return;
@@ -1145,17 +1298,14 @@ const pomodoroModule = (function () {
     try {
       _alarmAudio = new Audio(url);
 
-      // Force-play once
       var playPromise = _alarmAudio.play();
       if (playPromise && typeof playPromise.catch === 'function') {
         playPromise.catch(function () {
-          // URL failed to load, fallback to classic
           _stopAlarmInternal();
           _startLoopingClassic();
         });
       }
 
-      // Every 1500ms, reset and replay the audio
       _alarmInterval = setInterval(function () {
         if (_alarmAudio) {
           try {
@@ -1168,24 +1318,17 @@ const pomodoroModule = (function () {
         }
       }, ALARM_LOOP_MS);
     } catch (_) {
-      // If Audio creation fails, fallback to classic
       _startLoopingClassic();
     }
   }
 
-  /**
-   * Stop the alarm: clear interval, pause audio, hide button.
-   * Called when the user clicks the "Stop Alarm" button.
-   */
   function _stopAlarm() {
     _stopAlarmInternal();
 
-    // Hide the stop alarm button
     var btn = document.getElementById('btn-stop-alarm');
     if (btn) btn.style.display = 'none';
   }
 
-  /** Internal cleanup of all alarm resources (no UI updates) */
   function _stopAlarmInternal() {
     _alarmRinging = false;
 
@@ -1204,9 +1347,6 @@ const pomodoroModule = (function () {
     }
   }
 
-  /**
-   * Play a sound once for the "Test" button (no looping).
-   */
   function _playTestSound(profile) {
     if (profile === 'classic') {
       _playClassicBeepOnce();
@@ -1243,7 +1383,7 @@ const pomodoroModule = (function () {
     if (!('Notification' in window)) return;
 
     if (Notification.permission === 'granted') {
-      var label = MODES.find(function (m) { return m.key === _currentMode; }).label;
+      var label = _inGracePeriod ? 'Grace Period' : (MODES.find(function (m) { return m.key === _currentMode; }) || {}).label || 'Timer';
       new Notification('Hub OS — Pomodoro', {
         body: label + ' session complete!',
         icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="45" fill="%2300f0ff"/></svg>'

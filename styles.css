@@ -8481,6 +8481,11 @@ body.light-mode .cyber-btn-google:hover:not(:disabled) {
     display: none !important;
   }
 
+  /* ── Cycle indicator in dock mode ── */
+  .timer-cycle {
+    font-size: 0.55rem !important;
+  }
+
   /* ── Nav wrapper → horizontal flex row ── */
   .sidebar-nav {
     display: flex;
@@ -8750,4 +8755,77 @@ body.light-mode .cyber-btn-google:hover:not(:disabled) {
     width: 300px;
     right: 10px;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CYCLE INDICATOR — futuristic badge
+   ═══════════════════════════════════════════════════════════ */
+.cycle-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  color: #00f0ff;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  text-shadow: 0 0 6px rgba(0, 240, 255, 0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  user-select: none;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   GRACE PERIOD — urgent red warning state
+   ═══════════════════════════════════════════════════════════ */
+.timer-grace-period .timer-time,
+.timer-grace-period #timer-time {
+  color: #ff2a2a !important;
+  text-shadow:
+    0 0 10px rgba(255, 42, 42, 0.8),
+    0 0 20px rgba(255, 42, 42, 0.4),
+    0 0 40px rgba(255, 42, 42, 0.2);
+  animation: pulse-warning 1s ease-in-out infinite;
+}
+
+/* The ring progress circle in grace period */
+.timer-grace-period .timer-ring-progress,
+.timer-grace-period #ring-progress {
+  stroke: #ff2a2a !important;
+  filter: drop-shadow(0 0 6px rgba(255, 42, 42, 0.6));
+  animation: pulse-warning 1s ease-in-out infinite;
+}
+
+/* Grace period label */
+.timer-grace-period .timer-label {
+  color: #ff2a2a !important;
+  text-shadow: 0 0 8px rgba(255, 42, 42, 0.6);
+  animation: pulse-warning 1s ease-in-out infinite;
+}
+
+/* Pulse keyframes — intense 1-second cycle */
+@keyframes pulse-warning {
+  0%, 100% {
+    opacity: 1;
+    filter: brightness(1);
+  }
+  50% {
+    opacity: 0.6;
+    filter: brightness(1.4);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CYCLE INDICATOR — timer-cycle class (inline fallback)
+   ═══════════════════════════════════════════════════════════ */
+.timer-cycle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
