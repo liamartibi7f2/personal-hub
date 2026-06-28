@@ -76,6 +76,7 @@ const notesModule = (function () {
         // Only accept if at least one folder exists
         if (data.folders.length > 0) {
           _data = data;
+          _isDataLoaded = true;
           console.log("Notes data loaded from cloud/localStorage.");
           return;
         }
@@ -90,6 +91,7 @@ const notesModule = (function () {
         notes: [_buildNoteObject('Welcome', 'Welcome to Notes!<br><br>Try typing /h1, /h2, or /h3 followed by space to insert headings.')]
       }]
     };
+    _isDataLoaded = true;
     // ⚠ WARNING: Do NOT call _persist here — data hasn't been rendered yet.
     // The render() function will trigger the first save after it's done.
   }
@@ -99,13 +101,17 @@ const notesModule = (function () {
     // This prevents an empty template [] from overwriting good cloud data
     // during the startup race between the auto-save timer and the Firestore fetch.
     if (!_isNotesDataLoaded) {
-      console.warn("Auto-save blocked: Data has not finished loading from Cloud yet.");
+      console.warn("SAVE BLOCKED: Data has not finished loading from Cloud yet.");
       return;
     }
-    if (!_isDataLoaded) return;
+    if (!_isDataLoaded) {
+      console.warn("SAVE BLOCKED: _isDataLoaded is false.");
+      return;
+    }
     if (!force && !_autoSaveEnabled) return;
     if (_pageUnloading) return; // Prevent ghost saves during page reload
 
+    console.log("SAVE TRIGGERED: Sending data to Firebase...");
     _showSaving(true, 'SYNCING TO CLOUD...');
     // Safety net: force "Saved" after 8s to prevent stuck indicator
     var safetyTimer = setTimeout(function () {

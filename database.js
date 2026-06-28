@@ -27,6 +27,30 @@ const HubDB = (function () {
   let _ready     = false;
   let _initError = null;
 
+  // ── Global debounce utility (shared by all modules) ──
+  window.HubDebounce = (function () {
+    var timers = {};
+    return {
+      call: function (key, fn, delay) {
+        if (timers[key]) clearTimeout(timers[key]);
+        timers[key] = setTimeout(function () {
+          delete timers[key];
+          fn();
+        }, delay || 400);
+      },
+      cancel: function (key) {
+        if (timers[key]) {
+          clearTimeout(timers[key]);
+          delete timers[key];
+        }
+      },
+      flush: function (key) {
+        var t = timers[key];
+        if (t) { clearTimeout(t); delete timers[key]; }
+      }
+    };
+  })();
+
   // ── Initialisation ──
 
   try {
@@ -34,12 +58,22 @@ const HubDB = (function () {
     _db  = firebase.firestore(_app);
     _auth = firebase.auth(_app);
 
-    // Enable offline persistence (silently catches if already enabled)
-    _db.enablePersistence({ synchronizeTabs: true }).catch(function (err) {
-      if (err.code !== 'failed-precondition' && err.code !== 'unimplemented') {
-        console.warn('[HubDB] Persistence error:', err);
+    // Modern Firestore persistence via settings.cache (replaces deprecated enableMultiTabIndexedDbPersistence)
+    try {
+      _db.settings({
+        cache: { 'PERSISTENCE': 'MULTI_TAB' }
+      });
+    } catch (cacheErr) {
+      // Older SDK versions throw on unknown settings — persistence falls back to browser default
+      if (cacheErr.message && cacheErr.message.indexOf('cache') !== -1) {
+        // SDK doesn't support settings.cache yet — try the older enablePersistence as fallback
+        _db.enablePersistence({ synchronizeTabs: true }).catch(function (pErr) {
+          if (pErr.code !== 'failed-precondition' && pErr.code !== 'unimplemented') {
+            console.warn('[HubDB] Persistence error:', pErr);
+          }
+        });
       }
-    });
+    }
 
     // Track auth state — resolve a pending promise on first fire
     _auth._authReady = new Promise(function (resolve) {
@@ -122,6 +156,7 @@ const HubDB = (function () {
             }),
           _timeout(2500)
         ]);
+        console.log('[HubDB] Notes saved to subcollection successfully.');
         return; // success — exit early
       } catch (err) {
         // Log detailed error so the user can see Firestore Security Rules issues
@@ -367,7 +402,6 @@ const HubDB = (function () {
       var shared = JSON.parse(localStorage.getItem('hub_shared_quizzes') || '{}');
       var localData = shared[code];
       if (localData) {
-        console.log('[HubDB] Quiz imported from localStorage (offline mode). Code:', code);
         return localData;
       }
       throw new Error('Quiz not found: "' + code + '" does not exist (localStorage fallback also empty).');
