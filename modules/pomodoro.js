@@ -1146,7 +1146,8 @@ const pomodoroModule = (function () {
       // -- Cycle System --
       _currentCycle = (_currentCycle + 1) % _targetCycles;
 
-      // Dispatch success event
+      // Dispatch success event with explicit console log
+      console.log('EVENT DISPATCHED: prodex-pomodoro-success');
       try {
         document.dispatchEvent(new CustomEvent('prodex-pomodoro-success'));
       } catch (_e) { /* noop */ }
@@ -1173,7 +1174,39 @@ const pomodoroModule = (function () {
     }
 
     // ==========================================
-    //  CASE 2: Break session completed
+    //  CASE 2: Grace period expired (Penalty 1)
+    //  Check BEFORE break — during grace the mode
+    //  stays at shortBreak/longBreak.
+    // ==========================================
+    if (_inGracePeriod) {
+      _inGracePeriod = false;
+
+      // Dispatch fail event with explicit console log
+      console.log('EVENT DISPATCHED: prodex-pomodoro-fail (grace expired)');
+      try {
+        document.dispatchEvent(new CustomEvent('prodex-pomodoro-fail'));
+      } catch (_e) { /* noop */ }
+
+      // Reset cycle to zero
+      _currentCycle = 0;
+
+      // Revert to default Focus mode (paused — wait for user)
+      _currentMode = 'focus';
+      _setDuration(_settings.focus);
+      _isRunning = false;
+      _clearTimerState();
+      _stopAlarmInternal();
+      var btnAlarm = document.getElementById('btn-stop-alarm');
+      if (btnAlarm) btnAlarm.style.display = 'none';
+
+      if (_container) {
+        _renderApp();
+      }
+      return;
+    }
+
+    // ==========================================
+    //  CASE 3: Break session completed
     //  → Enter "Grace Period" (Penalty 1)
     // ==========================================
     if (_currentMode === 'shortBreak' || _currentMode === 'longBreak') {
@@ -1190,32 +1223,6 @@ const pomodoroModule = (function () {
       _lastTickTime = Date.now();
       _startInterval();
       _saveTimerState();
-
-      if (_container) {
-        _renderApp();
-      }
-      return;
-    }
-
-    // ==========================================
-    //  CASE 3: Grace period expired (Penalty 1)
-    // ==========================================
-    if (_inGracePeriod) {
-      _inGracePeriod = false;
-
-      // Dispatch fail event
-      try {
-        document.dispatchEvent(new CustomEvent('prodex-pomodoro-fail'));
-      } catch (_e) { /* noop */ }
-
-      // Reset cycle to zero
-      _currentCycle = 0;
-
-      // Revert to default Focus mode
-      _currentMode = 'focus';
-      _setDuration(_settings.focus);
-      _isRunning = false;
-      _clearTimerState();
 
       if (_container) {
         _renderApp();
