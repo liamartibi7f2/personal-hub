@@ -30,6 +30,11 @@ const pomodoroModule = (function () {
   let _pomodoroDataLoaded = false;
   let _pageUnloading     = false;
 
+  // ── LocalStorage keys for stats features ──
+  const LS_LAST_ACTIVE_DATE = 'hub_pomodoro_lastActiveDate';
+  const LS_DAILY_HISTORY    = 'hub_pomodoro_dailyHistory';   // { 'YYYY-MM-DD': { minutes: N, completed: N } }
+  const LS_TOTAL_FOCUS      = 'hub_pomodoro_totalFocus';     // minutes (legacy fallback)
+
   // ── Ghost save guard ──
   window.addEventListener('beforeunload', function () {
     _pageUnloading = true;
@@ -149,7 +154,29 @@ const pomodoroModule = (function () {
       _isFocusSession = false;
     }
 
+    // 5) Strict streak check: if lastActiveDate is older than yesterday, show 0
+    _checkStreakOnLoad();
+
     _renderApp();
+  }
+
+  /**
+   * On app load, check if the lastActiveDate gap is >1 day.
+   * If the streak is already broken, write nothing — _calculateStreak() will
+   * return 0 on next UI render because the date gap is visible.
+   */
+  function _checkStreakOnLoad() {
+    var lastActive = _readLastActiveDate();
+    if (!lastActive) return;
+
+    var todayKey     = _getDateKey(new Date());
+    var yesterdayKey = _getDateKey(new Date(Date.now() - 86400000));
+
+    // If lastActive is older than yesterday, streak is broken
+    if (lastActive !== todayKey && lastActive !== yesterdayKey) {
+      // Remove lastActiveDate so _calculateStreak() returns 0
+      try { localStorage.removeItem(LS_LAST_ACTIVE_DATE); } catch (_) { /* ignore */ }
+    }
   }
 
   function destroy() {
@@ -242,16 +269,73 @@ const pomodoroModule = (function () {
     return `${y}-${m}-${d}`;
   }
 
+  // ── LocalStorage Daily History Helpers ──
+
+  /** Read the daily-history object from localStorage (pure JS object, JSON serialised). */
+  function _readDailyHistory() {
+    try {
+      var raw = localStorage.getItem(LS_DAILY_HISTORY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (_) { return {}; }
+  }
+
+  /** Write the daily-history object to localStorage. */
+  function _writeDailyHistory(obj) {
+    try { localStorage.setItem(LS_DAILY_HISTORY, JSON.stringify(obj)); } catch (_) { /* ignore */ }
+  }
+
+  /** Get the last active date string from localStorage (or null). */
+  function _readLastActiveDate() {
+    try { return localStorage.getItem(LS_LAST_ACTIVE_DATE) || null; } catch (_) { return null; }
+  }
+
+  /** Write today as lastActiveDate. */
+  function _writeLastActiveDate() {
+    try { localStorage.setItem(LS_LAST_ACTIVE_DATE, _getDateKey(new Date())); } catch (_) { /* ignore */ }
+  }
+
+  // ── Statistics helpers ──
+
+  /**
+   * Accumulate a completed focus session into localStorage-based daily history.
+   * This is the single source-of-truth for chart + stat card aggregation.
+   */
   function _recordFocusCompletion() {
     if (!_pomodoroData) return;
     const todayKey = _getDateKey(new Date());
     const focusMinutes = Math.round(_totalSeconds / 60);
 
+    // ── Update cloud data (legacy compat) ──
     _pomodoroData.totalFocusMinutes = (_pomodoroData.totalFocusMinutes || 0) + focusMinutes;
     _pomodoroData.completedSessions = (_pomodoroData.completedSessions || 0) + 1;
     if (!_pomodoroData.dailyHistory) _pomodoroData.dailyHistory = {};
     _pomodoroData.dailyHistory[todayKey] = (_pomodoroData.dailyHistory[todayKey] || 0) + focusMinutes;
     _pomodoroData.lastCompletedDate = todayKey;
+
+    // ── Primary: localStorage daily history (chart + stat data source) ──
+    var history = _readDailyHistory();
+    if (!history[todayKey]) {
+      history[todayKey] = { minutes: 0, completed: 0 };
+    }
+    history[todayKey].minutes   += focusMinutes;
+    history[todayKey].completed += 1;
+    _writeDailyHistory(history);
+
+    // ── Streak handling ──
+    var lastActive = _readLastActiveDate();
+    var yesterdayKey = _getDateKey(new Date(Date.now() - 86400000));
+
+    if (lastActive === yesterdayKey) {
+      /* yesterday → increment streak (handled by _calculateStreak on next render) */
+    } else if (lastActive === todayKey) {
+      /* already counted today — no change */
+    } else {
+      /* gap → streak resets to 1 */
+    }
+    _writeLastActiveDate();
+
+    // ── Legacy total focus fallback ──
+    try { localStorage.setItem(LS_TOTAL_FOCUS, String(_pomodoroData.totalFocusMinutes || 0)); } catch (_) { /* ignore */ }
 
     /* Prodex: notify the Chrome extension content script */
     try {
@@ -261,25 +345,37 @@ const pomodoroModule = (function () {
     _savePomodoroData();
   }
 
+  /**
+   * Calculate current streak from the localStorage lastActiveDate.
+   *
+   * Rules:
+   *   - lastActiveDate === today   → count contiguous days in history
+   *   - lastActiveDate === yesterday → count contiguous days in history
+   *   - lastActiveDate is older or null → 0
+   */
   function _calculateStreak() {
-    const stats = _getStats();
-    const todayKey     = _getDateKey(new Date());
-    const yesterdayKey = _getDateKey(new Date(Date.now() - 86400000));
+    var lastActive = _readLastActiveDate();
+    if (!lastActive) return 0;
 
-    const dates = Object.keys(stats.dailyHistory)
-      .filter(d => (stats.dailyHistory[d] || 0) > 0)
-      .sort((a, b) => b.localeCompare(a));
+    var todayKey     = _getDateKey(new Date());
+    var yesterdayKey = _getDateKey(new Date(Date.now() - 86400000));
 
-    if (dates.length === 0) return 0;
-    if (dates[0] !== todayKey && dates[0] !== yesterdayKey) return 0;
+    // If lastActive is older than yesterday → broken streak
+    if (lastActive !== todayKey && lastActive !== yesterdayKey) return 0;
 
-    let streak = 1;
-    for (let i = 1; i < dates.length; i++) {
-      const prev = new Date(dates[i - 1]);
-      const curr = new Date(dates[i]);
-      const diffDays = Math.round((prev - curr) / 86400000);
-      if (diffDays === 1) {
+    // Walk backwards from yesterday (or today) through consecutive days
+    var history = _readDailyHistory();
+    var streak = 1; // at least today or yesterday
+    var cursor = (lastActive === todayKey) ? yesterdayKey : _getDateKey(new Date(Date.now() - 2 * 86400000));
+
+    while (true) {
+      var entry = history[cursor];
+      if (entry && entry.completed > 0) {
         streak++;
+        // move cursor one day earlier
+        var d = new Date(cursor + 'T12:00:00');
+        d.setDate(d.getDate() - 1);
+        cursor = _getDateKey(d);
       } else {
         break;
       }
@@ -288,20 +384,74 @@ const pomodoroModule = (function () {
     return streak;
   }
 
-  function _getWeeklyData() {
-    const stats = _getStats();
-    const now   = new Date();
-    const days  = [];
+  /**
+   * Get filtered daily history for a given date range.
+   * Returns an array of { date, minutes, completed } objects.
+   */
+  function _getFilteredHistory(range) {
+    var history = _readDailyHistory();
+    var now     = new Date();
+    var result  = [];
+    var startDate;
 
-    for (let i = 6; i >= 0; i--) {
-      const d       = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
-      const key     = _getDateKey(d);
-      const seconds = stats.dailyHistory[key] || 0;
+    if (range === 'week') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+    } else if (range === 'month') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    } else if (range === 'year') {
+      startDate = new Date(now.getFullYear(), 0, 1);
+    } else {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+    }
+
+    var cursor = new Date(startDate);
+    while (cursor <= now) {
+      var key = _getDateKey(cursor);
+      var entry = history[key];
+      if (entry) {
+        result.push({
+          date:      key,
+          minutes:   entry.minutes || 0,
+          completed: entry.completed || 0
+        });
+      } else {
+        result.push({
+          date:      key,
+          minutes:   0,
+          completed: 0
+        });
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return result;
+  }
+
+  /** Compute totals for the stat cards within the selected timeframe. */
+  function _computeTimeframeTotals(range) {
+    var filtered = _getFilteredHistory(range);
+    var totalMinutes = 0;
+    var totalCompleted = 0;
+    for (var i = 0; i < filtered.length; i++) {
+      totalMinutes  += filtered[i].minutes;
+      totalCompleted += filtered[i].completed;
+    }
+    return { totalMinutes: totalMinutes, totalCompleted: totalCompleted };
+  }
+
+  // ── Chart data builders ──
+
+  function _getWeeklyData() {
+    var raw = _getFilteredHistory('week');
+    var days = [];
+
+    for (var i = 0; i < raw.length; i++) {
+      var d = new Date(raw[i].date + 'T12:00:00');
       days.push({
-        date:    key,
+        date:    raw[i].date,
         dayName: d.toLocaleDateString('en-US', { weekday: 'short' }),
-        minutes: Math.floor(seconds / 60),
-        isToday: i === 0
+        minutes: raw[i].minutes,
+        isToday: raw[i].date === _getDateKey(new Date())
       });
     }
 
@@ -309,29 +459,34 @@ const pomodoroModule = (function () {
   }
 
   function _getMonthlyData() {
-    const stats = _getStats();
-    const now   = new Date();
-    const weeks = [];
+    var raw  = _getFilteredHistory('month');
+    var now  = new Date();
+    var weeks = [];
+    var totalDays = raw.length;
 
-    for (let w = 3; w >= 0; w--) {
-      let weekMinutes = 0;
-      const endDay   = new Date(now.getFullYear(), now.getMonth(), now.getDate() - w * 7);
-      const startDay = new Date(endDay.getFullYear(), endDay.getMonth(), endDay.getDate() - 6);
+    // Group into 4 chunks (rough weeks)
+    var chunkSize = Math.max(1, Math.ceil(totalDays / 4));
 
-      for (let d = new Date(startDay); d <= endDay; d.setDate(d.getDate() + 1)) {
-        const key     = _getDateKey(d);
-        const seconds = stats.dailyHistory[key] || 0;
-        weekMinutes += Math.floor(seconds / 60);
+    for (var w = 0; w < 4; w++) {
+      var startIdx = w * chunkSize;
+      var endIdx   = Math.min(startIdx + chunkSize, totalDays);
+      var weekMinutes = 0;
+
+      for (var i = startIdx; i < endIdx; i++) {
+        weekMinutes += raw[i].minutes;
       }
 
-      const sLabel = startDay.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      const eLabel = endDay.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      var sDate = new Date(raw[startIdx].date + 'T12:00:00');
+      var eDate = new Date(raw[endIdx - 1].date + 'T12:00:00');
+
+      var sLabel = sDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      var eLabel = eDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
       weeks.push({
-        label:      `${sLabel}–${eLabel}`,
-        shortLabel: `W${4 - w}`,
+        label:      sLabel + '–' + eLabel,
+        shortLabel: 'W' + (w + 1),
         minutes:    weekMinutes,
-        isCurrent:  w === 0
+        isCurrent:  w === 3
       });
     }
 
@@ -339,30 +494,33 @@ const pomodoroModule = (function () {
   }
 
   function _getYearlyData() {
-    const stats     = _getStats();
-    const now       = new Date();
-    const year      = now.getFullYear();
-    const monthNow  = now.getMonth();
-    const months    = [];
+    var raw  = _getFilteredHistory('year');
+    var now  = new Date();
+    var year = now.getFullYear();
 
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    var monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-    for (let m = 0; m < 12; m++) {
-      let monthMinutes = 0;
+    // Pre-group raw data by month index (0-11)
+    var monthBuckets = [];
+    for (var m = 0; m < 12; m++) {
+      monthBuckets[m] = 0;
+    }
 
-      const daysInMonth = new Date(year, m + 1, 0).getDate();
-      for (let day = 1; day <= daysInMonth; day++) {
-        const d       = new Date(year, m, day);
-        const key     = _getDateKey(d);
-        const seconds = stats.dailyHistory[key] || 0;
-        monthMinutes += Math.floor(seconds / 60);
+    var monthNow = now.getMonth();
+    for (var i = 0; i < raw.length; i++) {
+      var dateObj = new Date(raw[i].date + 'T12:00:00');
+      if (dateObj.getFullYear() === year) {
+        monthBuckets[dateObj.getMonth()] += raw[i].minutes;
       }
+    }
 
+    var months = [];
+    for (var mi = 0; mi < 12; mi++) {
       months.push({
-        label:     monthNames[m],
-        minutes:   monthMinutes,
-        isCurrent: m === monthNow
+        label:     monthNames[mi],
+        minutes:   monthBuckets[mi],
+        isCurrent: mi === monthNow
       });
     }
 
@@ -377,15 +535,84 @@ const pomodoroModule = (function () {
       };
     }
     if (_chartRange === 'year') {
+      var yearStr = String(new Date().getFullYear());
       return {
         bars:       _getYearlyData(),
-        chartLabel: `${new Date().getFullYear()} · Focus Hours`
+        chartLabel: yearStr + ' · Focus Hours'
       };
     }
     return {
       bars:       _getWeeklyData(),
       chartLabel: 'This Week · Focus Minutes'
     };
+  }
+
+  // ── Dynamic stats + chart update (no full re-render) ──
+
+  /**
+   * Recompute the stat cards and chart bars based on the current _chartRange.
+   * Called when the Week / Month / Year toggle is clicked.
+   * Avoids a full _renderApp() so the timer keeps running uninterrupted.
+   */
+  function _updateStatsAndChart() {
+    if (!_container) return;
+
+    // 1) Update stat cards
+    var tfTotals = _computeTimeframeTotals(_chartRange);
+    var totalMin = tfTotals.totalMinutes;
+    var hours    = Math.floor(totalMin / 60);
+    var mins     = totalMin % 60;
+    var focusTimeStr = hours > 0 ? hours + 'h ' + mins + 'm' : mins + 'm';
+
+    var elFocus = document.getElementById('stat-focus-time');
+    if (elFocus) elFocus.textContent = focusTimeStr;
+
+    var elCompleted = document.getElementById('stat-completed');
+    if (elCompleted) elCompleted.textContent = String(tfTotals.totalCompleted);
+
+    var elStreak = document.getElementById('stat-streak');
+    if (elStreak) elStreak.textContent = String(_calculateStreak());
+
+    // 2) Update chart bars region
+    var chartData = _getChartData();
+    var isYearView = _chartRange === 'year';
+    var maxValue   = Math.max.apply(null, chartData.bars.map(function (d) { return d.minutes; }).concat([1]));
+
+    var barsHtml = '';
+    for (var i = 0; i < chartData.bars.length; i++) {
+      var d = chartData.bars[i];
+      var displayVal = isYearView ? (d.minutes / 60) : d.minutes;
+      var displayValStr = isYearView
+        ? (displayVal >= 0.1 ? displayVal.toFixed(1) + 'h' : '')
+        : (d.minutes > 0 ? d.minutes + 'm' : '');
+      var heightPct = Math.max(4, (d.minutes / maxValue) * 100);
+      barsHtml +=
+        '<div class="chart-bar-wrapper">' +
+          '<span class="chart-bar-value">' + displayValStr + '</span>' +
+          '<div class="chart-bar' + (d.isCurrent ? ' chart-bar--today' : '') + '"' +
+               ' style="height:' + heightPct + '%"' +
+               ' title="' + d.label + ': ' + displayValStr + '">' +
+          '</div>' +
+          '<span class="chart-bar-label' + (d.isCurrent ? ' chart-bar-label--today' : '') + '">' + (d.shortLabel || d.dayName || d.label) + '</span>' +
+        '</div>';
+    }
+
+    var chartBarsEl = _container.querySelector('#chart-bars');
+    if (chartBarsEl) chartBarsEl.innerHTML = barsHtml;
+
+    // 3) Update chart heading
+    var chartHeading = _container.querySelector('.chart-heading');
+    if (chartHeading) chartHeading.textContent = chartData.chartLabel;
+
+    // 4) Toggle active class on range buttons
+    _container.querySelectorAll('.chart-range-btn').forEach(function (btn) {
+      var range = btn.dataset.range;
+      if (range === _chartRange) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
   }
 
   // =============================================================
@@ -617,14 +844,15 @@ const pomodoroModule = (function () {
   // ---------------------------------------------------------
 
   function _renderStatsDashboard() {
-    const stats      = _getStats();
     const streak     = _calculateStreak();
     const chartData  = _getChartData();
 
-    const totalMin = Math.floor(stats.totalFocusSeconds / 60);
-    const hours    = Math.floor(totalMin / 60);
-    const mins     = totalMin % 60;
-    const focusTimeStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+    // Compute timeframe-specific totals for stat cards
+    var tfTotals = _computeTimeframeTotals(_chartRange);
+    var totalMin = tfTotals.totalMinutes;
+    var hours    = Math.floor(totalMin / 60);
+    var mins     = totalMin % 60;
+    var focusTimeStr = hours > 0 ? hours + 'h ' + mins + 'm' : mins + 'm';
 
     const isYearView = _chartRange === 'year';
     const maxValue   = Math.max(...chartData.bars.map(d => d.minutes), 1);
@@ -641,7 +869,7 @@ const pomodoroModule = (function () {
           </div>
           <div class="stat-card-mini glass-card">
             <span class="stat-icon">✓</span>
-            <span class="stat-value" id="stat-completed">${stats.completedPomodoros}</span>
+            <span class="stat-value" id="stat-completed">${tfTotals.totalCompleted}</span>
             <span class="stat-label">Completed</span>
           </div>
           <div class="stat-card-mini glass-card">
@@ -900,7 +1128,7 @@ const pomodoroModule = (function () {
         var range = this.dataset.range;
         if (!range || range === _chartRange) return;
         _chartRange = range;
-        _renderApp();
+        _updateStatsAndChart();
       });
     });
   }
@@ -1195,9 +1423,7 @@ const pomodoroModule = (function () {
       _setDuration(_settings.focus);
       _isRunning = false;
       _clearTimerState();
-      _stopAlarmInternal();
-      var btnAlarm = document.getElementById('btn-stop-alarm');
-      if (btnAlarm) btnAlarm.style.display = 'none';
+      _stopAllAlarms();
 
       if (_container) {
         _renderApp();
@@ -1251,7 +1477,28 @@ const pomodoroModule = (function () {
   //  AUDIO ENGINE: Looping alarm with 6 profiles
   // =============================================================
 
+  /** Stop ALL running alarms: interval, audio, and UI. */
+  function _stopAllAlarms() {
+    if (_alarmInterval) {
+      clearInterval(_alarmInterval);
+      _alarmInterval = null;
+    }
+    if (_alarmAudio) {
+      try {
+        _alarmAudio.pause();
+        _alarmAudio.currentTime = 0;
+        _alarmAudio.src = '';
+      } catch (_) { /* ignore */ }
+      _alarmAudio = null;
+    }
+    _alarmRinging = false;
+    var btn = document.getElementById('btn-stop-alarm');
+    if (btn) btn.style.display = 'none';
+  }
+
   function _playAlarm(profile) {
+    // Always stop any existing alarm before starting a new one
+    _stopAllAlarms();
     _alarmRinging = true;
 
     if (profile === 'classic') {

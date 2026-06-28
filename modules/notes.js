@@ -191,6 +191,12 @@ const notesModule = (function () {
           '<div class="hub-notes-sidebar-header">' +
             '<span class="hub-notes-sidebar-title">Notes</span>' +
             '<div class="hub-notes-sidebar-actions">' +
+              '<button class="hub-notes-btn-add hub-notes-btn-search" id="hn-btn-search" title="Search Notes" aria-label="Search Notes">' +
+                '<svg width="14" height="14" viewBox="0 0 16 16" fill="none">' +
+                  '<circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5" fill="none"/>' +
+                  '<path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
+                '</svg>' +
+              '</button>' +
               '<button class="hub-notes-btn-add" id="hn-btn-add-folder" title="New Desk" aria-label="New Desk">' +
                 '<svg width="14" height="14" viewBox="0 0 16 16" fill="none">' +
                   '<path d="M2 6l6-4 6 4v7a1 1 0 01-1 1H3a1 1 0 01-1-1V6z" stroke="currentColor" stroke-width="1.3" fill="none"/>' +
@@ -203,6 +209,10 @@ const notesModule = (function () {
                 '</svg>' +
               '</button>' +
             '</div>' +
+          '</div>' +
+          '<div class="hub-notes-search-bar" id="hn-search-bar" style="display:none">' +
+            '<input type="text" class="hub-notes-search-input" id="hn-search-input" placeholder="Search keywords..." spellcheck="false" />' +
+            '<button class="hub-notes-search-clear" id="hn-search-clear" aria-label="Clear search">✕</button>' +
           '</div>' +
           '<div class="hub-notes-folder-list" id="hn-folder-list"></div>' +
           '<div class="hub-notes-divider"></div>' +
@@ -256,6 +266,10 @@ const notesModule = (function () {
     _el.editorPane      = _qs('hn-editor-pane');
     _el.addBtn          = _qs('hn-btn-add');
     _el.addFolderBtn    = _qs('hn-btn-add-folder');
+    _el.searchBtn       = _qs('hn-btn-search');
+    _el.searchBar       = _qs('hn-search-bar');
+    _el.searchInput     = _qs('hn-search-input');
+    _el.searchClear     = _qs('hn-search-clear');
 
     // 6) Render lists
     _renderFolders();
@@ -263,6 +277,7 @@ const notesModule = (function () {
     _loadNoteIntoEditor();
 
     // 7) Bind all events
+    _bindSearchEvents();
     _bindAddNote();
     _bindAddFolder();
     _bindEditorEvents();
@@ -492,6 +507,106 @@ const notesModule = (function () {
 
     _scheduleSave();
     return true;
+  }
+
+  // ============================================================
+  //   SEARCH — Real-time filtering
+  // ============================================================
+
+  /**
+   * Toggle the search bar open/closed and focus the input.
+   */
+  function _toggleSearchBar() {
+    if (!_el.searchBar || !_el.searchInput) return;
+    var isHidden = _el.searchBar.style.display === 'none' || !_el.searchBar.style.display;
+    if (isHidden) {
+      _el.searchBar.style.display = 'flex';
+      setTimeout(function () {
+        _el.searchBar.classList.add('hub-notes-search-bar--open');
+        _el.searchInput.focus();
+      }, 20);
+    } else {
+      _el.searchBar.classList.remove('hub-notes-search-bar--open');
+      _el.searchInput.value = '';
+      setTimeout(function () {
+        _el.searchBar.style.display = 'none';
+        _filterNoteList('');
+      }, 200);
+    }
+  }
+
+  /**
+   * Real-time filter of note items in the sidebar.
+   * Shows notes whose title OR content includes the query.
+   */
+  function _filterNoteList(query) {
+    var items = document.querySelectorAll('.hub-notes-note-item');
+    var q = query.toLowerCase().trim();
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      if (!q) {
+        item.style.display = '';
+        continue;
+      }
+      var titleEl = item.querySelector('.hub-notes-note-title');
+      var title   = titleEl ? titleEl.textContent.toLowerCase() : '';
+      var content = item.getAttribute('data-search-content') || '';
+      // Build content index on first encounter
+      if (!content) {
+        var nid = item.getAttribute('data-note-id');
+        if (nid && _activeFolder) {
+          for (var j = 0; j < _activeFolder.notes.length; j++) {
+            var n = _activeFolder.notes[j];
+            if (n && n.id === nid) {
+              content = (n.title || '') + ' ' + (n.content || '');
+              content = content.toLowerCase().replace(/<[^>]+>/g, '');
+              item.setAttribute('data-search-content', content);
+              break;
+            }
+          }
+        }
+      }
+      var match = title.indexOf(q) !== -1 || content.indexOf(q) !== -1;
+      item.style.display = match ? '' : 'none';
+    }
+  }
+
+  /**
+   * Bind search toggle button, input listener, and clear button.
+   */
+  function _bindSearchEvents() {
+    // Search button toggle
+    if (_el.searchBtn) {
+      _el.searchBtn.addEventListener('click', _toggleSearchBar);
+    }
+
+    // Real-time input filtering
+    if (_el.searchInput) {
+      _el.searchInput.addEventListener('input', function () {
+        _filterNoteList(this.value);
+      });
+    }
+
+    // Clear button
+    if (_el.searchClear) {
+      _el.searchClear.addEventListener('click', function () {
+        if (_el.searchInput) {
+          _el.searchInput.value = '';
+          _filterNoteList('');
+          _el.searchInput.focus();
+        }
+      });
+    }
+
+    // Escape to close search
+    if (_el.searchInput) {
+      _el.searchInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+          _toggleSearchBar();
+          if (_el.searchBtn) _el.searchBtn.focus();
+        }
+      });
+    }
   }
 
   // ============================================================
