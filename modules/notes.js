@@ -21,6 +21,14 @@ const notesModule = (function () {
    *  with empty [] before data has finished loading from Firestore.
    *  Only set to true AFTER cloud data is received and rendered.     */
   let _isNotesDataLoaded = false;
+  /**
+   * ⚡ SESSION-LEVEL INIT FLAG: Set to true after the first successful
+   *    load + render in this browser session. NEVER reset by destroy().
+   *    This prevents re-fetching from Firestore on tab switches,
+   *    eliminating the race condition that resets notes to "Welcome".
+   *    Only reset by clearData() on explicit logout.
+   */
+  let _sessionInitialized = false;
   let _autoSaveEnabled = true;
   let _pageUnloading = false; // Prevents ghost saves during page reload
 
@@ -37,7 +45,11 @@ const notesModule = (function () {
     addBtn:          null,
     addFolderBtn:    null,
     manualSaveBtn:   null,
-    saveFeedback:    null
+    saveFeedback:    null,
+    searchBtn:       null,
+    searchBar:       null,
+    searchInput:     null,
+    searchClear:     null
   };
 
   // ── Ghost save guard ──
@@ -188,6 +200,21 @@ const notesModule = (function () {
   async function render(container) {
     _container = container;
 
+    // ⚡ FAST PATH: If already initialized in this session, skip the async
+    //    Firestore fetch entirely. Just re-render the UI from memory.
+    //    This prevents the race condition where rapid tab switches trigger
+    //    multiple _loadData() calls that overwrite each other.
+    if (_sessionInitialized && _data) {
+      _isNotesDataLoaded = true;
+      // Restore active selections if they were lost (defensive — destroy()
+      // should preserve them, but handle the edge case anyway)
+      if (!_activeFolder) _activeFolder = _data.folders[0];
+      if (!_activeNote && _activeFolder) _activeNote = _activeFolder.notes[0] || null;
+      _renderUI();
+      _persist(true);
+      return;
+    }
+
     // 1) Show loading state immediately
     container.innerHTML =
       '<div class="tab-content hub-notes-app" style="display:flex;align-items:center;justify-content:center;min-height:300px">' +
@@ -207,10 +234,26 @@ const notesModule = (function () {
     //    This is the only place where _isNotesDataLoaded becomes true.
     //    From this point forward, auto-save is allowed to write to storage.
     _isNotesDataLoaded = true;
+    _sessionInitialized = true;
     console.log("Notes successfully loaded. Auto-save is now unlocked.");
 
     // 5) Overwrite with real Notes UI
-    container.innerHTML =
+    _renderUI();
+
+    // 6) Safe initial persist: Save the loaded/rendered data to cloud.
+    //    This happens AFTER the guard is unlocked AND the DOM is mounted,
+    //    ensuring we NEVER save empty data and the Saving indicator works.
+    _persist(true);
+  }
+
+  /**
+   * _renderUI — Injects the notes DOM template, caches element refs,
+   * renders folder/note lists, loads active note into the editor, and
+   * binds all event listeners. Called on first load AND on every tab-
+   * switch if _sessionInitialized is true, so the DOM is always fresh.
+   */
+  function _renderUI() {
+    _container.innerHTML =
       '<div class="tab-content hub-notes-app">' +
         '<aside class="hub-notes-sidebar glass" id="hn-sidebar">' +
           '<div class="hub-notes-sidebar-header">' +
@@ -278,7 +321,7 @@ const notesModule = (function () {
         '</div>' +
       '</div>';
 
-    // 5) Cache all DOM refs
+    // Cache all DOM refs
     _el.sidebarNotes    = _qs('hn-note-list');
     _el.folderList      = _qs('hn-folder-list');
     _el.titleInput      = _qs('hn-title-input');
@@ -296,12 +339,12 @@ const notesModule = (function () {
     _el.searchInput     = _qs('hn-search-input');
     _el.searchClear     = _qs('hn-search-clear');
 
-    // 6) Render lists
+    // Render lists
     _renderFolders();
     _renderNoteList();
     _loadNoteIntoEditor();
 
-    // 7) Bind all events
+    // Bind all events
     _bindSearchEvents();
     _bindAddNote();
     _bindAddFolder();
@@ -309,11 +352,6 @@ const notesModule = (function () {
     _bindFormatToolbar();
     _bindFolderClicks();
     _bindManualSave();
-
-    // 8) Safe initial persist: Save the loaded/rendered data to cloud.
-    //    This happens AFTER the guard is unlocked AND the DOM is mounted,
-    //    ensuring we NEVER save empty data and the Saving indicator works.
-    _persist(true);
   }
 
   // ============================================================
@@ -1050,6 +1088,7 @@ function _updateToolbarPosition() {
   async function loadFromCloud() {
     // 1) Reset local state and the Load Guard to prevent any
     //    stray auto-save timers from firing during the fetch.
+    _sessionInitialized = false;
     _isNotesDataLoaded = false;
     _data = null;
     _activeFolder = null;
@@ -1088,7 +1127,8 @@ function _updateToolbarPosition() {
       _saveTimer = null;
     }
 
-    // 2) Reset the Load Guard — no saves will fire until re-login + re-load
+    // 2) Reset session cache + Load Guard — no saves will fire until re-login + re-load
+    _sessionInitialized = false;
     _isNotesDataLoaded = false;
     _isDataLoaded = false;
 
@@ -1148,15 +1188,17 @@ function _updateToolbarPosition() {
     _el = {
       sidebarNotes: null, folderList: null, titleInput: null, editor: null,
       toolbar: null, savingIndicator: null, emptyState: null, editorPane: null,
-      addBtn: null, addFolderBtn: null
+      addBtn: null, addFolderBtn: null, searchBtn: null, searchBar: null,
+      searchInput: null, searchClear: null, manualSaveBtn: null, saveFeedback: null
     };
     _boundDocMouseup  = null;
     _boundDocMousedown = null;
     _boundDocKeyup    = null;
     _boundDocKeydown  = null;
-    _activeNote   = null;
-    _activeFolder = null;
-    _data   = null;
+    // ⚡ PRESERVE _data, _activeNote, _activeFolder, _sessionInitialized,
+    //    and _isNotesDataLoaded across tab switches so the in-memory cache
+    //    survives destroy() → render() cycles. Only the DOM refs and
+    //    listeners need to go — they are re-created on the next render.
     _container = null;
   }
 
