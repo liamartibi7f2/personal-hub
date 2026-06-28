@@ -80,6 +80,17 @@ const HubDB = (function () {
     return _db.collection('users').doc(_user.uid);
   }
 
+  /**
+   * Dedicated Firestore reference for the notes subcollection.
+   * Uses: users/{userId}/notes_store/data
+   * This completely isolates notes data from all other modules
+   * (Quiz, Flashcards, Pomodoro, Focus, etc.) so they can never collide.
+   */
+  function _notesDocRef() {
+    if (!_isOnline()) return null;
+    return _db.collection('users').doc(_user.uid).collection('notes_store').doc('data');
+  }
+
   // ── Public API ──
 
   // Timeout helper: rejects after ms if the promise doesn't settle
@@ -99,12 +110,12 @@ const HubDB = (function () {
   async function saveNotesData(data) {
     await _ensureReady();
 
-    // Logged in + online → Firestore only. No silent fallback.
+    // Logged in + online → Firestore subcollection only. No silent fallback.
     if (_isOnline()) {
       try {
         await Promise.race([
-          _userRef()
-            .set({ notesWorkspace: data }, { merge: true })
+          _notesDocRef()
+            .set({ workspace: data })
             .catch(function (err) {
               console.error('[HubDB] Firebase Write Failed:', err);
               throw err;
@@ -114,7 +125,7 @@ const HubDB = (function () {
         return; // success — exit early
       } catch (err) {
         // Log detailed error so the user can see Firestore Security Rules issues
-        console.error('[HubDB] Firestore set() failed:', err.message || err);
+        console.error('[HubDB] Firestore set() for notes_store failed:', err.message || err);
         // Do NOT fall through to localStorage — the user expects cloud sync.
         // If we silently save to localStorage here, Browser B will still
         // read empty cloud data and overwrite everything.
@@ -149,15 +160,15 @@ const HubDB = (function () {
       return null;
     }
     await _ensureReady();
-    // Try Firestore first when online (with 2.5s timeout)
+    // Try Firestore subcollection first when online (with 2.5s timeout)
     if (_isOnline()) {
       try {
         var doc = await Promise.race([
-          _userRef().get(),
+          _notesDocRef().get(),
           _timeout(2500)
         ]);
         if (doc.exists) {
-          var cloudData = doc.data().notesWorkspace;
+          var cloudData = doc.data().workspace;
           if (cloudData && cloudData.folders && cloudData.folders.length > 0) {
             // Merge any localStorage changes the user made while offline
             try {
@@ -165,7 +176,7 @@ const HubDB = (function () {
               if (localRaw) {
                 _mergeLocalIntoCloud(cloudData, JSON.parse(localRaw));
                 // Persist the merged result back to Firestore silently
-                _userRef().set({ notesWorkspace: cloudData }, { merge: true }).catch(function () {});
+                _notesDocRef().set({ workspace: cloudData }).catch(function () {});
               }
             } catch (_) {}
             // Clear local copy after successful cloud read + merge
@@ -201,17 +212,17 @@ const HubDB = (function () {
           }
         } catch (_) {}
 
-        // Persist the default/merged data to Firestore so cloud is never empty
+        // Persist the default/merged data to Firestore subcollection so cloud is never empty
         try {
           await Promise.race([
-            _userRef().set({ notesWorkspace: defaultData }, { merge: true }),
+            _notesDocRef().set({ workspace: defaultData }),
             _timeout(2500)
           ]);
         } catch (_) {}
         try { localStorage.removeItem(LOCAL_KEY); } catch (_) {}
         return defaultData;
       } catch (err) {
-        console.warn('[HubDB] Firestore load failed, trying localStorage:', err.message);
+        console.warn('[HubDB] Firestore load failed for notes_store, trying localStorage:', err.message);
       }
     }
 

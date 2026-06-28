@@ -268,6 +268,11 @@
 
   // ── Logout ──
   function _logout() {
+    // 0) IMMEDIATELY reset Load Guard on all data modules before signOut.
+    //    This prevents any pending auto-save timer from writing stale or
+    //    empty data to Firestore during the logout process.
+    _resetAllModulesOnLogout();
+
     // 1) Clear all local Hub caches so no stale data remains visible
     try { localStorage.removeItem('hub_notes'); } catch (_) {}
     try { localStorage.removeItem('hub_flashcards'); } catch (_) {}
@@ -296,6 +301,18 @@
         // Even if signOut fails, force a reload to reset state
         window.location.reload();
       });
+  }
+
+  /**
+   * Safely reset all module Load Guards on logout so no ghost saves
+   * can fire during the Firebase signOut → page reload window.
+   */
+  function _resetAllModulesOnLogout() {
+    // Notes module — has the Load Guard (_isNotesDataLoaded)
+    if (typeof notesModule !== 'undefined' && typeof notesModule.clearData === 'function') {
+      notesModule.clearData();
+    }
+    // Other modules can be added here as they adopt the Load Guard pattern.
   }
 
   // ── Listen to Firebase auth state ──

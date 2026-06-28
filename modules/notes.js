@@ -17,6 +17,10 @@ const notesModule = (function () {
   let _container    = null;
   let _saveTimer    = null;
   let _isDataLoaded = false;
+  /** ⚠ LOAD GUARD: Prevents auto-save from overwriting cloud data
+   *  with empty [] before data has finished loading from Firestore.
+   *  Only set to true AFTER cloud data is received and rendered.     */
+  let _isNotesDataLoaded = false;
   let _autoSaveEnabled = true;
   let _pageUnloading = false; // Prevents ghost saves during page reload
 
@@ -72,7 +76,7 @@ const notesModule = (function () {
         // Only accept if at least one folder exists
         if (data.folders.length > 0) {
           _data = data;
-          _isDataLoaded = true;
+          console.log("Notes data loaded from cloud/localStorage.");
           return;
         }
       }
@@ -86,11 +90,18 @@ const notesModule = (function () {
         notes: [_buildNoteObject('Welcome', 'Welcome to Notes!<br><br>Try typing /h1, /h2, or /h3 followed by space to insert headings.')]
       }]
     };
-    _isDataLoaded = true;
-    await _persist();
+    // ⚠ WARNING: Do NOT call _persist here — data hasn't been rendered yet.
+    // The render() function will trigger the first save after it's done.
   }
 
   async function _persist(force) {
+    // ⚠ LOAD GUARD: NEVER write to storage before cloud data is confirmed loaded.
+    // This prevents an empty template [] from overwriting good cloud data
+    // during the startup race between the auto-save timer and the Firestore fetch.
+    if (!_isNotesDataLoaded) {
+      console.warn("Auto-save blocked: Data has not finished loading from Cloud yet.");
+      return;
+    }
     if (!_isDataLoaded) return;
     if (!force && !_autoSaveEnabled) return;
     if (_pageUnloading) return; // Prevent ghost saves during page reload
@@ -111,6 +122,8 @@ const notesModule = (function () {
   }
 
   function _scheduleSave() {
+    // ⚠ LOAD GUARD: Don't schedule auto-saves until data is fully loaded.
+    if (!_isNotesDataLoaded) return;
     if (_pageUnloading) return; // Don't schedule saves during page reload
     if (_saveTimer) clearTimeout(_saveTimer);
     _saveTimer = setTimeout(function () {
@@ -184,7 +197,13 @@ const notesModule = (function () {
     _activeFolder = _data.folders[0];
     _activeNote   = _activeFolder.notes[0] || null;
 
-    // 4) Overwrite with real Notes UI
+    // 4) UNLOCK the Load Guard: Cloud data has been received and is about to be rendered.
+    //    This is the only place where _isNotesDataLoaded becomes true.
+    //    From this point forward, auto-save is allowed to write to storage.
+    _isNotesDataLoaded = true;
+    console.log("Notes successfully loaded. Auto-save is now unlocked.");
+
+    // 5) Overwrite with real Notes UI
     container.innerHTML =
       '<div class="tab-content hub-notes-app">' +
         '<aside class="hub-notes-sidebar glass" id="hn-sidebar">' +
@@ -284,6 +303,11 @@ const notesModule = (function () {
     _bindFormatToolbar();
     _bindFolderClicks();
     _bindManualSave();
+
+    // 8) Safe initial persist: Save the loaded/rendered data to cloud.
+    //    This happens AFTER the guard is unlocked AND the DOM is mounted,
+    //    ensuring we NEVER save empty data and the Saving indicator works.
+    _persist(true);
   }
 
   // ============================================================
@@ -1007,6 +1031,96 @@ function _updateToolbarPosition() {
   }
 
   // ============================================================
+  //   AUTH-AWARE LIFECYCLE
+  //   Called by auth-ui.js when user logs in or out.
+  // ============================================================
+
+  /**
+   * Called after login. Reloads notes data from the cloud and
+   * resets the local UI to reflect the freshly loaded state.
+   * The Load Guard (_isNotesDataLoaded) is reset to false before
+   * the fetch, then set to true only after data is confirmed.
+   */
+  async function loadFromCloud() {
+    // 1) Reset local state and the Load Guard to prevent any
+    //    stray auto-save timers from firing during the fetch.
+    _isNotesDataLoaded = false;
+    _data = null;
+    _activeFolder = null;
+    _activeNote = null;
+
+    // 2) If the container is mounted, show loading state
+    if (_container) {
+      _container.innerHTML =
+        '<div class="tab-content hub-notes-app" style="display:flex;align-items:center;justify-content:center;min-height:300px">' +
+          '<div class="hub-notes-loading" style="font-family:var(--font-mono);color:var(--text-muted);font-size:0.85rem">' +
+            '<span class="hub-notes-loading-dot">●</span> Loading workspace...' +
+          '</div>' +
+        '</div>';
+    }
+
+    // 3) Fetch fresh data from cloud
+    await _loadData();
+
+    // 4) If the module is currently mounted (container exists), re-render
+    if (_container) {
+      // Re-run the full render cycle over the existing container
+      render(_container);
+    }
+
+    console.log("[Notes] Data loaded from cloud after login.");
+  }
+
+  /**
+   * Called after logout. Clears all local notes state, resets the
+   * Load Guard, and clears the UI so the user never sees stale data.
+   */
+  function clearData() {
+    // 1) Cancel any pending save
+    if (_saveTimer) {
+      clearTimeout(_saveTimer);
+      _saveTimer = null;
+    }
+
+    // 2) Reset the Load Guard — no saves will fire until re-login + re-load
+    _isNotesDataLoaded = false;
+    _isDataLoaded = false;
+
+    // 3) Clear all local state
+    _data = null;
+    _activeFolder = null;
+    _activeNote = null;
+
+    // 4) Clear the UI if mounted
+    if (_container) {
+      _container.innerHTML =
+        '<div class="tab-content hub-notes-app" style="display:flex;align-items:center;justify-content:center;min-height:300px">' +
+          '<div class="hub-notes-loading" style="font-family:var(--font-mono);color:var(--text-muted);font-size:0.85rem;opacity:0.5">' +
+            '<span>Session ended. Login to access cloud notes.</span>' +
+          '</div>' +
+        '</div>';
+      _el = {
+        sidebarNotes: null, folderList: null, titleInput: null, editor: null,
+        toolbar: null, savingIndicator: null, emptyState: null, editorPane: null,
+        addBtn: null, addFolderBtn: null, searchBtn: null, searchBar: null,
+        searchInput: null, searchClear: null, manualSaveBtn: null, saveFeedback: null
+      };
+    }
+
+    // 5) Clear DOM listeners (same as destroy)
+    if (_boundDocMouseup)   document.removeEventListener('mouseup', _boundDocMouseup);
+    if (_boundDocMousedown) document.removeEventListener('mousedown', _boundDocMousedown);
+    if (_boundDocKeyup)     document.removeEventListener('keyup', _boundDocKeyup);
+    if (_boundDocKeydown)   document.removeEventListener('keydown', _boundDocKeydown);
+    _boundDocMouseup  = null;
+    _boundDocMousedown = null;
+    _boundDocKeyup    = null;
+    _boundDocKeydown  = null;
+
+    console.log("[Notes] Data cleared after logout. Load Guard reset.");
+  }
+
+  // ============================================================
   //   DESTROY
   // ============================================================
 
@@ -1049,6 +1163,8 @@ function _updateToolbarPosition() {
     name: 'Notes',
     getAutoSaveEnabled: getAutoSaveEnabled,
     setAutoSaveEnabled: setAutoSaveEnabled,
+    loadFromCloud: loadFromCloud,
+    clearData: clearData,
     icon: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none">' +
       '<path d="M4 3h12a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1z" stroke="currentColor" stroke-width="1.3"/>' +
       '<path d="M6 7h8M6 10h6M6 13h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>' +
