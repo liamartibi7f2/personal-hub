@@ -1102,6 +1102,124 @@ const HubDB = (function () {
     if (typeof local.autoStartFocus === 'boolean') cloud.autoStartFocus = local.autoStartFocus;
   }
 
+  // ── Flashcard AI Settings ──
+
+  const FLASHCARD_SETTINGS_KEY = 'hub_flashcard_ai_settings';
+
+  const DEFAULT_FLASHCARD_SETTINGS = {
+    schema: [
+      { id: 'phonetic', name: 'Phonetic', prompt: 'Provide the IPA phonetic transcription.', isDeletable: false },
+      { id: 'synonym', name: 'Synonym', prompt: 'Provide 2-3 common synonyms.', isDeletable: true }
+    ]
+  };
+
+  /**
+   * Firestore doc ref for flashcard AI settings.
+   * Path: users/{userId}/settings/flashcards
+   */
+  function _flashcardSettingsDocRef() {
+    if (!_isOnline()) return null;
+    return _db.collection('users').doc(_user.uid).collection('settings').doc('flashcards');
+  }
+
+  /**
+   * Save flashcard AI settings (schema) to Firestore.
+   * Falls back to localStorage when offline.
+   * @param {Object} data - { schema: [...] }
+   */
+  async function saveFlashcardSettings(data) {
+    await _ensureReady();
+
+    if (_isOnline()) {
+      try {
+        await Promise.race([
+          _flashcardSettingsDocRef()
+            .set(data)
+            .catch(function (err) {
+              console.error('[HubDB] Flashcard Settings Write Failed:', err);
+              throw err;
+            }),
+          _timeout(2500)
+        ]);
+        return;
+      } catch (err) {
+        console.error('[HubDB] Firestore set() for flashcard settings failed:', err.message || err);
+        return;
+      }
+    }
+
+    // Offline fallback
+    try {
+      localStorage.setItem(FLASHCARD_SETTINGS_KEY, JSON.stringify(data));
+    } catch (quotaErr) {
+      console.error('[HubDB] localStorage quota exceeded');
+    }
+  }
+
+  /**
+   * Load flashcard AI settings from Firestore.
+   * Falls back to localStorage when offline.
+   * If no data exists anywhere, returns the default schema.
+   * @returns {Object} { schema: [...] }
+   */
+  async function loadFlashcardSettings() {
+    if (navigator.onLine === false) {
+      try {
+        var raw = localStorage.getItem(FLASHCARD_SETTINGS_KEY);
+        if (raw) return JSON.parse(raw);
+      } catch (_) {}
+      return { ...DEFAULT_FLASHCARD_SETTINGS, schema: DEFAULT_FLASHCARD_SETTINGS.schema.map(function (s) { return { ...s }; }) };
+    }
+    await _ensureReady();
+
+    if (_isOnline()) {
+      try {
+        var doc = await Promise.race([
+          _flashcardSettingsDocRef().get(),
+          _timeout(2500)
+        ]);
+        if (doc.exists) {
+          var cloudData = doc.data();
+          if (cloudData && cloudData.schema && cloudData.schema.length > 0) {
+            try { localStorage.removeItem(FLASHCARD_SETTINGS_KEY); } catch (_) {}
+            return cloudData;
+          }
+        }
+
+        // No cloud data — check localStorage, then default
+        try {
+          var localRaw = localStorage.getItem(FLASHCARD_SETTINGS_KEY);
+          if (localRaw) {
+            var localData = JSON.parse(localRaw);
+            if (localData && localData.schema && localData.schema.length > 0) {
+              // Persist local data to cloud
+              _flashcardSettingsDocRef().set(localData).catch(function () {});
+              try { localStorage.removeItem(FLASHCARD_SETTINGS_KEY); } catch (_) {}
+              return localData;
+            }
+          }
+        } catch (_) {}
+
+        // No data exists — save defaults to cloud
+        var defaults = {
+          ...DEFAULT_FLASHCARD_SETTINGS,
+          schema: DEFAULT_FLASHCARD_SETTINGS.schema.map(function (s) { return { ...s }; })
+        };
+        _flashcardSettingsDocRef().set(defaults).catch(function () {});
+        return defaults;
+      } catch (err) {
+        console.warn('[HubDB] Firestore load failed for flashcard settings, trying localStorage:', err.message);
+      }
+    }
+
+    // localStorage fallback
+    try {
+      var raw = localStorage.getItem(FLASHCARD_SETTINGS_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return { ...DEFAULT_FLASHCARD_SETTINGS, schema: DEFAULT_FLASHCARD_SETTINGS.schema.map(function (s) { return { ...s }; }) };
+  }
+
   // ── Expose public API ──
 
   return {
@@ -1115,6 +1233,8 @@ const HubDB = (function () {
     loadFocusData: loadFocusData,
     savePomodoroData: savePomodoroData,
     loadPomodoroData: loadPomodoroData,
+    saveFlashcardSettings: saveFlashcardSettings,
+    loadFlashcardSettings: loadFlashcardSettings,
     loginWithGoogle: loginWithGoogle,
     getAuthStatus: getAuthStatus,
     waitForReady: _ensureReady,

@@ -50,6 +50,16 @@ const flashcardModule = (function () {
   let _sessionStats   = null;       // { reviewed: 0, correct: 0, hard: 0, again: 0, started: timestamp }
   let _cardFlipped    = false;      // Whether the card is flipped in study mode
 
+  // --- AI Settings state ---
+  let _aiSchema       = [];
+  let _isFlashcardSettingsLoaded = false;
+
+  // Default AI schema (used when no cloud data exists)
+  const DEFAULT_AI_SCHEMA = [
+    { id: 'phonetic', name: 'Phonetic', prompt: 'Provide the IPA phonetic transcription.', isDeletable: false },
+    { id: 'synonym', name: 'Synonym', prompt: 'Provide 2-3 common synonyms.', isDeletable: true }
+  ];
+
   // --- Default starter cards (new Gemini-compatible format) ---
 
   // ── Ghost save guard ──
@@ -176,6 +186,9 @@ const flashcardModule = (function () {
     // 2) Await data (async — may hit Firestore)
     await _loadDecksAsync();
 
+    // 3) Load AI settings from Firebase (async — uses load guard)
+    await _loadAISettingsAsync();
+
     _currentIndex = 0;
     _mode = 'library';
     _activeDeckId = null;
@@ -272,6 +285,324 @@ const flashcardModule = (function () {
     // Fire-and-forget: the async save is handled internally;
     // we don't need UI to block on it.
     HubDB.saveFlashcardsData({ decks: _decks }).catch(function () {});
+  }
+
+  /* ==========================================================
+     AI SETTINGS — Load, Save, Sync, and UI Modal
+     ========================================================== */
+
+  /**
+   * Load AI settings from HubDB (Firestore or localStorage).
+   * Uses a load guard to prevent overwriting cloud data with empty state.
+   */
+  async function _loadAISettingsAsync() {
+    try {
+      var settings = await HubDB.loadFlashcardSettings();
+      if (settings && settings.schema && settings.schema.length > 0) {
+        _aiSchema = settings.schema;
+      } else {
+        _aiSchema = DEFAULT_AI_SCHEMA.map(function (s) { return { ...s }; });
+        await HubDB.saveFlashcardSettings({ schema: _aiSchema });
+      }
+    } catch (_) {
+      _aiSchema = DEFAULT_AI_SCHEMA.map(function (s) { return { ...s }; });
+    }
+    _isFlashcardSettingsLoaded = true;
+  }
+
+  /**
+   * Save the current AI schema to HubDB.
+   * Only writes if the load guard is active.
+   */
+  function _saveAISettings() {
+    if (!_isFlashcardSettingsLoaded) return;
+    HubDB.saveFlashcardSettings({ schema: _aiSchema }).catch(function () {});
+  }
+
+  /**
+   * Build a dynamic AI instruction prompt for the given word
+   * based on the current schema fields.
+   */
+  function buildAIPrompt(targetWord, currentSchema) {
+    var schema = currentSchema || _aiSchema;
+    if (!schema || schema.length === 0) {
+      schema = DEFAULT_AI_SCHEMA;
+    }
+
+    var fieldInstructions = schema.map(function (field) {
+      return '    "' + field.id + '": ' + field.prompt;
+    }).join(',\n');
+
+    var prompt = 'You are an English vocabulary tutor. Return ONLY valid JSON for the word \'' + targetWord + '\'.\n' +
+      'Keys: type, vietnamese, describe, examples, note, word_family, idioms, collocations, clozeSentence' +
+      (schema.length > 0 ? ', ' + schema.map(function (f) { return f.id; }).join(', ') : '') + '.\n' +
+      '- type: short part of speech in parentheses (n), (v), (adj), (adv)\n' +
+      '- vietnamese: concise Vietnamese meaning\n' +
+      '- describe: RETURN A LIST of distinct short meanings (each <= 12 words)\n' +
+      '- examples: RETURN A LIST of 2 short example sentences (natural, correct context)\n' +
+      '- note: return EXACTLY 3 short bullet points (<=15 words each) about common mistakes/confusions.\n' +
+      '- synonyms: up to 5\n' +
+      '- word_family: include forms with POS\n' +
+      '- idioms: return up to 2 idioms or set phrases using the word.\n' +
+      '- collocations: return 5 natural collocations\n' +
+      '- clozeSentence: A natural English example sentence. You MUST replace the target vocabulary word in this sentence with EXACTLY three underscores: "___"';
+
+    if (schema.length > 0) {
+      prompt += '\n\nAdditional fields:\n' + fieldInstructions;
+    }
+
+    prompt += '\n\nReturn ONLY a valid JSON object. Do NOT wrap it in markdown code blocks. Do NOT include any text outside the JSON.';
+
+    return prompt;
+  }
+
+  /* ==========================================================
+     ADVANCED AI SETTINGS MODAL
+     ========================================================== */
+
+  function _showAISettingsModal() {
+    if (document.getElementById('flashcard-ai-settings-overlay')) return;
+
+    var fieldsHtml = _aiSchema.map(function (field, index) {
+      var delBtn = field.isDeletable
+        ? '<button class="hub-flashcard-ai-del-btn" data-index="' + index + '" title="Delete field">&times;</button>'
+        : '';
+      return '' +
+        '<div class="hub-flashcard-ai-field-row">' +
+          '<div class="hub-flashcard-ai-field-info">' +
+            '<span class="hub-flashcard-ai-field-id">' + _esc(field.id) + '</span>' +
+            '<span class="hub-flashcard-ai-field-name">' + _esc(field.name) + '</span>' +
+            '<span class="hub-flashcard-ai-field-prompt">' + _esc(field.prompt) + '</span>' +
+          '</div>' +
+          delBtn +
+        '</div>';
+    }).join('') || '<p class="hub-flashcard-ai-empty">No custom fields defined.</p>';
+
+    var overlay = document.createElement('div');
+    overlay.id = 'flashcard-ai-settings-overlay';
+    overlay.className = 'add-card-overlay';
+    overlay.innerHTML = '' +
+      '<div class="hub-flashcard-ai-modal glass">' +
+        '<div class="generate-modal-header">' +
+          '<div class="generate-modal-icon">' +
+            '<svg width="24" height="24" viewBox="0 0 24 24" fill="none">' +
+              '<path d="M12 2L2 7l10 5 10-5-10-5z" stroke="var(--accent-secondary)" stroke-width="1.5" stroke-linejoin="round"/>' +
+              '<path d="M2 17l10 5 10-5" stroke="var(--accent-secondary)" stroke-width="1.5" stroke-linejoin="round" opacity="0.6"/>' +
+              '<path d="M2 12l10 5 10-5" stroke="var(--accent-secondary)" stroke-width="1.5" stroke-linejoin="round" opacity="0.4"/>' +
+            '</svg>' +
+          '</div>' +
+          '<h3 class="generate-modal-title">Advanced AI Settings</h3>' +
+          '<p class="generate-modal-subtitle">Customize the AI prompt fields for auto-generated cards</p>' +
+        '</div>' +
+
+        '<div class="hub-flashcard-ai-body">' +
+
+          '<div class="hub-flashcard-ai-section">' +
+            '<h4 class="hub-flashcard-ai-section-title">Prompt Fields</h4>' +
+            '<div class="hub-flashcard-ai-field-list">' +
+              fieldsHtml +
+            '</div>' +
+          '</div>' +
+
+          '<div class="hub-flashcard-ai-section">' +
+            '<h4 class="hub-flashcard-ai-section-title">Add Custom Field</h4>' +
+            '<div class="hub-flashcard-ai-form">' +
+              '<div class="hub-flashcard-ai-form-row">' +
+                '<div class="hub-flashcard-ai-form-group" style="flex:1;">' +
+                  '<label class="hub-flashcard-ai-label">Field ID</label>' +
+                  '<input type="text" id="hub-ai-new-id" class="hub-flashcard-ai-input" placeholder="e.g. phrasal_verb" autocomplete="off">' +
+                '</div>' +
+                '<div class="hub-flashcard-ai-form-group" style="flex:1;">' +
+                  '<label class="hub-flashcard-ai-label">Field Name</label>' +
+                  '<input type="text" id="hub-ai-new-name" class="hub-flashcard-ai-input" placeholder="e.g. Phrasal Verb" autocomplete="off">' +
+                '</div>' +
+              '</div>' +
+              '<div class="hub-flashcard-ai-form-group">' +
+                '<label class="hub-flashcard-ai-label">AI Instruction</label>' +
+                '<textarea id="hub-ai-new-prompt" class="hub-flashcard-ai-textarea" placeholder="e.g. Provide a common phrasal verb using this word" rows="2"></textarea>' +
+              '</div>' +
+              '<button class="btn btn-primary" id="hub-ai-add-field-btn">+ Add Field</button>' +
+            '</div>' +
+          '</div>' +
+
+          '<div class="hub-flashcard-ai-status" id="hub-ai-status"></div>' +
+        '</div>' +
+
+        '<div class="generate-modal-footer">' +
+          '<button class="btn btn-ghost" id="hub-ai-close-btn">Close</button>' +
+        '</div>' +
+      '</div>';
+
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) _closeAISettingsModal();
+    });
+
+    var escHandler = function (e) {
+      if (e.key === 'Escape') {
+        _closeAISettingsModal();
+        document.removeEventListener('keydown', escHandler);
+      }
+    };
+    document.addEventListener('keydown', escHandler);
+
+    overlay.querySelector('#hub-ai-close-btn')
+      .addEventListener('click', _closeAISettingsModal);
+
+    overlay.querySelectorAll('.hub-flashcard-ai-del-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var index = parseInt(btn.dataset.index, 10);
+        _deleteAIField(index);
+      });
+    });
+
+    var idInput = overlay.querySelector('#hub-ai-new-id');
+    if (idInput) {
+      idInput.addEventListener('input', function () {
+        idInput.value = idInput.value.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+      });
+    }
+
+    overlay.querySelector('#hub-ai-add-field-btn')
+      .addEventListener('click', _addAIField);
+
+    var promptInput = overlay.querySelector('#hub-ai-new-prompt');
+    if (promptInput) {
+      promptInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          _addAIField();
+        }
+      });
+    }
+
+    setTimeout(function () {
+      if (idInput) idInput.focus();
+    }, 150);
+  }
+
+  function _closeAISettingsModal() {
+    var overlay = document.getElementById('flashcard-ai-settings-overlay');
+    if (overlay) overlay.remove();
+  }
+
+  function _addAIField() {
+    var overlay = document.getElementById('flashcard-ai-settings-overlay');
+    if (!overlay) return;
+
+    var idInput = overlay.querySelector('#hub-ai-new-id');
+    var nameInput = overlay.querySelector('#hub-ai-new-name');
+    var promptInput = overlay.querySelector('#hub-ai-new-prompt');
+    var statusEl = overlay.querySelector('#hub-ai-status');
+
+    var fieldId = (idInput ? idInput.value : '').trim();
+    var fieldName = (nameInput ? nameInput.value : '').trim();
+    var fieldPrompt = (promptInput ? promptInput.value : '').trim();
+
+    if (!fieldId) {
+      if (statusEl) {
+        statusEl.className = 'hub-flashcard-ai-status hub-flashcard-ai-status-error';
+        statusEl.textContent = 'Please enter a Field ID.';
+      }
+      if (idInput) idInput.focus();
+      return;
+    }
+    if (!fieldName) {
+      if (statusEl) {
+        statusEl.className = 'hub-flashcard-ai-status hub-flashcard-ai-status-error';
+        statusEl.textContent = 'Please enter a Field Name.';
+      }
+      if (nameInput) nameInput.focus();
+      return;
+    }
+    if (!fieldPrompt) {
+      if (statusEl) {
+        statusEl.className = 'hub-flashcard-ai-status hub-flashcard-ai-status-error';
+        statusEl.textContent = 'Please enter an AI Instruction.';
+      }
+      if (promptInput) promptInput.focus();
+      return;
+    }
+
+    var exists = _aiSchema.some(function (f) { return f.id === fieldId; });
+    if (exists) {
+      if (statusEl) {
+        statusEl.className = 'hub-flashcard-ai-status hub-flashcard-ai-status-error';
+        statusEl.textContent = 'A field with ID "' + fieldId + '" already exists.';
+      }
+      if (idInput) idInput.focus();
+      return;
+    }
+
+    _aiSchema.push({
+      id: fieldId,
+      name: fieldName,
+      prompt: fieldPrompt,
+      isDeletable: true
+    });
+
+    _saveAISettings();
+
+    if (idInput) idInput.value = '';
+    if (nameInput) nameInput.value = '';
+    if (promptInput) promptInput.value = '';
+
+    if (statusEl) {
+      statusEl.className = 'hub-flashcard-ai-status hub-flashcard-ai-status-success';
+      statusEl.textContent = 'Field "' + fieldName + '" added successfully!';
+      setTimeout(function () {
+        if (statusEl) { statusEl.className = 'hub-flashcard-ai-status'; statusEl.textContent = ''; }
+      }, 2000);
+    }
+
+    _reRenderAIFieldList();
+    if (idInput) idInput.focus();
+  }
+
+  function _deleteAIField(index) {
+    var field = _aiSchema[index];
+    if (!field) return;
+    if (!field.isDeletable) return;
+
+    _aiSchema.splice(index, 1);
+    _saveAISettings();
+    _reRenderAIFieldList();
+  }
+
+  function _reRenderAIFieldList() {
+    var overlay = document.getElementById('flashcard-ai-settings-overlay');
+    if (!overlay) return;
+
+    var fieldList = overlay.querySelector('.hub-flashcard-ai-field-list');
+    if (!fieldList) return;
+
+    if (_aiSchema.length === 0) {
+      fieldList.innerHTML = '<p class="hub-flashcard-ai-empty">No custom fields defined.</p>';
+      return;
+    }
+
+    fieldList.innerHTML = _aiSchema.map(function (field, index) {
+      var delBtn = field.isDeletable
+        ? '<button class="hub-flashcard-ai-del-btn" data-index="' + index + '" title="Delete field">&times;</button>'
+        : '';
+      return '' +
+        '<div class="hub-flashcard-ai-field-row">' +
+          '<div class="hub-flashcard-ai-field-info">' +
+            '<span class="hub-flashcard-ai-field-id">' + _esc(field.id) + '</span>' +
+            '<span class="hub-flashcard-ai-field-name">' + _esc(field.name) + '</span>' +
+            '<span class="hub-flashcard-ai-field-prompt">' + _esc(field.prompt) + '</span>' +
+          '</div>' +
+          delBtn +
+        '</div>';
+    }).join('');
+
+    fieldList.querySelectorAll('.hub-flashcard-ai-del-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var index = parseInt(btn.dataset.index, 10);
+        _deleteAIField(index);
+      });
+    });
   }
 
   /* ==========================================================
@@ -460,18 +791,7 @@ const flashcardModule = (function () {
       throw new Error('NO_API_KEY');
     }
 
-const prompt = `You are an English vocabulary tutor. Return ONLY valid JSON for the word '${word}'.
-Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_family, idioms, collocations, clozeSentence.
-- type: short form (n), (v), (adj), (adv)
-- vietnamese: concise Vietnamese meaning
-- describe: RETURN A LIST of distinct short meanings (each <= 12 words)
-- examples: RETURN A LIST of 2 short example sentences (natural, correct context)
-- note: return EXACTLY 3 short bullet points (<=15 words each) about common mistakes/confusions.
-- synonyms: up to 5
-- word_family: include forms with POS
-- idioms: return up to 2 idioms or set phrases using the word.
-- collocations: return 5 natural collocations
-- clozeSentence: A natural English example sentence. You MUST replace the target vocabulary word in this sentence with EXACTLY three underscores: "___"`;
+const prompt = buildAIPrompt(word, _aiSchema);
 
     const body = {
       contents: [
@@ -528,6 +848,8 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
       collocations: _ensureArray(parsed.collocations),
       clozeSentence: parsed.clozeSentence || '',
       imageUrl: parsed.imageUrl || '',
+      // Dynamic fields from AI schema
+      ...(_buildDynamicFields(parsed)),
       repetition: 0,
       interval: 0,
       easeFactor: 2.5,
@@ -550,6 +872,25 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
     }
 
     return JSON.parse(jsonStr);
+  }
+
+  /**
+   * Build dynamic field values from the AI schema.
+   * Maps each schema field to the value from the parsed response.
+   */
+  function _buildDynamicFields(parsed) {
+    var fields = {};
+    if (_aiSchema && _aiSchema.length > 0) {
+      _aiSchema.forEach(function (field) {
+        var val = parsed[field.id];
+        if (val !== undefined && val !== null) {
+          fields[field.id] = val;
+        } else {
+          fields[field.id] = '';
+        }
+      });
+    }
+    return fields;
   }
 
   /**
@@ -1410,6 +1751,12 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
           <div class="flashcard-header">
             <button class="btn btn-ghost" id="btn-back-to-library" style="padding:6px 14px;">⬅ Back to Decks</button>
             <h2 class="section-header" style="margin-bottom:0;">${_esc(deck.title)}</h2>
+            <button class="hub-flashcard-ai-settings-btn" id="btn-ai-settings-empty" title="Advanced AI Settings" aria-label="Advanced AI Settings">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <circle cx="9" cy="9" r="2.5" stroke="currentColor" stroke-width="1.3"/>
+                <path d="M9 1.5v2M9 14.5v2M1.5 9h2M14.5 9h2M3.6 3.6l1.4 1.4M13 13l1.4 1.4M3.6 14.4l1.4-1.4M13 5l1.4-1.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+              </svg>
+            </button>
           </div>
           <div class="empty-state">
             <div class="empty-state-icon">🃏</div>
@@ -1461,6 +1808,12 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
           <div class="btn-group">
             <button class="btn btn-primary btn-sm" id="btn-add-card-ai">✨ AI Generate</button>
             <button class="btn btn-manual-add btn-sm" id="btn-add-card-manual">✍️ Manual Add</button>
+            <button class="hub-flashcard-ai-settings-btn" id="btn-ai-settings" title="Advanced AI Settings" aria-label="Advanced AI Settings">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <circle cx="9" cy="9" r="2.5" stroke="currentColor" stroke-width="1.3"/>
+                <path d="M9 1.5v2M9 14.5v2M1.5 9h2M14.5 9h2M3.6 3.6l1.4 1.4M13 13l1.4 1.4M3.6 14.4l1.4-1.4M13 5l1.4-1.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -1659,11 +2012,13 @@ Keys: type, phonetic, vietnamese, describe, examples, note, synonyms, word_famil
       });
     }
 
-    // Add card buttons (AI + Manual)
+    // Add card buttons (AI + Manual + AI Settings)
     const btnAddAi = _container.querySelector('#btn-add-card-ai');
     if (btnAddAi) btnAddAi.addEventListener('click', _showAddForm);
     const btnAddManual = _container.querySelector('#btn-add-card-manual');
     if (btnAddManual) btnAddManual.addEventListener('click', () => _showCardEditorModal(null));
+    const btnAiSettings = _container.querySelector('#btn-ai-settings, #btn-ai-settings-empty');
+    if (btnAiSettings) btnAiSettings.addEventListener('click', _showAISettingsModal);
 
     // Prev / Next
     const btnPrev = _container.querySelector('#btn-prev');

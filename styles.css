@@ -8887,3 +8887,340 @@ body.light-mode .cyber-btn-google:hover:not(:disabled) {
   align-items: center;
   justify-content: center;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   FLASHCARD ADVANCED AI SETTINGS MODAL
+   Cyberpunk-styled modal for managing AI prompt fields
+   ═══════════════════════════════════════════════════════════ */
+
+/* Settings button in browse header — gear icon */
+.hub-flashcard-ai-settings-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(179, 71, 234, 0.25);
+  background: transparent;
+  color: var(--accent-secondary);
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+  flex-shrink: 0;
+}
+
+.hub-flashcard-ai-settings-btn:hover {
+  background: rgba(179, 71, 234, 0.1);
+  border-color: var(--accent-secondary);
+  box-shadow: 0 0 18px rgba(179, 71, 234, 0.25);
+  transform: translateY(-1px) rotate(30deg);
+}
+
+.hub-flashcard-ai-settings-btn:active {
+  transform: scale(0.9);
+}
+
+/* Modal overlay — reuses add-card-overlay */
+.hub-flashcard-ai-modal {
+  width: 92%;
+  max-width: 500px;
+  max-height: 88vh;
+  padding: var(--space-xl);
+  border-radius: var(--radius-xl);
+  animation: scaleIn 300ms var(--ease-out-expo);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Scrollable body */
+.hub-flashcard-ai-body {
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  padding-right: 6px;
+  margin: 0 -6px 0 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.08) transparent;
+}
+
+.hub-flashcard-ai-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.hub-flashcard-ai-body::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.1);
+  border-radius: var(--radius-full);
+}
+
+/* Section within the body */
+.hub-flashcard-ai-section {
+  margin-bottom: var(--space-lg);
+  padding-bottom: var(--space-lg);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.hub-flashcard-ai-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.hub-flashcard-ai-section-title {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent-secondary);
+  margin-bottom: var(--space-md);
+  text-shadow: 0 0 8px rgba(179, 71, 234, 0.2);
+}
+
+/* Field list */
+.hub-flashcard-ai-field-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/* Individual field row */
+.hub-flashcard-ai-field-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border);
+  transition: border-color var(--duration-fast) var(--ease-out-expo),
+              background var(--duration-fast) var(--ease-out-expo);
+}
+
+.hub-flashcard-ai-field-row:hover {
+  border-color: rgba(179, 71, 234, 0.2);
+  background: rgba(179, 71, 234, 0.04);
+}
+
+/* Field info: id, name, prompt stacked */
+.hub-flashcard-ai-field-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hub-flashcard-ai-field-id {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--accent-primary);
+  letter-spacing: 0.02em;
+}
+
+.hub-flashcard-ai-field-name {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.hub-flashcard-ai-field-prompt {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Delete button on field rows */
+.hub-flashcard-ai-del-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(255, 68, 102, 0.2);
+  background: transparent;
+  color: var(--danger);
+  font-size: 1rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+}
+
+.hub-flashcard-ai-del-btn:hover {
+  background: rgba(255, 68, 102, 0.12);
+  border-color: var(--danger);
+  box-shadow: 0 0 12px rgba(255, 68, 102, 0.25);
+  transform: scale(1.1);
+}
+
+.hub-flashcard-ai-del-btn:active {
+  transform: scale(0.85);
+}
+
+/* Empty state */
+.hub-flashcard-ai-empty {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: var(--space-sm);
+  text-align: center;
+}
+
+/* Add field form */
+.hub-flashcard-ai-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.hub-flashcard-ai-form-row {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+@media (max-width: 500px) {
+  .hub-flashcard-ai-form-row {
+    flex-direction: column;
+  }
+}
+
+.hub-flashcard-ai-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hub-flashcard-ai-label {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+}
+
+.hub-flashcard-ai-input {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  transition: border-color var(--duration-fast);
+}
+
+.hub-flashcard-ai-input:focus {
+  outline: none;
+  border-color: var(--accent-secondary);
+  box-shadow: 0 0 0 3px rgba(179, 71, 234, 0.1);
+}
+
+.hub-flashcard-ai-input::placeholder {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.hub-flashcard-ai-textarea {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  resize: vertical;
+  min-height: 52px;
+  line-height: 1.5;
+  transition: border-color var(--duration-fast);
+}
+
+.hub-flashcard-ai-textarea:focus {
+  outline: none;
+  border-color: var(--accent-secondary);
+  box-shadow: 0 0 0 3px rgba(179, 71, 234, 0.1);
+}
+
+.hub-flashcard-ai-textarea::placeholder {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+/* Status messages inside settings modal */
+.hub-flashcard-ai-status {
+  min-height: 24px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  padding: 4px 0;
+  transition: all var(--duration-fast);
+}
+
+.hub-flashcard-ai-status-success {
+  color: var(--success);
+  text-shadow: 0 0 8px rgba(68, 255, 136, 0.3);
+}
+
+.hub-flashcard-ai-status-error {
+  color: var(--danger);
+  text-shadow: 0 0 8px rgba(255, 68, 102, 0.3);
+}
+
+/* Light mode overrides for AI modal */
+html.light-mode .hub-flashcard-ai-input,
+body.light-mode .hub-flashcard-ai-input,
+html.light-mode .hub-flashcard-ai-textarea,
+body.light-mode .hub-flashcard-ai-textarea {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: var(--text-primary);
+}
+
+html.light-mode .hub-flashcard-ai-input:focus,
+body.light-mode .hub-flashcard-ai-input:focus,
+html.light-mode .hub-flashcard-ai-textarea:focus,
+body.light-mode .hub-flashcard-ai-textarea:focus {
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.08);
+}
+
+html.light-mode .hub-flashcard-ai-field-row:hover,
+body.light-mode .hub-flashcard-ai-field-row:hover {
+  background: rgba(124, 58, 237, 0.04);
+  border-color: rgba(124, 58, 237, 0.2);
+}
+
+html.light-mode .hub-flashcard-ai-section-title,
+body.light-mode .hub-flashcard-ai-section-title {
+  color: var(--accent-secondary);
+}
+
+html.light-mode .hub-flashcard-ai-settings-btn,
+body.light-mode .hub-flashcard-ai-settings-btn {
+  border-color: rgba(124, 58, 237, 0.25);
+  color: var(--accent-secondary);
+}
+
+html.light-mode .hub-flashcard-ai-settings-btn:hover,
+body.light-mode .hub-flashcard-ai-settings-btn:hover {
+  background: rgba(124, 58, 237, 0.08);
+  box-shadow: 0 0 12px rgba(124, 58, 237, 0.15);
+}
+
+/* Mobile perf patch for AI settings modal */
+@media (max-width: 768px) {
+  .hub-flashcard-ai-modal {
+    background: rgba(18, 18, 30, 0.96);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    max-width: 95vw;
+    max-height: 85vh;
+  }
+}
