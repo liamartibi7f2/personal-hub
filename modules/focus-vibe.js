@@ -335,12 +335,12 @@
     if (activeList.length === 0) return;
 
     var currentIdx = -1;
-    for (var i = 0; i < activeList.length; i++) {
-      if (activeList[i].videoId === S.currentVideoId) {
+    activeList.some(function (item, i) {
+      if (item.videoId === S.currentVideoId) {
         currentIdx = i;
-        break;
+        return true;
       }
-    }
+    });
 
     // If current track not in active list, start from first
     var nextIdx = currentIdx >= 0 ? (currentIdx + 1) % activeList.length : 0;
@@ -755,9 +755,9 @@ function renderVibeGridHTML(playlist, filterTag) {
   function editVibeInLibrary(id) {
     var playlist = getPlaylist();
     var idx = -1;
-    for (var i = 0; i < playlist.length; i++) {
-      if (playlist[i].id === id) { idx = i; break; }
-    }
+    playlist.some(function (item, i) {
+      if (item.id === id) { idx = i; return true; }
+    });
     if (idx === -1) return;
     if (playlist[idx]._default) return;
 
@@ -804,9 +804,9 @@ function renderVibeGridHTML(playlist, filterTag) {
   function deleteVibeFromLibrary(id) {
     var playlist = getPlaylist();
     var idx = -1;
-    for (var i = 0; i < playlist.length; i++) {
-      if (playlist[i].id === id) { idx = i; break; }
-    }
+    playlist.some(function (item, i) {
+      if (item.id === id) { idx = i; return true; }
+    });
     if (idx === -1) return;
     if (playlist[idx]._default) return;
     playlist.splice(idx, 1);

@@ -670,9 +670,14 @@ const flashcardModule = (function () {
     const updated = { ...card };
 
     if (quality >= 3) {
-      // Correct response — advance interval
       if (updated.repetition === 0) {
-        updated.interval = 1;
+        if (quality === QUALITY.HARD) {
+          updated.interval = 1;
+        } else if (quality === QUALITY.GOOD) {
+          updated.interval = 2;
+        } else {
+          updated.interval = 4;
+        }
       } else if (updated.repetition === 1) {
         updated.interval = 6;
       } else {
@@ -680,39 +685,26 @@ const flashcardModule = (function () {
       }
       updated.repetition++;
     } else {
-      // Incorrect (Again) — reset
       updated.repetition = 0;
       updated.interval = 1;
     }
 
-    // Update ease factor
     const qDiff = 5 - quality;
     updated.easeFactor = updated.easeFactor + (0.1 - qDiff * (0.08 + qDiff * 0.02));
     if (updated.easeFactor < 1.3) updated.easeFactor = 1.3;
 
-    // Set next review date
     if (isAgainInSession) {
-      // Re-queue in the same study session (set to now so it's immediately due)
       updated.nextReviewDate = Date.now();
     } else {
-      // Convert interval (days) to milliseconds
       updated.nextReviewDate = Date.now() + (updated.interval * 24 * 60 * 60 * 1000);
     }
 
     return updated;
   }
 
-  /* ==========================================================
-     SRS: Simulate what the next review label WOULD be
-     for a given quality, without mutating the card.
-     Returns a human-readable string like "< 1m", "1d", "6d"
-     ========================================================== */
-
   function _getNextReviewLabel(quality, card) {
-    // For "Again", always show "< 1m" (in-session re-queue)
     if (quality === QUALITY.AGAIN) return '< 1m';
 
-    // Simulate SM-2 calculation for this quality
     let interval, easeFactor;
 
     easeFactor = card.easeFactor +
@@ -721,7 +713,13 @@ const flashcardModule = (function () {
 
     if (quality >= 3) {
       if (card.repetition === 0) {
-        interval = 1;
+        if (quality === QUALITY.HARD) {
+          interval = 1;
+        } else if (quality === QUALITY.GOOD) {
+          interval = 2;
+        } else {
+          interval = 4;
+        }
       } else if (card.repetition === 1) {
         interval = 6;
       } else {
@@ -972,7 +970,14 @@ const prompt = buildAIPrompt(word, _aiSchema);
               <div class="deck-card glass-card" data-deck-id="${_esc(deck.id)}">
                 <div class="deck-card-top">
                   <h3 class="deck-card-title">${_esc(deck.title)}</h3>
-                  <button class="deck-delete-btn" data-action="delete-deck" data-deck-id="${_esc(deck.id)}" title="Delete deck">🗑</button>
+                  <div class="deck-card-actions-top">
+                    <button class="deck-rename-btn" data-action="rename-deck" data-deck-id="${_esc(deck.id)}" title="Rename deck">
+                      <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17 3a2.83 2.83 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+                      </svg>
+                    </button>
+                    <button class="deck-delete-btn" data-action="delete-deck" data-deck-id="${_esc(deck.id)}" title="Delete deck">🗑</button>
+                  </div>
                 </div>
                 <div class="deck-card-meta">
                   Total Cards: ${dTotal} ·
@@ -1028,6 +1033,8 @@ const prompt = buildAIPrompt(word, _aiSchema);
           _renderApp();
         } else if (action === 'delete-deck') {
           _showDeckDeleteConfirm(deckId);
+        } else if (action === 'rename-deck') {
+          _handleRenameDeck(deckId);
         }
       });
     });
@@ -1141,6 +1148,21 @@ const prompt = buildAIPrompt(word, _aiSchema);
   }
 
   /* ==========================================================
+     RENAME DECK
+     ========================================================== */
+
+  function _handleRenameDeck(deckId) {
+    const deck = _decks.find(d => d.id === deckId);
+    if (!deck) return;
+    const newName = prompt('Enter new name for this deck:', deck.title);
+    if (!newName || newName.trim() === '') return;
+    if (newName.trim() === deck.title) return;
+    deck.title = newName.trim();
+    _saveDecks();
+    _renderApp();
+  }
+
+  /* ==========================================================
      DELETE DECK CONFIRMATION
      ========================================================== */
 
@@ -1212,11 +1234,11 @@ const prompt = buildAIPrompt(word, _aiSchema);
 
     const now = Date.now();
     _studyQueue = [];
-    for (let i = 0; i < deck.cards.length; i++) {
-      if (deck.cards[i].nextReviewDate <= now) {
+    deck.cards.forEach(function (card, i) {
+      if (card.nextReviewDate <= now) {
         _studyQueue.push(i);
       }
-    }
+    });
 
     if (_studyQueue.length === 0) {
       _showToast('No cards due in this deck! You\'re all caught up.');
@@ -1225,7 +1247,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
       return;
     }
 
-    // Shuffle the queue for variety
+    // Shuffle the queue for variety (Fisher-Yates)
     for (let i = _studyQueue.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [_studyQueue[i], _studyQueue[j]] = [_studyQueue[j], _studyQueue[i]];
@@ -1564,12 +1586,12 @@ const prompt = buildAIPrompt(word, _aiSchema);
     };
     document.addEventListener('keydown', numberHandler);
 
-    // Assessment button clicks
-    _container.querySelectorAll('.srs-assessment-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const quality = parseInt(btn.dataset.quality, 10);
-        _handleAssessment(quality, cardIdx);
-      });
+    // Assessment button clicks (delegated)
+    _container.addEventListener('click', function (e) {
+      var btn = e.target.closest('.srs-assessment-btn');
+      if (!btn) return;
+      var quality = parseInt(btn.dataset.quality, 10);
+      _handleAssessment(quality, cardIdx);
     });
 
     // End session button
@@ -2050,12 +2072,12 @@ const prompt = buildAIPrompt(word, _aiSchema);
     };
     document.addEventListener('keydown', keyHandler);
 
-    // Dot indicators (click to jump)
-    _container.querySelectorAll('.deck-dot').forEach(dot => {
-      dot.addEventListener('click', () => {
-        _currentIndex = parseInt(dot.dataset.index, 10);
-        _renderBrowseMode();
-      });
+    // Dot indicators (click to jump, delegated)
+    _container.addEventListener('click', function (e) {
+      var dot = e.target.closest('.deck-dot');
+      if (!dot) return;
+      _currentIndex = parseInt(dot.dataset.index, 10);
+      _renderBrowseMode();
     });
 
     // Delete card

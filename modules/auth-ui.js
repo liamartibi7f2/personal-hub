@@ -435,16 +435,15 @@
     function onActivity() {
       if (_currentUser) _resetInactivityTimer();
     }
-    for (var i = 0; i < events.length; i++) {
-      document.addEventListener(events[i], onActivity, { passive: true });
-    }
+    events.forEach(function (evt) {
+      document.addEventListener(evt, onActivity, { passive: true });
+    });
   }
 
   function _resetInactivityTimer() {
     _clearInactivityTimer();
     _inactivityTimer = setTimeout(function () {
       if (_currentUser) {
-        console.log('[AuthUI] Inactivity timeout — signing out');
         _logout();
       }
     }, INACTIVITY_MS);

@@ -298,16 +298,16 @@ const dashboardModule = (function () {
       let dueCards   = 0;
       const now      = Date.now();
 
-      for (let i = 0; i < decks.length; i++) {
-        const cards = decks[i].cards;
-        if (!Array.isArray(cards)) continue;
+      decks.forEach(function (deck) {
+        const cards = deck.cards;
+        if (!Array.isArray(cards)) return;
         totalCards += cards.length;
-        for (let j = 0; j < cards.length; j++) {
-          if (typeof cards[j].nextReviewDate === 'number' && cards[j].nextReviewDate <= now) {
+        cards.forEach(function (card) {
+          if (typeof card.nextReviewDate === 'number' && card.nextReviewDate <= now) {
             dueCards++;
           }
-        }
-      }
+        });
+      });
 
       setText('w-total-cards', totalCards);
 
@@ -340,16 +340,16 @@ const dashboardModule = (function () {
       setText('w-quiz-decks', decks.length);
 
       let totalQuestions = 0;
-      for (let i = 0; i < decks.length; i++) {
-        const sections = decks[i].sections;
-        if (!Array.isArray(sections)) continue;
-        for (let j = 0; j < sections.length; j++) {
-          const questions = sections[j].questions;
+      decks.forEach(function (deck) {
+        const sections = deck.sections;
+        if (!Array.isArray(sections)) return;
+        sections.forEach(function (section) {
+          const questions = section.questions;
           if (Array.isArray(questions)) {
             totalQuestions += questions.length;
           }
-        }
-      }
+        });
+      });
 
       setText('w-quiz-questions', totalQuestions);
     }
@@ -404,8 +404,7 @@ const dashboardModule = (function () {
     for (let i = 1; i < dates.length; i++) {
       const prev     = new Date(dates[i - 1]);
       const curr     = new Date(dates[i]);
-      const diffDays = Math.round((prev - curr) / 86400000);
-      if (diffDays === 1) {
+      if (Math.round((prev - curr) / 86400000) === 1) {
         streak++;
       } else {
         break;

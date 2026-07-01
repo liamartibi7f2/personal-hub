@@ -8,14 +8,13 @@ const notesModule = (function () {
   'use strict';
 
   // ── Constants ──
-  const SAVE_DELAY  = 400;
+  const SAVE_DELAY  = 500;
 
   // ── Private state ──
   let _data         = null;
   let _activeFolder = null;
   let _activeNote   = null;
   let _container    = null;
-  let _saveTimer    = null;
   let _isDataLoaded = false;
   /** ⚠ LOAD GUARD: Prevents auto-save from overwriting cloud data
    *  with empty [] before data has finished loading from Firestore.
@@ -57,10 +56,7 @@ const notesModule = (function () {
   // mark _pageUnloading so no setTimeout callback will fire a write.
   window.addEventListener('beforeunload', function () {
     _pageUnloading = true;
-    if (_saveTimer) {
-      clearTimeout(_saveTimer);
-      _saveTimer = null;
-    }
+    HubDebounce.cancel('notes-auto-save');
   });
 
   // Bound handler references for cleanup
@@ -89,7 +85,6 @@ const notesModule = (function () {
         if (data.folders.length > 0) {
           _data = data;
           _isDataLoaded = true;
-          console.log("Notes data loaded from cloud/localStorage.");
           return;
         }
       }
@@ -123,7 +118,6 @@ const notesModule = (function () {
     if (!force && !_autoSaveEnabled) return;
     if (_pageUnloading) return; // Prevent ghost saves during page reload
 
-    console.log("SAVE TRIGGERED: Sending data to Firebase...");
     _showSaving(true, 'SYNCING TO CLOUD...');
     // Safety net: force "Saved" after 8s to prevent stuck indicator
     var safetyTimer = setTimeout(function () {
@@ -143,13 +137,7 @@ const notesModule = (function () {
     // ⚠ LOAD GUARD: Don't schedule auto-saves until data is fully loaded.
     if (!_isNotesDataLoaded) return;
     if (_pageUnloading) return; // Don't schedule saves during page reload
-    if (_saveTimer) clearTimeout(_saveTimer);
-    _saveTimer = setTimeout(function () {
-      _persist().then(function () {
-      }).catch(function () {
-      });
-      _saveTimer = null;
-    }, SAVE_DELAY);
+    HubDebounce.call('notes-auto-save', _persist, SAVE_DELAY);
   }
 
   function _showSaving(active, customMsg) {
@@ -235,7 +223,6 @@ const notesModule = (function () {
     //    From this point forward, auto-save is allowed to write to storage.
     _isNotesDataLoaded = true;
     _sessionInitialized = true;
-    console.log("Notes successfully loaded. Auto-save is now unlocked.");
 
     // 5) Overwrite with real Notes UI
     _renderUI();
@@ -361,20 +348,23 @@ const notesModule = (function () {
   function _renderFolders() {
     var el = _el.folderList;
     if (!el) return;
-    var html = '';
-    for (var i = 0; i < _data.folders.length; i++) {
-      var f = _data.folders[i];
+    var frag = document.createDocumentFragment();
+    _data.folders.forEach(function (f) {
       var activeClass = (_activeFolder && f.id === _activeFolder.id) ? ' hub-notes-active' : '';
-      html += '<button class="hub-notes-folder-item' + activeClass + '" data-folder-id="' + _escHtml(f.id) + '">' +
+      var btn = document.createElement('button');
+      btn.className = 'hub-notes-folder-item' + activeClass;
+      btn.dataset.folderId = f.id;
+      btn.innerHTML = '' +
         '<svg class="hub-notes-folder-icon" width="14" height="14" viewBox="0 0 20 20" fill="none">' +
           '<path d="M2 5a2 2 0 012-2h4l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V5z" fill="currentColor" opacity="0.3"/>' +
           '<path d="M2 5a2 2 0 012-2h4l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V5z" stroke="currentColor" stroke-width="1.2" fill="none"/>' +
         '</svg>' +
         '<span>' + _escHtml(f.name) + '</span>' +
-        '<span class="hub-notes-folder-count">' + (f.notes ? f.notes.length : 0) + '</span>' +
-      '</button>';
-    }
-    el.innerHTML = html;
+        '<span class="hub-notes-folder-count">' + (f.notes ? f.notes.length : 0) + '</span>';
+      frag.appendChild(btn);
+    });
+    el.innerHTML = '';
+    el.appendChild(frag);
   }
 
   function _renderNoteList() {
@@ -384,17 +374,20 @@ const notesModule = (function () {
       el.innerHTML = '<div class="hub-notes-empty-list">No notes yet</div>';
       return;
     }
-    var html = '';
-    for (var i = 0; i < _activeFolder.notes.length; i++) {
-      var n = _activeFolder.notes[i];
-      if (!n) continue; // Safety check
+    var frag = document.createDocumentFragment();
+    _activeFolder.notes.forEach(function (n) {
+      if (!n) return;
       var activeClass = (_activeNote && n.id === _activeNote.id) ? ' hub-notes-active' : '';
-      html += '<button class="hub-notes-note-item' + activeClass + '" data-note-id="' + _escHtml(n.id) + '">' +
+      var btn = document.createElement('button');
+      btn.className = 'hub-notes-note-item' + activeClass;
+      btn.dataset.noteId = n.id;
+      btn.innerHTML = '' +
         '<span class="hub-notes-note-title">' + _escHtml(n.title || 'Untitled') + '</span>' +
-        '<span class="hub-notes-note-date">' + _formatDate(n.updatedAt) + '</span>' +
-      '</button>';
-    }
-    el.innerHTML = html;
+        '<span class="hub-notes-note-date">' + _formatDate(n.updatedAt) + '</span>';
+      frag.appendChild(btn);
+    });
+    el.innerHTML = '';
+    el.appendChild(frag);
   }
 
   function _formatDate(ts) {
@@ -494,10 +487,7 @@ const notesModule = (function () {
   }
 
   function _renameFolder(folderId) {
-    var folder = null;
-    for (var i = 0; i < _data.folders.length; i++) {
-      if (_data.folders[i].id === folderId) { folder = _data.folders[i]; break; }
-    }
+    var folder = _data.folders.find(function (f) { return f.id === folderId; });
     if (!folder) return;
     var name = prompt('Rename desk:', folder.name);
     if (!name || !name.trim() || name.trim() === folder.name) return;
@@ -508,10 +498,7 @@ const notesModule = (function () {
 
   function _deleteFolder(folderId) {
     if (!confirm('Delete this desk and all its notes?')) return;
-    var idx = -1;
-    for (var i = 0; i < _data.folders.length; i++) {
-      if (_data.folders[i].id === folderId) { idx = i; break; }
-    }
+    var idx = _data.folders.findIndex(function (f) { return f.id === folderId; });
     if (idx === -1) return;
     _data.folders.splice(idx, 1);
 
@@ -610,11 +597,10 @@ const notesModule = (function () {
   function _filterNoteList(query) {
     var items = document.querySelectorAll('.hub-notes-note-item');
     var q = query.toLowerCase().trim();
-    for (var i = 0; i < items.length; i++) {
-      var item = items[i];
+    [].forEach.call(items, function (item) {
       if (!q) {
         item.style.display = '';
-        continue;
+        return;
       }
       var titleEl = item.querySelector('.hub-notes-note-title');
       var title   = titleEl ? titleEl.textContent.toLowerCase() : '';
@@ -623,20 +609,17 @@ const notesModule = (function () {
       if (!content) {
         var nid = item.getAttribute('data-note-id');
         if (nid && _activeFolder) {
-          for (var j = 0; j < _activeFolder.notes.length; j++) {
-            var n = _activeFolder.notes[j];
-            if (n && n.id === nid) {
-              content = (n.title || '') + ' ' + (n.content || '');
-              content = content.toLowerCase().replace(/<[^>]+>/g, '');
-              item.setAttribute('data-search-content', content);
-              break;
-            }
+          var note = _activeFolder.notes.find(function (n) { return n && n.id === nid; });
+          if (note) {
+            content = (note.title || '') + ' ' + (note.content || '');
+            content = content.toLowerCase().replace(/<[^>]+>/g, '');
+            item.setAttribute('data-search-content', content);
           }
         }
       }
       var match = title.indexOf(q) !== -1 || content.indexOf(q) !== -1;
       item.style.display = match ? '' : 'none';
-    }
+    });
   }
 
   /**
@@ -694,10 +677,7 @@ const notesModule = (function () {
       var item = e.target.closest('.hub-notes-folder-item');
       if (!item) return;
       var fid = item.getAttribute('data-folder-id');
-      var folder = null;
-      for (var i = 0; i < _data.folders.length; i++) {
-        if (_data.folders[i].id === fid) { folder = _data.folders[i]; break; }
-      }
+      var folder = _data.folders.find(function (f) { return f.id === fid; });
       if (!folder || folder.id === _activeFolder.id) return;
       _activeFolder = folder;
       _activeNote = _activeFolder.notes[0] || null;
@@ -749,14 +729,9 @@ const notesModule = (function () {
     if (_el.editor) {
       _el.editor.addEventListener('paste', function (e) {
         var items = e.clipboardData && e.clipboardData.items;
-        if (items) {
-          for (var i = 0; i < items.length; i++) {
-            if (items[i].type.indexOf('image') !== -1) {
-              e.preventDefault();
-              alert('⚠️ Hub.OS Protocol: Direct image pasting is disabled to protect the 5MB storage limit. Please use an Image URL instead.');
-              return;
-            }
-          }
+        if (items && [].some.call(items, function (it) { return it.type.indexOf('image') !== -1; })) {
+          e.preventDefault();
+          alert('⚠️ Hub.OS Protocol: Direct image pasting is disabled to protect the 5MB storage limit. Please use an Image URL instead.');
         }
         var html = e.clipboardData && e.clipboardData.getData('text/html');
         if (html && html.indexOf('src="data:image/') !== -1) {
@@ -770,14 +745,9 @@ const notesModule = (function () {
     if (_el.editor) {
       _el.editor.addEventListener('drop', function (e) {
         var files = e.dataTransfer && e.dataTransfer.files;
-        if (files) {
-          for (var i = 0; i < files.length; i++) {
-            if (files[i].type.indexOf('image') !== -1) {
-              e.preventDefault();
-              alert('⚠️ Hub.OS Protocol: Drag & drop for images is not supported in the Offline version.');
-              return;
-            }
-          }
+        if (files && [].some.call(files, function (f) { return f.type.indexOf('image') !== -1; })) {
+          e.preventDefault();
+          alert('⚠️ Hub.OS Protocol: Drag & drop for images is not supported in the Offline version.');
         }
       });
     }
@@ -829,15 +799,7 @@ const notesModule = (function () {
         var nid = item.getAttribute('data-note-id');
         if (!nid || (_activeNote && nid === _activeNote.id)) return;
         _saveImmediate();
-        var note = null;
-        if (_activeFolder) {
-          for (var i = 0; i < _activeFolder.notes.length; i++) {
-            if (_activeFolder.notes[i] && _activeFolder.notes[i].id === nid) { 
-              note = _activeFolder.notes[i]; 
-              break; 
-            }
-          }
-        }
+        var note = _activeFolder ? _activeFolder.notes.find(function (n) { return n && n.id === nid; }) : null;
         if (note) {
           _activeNote = note;
           _renderNoteList();
@@ -1022,10 +984,7 @@ function _updateToolbarPosition() {
   // ============================================================
 
   async function _saveImmediate() {
-    if (_saveTimer) {
-      clearTimeout(_saveTimer);
-      _saveTimer = null;
-    }
+    HubDebounce.cancel('notes-auto-save');
     if (_activeNote && _el.titleInput && _el.editor) {
       _activeNote.title   = _el.titleInput.value || 'Untitled';
       _activeNote.content = _el.editor.innerHTML;
@@ -1047,10 +1006,7 @@ function _updateToolbarPosition() {
         _activeNote.title   = _el.titleInput.value || 'Untitled';
         _activeNote.content = _el.editor.innerHTML;
       }
-      if (_saveTimer) {
-        clearTimeout(_saveTimer);
-        _saveTimer = null;
-      }
+      HubDebounce.cancel('notes-auto-save');
       _persist(true).then(function () {
         var el = document.getElementById('hn-save-feedback');
         if (el) {
@@ -1112,8 +1068,6 @@ function _updateToolbarPosition() {
       // Re-run the full render cycle over the existing container
       render(_container);
     }
-
-    console.log("[Notes] Data loaded from cloud after login.");
   }
 
   /**
@@ -1122,10 +1076,7 @@ function _updateToolbarPosition() {
    */
   function clearData() {
     // 1) Cancel any pending save
-    if (_saveTimer) {
-      clearTimeout(_saveTimer);
-      _saveTimer = null;
-    }
+    HubDebounce.cancel('notes-auto-save');
 
     // 2) Reset session cache + Load Guard — no saves will fire until re-login + re-load
     _sessionInitialized = false;
@@ -1163,8 +1114,7 @@ function _updateToolbarPosition() {
     _boundDocKeyup    = null;
     _boundDocKeydown  = null;
 
-    console.log("[Notes] Data cleared after logout. Load Guard reset.");
-  }
+    }
 
   // ============================================================
   //   DESTROY
@@ -1173,10 +1123,7 @@ function _updateToolbarPosition() {
   function destroy() {
     // Fire-and-forget save on destroy; no need to block teardown
     _saveImmediate().catch(function () {});
-    if (_saveTimer) {
-      clearTimeout(_saveTimer);
-      _saveTimer = null;
-    }
+    HubDebounce.cancel('notes-auto-save');
 
     // Remove document-level listeners
     if (_boundDocMouseup)   document.removeEventListener('mouseup', _boundDocMouseup);

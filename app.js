@@ -99,8 +99,12 @@ const app = (function () {
       <span class="nav-icon">${mod.icon}</span>
       <span>${mod.name}</span>
     `;
-    btn.addEventListener('click', () => switchTo(mod.id));
     _navList.appendChild(btn);
+
+    // Direct click listener on this nav item
+    btn.addEventListener('click', function () {
+      switchTo(mod.id);
+    });
   }
 
   // --- Listen for browser back/forward (hashchange) ---

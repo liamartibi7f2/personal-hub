@@ -3474,6 +3474,38 @@ body.light-mode .btn-edit-card:hover {
   transform: scale(0.97);
 }
 
+/* Top-right action buttons container */
+.deck-card-actions-top {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+/* Rename button — subtle, turns neon on hover */
+.deck-rename-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+}
+.deck-rename-btn:hover {
+  color: var(--accent-primary);
+  border-color: rgba(0, 230, 255, 0.25);
+  background: rgba(0, 230, 255, 0.08);
+}
+.deck-rename-btn:active {
+  transform: scale(0.9);
+}
+
 /* Delete button — subtle, turns red on hover */
 .deck-delete-btn {
   width: 30px;
@@ -6376,7 +6408,9 @@ body.light-mode .sidebar-settings-btn,
 html.light-mode .card-flip-back-btn,
 body.light-mode .card-flip-back-btn,
 html.light-mode .deck-delete-btn,
-body.light-mode .deck-delete-btn {
+body.light-mode .deck-delete-btn,
+html.light-mode .deck-rename-btn,
+body.light-mode .deck-rename-btn {
   background: rgba(0, 0, 0, 0.04);
   border-color: rgba(0, 0, 0, 0.10);
 }

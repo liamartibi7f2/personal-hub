@@ -29,7 +29,7 @@ const HubDB = (function () {
 
   // ── Global debounce utility (shared by all modules) ──
   window.HubDebounce = (function () {
-    var timers = {};
+    const timers = {};
     return {
       call: function (key, fn, delay) {
         if (timers[key]) clearTimeout(timers[key]);
@@ -45,7 +45,7 @@ const HubDB = (function () {
         }
       },
       flush: function (key) {
-        var t = timers[key];
+        const t = timers[key];
         if (t) { clearTimeout(t); delete timers[key]; }
       }
     };
@@ -156,7 +156,6 @@ const HubDB = (function () {
             }),
           _timeout(2500)
         ]);
-        console.log('[HubDB] Notes saved to subcollection successfully.');
         return; // success — exit early
       } catch (err) {
         // Log detailed error so the user can see Firestore Security Rules issues
@@ -189,7 +188,7 @@ const HubDB = (function () {
     // Fast-path: if browser says offline, skip auth wait + Firestore entirely
     if (navigator.onLine === false) {
       try {
-        var raw = localStorage.getItem(LOCAL_KEY);
+        const raw = localStorage.getItem(LOCAL_KEY);
         if (raw) return JSON.parse(raw);
       } catch (_) {}
       return null;
@@ -198,32 +197,27 @@ const HubDB = (function () {
     // Try Firestore subcollection first when online (with 2.5s timeout)
     if (_isOnline()) {
       try {
-        var doc = await Promise.race([
+        const doc = await Promise.race([
           _notesDocRef().get(),
           _timeout(2500)
         ]);
         if (doc.exists) {
-          var cloudData = doc.data().workspace;
+          const cloudData = doc.data().workspace;
           if (cloudData && cloudData.folders && cloudData.folders.length > 0) {
             // Merge any localStorage changes the user made while offline
             try {
-              var localRaw = localStorage.getItem(LOCAL_KEY);
+              const localRaw = localStorage.getItem(LOCAL_KEY);
               if (localRaw) {
                 _mergeLocalIntoCloud(cloudData, JSON.parse(localRaw));
-                // Persist the merged result back to Firestore silently
                 _notesDocRef().set({ workspace: cloudData }).catch(function () {});
               }
             } catch (_) {}
-            // Clear local copy after successful cloud read + merge
             try { localStorage.removeItem(LOCAL_KEY); } catch (_) {}
             return cloudData;
           }
         }
 
-        // Cloud doc exists but workspace is empty/missing, OR doc doesn't exist.
-        // Initialize a proper default structure and save it to cloud so that
-        // logging in from another browser gets data, not empty overwrites.
-        var defaultData = {
+        let defaultData = {
           folders: [{
             id: 'folder-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
             name: 'Personal',
@@ -236,18 +230,16 @@ const HubDB = (function () {
           }]
         };
 
-        // Check localStorage for any unsaved work first
         try {
-          var localRaw = localStorage.getItem(LOCAL_KEY);
+          const localRaw = localStorage.getItem(LOCAL_KEY);
           if (localRaw) {
-            var localData = JSON.parse(localRaw);
+            const localData = JSON.parse(localRaw);
             if (localData && localData.folders && localData.folders.length > 0) {
               defaultData = localData;
             }
           }
         } catch (_) {}
 
-        // Persist the default/merged data to Firestore subcollection so cloud is never empty
         try {
           await Promise.race([
             _notesDocRef().set({ workspace: defaultData }),
@@ -261,9 +253,8 @@ const HubDB = (function () {
       }
     }
 
-    // localStorage fallback
     try {
-      var raw = localStorage.getItem(LOCAL_KEY);
+      const raw = localStorage.getItem(LOCAL_KEY);
       if (raw) return JSON.parse(raw);
     } catch (_) {}
     return null;
@@ -276,28 +267,20 @@ const HubDB = (function () {
   function _mergeLocalIntoCloud(cloud, local) {
     if (!local || !local.folders || !cloud || !cloud.folders) return;
     local.folders.forEach(function (localFolder) {
-      var match = cloud.folders.find(function (f) { return f.id === localFolder.id; });
+      const match = cloud.folders.find(function (f) { return f.id === localFolder.id; });
       if (!match) {
-        // Entire folder doesn't exist in cloud → add it
         cloud.folders.push(localFolder);
       } else if (localFolder.notes && localFolder.notes.length) {
-        // Merge individual notes that don't exist in cloud.
-        // PROTECT: if a local note is empty and the cloud note has content,
-        // do NOT overwrite the cloud content — keep the richer version.
         localFolder.notes.forEach(function (localNote) {
           if (!localNote) return;
-          var noteMatch = match.notes.find(function (n) { return n && n.id === localNote.id; });
+          const noteMatch = match.notes.find(function (n) { return n && n.id === localNote.id; });
           if (!noteMatch) {
             match.notes.push(localNote);
           } else if (!localNote.content || !localNote.content.trim()) {
-            // Local note is empty → keep the cloud version (it has content)
-            // Do nothing — cloud note already has the richer content
           } else if (!noteMatch.content || !noteMatch.content.trim()) {
-            // Cloud note is empty but local has content → keep local version
             noteMatch.content = localNote.content;
             if (localNote.title) noteMatch.title = localNote.title;
           }
-          // If both have content, keep the cloud version (most recently synced)
         });
       }
     });
@@ -309,7 +292,7 @@ const HubDB = (function () {
    */
   async function loginWithGoogle() {
     await _ensureReady();
-    var provider = new firebase.auth.GoogleAuthProvider();
+    const provider = new firebase.auth.GoogleAuthProvider();
     return _auth.signInWithPopup(provider);
   }
 
@@ -333,7 +316,7 @@ const HubDB = (function () {
    */
   async function shareQuizDeck(deckData) {
     await _ensureReady();
-    var code = _generateShareCode();
+    const code = _generateShareCode();
     try {
       if (!_isOnline()) {
         throw new Error('You must be logged in to the Cloud to share a deck.');
@@ -359,13 +342,13 @@ const HubDB = (function () {
    * @returns {Promise<Object|null>} The quiz deck data, or null if not found
    */
   async function importSharedQuiz(shareCode) {
-    var code = (shareCode || '').trim().toUpperCase();
+    const code = (shareCode || '').trim().toUpperCase();
     if (!code || code.length !== 6) throw new Error('Invalid code: must be exactly 6 characters');
 
     await _ensureReady();
     try {
       if (_ready && navigator.onLine !== false) {
-        var doc = await Promise.race([
+        const doc = await Promise.race([
           _db.collection('shared_quizzes').doc(code).get()
             .catch(function (err) {
               console.error('[HubDB] Import Error — Firestore read rejected (permission denied?):', err);
@@ -377,7 +360,7 @@ const HubDB = (function () {
           console.warn('[HubDB] Import Error — code "' + code + '" not found in shared_quizzes');
           throw new Error('Quiz not found: "' + code + '" does not exist.');
         }
-        var data = doc.data();
+        const data = doc.data();
         if (!data || !data.sections || data.sections.length === 0) {
           console.warn('[HubDB] Import Error — document exists but has no quiz data');
           throw new Error('Quiz data is empty or corrupted.');
@@ -387,7 +370,6 @@ const HubDB = (function () {
         console.warn('[HubDB] Cannot import — browser is offline. Trying localStorage fallback.');
       }
     } catch (err) {
-      // Re-throw Firestore/timeout errors for the caller to handle
       if (err.message && (err.message.indexOf('Quiz not found') !== -1 ||
           err.message.indexOf('Permission denied') !== -1 ||
           err.message.indexOf('Invalid code') !== -1 ||
@@ -399,8 +381,8 @@ const HubDB = (function () {
 
     // Offline-only fallback: check localStorage
     try {
-      var shared = JSON.parse(localStorage.getItem('hub_shared_quizzes') || '{}');
-      var localData = shared[code];
+      const shared = JSON.parse(localStorage.getItem('hub_shared_quizzes') || '{}');
+      const localData = shared[code];
       if (localData) {
         return localData;
       }
@@ -415,9 +397,9 @@ const HubDB = (function () {
    * Retries up to 5 times if the code already exists in shared_quizzes.
    */
   function _generateShareCode() {
-    var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude O,0,I,1 for readability
-    var code = '';
-    for (var i = 0; i < 6; i++) {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude O,0,I,1 for readability
+    let code = '';
+    for (let i = 0; i < 6; i++) {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return code;
@@ -477,7 +459,7 @@ const HubDB = (function () {
     // Fast-path: if browser says offline, skip auth wait + Firestore entirely
     if (navigator.onLine === false) {
       try {
-        var raw = localStorage.getItem(FLASHCARD_KEY);
+        const raw = localStorage.getItem(FLASHCARD_KEY);
         if (raw) return JSON.parse(raw);
       } catch (_) {}
       return null;
@@ -486,43 +468,35 @@ const HubDB = (function () {
     // Try Firestore first when online (with 2.5s timeout)
     if (_isOnline()) {
       try {
-        var doc = await Promise.race([
+        const doc = await Promise.race([
           _userRef().get(),
           _timeout(2500)
         ]);
         if (doc.exists) {
-          var cloudData = doc.data().flashcardsData;
+          const cloudData = doc.data().flashcardsData;
           if (cloudData && cloudData.decks && cloudData.decks.length > 0) {
             // Merge any localStorage changes the user made while offline
             try {
-              var localRaw = localStorage.getItem(FLASHCARD_KEY);
+              const localRaw = localStorage.getItem(FLASHCARD_KEY);
               if (localRaw) {
                 _mergeLocalFlashcardsIntoCloud(cloudData, JSON.parse(localRaw));
-                // Persist the merged result back to Firestore silently
                 _userRef().set({ flashcardsData: cloudData }, { merge: true }).catch(function () {});
               }
             } catch (_) {}
-            // Clear local copy after successful cloud read + merge
             try { localStorage.removeItem(FLASHCARD_KEY); } catch (_) {}
             return cloudData;
           }
         }
 
-        // Cloud doc exists but flashcardsData is empty/missing, OR doc doesn't exist.
-        // Initialize a default structure and save it to cloud so that
-        // logging in from another browser gets data, not empty overwrites.
-        var defaultFlashcardData = {
+        let defaultFlashcardData = {
           decks: []
         };
 
-        // Check localStorage for any unsaved work first.
-        // Filter out auto-generated "Default Deck" templates that have no cards.
         try {
-          var localRaw = localStorage.getItem(FLASHCARD_KEY);
+          const localRaw = localStorage.getItem(FLASHCARD_KEY);
           if (localRaw) {
-            var localData = JSON.parse(localRaw);
+            const localData = JSON.parse(localRaw);
             if (localData && localData.decks && localData.decks.length > 0) {
-              // Strip default templates before using local data as default
               localData.decks = localData.decks.filter(function (d) {
                 return !(d.title === 'Default Deck' && (!d.cards || d.cards.length === 0));
               });
@@ -549,24 +523,18 @@ const HubDB = (function () {
 
     // localStorage fallback
     try {
-      var raw = localStorage.getItem(FLASHCARD_KEY);
+      const raw = localStorage.getItem(FLASHCARD_KEY);
       if (raw) return JSON.parse(raw);
     } catch (_) {}
     return null;
   }
 
-  /**
-   * Merge any decks/cards that exist locally but not in the cloud.
-   * This prevents data loss when the user adds cards offline.
-   *
-   * IMPORTANT: Skips auto-generated "Default Deck" templates to prevent
-   * the offline default from cloning itself on every cloud sync.
-   */
   function _mergeLocalFlashcardsIntoCloud(cloud, local) {
     if (!local || !local.decks || !cloud || !cloud.decks) return;
-    // Build a set of existing deck IDs + titles for fast duplicate check
-    var cloudIds = {};
-    var cloudTitles = {};
+    const cloudIds = {};
+    const cloudTitles = {};
+
+    // Quick build deck ID+title set; local-only additions skip re-propagating cloud set
     cloud.decks.forEach(function (d) {
       if (d.id) cloudIds[d.id] = true;
       if (d.title) cloudTitles[d.title.toLowerCase().trim()] = true;
@@ -585,7 +553,7 @@ const HubDB = (function () {
 
       // 3) Skip if a deck with the exact same title already exists in the cloud
       //    (case-insensitive, trimmed)
-      var titleKey = localDeck.title ? localDeck.title.toLowerCase().trim() : '';
+      const titleKey = localDeck.title ? localDeck.title.toLowerCase().trim() : '';
       if (titleKey && cloudTitles[titleKey]) return;
 
       // Deck is genuinely new → add it to the cloud
@@ -596,14 +564,11 @@ const HubDB = (function () {
 
     // Now merge cards for decks that already existed in cloud (same ID)
     local.decks.forEach(function (localDeck) {
-      var match = cloud.decks.find(function (d) { return d.id === localDeck.id; });
+      const match = cloud.decks.find(function (d) { return d.id === localDeck.id; });
       if (match && localDeck.cards && localDeck.cards.length) {
-        // Merge individual cards that don't exist in cloud.
-        // PROTECT: if a local card is empty and the cloud card has content,
-        // do NOT overwrite the cloud content — keep the richer version.
         localDeck.cards.forEach(function (localCard) {
           if (!localCard) return;
-          var cardMatch = match.cards.find(function (c) { return c && c.term === localCard.term; });
+          const cardMatch = match.cards.find(function (c) { return c && c.term === localCard.term; });
           if (!cardMatch) {
             match.cards.push(localCard);
           } else if (!localCard.term || !localCard.term.trim()) {
@@ -672,56 +637,47 @@ const HubDB = (function () {
     // Fast-path: if browser says offline, skip auth wait + Firestore entirely
     if (navigator.onLine === false) {
       try {
-        var raw = localStorage.getItem(QUIZ_KEY);
+        const raw = localStorage.getItem(QUIZ_KEY);
         if (raw) return { decks: JSON.parse(raw) };
       } catch (_) {}
       return { decks: [] };
     }
     await _ensureReady();
-    // Try Firestore first when online (with 2.5s timeout)
     if (_isOnline()) {
       try {
-        var doc = await Promise.race([
+        const doc = await Promise.race([
           _userRef().get(),
           _timeout(2500)
         ]);
         if (doc.exists) {
-          var cloudData = doc.data().quizData;
+          const cloudData = doc.data().quizData;
           if (cloudData && cloudData.decks && cloudData.decks.length > 0) {
-            // Merge any localStorage changes the user made while offline
             try {
-              var localRaw = localStorage.getItem(QUIZ_KEY);
+              const localRaw = localStorage.getItem(QUIZ_KEY);
               if (localRaw) {
                 _mergeLocalQuizIntoCloud(cloudData, { decks: JSON.parse(localRaw) });
-                // Persist the merged result back to Firestore silently
                 _userRef().set({ quizData: cloudData }, { merge: true }).catch(function () {});
               }
             } catch (_) {}
-            // Clear local copy after successful cloud read + merge
             try { localStorage.removeItem(QUIZ_KEY); } catch (_) {}
             return cloudData;
           }
         }
 
-        // Cloud doc exists but quizData is empty/missing, OR doc doesn't exist.
-        // Initialize a default structure and save it to cloud so that
-        // logging in from another browser gets data, not empty overwrites.
-        var defaultQuizData = {
+        let defaultQuizData = {
           decks: []
         };
 
-        // Check localStorage for any unsaved work first
         try {
-          var localRaw = localStorage.getItem(QUIZ_KEY);
+          const localRaw = localStorage.getItem(QUIZ_KEY);
           if (localRaw) {
-            var localData = { decks: JSON.parse(localRaw) };
+            const localData = { decks: JSON.parse(localRaw) };
             if (localData.decks && localData.decks.length > 0) {
               defaultQuizData = localData;
             }
           }
         } catch (_) {}
 
-        // Persist the default/merged data to Firestore so cloud is never empty
         try {
           await Promise.race([
             _userRef().set({ quizData: defaultQuizData }, { merge: true }),
@@ -735,24 +691,18 @@ const HubDB = (function () {
       }
     }
 
-    // localStorage fallback
     try {
-      var raw = localStorage.getItem(QUIZ_KEY);
+      const raw = localStorage.getItem(QUIZ_KEY);
       if (raw) return { decks: JSON.parse(raw) };
     } catch (_) {}
     return { decks: [] };
   }
 
-  /**
-   * Merge any quiz decks that exist locally but not in the cloud.
-   * This prevents data loss when the user adds decks offline.
-   */
   function _mergeLocalQuizIntoCloud(cloud, local) {
     if (!local || !local.decks || !cloud || !cloud.decks) return;
     local.decks.forEach(function (localDeck) {
-      var match = cloud.decks.find(function (d) { return d.id === localDeck.id; });
+      const match = cloud.decks.find(function (d) { return d.id === localDeck.id; });
       if (!match) {
-        // Entire deck doesn't exist in cloud → add it
         cloud.decks.push(localDeck);
       }
     });
@@ -814,63 +764,54 @@ const HubDB = (function () {
     // Fast-path: if browser says offline, skip auth wait + Firestore entirely
     if (navigator.onLine === false) {
       try {
-        var raw = localStorage.getItem(FOCUS_KEY);
+        const raw = localStorage.getItem(FOCUS_KEY);
         if (raw) return JSON.parse(raw);
       } catch (_) {}
       return null;
     }
     await _ensureReady();
-    // Try Firestore first when online (with 2.5s timeout)
     if (_isOnline()) {
       try {
-        var doc = await Promise.race([
+        const doc = await Promise.race([
           _userRef().get(),
           _timeout(2500)
         ]);
         if (doc.exists) {
-          var cloudData = doc.data().focusData;
+          const cloudData = doc.data().focusData;
           if (cloudData && cloudData.customLinks) {
-            // Merge any localStorage changes the user made while offline
             try {
-              var localRaw = localStorage.getItem(FOCUS_KEY);
+              const localRaw = localStorage.getItem(FOCUS_KEY);
               if (localRaw) {
                 _mergeLocalFocusIntoCloud(cloudData, JSON.parse(localRaw));
-                // Persist the merged result back to Firestore silently
                 _userRef().set({ focusData: cloudData }, { merge: true }).catch(function () {});
               }
             } catch (_) {}
-            // Clear local copy after successful cloud read + merge
             try { localStorage.removeItem(FOCUS_KEY); } catch (_) {}
             return cloudData;
           }
         }
 
-        // Cloud doc exists but focusData is empty/missing, OR doc doesn't exist.
-        // Initialize a default structure and save it to cloud so that
-        // logging in from another browser gets data, not empty overwrites.
-        var defaultFocusData = {
+        let defaultFocusData = {
           customLinks: [],
           lastStation: 'lofi',
           volume: 50,
           playlist: []
         };
 
-        // Check localStorage for any unsaved work first
         try {
-          var localRaw = localStorage.getItem(FOCUS_KEY);
+          const localRaw = localStorage.getItem(FOCUS_KEY);
           if (localRaw) {
-            var localData = JSON.parse(localRaw);
+            const localData = JSON.parse(localRaw);
             if (localData && localData.customLinks) {
               defaultFocusData = localData;
             }
           }
         } catch (_) {}
 
-        // Also merge the old `hub_focus_playlist` key if it exists (migration)
         try {
-          var oldPlaylistRaw = localStorage.getItem('hub_focus_playlist');
+          const oldPlaylistRaw = localStorage.getItem('hub_focus_playlist');
           if (oldPlaylistRaw) {
-            var oldPlaylist = JSON.parse(oldPlaylistRaw);
+            const oldPlaylist = JSON.parse(oldPlaylistRaw);
             if (Array.isArray(oldPlaylist) && oldPlaylist.length > 0 && (!defaultFocusData.playlist || defaultFocusData.playlist.length === 0)) {
               defaultFocusData.playlist = oldPlaylist;
             }
@@ -878,7 +819,6 @@ const HubDB = (function () {
           }
         } catch (_) {}
 
-        // Persist the default/merged data to Firestore so cloud is never empty
         try {
           await Promise.race([
             _userRef().set({ focusData: defaultFocusData }, { merge: true }),
@@ -892,9 +832,8 @@ const HubDB = (function () {
       }
     }
 
-    // localStorage fallback
     try {
-      var raw = localStorage.getItem(FOCUS_KEY);
+      const raw = localStorage.getItem(FOCUS_KEY);
       if (raw) return JSON.parse(raw);
     } catch (_) {}
     return null;
@@ -996,54 +935,45 @@ const HubDB = (function () {
     // Fast-path: if browser says offline, skip auth wait + Firestore entirely
     if (navigator.onLine === false) {
       try {
-        var raw = localStorage.getItem(POMODORO_KEY);
+        const raw = localStorage.getItem(POMODORO_KEY);
         if (raw) return { ...DEFAULT_POMODORO_DATA, ...JSON.parse(raw) };
       } catch (_) {}
       return { ...DEFAULT_POMODORO_DATA };
     }
     await _ensureReady();
-    // Try Firestore first when online (with 2.5s timeout)
     if (_isOnline()) {
       try {
-        var doc = await Promise.race([
+        const doc = await Promise.race([
           _userRef().get(),
           _timeout(2500)
         ]);
         if (doc.exists) {
-          var cloudData = doc.data().pomodoroData;
+          const cloudData = doc.data().pomodoroData;
           if (cloudData && (typeof cloudData.totalFocusMinutes === 'number' || cloudData.work)) {
-            // Merge any localStorage changes the user made while offline
             try {
-              var localRaw = localStorage.getItem(POMODORO_KEY);
+              const localRaw = localStorage.getItem(POMODORO_KEY);
               if (localRaw) {
                 _mergeLocalPomodoroIntoCloud(cloudData, JSON.parse(localRaw));
-                // Persist the merged result back to Firestore silently
                 _userRef().set({ pomodoroData: cloudData }, { merge: true }).catch(function () {});
               }
             } catch (_) {}
-            // Clear local copy after successful cloud read + merge
             try { localStorage.removeItem(POMODORO_KEY); } catch (_) {}
             return { ...DEFAULT_POMODORO_DATA, ...cloudData };
           }
         }
 
-        // Cloud doc exists but pomodoroData is empty/missing, OR doc doesn't exist.
-        // Initialize a default structure and save it to cloud so that
-        // logging in from another browser gets data, not empty overwrites.
-        var defaultPomodoroData = { ...DEFAULT_POMODORO_DATA };
+        const defaultPomodoroData = { ...DEFAULT_POMODORO_DATA };
 
-        // Check localStorage for any unsaved work first
         try {
-          var localRaw = localStorage.getItem(POMODORO_KEY);
+          const localRaw = localStorage.getItem(POMODORO_KEY);
           if (localRaw) {
-            var localData = JSON.parse(localRaw);
+            const localData = JSON.parse(localRaw);
             if (localData && (typeof localData.totalFocusMinutes === 'number' || localData.work)) {
               defaultPomodoroData = { ...defaultPomodoroData, ...localData };
             }
           }
         } catch (_) {}
 
-        // Persist the default/merged data to Firestore so cloud is never empty
         try {
           await Promise.race([
             _userRef().set({ pomodoroData: defaultPomodoroData }, { merge: true }),
@@ -1057,43 +987,32 @@ const HubDB = (function () {
       }
     }
 
-    // localStorage fallback
     try {
-      var raw = localStorage.getItem(POMODORO_KEY);
+      const raw = localStorage.getItem(POMODORO_KEY);
       if (raw) return { ...DEFAULT_POMODORO_DATA, ...JSON.parse(raw) };
     } catch (_) {}
     return { ...DEFAULT_POMODORO_DATA };
   }
 
-  /**
-   * Merge any local pomodoro data changes into the cloud data.
-   * This prevents data loss when the user completes sessions offline.
-   * Merges completion stats cumulatively, prefers local settings
-   * (most recently changed).
-   */
   function _mergeLocalPomodoroIntoCloud(cloud, local) {
     if (!local || !cloud) return;
-    // Merge cumulative stats (additive — count each completed session once)
     if (typeof local.totalFocusMinutes === 'number') {
       cloud.totalFocusMinutes = Math.max(cloud.totalFocusMinutes || 0, local.totalFocusMinutes);
     }
     if (typeof local.completedSessions === 'number') {
       cloud.completedSessions = Math.max(cloud.completedSessions || 0, local.completedSessions);
     }
-    // Merge daily history (local sessions not yet recorded in cloud)
     if (local.dailyHistory && typeof local.dailyHistory === 'object') {
       if (!cloud.dailyHistory) cloud.dailyHistory = {};
       Object.keys(local.dailyHistory).forEach(function (dateKey) {
-        var localVal = local.dailyHistory[dateKey];
-        var cloudVal = cloud.dailyHistory[dateKey] || 0;
+        const localVal = local.dailyHistory[dateKey];
+        const cloudVal = cloud.dailyHistory[dateKey] || 0;
         cloud.dailyHistory[dateKey] = Math.max(localVal, cloudVal);
       });
     }
-    // Prefer local lastCompletedDate if it's more recent
     if (local.lastCompletedDate && (!cloud.lastCompletedDate || local.lastCompletedDate > cloud.lastCompletedDate)) {
       cloud.lastCompletedDate = local.lastCompletedDate;
     }
-    // Prefer local settings (most recently changed)
     if (typeof local.work === 'number') cloud.work = local.work;
     if (typeof local.shortBreak === 'number') cloud.shortBreak = local.shortBreak;
     if (typeof local.longBreak === 'number') cloud.longBreak = local.longBreak;
@@ -1165,7 +1084,7 @@ const HubDB = (function () {
   async function loadFlashcardSettings() {
     if (navigator.onLine === false) {
       try {
-        var raw = localStorage.getItem(FLASHCARD_SETTINGS_KEY);
+        const raw = localStorage.getItem(FLASHCARD_SETTINGS_KEY);
         if (raw) return JSON.parse(raw);
       } catch (_) {}
       return { ...DEFAULT_FLASHCARD_SETTINGS, schema: DEFAULT_FLASHCARD_SETTINGS.schema.map(function (s) { return { ...s }; }) };
@@ -1174,25 +1093,23 @@ const HubDB = (function () {
 
     if (_isOnline()) {
       try {
-        var doc = await Promise.race([
+        const doc = await Promise.race([
           _flashcardSettingsDocRef().get(),
           _timeout(2500)
         ]);
         if (doc.exists) {
-          var cloudData = doc.data();
+          const cloudData = doc.data();
           if (cloudData && cloudData.schema && cloudData.schema.length > 0) {
             try { localStorage.removeItem(FLASHCARD_SETTINGS_KEY); } catch (_) {}
             return cloudData;
           }
         }
 
-        // No cloud data — check localStorage, then default
         try {
-          var localRaw = localStorage.getItem(FLASHCARD_SETTINGS_KEY);
+          const localRaw = localStorage.getItem(FLASHCARD_SETTINGS_KEY);
           if (localRaw) {
-            var localData = JSON.parse(localRaw);
+            const localData = JSON.parse(localRaw);
             if (localData && localData.schema && localData.schema.length > 0) {
-              // Persist local data to cloud
               _flashcardSettingsDocRef().set(localData).catch(function () {});
               try { localStorage.removeItem(FLASHCARD_SETTINGS_KEY); } catch (_) {}
               return localData;
@@ -1200,8 +1117,7 @@ const HubDB = (function () {
           }
         } catch (_) {}
 
-        // No data exists — save defaults to cloud
-        var defaults = {
+        const defaults = {
           ...DEFAULT_FLASHCARD_SETTINGS,
           schema: DEFAULT_FLASHCARD_SETTINGS.schema.map(function (s) { return { ...s }; })
         };
@@ -1212,9 +1128,8 @@ const HubDB = (function () {
       }
     }
 
-    // localStorage fallback
     try {
-      var raw = localStorage.getItem(FLASHCARD_SETTINGS_KEY);
+      const raw = localStorage.getItem(FLASHCARD_SETTINGS_KEY);
       if (raw) return JSON.parse(raw);
     } catch (_) {}
     return { ...DEFAULT_FLASHCARD_SETTINGS, schema: DEFAULT_FLASHCARD_SETTINGS.schema.map(function (s) { return { ...s }; }) };

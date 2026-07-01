@@ -387,29 +387,16 @@ D. Local Councils`;
     if (btnCreate)  btnCreate.addEventListener('click', () => { _mode = 'editor'; _renderApp(); });
     if (btnCreateFirst) btnCreateFirst.addEventListener('click', () => { _mode = 'editor'; _renderApp(); });
 
-    // Play, Share, and Delete buttons on deck cards
-    _container.querySelectorAll('[data-action="play"]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const id = btn.dataset.deckId;
-        _handlePlayDeck(id);
-      });
-    });
-
-    _container.querySelectorAll('[data-action="share"]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const id = btn.dataset.deckId;
-        _handleShareDeck(id);
-      });
-    });
-
-    _container.querySelectorAll('[data-action="delete"]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const id = btn.dataset.deckId;
-        _handleDeleteDeck(id);
-      });
+    // Play, Share, and Delete buttons on deck cards (delegated)
+    _container.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      e.stopPropagation();
+      var action = btn.dataset.action;
+      var id = btn.dataset.deckId;
+      if (action === 'play') _handlePlayDeck(id);
+      else if (action === 'share') _handleShareDeck(id);
+      else if (action === 'delete') _handleDeleteDeck(id);
     });
 
     // --- AI Generator events ---
@@ -690,9 +677,9 @@ D. Local Councils`;
 
     // Validate at least one question was parsed
     let totalQuestions = 0;
-    for (const section of result.sections) {
+    (result.sections || []).forEach(function (section) {
       totalQuestions += section.questions.length;
-    }
+    });
     if (totalQuestions === 0) {
       _showErrors(['No valid questions found. Check your formatting and try again.']);
       return;
@@ -881,13 +868,13 @@ D. Local Councils`;
     // First, calculate score
     let total = 0, correct = 0;
     if (_quizData) {
-      for (let si = 0; si < _quizData.sections.length; si++) {
-        const qs = _quizData.sections[si].questions;
+      _quizData.sections.forEach(function (section, si) {
+        const qs = section.questions;
         total += qs.length;
-        for (let qi = 0; qi < qs.length; qi++) {
+        qs.forEach(function (q, qi) {
           if (_answeredMap[si + '-' + qi] === 'correct') correct++;
-        }
-      }
+        });
+      });
     }
 
     // Reveal all unanswered questions
@@ -916,33 +903,27 @@ D. Local Councils`;
     let totalQuestions = 0;
     let answeredCount = 0;
     let correctCount = 0;
-    for (let si = 0; si < sections.length; si++) {
-      const qs = sections[si].questions;
+    sections.forEach(function (section, si) {
+      const qs = section.questions;
       totalQuestions += qs.length;
-      for (let qi = 0; qi < qs.length; qi++) {
+      qs.forEach(function (q, qi) {
         const key = `${si}-${qi}`;
         if (_answeredMap[key]) {
           answeredCount++;
           if (_answeredMap[key] === 'correct') correctCount++;
         }
-      }
-    }
+      });
+    });
     const allAnswered = answeredCount === totalQuestions;
 
     // Build sections HTML
-    let sectionsHtml = '';
-
-    for (let si = 0; si < sections.length; si++) {
-      const section = sections[si];
-      let questionsHtml = '';
-
-      for (let qi = 0; qi < section.questions.length; qi++) {
-        const q = section.questions[qi];
+    const sectionsHtml = sections.map(function (section, si) {
+      const questionsHtml = section.questions.map(function (q, qi) {
         const key = `${si}-${qi}`;
         const selected = _selectedMap[key] || null;
         const answered = !!_answeredMap[key];
 
-        questionsHtml += `
+        return `
           <div class="quiz-question-card glass-card" id="q-card-${si}-${qi}">
             <!-- Question number + text -->
             <div class="quiz-question-header">
@@ -990,18 +971,18 @@ D. Local Councils`;
             ` : ''}
           </div>
         `;
-      }
+      }).join('');
 
       // Section wrapper
       const sectionTitle = section.title || `Section ${si + 1}`;
-      sectionsHtml += `
+      return `
         <div class="quiz-section">
           <h3 class="quiz-section-title">${_esc(sectionTitle)}</h3>
           <div class="quiz-section-count">${section.questions.length} question${section.questions.length !== 1 ? 's' : ''}</div>
           ${questionsHtml}
         </div>
       `;
-    }
+    }).join('');
 
     _container.innerHTML = `
       <div class="tab-content quiz-app">
@@ -1225,8 +1206,8 @@ D. Local Councils`;
     };
 
     // Lock share buttons to prevent double-clicks while generating
-    var shareBtns = _container ? _container.querySelectorAll('[data-action="share"]') : [];
-    for (var si = 0; si < shareBtns.length; si++) { shareBtns[si].disabled = true; }
+    var shareBtns = _container ? Array.from(_container.querySelectorAll('[data-action="share"]')) : [];
+    shareBtns.forEach(function (btn) { btn.disabled = true; });
 
     // Find modal elements
     var overlay = document.getElementById('hub-quiz-share-overlay');
@@ -1237,7 +1218,7 @@ D. Local Councils`;
     if (!overlay) {
       console.warn('[Quiz] Share overlay element (#hub-quiz-share-overlay) not found in DOM');
       _showToast('Share modal unavailable — please reload the page.');
-      for (var s2 = 0; s2 < shareBtns.length; s2++) { shareBtns[s2].disabled = false; }
+      shareBtns.forEach(function (btn) { btn.disabled = false; });
       return;
     }
 
@@ -1246,9 +1227,7 @@ D. Local Councils`;
     if (feedbackEl) feedbackEl.textContent = '';
 
     try {
-      console.log('[Quiz] Calling HubDB.shareQuizDeck...');
       var shareCode = await HubDB.shareQuizDeck(shareData);
-      console.log('[Quiz] Share code received:', shareCode);
 
       // Populate the modal fields
       if (codeDisplay) codeDisplay.textContent = shareCode;
@@ -1259,7 +1238,6 @@ D. Local Councils`;
 
       // Open the modal
       overlay.style.display = 'flex';
-      console.log('[Quiz] Share overlay display set to flex');
 
       // Select link text after the DOM has painted
       if (linkInput) {
@@ -1284,7 +1262,7 @@ D. Local Councils`;
       _showToast('Share failed: ' + (err.message || 'Check connection'));
     } finally {
       // Re-enable share buttons
-      for (var s3 = 0; s3 < shareBtns.length; s3++) { shareBtns[s3].disabled = false; }
+      shareBtns.forEach(function (btn) { btn.disabled = false; });
     }
   }
 

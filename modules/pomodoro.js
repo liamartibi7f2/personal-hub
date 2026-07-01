@@ -432,10 +432,10 @@ const pomodoroModule = (function () {
     var filtered = _getFilteredHistory(range);
     var totalMinutes = 0;
     var totalCompleted = 0;
-    for (var i = 0; i < filtered.length; i++) {
-      totalMinutes  += filtered[i].minutes;
-      totalCompleted += filtered[i].completed;
-    }
+    filtered.forEach(function (d) {
+      totalMinutes  += d.minutes;
+      totalCompleted += d.completed;
+    });
     return { totalMinutes: totalMinutes, totalCompleted: totalCompleted };
   }
 
@@ -445,15 +445,15 @@ const pomodoroModule = (function () {
     var raw = _getFilteredHistory('week');
     var days = [];
 
-    for (var i = 0; i < raw.length; i++) {
-      var d = new Date(raw[i].date + 'T12:00:00');
+    raw.forEach(function (r) {
+      var d = new Date(r.date + 'T12:00:00');
       days.push({
-        date:    raw[i].date,
+        date:    r.date,
         dayName: d.toLocaleDateString('en-US', { weekday: 'short' }),
-        minutes: raw[i].minutes,
-        isToday: raw[i].date === _getDateKey(new Date())
+        minutes: r.minutes,
+        isToday: r.date === _getDateKey(new Date())
       });
-    }
+    });
 
     return days;
   }
@@ -472,8 +472,8 @@ const pomodoroModule = (function () {
       var endIdx   = Math.min(startIdx + chunkSize, totalDays);
       var weekMinutes = 0;
 
-      for (var i = startIdx; i < endIdx; i++) {
-        weekMinutes += raw[i].minutes;
+      for (var j = startIdx; j < endIdx; j++) {
+        weekMinutes += raw[j].minutes;
       }
 
       var sDate = new Date(raw[startIdx].date + 'T12:00:00');
@@ -508,21 +508,21 @@ const pomodoroModule = (function () {
     }
 
     var monthNow = now.getMonth();
-    for (var i = 0; i < raw.length; i++) {
-      var dateObj = new Date(raw[i].date + 'T12:00:00');
+    raw.forEach(function (r) {
+      var dateObj = new Date(r.date + 'T12:00:00');
       if (dateObj.getFullYear() === year) {
-        monthBuckets[dateObj.getMonth()] += raw[i].minutes;
+        monthBuckets[dateObj.getMonth()] += r.minutes;
       }
-    }
+    });
 
     var months = [];
-    for (var mi = 0; mi < 12; mi++) {
+    monthNames.forEach(function (name, mi) {
       months.push({
-        label:     monthNames[mi],
+        label:     name,
         minutes:   monthBuckets[mi],
         isCurrent: mi === monthNow
       });
-    }
+    });
 
     return months;
   }
@@ -578,15 +578,13 @@ const pomodoroModule = (function () {
     var isYearView = _chartRange === 'year';
     var maxValue   = Math.max.apply(null, chartData.bars.map(function (d) { return d.minutes; }).concat([1]));
 
-    var barsHtml = '';
-    for (var i = 0; i < chartData.bars.length; i++) {
-      var d = chartData.bars[i];
+    var barsHtml = chartData.bars.map(function (d) {
       var displayVal = isYearView ? (d.minutes / 60) : d.minutes;
       var displayValStr = isYearView
         ? (displayVal >= 0.1 ? displayVal.toFixed(1) + 'h' : '')
         : (d.minutes > 0 ? d.minutes + 'm' : '');
       var heightPct = Math.max(4, (d.minutes / maxValue) * 100);
-      barsHtml +=
+      return '' +
         '<div class="chart-bar-wrapper">' +
           '<span class="chart-bar-value">' + displayValStr + '</span>' +
           '<div class="chart-bar' + (d.isCurrent ? ' chart-bar--today' : '') + '"' +
@@ -595,7 +593,7 @@ const pomodoroModule = (function () {
           '</div>' +
           '<span class="chart-bar-label' + (d.isCurrent ? ' chart-bar-label--today' : '') + '">' + (d.shortLabel || d.dayName || d.label) + '</span>' +
         '</div>';
-    }
+    }).join('');
 
     var chartBarsEl = _container.querySelector('#chart-bars');
     if (chartBarsEl) chartBarsEl.innerHTML = barsHtml;
@@ -978,11 +976,9 @@ const pomodoroModule = (function () {
   function _renderSoundField() {
     var current = _settings.soundProfile || 'classic';
 
-    var profileOpts = '';
-    for (var pi = 0; pi < SOUND_PROFILES.length; pi++) {
-      var p = SOUND_PROFILES[pi];
-      profileOpts += '<option value="' + p.key + '"' + (p.key === current ? ' selected' : '') + '>' + p.label + '</option>';
-    }
+    var profileOpts = SOUND_PROFILES.map(function (p) {
+      return '<option value="' + p.key + '"' + (p.key === current ? ' selected' : '') + '>' + p.label + '</option>';
+    }).join('');
 
     return '' +
       '<div class="settings-field">' +
@@ -1026,17 +1022,18 @@ const pomodoroModule = (function () {
   function _bindEvents() {
     if (!_container) return;
 
-    // --- Mode toggle buttons ---
-    _container.querySelectorAll('.mode-btn').forEach(btn => {
-      btn.addEventListener('click', function () {
-        var mode = this.dataset.mode;
+    // --- Mode toggle buttons (delegated) ---
+    _container.addEventListener('click', function (e) {
+      var btn = e.target.closest('.mode-btn');
+      if (btn) {
+        var mode = btn.dataset.mode;
         if (mode === _currentMode) return;
         // Clearing grace period or focus tracking when user manually switches
         _inGracePeriod = false;
         _focusStartTime = null;
         _isFocusSession = false;
         _switchMode(mode);
-      });
+      }
     });
 
     // --- Timer controls ---
@@ -1080,20 +1077,20 @@ const pomodoroModule = (function () {
       });
     }
 
-    // --- Settings: stepper buttons ---
-    _container.querySelectorAll('.stepper-btn').forEach(btn => {
-      btn.addEventListener('click', function () {
-        var target = this.dataset.target;
-        var dir    = parseInt(this.dataset.dir, 10);
-        var input  = _container.querySelector('#input-' + target);
-        if (input) {
-          var min  = parseInt(input.getAttribute('min'), 10) || 1;
-          var max  = parseInt(input.getAttribute('max'), 10) || 120;
-          var val  = parseInt(input.value, 10) || 0;
-          val = Math.max(min, Math.min(max, val + dir));
-          input.value = val;
-        }
-      });
+    // --- Settings: stepper buttons (delegated) ---
+    _container.addEventListener('click', function (e) {
+      var btn = e.target.closest('.stepper-btn');
+      if (!btn) return;
+      var target = btn.dataset.target;
+      var dir    = parseInt(btn.dataset.dir, 10);
+      var input  = _container.querySelector('#input-' + target);
+      if (input) {
+        var min  = parseInt(input.getAttribute('min'), 10) || 1;
+        var max  = parseInt(input.getAttribute('max'), 10) || 120;
+        var val  = parseInt(input.value, 10) || 0;
+        val = Math.max(min, Math.min(max, val + dir));
+        input.value = val;
+      }
     });
 
     // --- Settings: test sound button ---
@@ -1122,14 +1119,14 @@ const pomodoroModule = (function () {
     };
     document.addEventListener('keydown', _escapeHandler);
 
-    // --- Chart range toggle pills ---
-    _container.querySelectorAll('.chart-range-btn').forEach(btn => {
-      btn.addEventListener('click', function () {
-        var range = this.dataset.range;
-        if (!range || range === _chartRange) return;
-        _chartRange = range;
-        _updateStatsAndChart();
-      });
+    // --- Chart range toggle pills (delegated) ---
+    _container.addEventListener('click', function (e) {
+      var btn = e.target.closest('.chart-range-btn');
+      if (!btn) return;
+      var range = btn.dataset.range;
+      if (!range || range === _chartRange) return;
+      _chartRange = range;
+      _updateStatsAndChart();
     });
   }
 
@@ -1321,6 +1318,9 @@ const pomodoroModule = (function () {
 
   function _startInterval() {
     if (_timerInterval) clearInterval(_timerInterval);
+    // Cache DOM refs for hot-path timer updates
+    var timeEl = document.getElementById('timer-time');
+    var ringEl = document.getElementById('ring-progress');
     _timerInterval = setInterval(function () {
       var now   = Date.now();
       var delta = (now - _lastTickTime) / 1000;
@@ -1337,8 +1337,6 @@ const pomodoroModule = (function () {
       }
 
       var displaySeconds = Math.ceil(_secondsRemaining);
-      var timeEl = document.getElementById('timer-time');
-      var ringEl = document.getElementById('ring-progress');
       if (timeEl) {
         var m = Math.floor(displaySeconds / 60);
         var s = displaySeconds % 60;
@@ -1374,8 +1372,7 @@ const pomodoroModule = (function () {
       // -- Cycle System --
       _currentCycle = (_currentCycle + 1) % _targetCycles;
 
-      // Dispatch success event with explicit console log
-      console.log('EVENT DISPATCHED: prodex-pomodoro-success');
+      // Dispatch success event
       try {
         document.dispatchEvent(new CustomEvent('prodex-pomodoro-success'));
       } catch (_e) { /* noop */ }
@@ -1409,8 +1406,7 @@ const pomodoroModule = (function () {
     if (_inGracePeriod) {
       _inGracePeriod = false;
 
-      // Dispatch fail event with explicit console log
-      console.log('EVENT DISPATCHED: prodex-pomodoro-fail (grace expired)');
+      // Dispatch fail event
       try {
         document.dispatchEvent(new CustomEvent('prodex-pomodoro-fail'));
       } catch (_e) { /* noop */ }
@@ -1529,19 +1525,19 @@ const pomodoroModule = (function () {
       master.connect(ctx.destination);
 
       var freqs = [880, 1100, 880, 1100, 1320];
-      for (var i = 0; i < freqs.length; i++) {
+      freqs.forEach(function (freq, i) {
         var t = now + i * 0.18;
         var osc = ctx.createOscillator();
         var g = ctx.createGain();
         osc.type = 'square';
-        osc.frequency.setValueAtTime(freqs[i], t);
+        osc.frequency.setValueAtTime(freq, t);
         g.gain.setValueAtTime(0.25, t);
         g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
         osc.connect(g);
         g.connect(master);
         osc.start(t);
         osc.stop(t + 0.25);
-      }
+      });
     } catch (_) { /* audio unavailable */ }
   }
 
