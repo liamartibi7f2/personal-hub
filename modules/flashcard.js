@@ -84,10 +84,22 @@ const flashcardModule = (function () {
         '</div>' +
       '</div>';
 
-    // 2) Await data (async — may hit Firestore)
+    console.log("[Flashcard] render() — checking auth & loading decks");
+
+    // 2) Wait for Firebase auth to settle before attempting to fetch
+    //    This prevents a race condition where the decks firestore query
+    //    fires before onAuthStateChanged has populated the user.
+    if (typeof HubDB !== 'undefined' && HubDB.waitForReady) {
+      console.log("[Flashcard] Waiting for HubDB auth ready...");
+      await HubDB.waitForReady();
+      var authStatus = HubDB.getAuthStatus();
+      console.log("[Flashcard] Auth ready — loggedIn:", authStatus.loggedIn, "uid:", authStatus.uid);
+    }
+
+    // 3) Await data (async — may hit Firestore)
     await _loadDecksAsync();
 
-    // 3) Load AI settings from Firebase (async — uses load guard)
+    // 4) Load AI settings from Firebase (async — uses load guard)
     await _loadAISettingsAsync();
 
     _currentIndex = 0;
@@ -136,8 +148,12 @@ const flashcardModule = (function () {
    * fallback to localStorage otherwise).
    */
   async function _loadDecksAsync() {
+    console.log("[Flashcard] _loadDecksAsync() — fetching decks from HubDB...");
+    var authCheck = HubDB.getAuthStatus();
+    console.log("[Flashcard] Auth status at load time — loggedIn:", authCheck.loggedIn, "uid:", authCheck.uid);
     try {
       const data = await HubDB.loadFlashcardsData();
+      console.log("[Flashcard] _loadDecksAsync() — HubDB returned:", data ? (data.decks ? data.decks.length + " decks" : "no decks key") : "null");
       if (data && Array.isArray(data.decks)) {
         if (data.decks.length > 0) {
           if (data.decks[0].cards !== undefined) {

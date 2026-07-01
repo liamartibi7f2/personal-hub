@@ -456,6 +456,7 @@ const HubDB = (function () {
    * @returns {Object|null} The parsed flashcards data, or default structure
    */
   async function loadFlashcardsData() {
+    console.log("[HubDB] loadFlashcardsData() called — auth ready:", _ready, "user:", _user ? _user.uid : "null", "online:", navigator.onLine !== false);
     // Fast-path: if browser says offline, skip auth wait + Firestore entirely
     if (navigator.onLine === false) {
       try {
@@ -472,8 +473,10 @@ const HubDB = (function () {
           _userRef().get(),
           _timeout(2500)
         ]);
+        console.log("[HubDB] loadFlashcardsData — doc.exists:", doc ? doc.exists : "no doc", "user:", _user ? _user.uid : "null");
         if (doc.exists) {
           const cloudData = doc.data().flashcardsData;
+          console.log("[HubDB] loadFlashcardsData — cloud flashcardsData:", cloudData ? (cloudData.decks ? cloudData.decks.length + " decks" : "no decks") : "null");
           if (cloudData && cloudData.decks && cloudData.decks.length > 0) {
             // Merge any localStorage changes the user made while offline
             try {
@@ -484,6 +487,7 @@ const HubDB = (function () {
               }
             } catch (_) {}
             try { localStorage.removeItem(FLASHCARD_KEY); } catch (_) {}
+            console.log("[HubDB] loadFlashcardsData — returning cloud data with", cloudData.decks.length, "decks");
             return cloudData;
           }
         }
@@ -502,6 +506,8 @@ const HubDB = (function () {
           }
         } catch (_) {}
 
+        console.log("[HubDB] loadFlashcardsData — no cloud data found, defaultFlashcardData has", defaultFlashcardData.decks.length, "decks");
+
         // Persist the default/merged data to Firestore so cloud is never empty
         try {
           await Promise.race([
@@ -510,13 +516,13 @@ const HubDB = (function () {
           ]);
         } catch (_) {}
         try { localStorage.removeItem(FLASHCARD_KEY); } catch (_) {}
+        console.log("[HubDB] loadFlashcardsData — returning default/local data with", defaultFlashcardData.decks.length, "decks");
         return defaultFlashcardData;
       } catch (err) {
         console.warn('[HubDB] Firestore load failed, trying localStorage:', err.message);
       }
     }
-
-    // localStorage fallback
+    console.log("[HubDB] loadFlashcardsData — not online, falling back to localStorage");
     try {
       const raw = localStorage.getItem(FLASHCARD_KEY);
       if (raw) return JSON.parse(raw);
