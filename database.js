@@ -497,12 +497,7 @@ const HubDB = (function () {
           if (localRaw) {
             const localData = JSON.parse(localRaw);
             if (localData && localData.decks && localData.decks.length > 0) {
-              localData.decks = localData.decks.filter(function (d) {
-                return !(d.title === 'Default Deck' && (!d.cards || d.cards.length === 0));
-              });
-              if (localData.decks.length > 0) {
-                defaultFlashcardData = localData;
-              }
+              defaultFlashcardData = localData;
             }
           }
         } catch (_) {}
@@ -534,35 +529,22 @@ const HubDB = (function () {
     const cloudIds = {};
     const cloudTitles = {};
 
-    // Quick build deck ID+title set; local-only additions skip re-propagating cloud set
     cloud.decks.forEach(function (d) {
       if (d.id) cloudIds[d.id] = true;
       if (d.title) cloudTitles[d.title.toLowerCase().trim()] = true;
     });
 
     local.decks.forEach(function (localDeck) {
-      // 1) Skip auto-generated default templates (empty "Default Deck" that
-      //    the module creates on first visit when localStorage is empty).
-      //    These have title "Default Deck" and no real cards.
-      if (localDeck.title === 'Default Deck' && (!localDeck.cards || localDeck.cards.length === 0)) {
-        return; // ignore — this is the offline auto-generated stub
-      }
-
-      // 2) Skip if a deck with the exact same ID already exists in the cloud
       if (localDeck.id && cloudIds[localDeck.id]) return;
 
-      // 3) Skip if a deck with the exact same title already exists in the cloud
-      //    (case-insensitive, trimmed)
       const titleKey = localDeck.title ? localDeck.title.toLowerCase().trim() : '';
       if (titleKey && cloudTitles[titleKey]) return;
 
-      // Deck is genuinely new → add it to the cloud
       cloud.decks.push(localDeck);
       cloudIds[localDeck.id] = true;
       cloudTitles[titleKey] = true;
     });
 
-    // Now merge cards for decks that already existed in cloud (same ID)
     local.decks.forEach(function (localDeck) {
       const match = cloud.decks.find(function (d) { return d.id === localDeck.id; });
       if (match && localDeck.cards && localDeck.cards.length) {
@@ -572,12 +554,9 @@ const HubDB = (function () {
           if (!cardMatch) {
             match.cards.push(localCard);
           } else if (!localCard.term || !localCard.term.trim()) {
-            // Local card is empty → keep the cloud version
           } else if (!cardMatch.term || !cardMatch.term.trim()) {
-            // Cloud card is empty but local has content → keep local version
             Object.assign(cardMatch, localCard);
           }
-          // If both have content, keep the cloud version (most recently synced)
         });
       }
     });

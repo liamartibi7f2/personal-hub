@@ -69,105 +69,6 @@ const flashcardModule = (function () {
     _pageUnloading = true;
   });
 
-  const DEFAULT_CARDS = [
-    {
-      term: 'Ephemeral',
-      type: '(adj)',
-      phonetic: '/ɪˈfem.ər.əl/',
-      vietnamese: 'phù du, ngắn ngủi, chóng tàn',
-      describe: [
-        'Lasting for a very short time',
-        'Transitory; fleeting by nature'
-      ],
-      examples: [
-        'The beauty of cherry blossoms is ephemeral, lasting only a few days.',
-        'Social media fame is often ephemeral — here today, gone tomorrow.'
-      ],
-      note: [
-        'Don\'t confuse with "ethereal" (delicate, heavenly).',
-        'Often used in literary or philosophical contexts.',
-        'Stress falls on the second syllable: e-PHEM-er-al.'
-      ],
-      synonyms: ['fleeting', 'transient', 'momentary', 'brief', 'short-lived'],
-      word_family: { noun: 'ephemerality', adverb: 'ephemerally', noun2: 'ephemeron' },
-      idioms: [
-        'Here today, gone tomorrow — fame is ephemeral.'
-      ],
-      collocations: [
-        'ephemeral beauty',
-        'ephemeral nature',
-        'ephemeral fame',
-        'ephemeral moment',
-        'ephemeral existence'
-      ],
-      clozeSentence: 'The beauty of cherry blossoms is ___, lasting only a few days.'
-    },
-    {
-      term: 'Ubiquitous',
-      type: '(adj)',
-      phonetic: '/juːˈbɪk.wɪ.təs/',
-      vietnamese: 'ở khắp nơi, đâu cũng có',
-      describe: [
-        'Present, appearing, or found everywhere',
-        'So common as to seem universal'
-      ],
-      examples: [
-        'Smartphones have become ubiquitous in modern society.',
-        'The brand\'s logo is ubiquitous — you see it on every street corner.'
-      ],
-      note: [
-        'Pronounced "you-BICK-wih-tus" — the "qui" is /kwɪ/.',
-        'Often overused in academic writing; vary your vocabulary.',
-        'Not to be confused with "universal" — ubiquitous implies physical presence.'
-      ],
-      synonyms: ['omnipresent', 'pervasive', 'universal', 'everywhere', 'all-over'],
-      word_family: { noun: 'ubiquity', adverb: 'ubiquitously', noun2: 'ubiquitousness' },
-      idioms: [
-        'As ubiquitous as the air we breathe.'
-      ],
-      collocations: [
-        'ubiquitous presence',
-        'ubiquitous technology',
-        'ubiquitous computing',
-        'ubiquitous access',
-        'ubiquitous advertising'
-      ],
-      clozeSentence: 'Smartphones have become ___ in modern society.'
-    },
-    {
-      term: 'Pragmatic',
-      type: '(adj)',
-      phonetic: '/præɡˈmæt.ɪk/',
-      vietnamese: 'thực dụng, thực tế',
-      describe: [
-        'Dealing with things sensibly and realistically',
-        'Based on practical rather than theoretical considerations'
-      ],
-      examples: [
-        'We need a pragmatic approach to solve this budget crisis.',
-        'She\'s a pragmatic leader who focuses on what actually works.'
-      ],
-      note: [
-        'Not the same as "pragmatic" in linguistics (study of language use).',
-        'Don\'t confuse with "dogmatic" — they are near opposites.',
-        'A pragmatic person values results over ideology.'
-      ],
-      synonyms: ['practical', 'realistic', 'sensible', 'down-to-earth', 'hardheaded'],
-      word_family: { noun: 'pragmatism', noun2: 'pragmatist', adverb: 'pragmatically' },
-      idioms: [
-        'Don\'t let perfect be the enemy of good — be pragmatic.'
-      ],
-      collocations: [
-        'pragmatic approach',
-        'pragmatic solution',
-        'pragmatic view',
-        'pragmatic decision',
-        'pragmatic reason'
-      ],
-      clozeSentence: 'We need a ___ approach to solve this budget crisis.'
-    }
-  ];
-
   /* ==========================================================
      RENDER / DESTROY (module contract)
      ========================================================== */
@@ -236,10 +137,9 @@ const flashcardModule = (function () {
    */
   async function _loadDecksAsync() {
     try {
-      var data = await HubDB.loadFlashcardsData();
+      const data = await HubDB.loadFlashcardsData();
       if (data && Array.isArray(data.decks)) {
         if (data.decks.length > 0) {
-          // Detect format: each deck has 'cards' property
           if (data.decks[0].cards !== undefined) {
             _decks = data.decks.map(function (deck) {
               return {
@@ -249,10 +149,10 @@ const flashcardModule = (function () {
               };
             });
           } else if (data.decks[0].term !== undefined) {
-            // Legacy flat card array — migrate to a "Default Deck"
+            // Legacy flat card array — migrate into a single deck
             _decks = [{
-              id: 'deck_default_migrated',
-              title: 'Default Deck',
+              id: 'deck_migrated_' + Date.now(),
+              title: 'My Cards',
               cards: data.decks.map(_normalizeCard)
             }];
             await HubDB.saveFlashcardsData({ decks: _decks });
@@ -262,17 +162,11 @@ const flashcardModule = (function () {
         } else {
           _decks = [];
         }
+      } else {
+        _decks = [];
       }
-    } catch (_) { /* ignore */ }
-
-    // If no decks exist, create default deck with starter cards
-    if (!_decks || _decks.length === 0) {
-      _decks = [{
-        id: 'deck_default_' + Date.now(),
-        title: 'Default Deck',
-        cards: DEFAULT_CARDS.map(function (c) { return _normalizeCard({ ...c }); })
-      }];
-      await HubDB.saveFlashcardsData({ decks: _decks });
+    } catch (_) {
+      _decks = [];
     }
   }
 
