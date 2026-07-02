@@ -119,6 +119,19 @@ const flashcardModule = (function () {
     _mode = 'library';
     _activeDeckId = null;
     _container = null;
+    // Clean up all global keyboard listeners to prevent leak/accumulation
+    if (window._hubFlashcardBrowseKeyHandler) {
+      document.removeEventListener('keydown', window._hubFlashcardBrowseKeyHandler);
+      delete window._hubFlashcardBrowseKeyHandler;
+    }
+    if (window._hubFlashcardSpaceHandler) {
+      document.removeEventListener('keydown', window._hubFlashcardSpaceHandler);
+      delete window._hubFlashcardSpaceHandler;
+    }
+    if (window._hubFlashcardNumberHandler) {
+      document.removeEventListener('keydown', window._hubFlashcardNumberHandler);
+      delete window._hubFlashcardNumberHandler;
+    }
   }
 
   /* ==========================================================
@@ -1426,14 +1439,21 @@ const prompt = buildAIPrompt(word, _aiSchema);
         });
 
         // Prevent spacebar flip when cloze input is focused
+        // Clean up any previous handlers to prevent accumulation
+        if (window._hubFlashcardSpaceHandler) {
+          document.removeEventListener('keydown', window._hubFlashcardSpaceHandler);
+        }
         const spaceHandler = (e) => {
           if ((e.key === ' ' || e.key === 'Spacebar') && !_cardFlipped) {
-            if (e.target === clozeInput) return; // allow typing space in input
+            // Always allow typing in any input or textarea (including overlays/modals)
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            if (e.target === clozeInput) return;
             e.preventDefault();
             clozeInput.focus();
           }
         };
         document.addEventListener('keydown', spaceHandler);
+        window._hubFlashcardSpaceHandler = spaceHandler;
 
         // --- Cloze: flip helper ---
         const _doFlip = () => {
@@ -1509,6 +1529,10 @@ const prompt = buildAIPrompt(word, _aiSchema);
           }
         });
 
+        // Clean up any previous study space handler to prevent accumulation
+        if (window._hubFlashcardSpaceHandler) {
+          document.removeEventListener('keydown', window._hubFlashcardSpaceHandler);
+        }
         const spaceHandler = (e) => {
           if (e.key === ' ' || e.key === 'Spacebar') {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -1521,6 +1545,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
           }
         };
         document.addEventListener('keydown', spaceHandler);
+        window._hubFlashcardSpaceHandler = spaceHandler;
       }
     }
 
@@ -1536,6 +1561,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
       }
     };
     document.addEventListener('keydown', numberHandler);
+    window._hubFlashcardNumberHandler = numberHandler;
 
     // Assessment button clicks (delegated)
     _container.addEventListener('click', function (e) {
@@ -2031,7 +2057,10 @@ const prompt = buildAIPrompt(word, _aiSchema);
       if (_currentIndex < cards.length - 1) { _currentIndex++; _renderBrowseMode(); }
     });
 
-    // Keyboard nav
+    // Keyboard nav — clean up any previous listener to prevent accumulation
+    if (window._hubFlashcardBrowseKeyHandler) {
+      document.removeEventListener('keydown', window._hubFlashcardBrowseKeyHandler);
+    }
     const keyHandler = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
@@ -2050,6 +2079,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
       }
     };
     document.addEventListener('keydown', keyHandler);
+    window._hubFlashcardBrowseKeyHandler = keyHandler;
 
     // Dot indicators (click to jump, delegated)
     _container.addEventListener('click', function (e) {
@@ -2213,10 +2243,8 @@ const prompt = buildAIPrompt(word, _aiSchema);
 
     document.body.appendChild(overlay);
 
-    // --- Event: Close on backdrop click ---
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) _closeAddForm();
-    });
+    // NOTE: Intentionally NO "close on backdrop click" for this modal.
+    // The user must click the Cancel button to avoid accidental data loss.
 
     // --- Event: Close on Escape ---
     const escHandler = (e) => {
@@ -2499,10 +2527,8 @@ const prompt = buildAIPrompt(word, _aiSchema);
 
     document.body.appendChild(overlay);
 
-    // --- Close on backdrop click ---
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) _closeCardEditorModal();
-    });
+    // NOTE: Intentionally NO "close on backdrop click" for this modal.
+    // The user must click the Cancel button to avoid accidental data loss.
 
     // --- Close on Escape ---
     const escHandler = (e) => {
