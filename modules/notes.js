@@ -48,7 +48,10 @@ const notesModule = (function () {
     searchBtn:       null,
     searchBar:       null,
     searchInput:     null,
-    searchClear:     null
+    searchClear:     null,
+    dateContainer:   null,
+    dateText:        null,
+    dateInput:       null
   };
 
   // ── Ghost save guard ──
@@ -166,6 +169,7 @@ const notesModule = (function () {
       title: title || 'Untitled',
       content: content || '',
       folderId: null,
+      createdAt: Date.now(),
       updatedAt: Date.now()
     };
   }
@@ -287,6 +291,10 @@ const notesModule = (function () {
             '<span class="hub-notes-save-feedback" id="hn-save-feedback"></span>' +
           '</div>' +
           '<div class="hub-notes-editor-area">' +
+            '<div class="hub-notes-date-container" id="hn-date-container">' +
+              '<span class="hub-notes-date-text" id="hn-date-text">Set Date</span>' +
+              '<input type="date" class="hub-notes-date-input" id="hn-date-input" />' +
+            '</div>' +
             '<input type="text" class="hub-notes-title-input" id="hn-title-input" placeholder="Untitled" spellcheck="false" />' +
             '<div class="hub-notes-editor" id="hn-editor" contenteditable="true" data-placeholder="Start writing... /h1 /h2 /h3 for headings"></div>' +
           '</div>' +
@@ -325,6 +333,9 @@ const notesModule = (function () {
     _el.searchBar       = _qs('hn-search-bar');
     _el.searchInput     = _qs('hn-search-input');
     _el.searchClear     = _qs('hn-search-clear');
+    _el.dateContainer   = _qs('hn-date-container');
+    _el.dateText        = _qs('hn-date-text');
+    _el.dateInput       = _qs('hn-date-input');
 
     // Render lists
     _renderFolders();
@@ -339,6 +350,7 @@ const notesModule = (function () {
     _bindFormatToolbar();
     _bindFolderClicks();
     _bindManualSave();
+    _bindDateEvents();
   }
 
   // ============================================================
@@ -413,14 +425,45 @@ const notesModule = (function () {
       if (_el.editor) _el.editor.style.display = 'none';
       if (_el.emptyState) _el.emptyState.style.display = '';
       if (_el.editorPane) _el.editorPane.classList.add('hub-notes-editor--empty');
+      if (_el.dateContainer) _el.dateContainer.style.display = 'none';
       return;
     }
     if (_el.emptyState) _el.emptyState.style.display = 'none';
     if (_el.editorPane) _el.editorPane.classList.remove('hub-notes-editor--empty');
     if (_el.titleInput) { _el.titleInput.style.display = ''; _el.titleInput.value = _activeNote.title; }
     if (_el.editor) { _el.editor.style.display = ''; _el.editor.innerHTML = _activeNote.content || ''; }
+    if (_el.dateContainer) _el.dateContainer.style.display = '';
 
+    _updateDateDisplay();
     _updateNoteListDate();
+  }
+
+  function _formatCreatedDate(ts) {
+    if (!ts) return 'Set Date';
+    var d = new Date(ts);
+    var dd = String(d.getDate()).padStart(2, '0');
+    var mm = String(d.getMonth() + 1).padStart(2, '0');
+    var yyyy = d.getFullYear();
+    return dd + '/' + mm + '/' + yyyy;
+  }
+
+  function _formatDateInputValue(ts) {
+    if (!ts) return '';
+    var d = new Date(ts);
+    var dd = String(d.getDate()).padStart(2, '0');
+    var mm = String(d.getMonth() + 1).padStart(2, '0');
+    var yyyy = d.getFullYear();
+    return yyyy + '-' + mm + '-' + dd;
+  }
+
+  function _updateDateDisplay() {
+    if (!_activeNote) return;
+    if (_el.dateText) {
+      _el.dateText.textContent = _formatCreatedDate(_activeNote.createdAt);
+    }
+    if (_el.dateInput) {
+      _el.dateInput.value = _formatDateInputValue(_activeNote.createdAt);
+    }
   }
 
   function _updateNoteListDate() {
@@ -1019,6 +1062,54 @@ function _updateToolbarPosition() {
   }
 
   // ============================================================
+  //   CREATION DATE — Inline date picker
+  // ============================================================
+
+  function _bindDateEvents() {
+    // Click on date text → show date input, hide text
+    if (_el.dateText) {
+      _el.dateText.addEventListener('click', function () {
+        if (_el.dateText) _el.dateText.style.display = 'none';
+        if (_el.dateInput) {
+          _el.dateInput.style.display = '';
+          _el.dateInput.focus();
+          // On mobile, trigger the native date picker immediately
+          if ('showPicker' in HTMLInputElement.prototype) {
+            _el.dateInput.showPicker();
+          }
+        }
+      });
+    }
+
+    // Date input change → update note, trigger auto-save
+    if (_el.dateInput) {
+      _el.dateInput.addEventListener('change', function () {
+        var val = _el.dateInput.value;
+        if (val && _activeNote) {
+          // Convert YYYY-MM-DD to timestamp (UTC midnight of that day)
+          var parts = val.split('-');
+          var d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+          _activeNote.createdAt = d.getTime();
+          _updateDateDisplay();
+          _scheduleSave();
+        }
+        // Hide input, show text
+        if (_el.dateInput) _el.dateInput.style.display = 'none';
+        if (_el.dateText) _el.dateText.style.display = '';
+      });
+
+      // Blur → hide input, show text (but not if user is still picking)
+      _el.dateInput.addEventListener('blur', function () {
+        // Small delay to let a 'change' event fire first
+        setTimeout(function () {
+          if (_el.dateInput) _el.dateInput.style.display = 'none';
+          if (_el.dateText) _el.dateText.style.display = '';
+        }, 150);
+      });
+    }
+  }
+
+  // ============================================================
   //   AUTO-SAVE TOGGLE (called from backup modal)
   // ============================================================
 
@@ -1100,7 +1191,8 @@ function _updateToolbarPosition() {
         sidebarNotes: null, folderList: null, titleInput: null, editor: null,
         toolbar: null, savingIndicator: null, emptyState: null, editorPane: null,
         addBtn: null, addFolderBtn: null, searchBtn: null, searchBar: null,
-        searchInput: null, searchClear: null, manualSaveBtn: null, saveFeedback: null
+        searchInput: null, searchClear: null, manualSaveBtn: null, saveFeedback: null,
+        dateContainer: null, dateText: null, dateInput: null
       };
     }
 
@@ -1136,12 +1228,9 @@ function _updateToolbarPosition() {
       sidebarNotes: null, folderList: null, titleInput: null, editor: null,
       toolbar: null, savingIndicator: null, emptyState: null, editorPane: null,
       addBtn: null, addFolderBtn: null, searchBtn: null, searchBar: null,
-      searchInput: null, searchClear: null, manualSaveBtn: null, saveFeedback: null
+      searchInput: null, searchClear: null, manualSaveBtn: null, saveFeedback: null,
+      dateContainer: null, dateText: null, dateInput: null
     };
-    _boundDocMouseup  = null;
-    _boundDocMousedown = null;
-    _boundDocKeyup    = null;
-    _boundDocKeydown  = null;
     // ⚡ PRESERVE _data, _activeNote, _activeFolder, _sessionInitialized,
     //    and _isNotesDataLoaded across tab switches so the in-memory cache
     //    survives destroy() → render() cycles. Only the DOM refs and

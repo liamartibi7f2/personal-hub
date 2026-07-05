@@ -7328,6 +7328,66 @@ body.light-mode .hub-notes-save-feedback {
   -webkit-backdrop-filter: blur(12px);
 }
 
+/* ── Creation Date Container ── */
+.hub-notes-date-container {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-xs);
+  min-height: 22px;
+}
+
+.hub-notes-date-text {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  transition: color var(--duration-fast) var(--ease-out-expo),
+              border-color var(--duration-fast) var(--ease-out-expo),
+              background var(--duration-fast) var(--ease-out-expo);
+  user-select: none;
+}
+
+.hub-notes-date-text:hover {
+  color: var(--accent-primary);
+  border-color: rgba(0, 240, 255, 0.2);
+  background: rgba(0, 240, 255, 0.06);
+}
+
+.hub-notes-date-text:active {
+  transform: scale(0.97);
+}
+
+.hub-notes-date-input {
+  display: none;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent-primary);
+  background: rgba(0, 240, 255, 0.06);
+  color: var(--text-primary);
+  outline: none;
+  width: 150px;
+  text-align: center;
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.15);
+  cursor: pointer;
+  color-scheme: dark;
+}
+
+.hub-notes-date-input:focus {
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.3),
+              0 0 40px rgba(0, 240, 255, 0.08);
+  border-color: var(--accent-primary);
+}
+
+.hub-notes-date-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.7) sepia(1) hue-rotate(160deg) saturate(3);
+  cursor: pointer;
+}
+
 /* ── Empty State ── */
 .hub-notes-empty-state {
   position: absolute;
