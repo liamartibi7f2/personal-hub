@@ -52,6 +52,7 @@ const flashcardModule = (function () {
 
   // --- AI Settings state ---
   let _aiSchema       = [];
+  let _voiceSpeed     = 0.9;
   let _isFlashcardSettingsLoaded = false;
 
   // Default AI schema (used when no cloud data exists)
@@ -118,6 +119,19 @@ const flashcardModule = (function () {
     _mode = 'library';
     _activeDeckId = null;
     _container = null;
+    // Clean up all global keyboard listeners to prevent leak/accumulation
+    if (window._hubFlashcardBrowseKeyHandler) {
+      document.removeEventListener('keydown', window._hubFlashcardBrowseKeyHandler);
+      delete window._hubFlashcardBrowseKeyHandler;
+    }
+    if (window._hubFlashcardSpaceHandler) {
+      document.removeEventListener('keydown', window._hubFlashcardSpaceHandler);
+      delete window._hubFlashcardSpaceHandler;
+    }
+    if (window._hubFlashcardNumberHandler) {
+      document.removeEventListener('keydown', window._hubFlashcardNumberHandler);
+      delete window._hubFlashcardNumberHandler;
+    }
   }
 
   /* ==========================================================
@@ -208,14 +222,25 @@ const flashcardModule = (function () {
   async function _loadAISettingsAsync() {
     try {
       var settings = await HubDB.loadFlashcardSettings();
-      if (settings && settings.schema && settings.schema.length > 0) {
-        _aiSchema = settings.schema;
+      if (settings) {
+        if (settings.schema && settings.schema.length > 0) {
+          _aiSchema = settings.schema;
+        } else {
+          _aiSchema = DEFAULT_AI_SCHEMA.map(function (s) { return { ...s }; });
+        }
+        if (typeof settings.voiceSpeed === 'number') {
+          _voiceSpeed = settings.voiceSpeed;
+        } else {
+          _voiceSpeed = 0.9;
+        }
       } else {
         _aiSchema = DEFAULT_AI_SCHEMA.map(function (s) { return { ...s }; });
-        await HubDB.saveFlashcardSettings({ schema: _aiSchema });
+        _voiceSpeed = 0.9;
+        await HubDB.saveFlashcardSettings({ schema: _aiSchema, voiceSpeed: _voiceSpeed });
       }
     } catch (_) {
       _aiSchema = DEFAULT_AI_SCHEMA.map(function (s) { return { ...s }; });
+      _voiceSpeed = 0.9;
     }
     _isFlashcardSettingsLoaded = true;
   }
@@ -226,7 +251,7 @@ const flashcardModule = (function () {
    */
   function _saveAISettings() {
     if (!_isFlashcardSettingsLoaded) return;
-    HubDB.saveFlashcardSettings({ schema: _aiSchema }).catch(function () {});
+    HubDB.saveFlashcardSettings({ schema: _aiSchema, voiceSpeed: _voiceSpeed }).catch(function () {});
   }
 
   /**
@@ -315,6 +340,21 @@ const flashcardModule = (function () {
           '</div>' +
 
           '<div class="hub-flashcard-ai-section">' +
+            '<h4 class="hub-flashcard-ai-section-title">Voice Speed</h4>' +
+            '<div class="hub-flashcard-voice-speed-row">' +
+              '<span class="hub-flashcard-voice-speed-label">0.5x</span>' +
+              '<div class="hub-flashcard-voice-speed-track">' +
+                '<input type="range" id="hub-voice-speed-range" ' +
+                  'min="0.5" max="1.5" step="0.1" value="' + _voiceSpeed + '" ' +
+                  'class="hub-flashcard-voice-speed-slider">' +
+                '<span class="hub-flashcard-voice-speed-value" id="hub-voice-speed-display">' + _voiceSpeed.toFixed(1) + 'x</span>' +
+              '</div>' +
+              '<span class="hub-flashcard-voice-speed-label">1.5x</span>' +
+            '</div>' +
+            '<p class="hub-flashcard-voice-speed-hint">Adjust the TTS reading speed (default: 0.9x)</p>' +
+          '</div>' +
+
+          '<div class="hub-flashcard-ai-section">' +
             '<h4 class="hub-flashcard-ai-section-title">Add Custom Field</h4>' +
             '<div class="hub-flashcard-ai-form">' +
               '<div class="hub-flashcard-ai-form-row">' +
@@ -384,6 +424,18 @@ const flashcardModule = (function () {
           e.preventDefault();
           _addAIField();
         }
+      });
+    }
+
+    // --- Voice Speed slider live update ---
+    var voiceRange = overlay.querySelector('#hub-voice-speed-range');
+    var voiceDisplay = overlay.querySelector('#hub-voice-speed-display');
+    if (voiceRange && voiceDisplay) {
+      voiceRange.addEventListener('input', function () {
+        var val = parseFloat(voiceRange.value);
+        voiceDisplay.textContent = val.toFixed(1) + 'x';
+        _voiceSpeed = val;
+        _saveAISettings();
       });
     }
 
@@ -1251,7 +1303,9 @@ const prompt = buildAIPrompt(word, _aiSchema);
 
                 ${card.phonetic ? `
                 <div class="card-section">
-                  <span class="card-section-label label-phonetic">🔊 Phonetic</span>
+                  <span class="card-section-label label-phonetic">🔊 Phonetic
+                    <button class="hub-flashcard-speaker-btn" data-speaker-term="${_esc(card.term)}" title="Listen to pronunciation" aria-label="Listen to pronunciation">&#9654;</button>
+                  </span>
                   <span class="card-phonetic">${_esc(card.phonetic)}</span>
                 </div>` : ''}
 
@@ -1385,14 +1439,21 @@ const prompt = buildAIPrompt(word, _aiSchema);
         });
 
         // Prevent spacebar flip when cloze input is focused
+        // Clean up any previous handlers to prevent accumulation
+        if (window._hubFlashcardSpaceHandler) {
+          document.removeEventListener('keydown', window._hubFlashcardSpaceHandler);
+        }
         const spaceHandler = (e) => {
           if ((e.key === ' ' || e.key === 'Spacebar') && !_cardFlipped) {
-            if (e.target === clozeInput) return; // allow typing space in input
+            // Always allow typing in any input or textarea (including overlays/modals)
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            if (e.target === clozeInput) return;
             e.preventDefault();
             clozeInput.focus();
           }
         };
         document.addEventListener('keydown', spaceHandler);
+        window._hubFlashcardSpaceHandler = spaceHandler;
 
         // --- Cloze: flip helper ---
         const _doFlip = () => {
@@ -1468,6 +1529,10 @@ const prompt = buildAIPrompt(word, _aiSchema);
           }
         });
 
+        // Clean up any previous study space handler to prevent accumulation
+        if (window._hubFlashcardSpaceHandler) {
+          document.removeEventListener('keydown', window._hubFlashcardSpaceHandler);
+        }
         const spaceHandler = (e) => {
           if (e.key === ' ' || e.key === 'Spacebar') {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -1480,6 +1545,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
           }
         };
         document.addEventListener('keydown', spaceHandler);
+        window._hubFlashcardSpaceHandler = spaceHandler;
       }
     }
 
@@ -1495,6 +1561,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
       }
     };
     document.addEventListener('keydown', numberHandler);
+    window._hubFlashcardNumberHandler = numberHandler;
 
     // Assessment button clicks (delegated)
     _container.addEventListener('click', function (e) {
@@ -1513,6 +1580,32 @@ const prompt = buildAIPrompt(word, _aiSchema);
         _activeDeckId = null;
         _cardFlipped = false;
         _renderApp();
+      });
+    }
+
+    // Speaker buttons (TTS) — event delegation
+    if (_container) {
+      _container.querySelectorAll('.hub-flashcard-speaker-btn').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var term = btn.dataset.speakerTerm;
+          if (term) {
+            btn.classList.add('speaking');
+            playPronunciation(term);
+            var removeSpeaking = function () { btn.classList.remove('speaking'); };
+            if (window.speechSynthesis) {
+              var cleanup = function () {
+                window.speechSynthesis.removeEventListener('end', cleanup);
+                window.speechSynthesis.removeEventListener('error', cleanup);
+                removeSpeaking();
+              };
+              window.speechSynthesis.addEventListener('end', cleanup);
+              window.speechSynthesis.addEventListener('error', cleanup);
+            } else {
+              setTimeout(removeSpeaking, 1500);
+            }
+          }
+        });
       });
     }
   }
@@ -1778,7 +1871,9 @@ const prompt = buildAIPrompt(word, _aiSchema);
 
                 ${card.phonetic ? `
                 <div class="card-section">
-                  <span class="card-section-label label-phonetic">🔊 Phonetic</span>
+                  <span class="card-section-label label-phonetic">🔊 Phonetic
+                    <button class="hub-flashcard-speaker-btn" data-speaker-term="${_esc(card.term)}" title="Listen to pronunciation" aria-label="Listen to pronunciation">&#9654;</button>
+                  </span>
                   <span class="card-phonetic">${_esc(card.phonetic)}</span>
                 </div>` : ''}
 
@@ -1962,7 +2057,10 @@ const prompt = buildAIPrompt(word, _aiSchema);
       if (_currentIndex < cards.length - 1) { _currentIndex++; _renderBrowseMode(); }
     });
 
-    // Keyboard nav
+    // Keyboard nav — clean up any previous listener to prevent accumulation
+    if (window._hubFlashcardBrowseKeyHandler) {
+      document.removeEventListener('keydown', window._hubFlashcardBrowseKeyHandler);
+    }
     const keyHandler = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
@@ -1981,6 +2079,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
       }
     };
     document.addEventListener('keydown', keyHandler);
+    window._hubFlashcardBrowseKeyHandler = keyHandler;
 
     // Dot indicators (click to jump, delegated)
     _container.addEventListener('click', function (e) {
@@ -2013,6 +2112,33 @@ const prompt = buildAIPrompt(word, _aiSchema);
     if (btnEdit) btnEdit.addEventListener('click', () => {
       _showCardEditorModal(cards[_currentIndex]);
     });
+
+    // Speaker buttons (TTS) — event delegation
+    if (_container) {
+      _container.querySelectorAll('.hub-flashcard-speaker-btn').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var term = btn.dataset.speakerTerm;
+          if (term) {
+            btn.classList.add('speaking');
+            playPronunciation(term);
+            // Remove speaking class when speech ends
+            var removeSpeaking = function () { btn.classList.remove('speaking'); };
+            if (window.speechSynthesis) {
+              var cleanup = function () {
+                window.speechSynthesis.removeEventListener('end', cleanup);
+                window.speechSynthesis.removeEventListener('error', cleanup);
+                removeSpeaking();
+              };
+              window.speechSynthesis.addEventListener('end', cleanup);
+              window.speechSynthesis.addEventListener('error', cleanup);
+            } else {
+              setTimeout(removeSpeaking, 1500);
+            }
+          }
+        });
+      });
+    }
   }
 
   /* ==========================================================
@@ -2117,10 +2243,8 @@ const prompt = buildAIPrompt(word, _aiSchema);
 
     document.body.appendChild(overlay);
 
-    // --- Event: Close on backdrop click ---
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) _closeAddForm();
-    });
+    // NOTE: Intentionally NO "close on backdrop click" for this modal.
+    // The user must click the Cancel button to avoid accidental data loss.
 
     // --- Event: Close on Escape ---
     const escHandler = (e) => {
@@ -2403,10 +2527,8 @@ const prompt = buildAIPrompt(word, _aiSchema);
 
     document.body.appendChild(overlay);
 
-    // --- Close on backdrop click ---
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) _closeCardEditorModal();
-    });
+    // NOTE: Intentionally NO "close on backdrop click" for this modal.
+    // The user must click the Cancel button to avoid accidental data loss.
 
     // --- Close on Escape ---
     const escHandler = (e) => {
@@ -2514,6 +2636,53 @@ const prompt = buildAIPrompt(word, _aiSchema);
     _saveDecks();
     _closeCardEditorModal();
     _renderApp();
+  }
+
+  /* ==========================================================
+     TEXT-TO-SPEECH: Speak a word using the Web Speech API
+     ========================================================== */
+
+  /**
+   * Pronounce the given word using SpeechSynthesis.
+   * Uses the user's saved voiceSpeed setting and selects a
+   * native en-US voice if available.
+   */
+  function playPronunciation(word) {
+    if (!window.speechSynthesis) {
+      console.warn('[Flashcard] SpeechSynthesis not supported.');
+      return;
+    }
+
+    // Cancel any in-progress speech to avoid overlap
+    window.speechSynthesis.cancel();
+
+    var utterance = new SpeechSynthesisUtterance(word);
+    utterance.lang = 'en-US';
+    utterance.rate = _voiceSpeed;
+
+    // Attempt to select a native en-US voice.
+    // Chrome loads voices asynchronously; getVoices() may be empty
+    // on first call. We try once synchronously, then fall back to
+    // the voiceschanged event or a delayed retry.
+    var voices = window.speechSynthesis.getVoices();
+    if (voices.length === 0) {
+      try {
+        // Some browsers return empty until the first speak() call
+        window.speechSynthesis.speak(utterance);
+        window.speechSynthesis.cancel();
+        voices = window.speechSynthesis.getVoices();
+      } catch (_) {}
+    }
+
+    var enUsVoice = voices.find(function (v) {
+      return v.lang === 'en-US' || v.lang.startsWith('en-US');
+    });
+
+    if (enUsVoice) {
+      utterance.voice = enUsVoice;
+    }
+
+    window.speechSynthesis.speak(utterance);
   }
 
   /* ==========================================================
