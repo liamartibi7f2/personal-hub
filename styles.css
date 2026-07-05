@@ -7725,6 +7725,52 @@ body.light-mode .hub-notes-save-feedback {
   text-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
 }
 
+/* Toolbar separator */
+.hub-notes-tb-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--glass-border);
+  margin: 0 3px;
+  flex-shrink: 0;
+}
+
+/* ── Bullet Lists inside editor ── */
+#hn-editor ul {
+  padding-left: 20px;
+  margin: 6px 0;
+  list-style: none;
+}
+
+#hn-editor li {
+  position: relative;
+  padding-left: 4px;
+  margin: 4px 0;
+  line-height: 1.7;
+}
+
+#hn-editor li::marker {
+  color: var(--accent-primary);
+  font-size: 0.85em;
+}
+
+#hn-editor ul ul {
+  padding-left: 18px;
+}
+
+#hn-editor ul ul li::marker {
+  color: var(--accent-secondary, #b34bea);
+}
+
+html.light-mode #hn-editor li::marker,
+body.light-mode #hn-editor li::marker {
+  color: #0080a0;
+}
+
+html.light-mode #hn-editor ul ul li::marker,
+body.light-mode #hn-editor ul ul li::marker {
+  color: #8a2be2;
+}
+
 /* ── Light mode overrides ── */
 html.light-mode .hub-notes-btn-add:hover,
 body.light-mode .hub-notes-btn-add:hover {

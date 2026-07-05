@@ -313,6 +313,15 @@ const notesModule = (function () {
           '<button class="hub-notes-tb-btn" data-cmd="italic" title="Italic" aria-label="Italic"><i>I</i></button>' +
           '<button class="hub-notes-tb-btn" data-cmd="underline" title="Underline" aria-label="Underline"><u>U</u></button>' +
           '<button class="hub-notes-tb-btn hub-notes-tb-highlight" data-cmd="foreColor" data-value="#00f0ff" title="Neon Cyan" aria-label="Neon Cyan text color">A</button>' +
+          '<span class="hub-notes-tb-sep"></span>' +
+          '<button class="hub-notes-tb-btn" data-cmd="insertUnorderedList" title="Bullet List" aria-label="Bullet List">' +
+            '<svg width="14" height="14" viewBox="0 0 16 16" fill="none">' +
+              '<path d="M4 4.5h10M4 8h10M4 11.5h10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>' +
+              '<circle cx="2" cy="4.5" r="1" fill="currentColor"/>' +
+              '<circle cx="2" cy="8" r="1" fill="currentColor"/>' +
+              '<circle cx="2" cy="11.5" r="1" fill="currentColor"/>' +
+            '</svg>' +
+          '</button>' +
         '</div>' +
       '</div>';
 
@@ -962,7 +971,30 @@ const notesModule = (function () {
       var cmd = btn.getAttribute('data-cmd');
       var val = btn.getAttribute('data-value');
       if (cmd === 'foreColor' && val) {
-        document.execCommand('foreColor', false, val);
+        // Toggle: if selection is already the highlight color, revert to default
+        var currentColor = '';
+        try { currentColor = document.queryCommandValue('foreColor'); } catch (_) {}
+        // Convert both to lowercase hex for comparison
+        var normalizeColor = function (c) {
+          if (!c) return '';
+          c = c.toLowerCase().replace(/\s/g, '');
+          // rgb(0, 240, 255) → #00f0ff
+          var rgb = c.match(/^rgb\((\d+),(\d+),(\d+)\)$/);
+          if (rgb) {
+            return '#' + [rgb[1], rgb[2], rgb[3]].map(function (n) {
+              var h = parseInt(n, 10).toString(16);
+              return h.length === 1 ? '0' + h : h;
+            }).join('');
+          }
+          return c;
+        };
+        var tgt = normalizeColor(val);
+        var cur = normalizeColor(currentColor);
+        if (cur === tgt) {
+          document.execCommand('foreColor', false, '#ffffff');
+        } else {
+          document.execCommand('foreColor', false, val);
+        }
       } else if (cmd) {
         document.execCommand(cmd, false, null);
       }
