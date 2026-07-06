@@ -93,17 +93,12 @@ const notesModule = (function () {
       }
     } catch (_) { /* ignore */ }
 
-    // Default data if nothing stored
-    _data = {
-      folders: [{
-        id: _uid(),
-        name: 'Personal',
-        notes: [_buildNoteObject('Welcome', 'Welcome to Notes!<br><br>Try typing /h1, /h2, or /h3 followed by space to insert headings.')]
-      }]
-    };
+    // No data exists yet (new user or empty workspace).
+    // Initialize with empty array — NO default folders, NO default notes.
+    // The workspace is only populated when the user explicitly clicks
+    // "Add Folder" or "Add Note" in the UI.
+    _data = { folders: [] };
     _isDataLoaded = true;
-    // ⚠ WARNING: Do NOT call _persist here — data hasn't been rendered yet.
-    // The render() function will trigger the first save after it's done.
   }
 
   async function _persist(force) {
@@ -200,10 +195,14 @@ const notesModule = (function () {
       _isNotesDataLoaded = true;
       // Restore active selections if they were lost (defensive — destroy()
       // should preserve them, but handle the edge case anyway)
-      if (!_activeFolder) _activeFolder = _data.folders[0];
-      if (!_activeNote && _activeFolder) _activeNote = _activeFolder.notes[0] || null;
+      if (!_activeFolder && _data.folders && _data.folders.length > 0) {
+        _activeFolder = _data.folders[0];
+      }
+      if (!_activeNote && _activeFolder && _activeFolder.notes) {
+        _activeNote = _activeFolder.notes[0] || null;
+      }
       _renderUI();
-      _persist(true);
+      // ⚠ NO auto-save here — only explicit user actions trigger persist.
       return;
     }
 
@@ -219,22 +218,26 @@ const notesModule = (function () {
     await _loadData();
 
     // 3) Initialize active selections
-    _activeFolder = _data.folders[0];
-    _activeNote   = _activeFolder.notes[0] || null;
+    //    Safe: _data.folders may be empty (new user) — handle gracefully
+    _activeFolder = _data.folders && _data.folders.length > 0 ? _data.folders[0] : null;
+    _activeNote   = (_activeFolder && _activeFolder.notes && _activeFolder.notes.length > 0)
+                      ? _activeFolder.notes[0]
+                      : null;
 
     // 4) UNLOCK the Load Guard: Cloud data has been received and is about to be rendered.
     //    This is the only place where _isNotesDataLoaded becomes true.
-    //    From this point forward, auto-save is allowed to write to storage.
+    //    From this point forward, auto-save is allowed to write to storage
+    //    (but ONLY triggered by explicit user actions — typing, adding folders/notes).
     _isNotesDataLoaded = true;
     _sessionInitialized = true;
 
     // 5) Overwrite with real Notes UI
     _renderUI();
 
-    // 6) Safe initial persist: Save the loaded/rendered data to cloud.
-    //    This happens AFTER the guard is unlocked AND the DOM is mounted,
-    //    ensuring we NEVER save empty data and the Saving indicator works.
-    _persist(true);
+    // ⚠ NO auto-save after render.
+    //    The workspace was loaded from cloud/localStorage as-is.
+    //    Persist only fires when the user explicitly edits content,
+    //    creates a folder, or clicks the manual Save button.
   }
 
   /**

@@ -209,45 +209,22 @@ const HubDB = (function () {
               const localRaw = localStorage.getItem(LOCAL_KEY);
               if (localRaw) {
                 _mergeLocalIntoCloud(cloudData, JSON.parse(localRaw));
+                // Only save back if local merge actually changed something
                 _notesDocRef().set({ workspace: cloudData }).catch(function () {});
               }
             } catch (_) {}
             try { localStorage.removeItem(LOCAL_KEY); } catch (_) {}
             return cloudData;
           }
+          // Cloud doc exists but has no workspace yet — return null,
+          // NOT a default. The workspace is created only when the user
+          // explicitly clicks "Add Folder" / "Add Note" in the UI.
+          return null;
         }
 
-        let defaultData = {
-          folders: [{
-            id: 'folder-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
-            name: 'Personal',
-            notes: [{
-              id: 'note-' + Date.now(),
-              title: 'Welcome',
-              content: 'Welcome to Notes!<br><br>Try typing /h1, /h2, or /h3 followed by space to insert headings.',
-              order: 0
-            }]
-          }]
-        };
-
-        try {
-          const localRaw = localStorage.getItem(LOCAL_KEY);
-          if (localRaw) {
-            const localData = JSON.parse(localRaw);
-            if (localData && localData.folders && localData.folders.length > 0) {
-              defaultData = localData;
-            }
-          }
-        } catch (_) {}
-
-        try {
-          await Promise.race([
-            _notesDocRef().set({ workspace: defaultData }),
-            _timeout(2500)
-          ]);
-        } catch (_) {}
-        try { localStorage.removeItem(LOCAL_KEY); } catch (_) {}
-        return defaultData;
+        // No user document at all (first login) — return null.
+        // NEVER auto-create + auto-save a default workspace.
+        return null;
       } catch (err) {
         console.warn('[HubDB] Firestore load failed for notes_store, trying localStorage:', err.message);
       }
