@@ -991,7 +991,9 @@ const HubDB = (function () {
     schema: [
       { id: 'phonetic', name: 'Phonetic', prompt: 'Provide the IPA phonetic transcription.', isDeletable: false },
       { id: 'synonym', name: 'Synonym', prompt: 'Provide 2-3 common synonyms.', isDeletable: true }
-    ]
+    ],
+    systemLanguage: 'en',
+    workspaceTheme: 'cyberpunk'
   };
 
   /**

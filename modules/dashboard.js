@@ -223,7 +223,11 @@ const dashboardModule = (function () {
 
       setText('dash-clock', `${hours}:${minutes}`);
 
-      setText('dash-date', now.toLocaleDateString('en-US', {
+      // Localize date: vi uses vi-VN locale
+      var sysLang = 'en';
+      try { sysLang = localStorage.getItem('hub_system_language') || 'en'; } catch (_) {}
+      var locale = sysLang === 'vi' ? 'vi-VN' : 'en-US';
+      setText('dash-date', now.toLocaleDateString(locale, {
         weekday: 'long',
         year:    'numeric',
         month:   'long',
@@ -231,10 +235,21 @@ const dashboardModule = (function () {
       }));
 
       const h = now.getHours();
-      let greeting = 'Good Evening';
-      if (h < 12) greeting = 'Good Morning';
-      else if (h < 17) greeting = 'Good Afternoon';
-      setText('dash-greeting', `${greeting}, Commander.`);
+      // Look up greeting from i18n dictionary if flashcardModule is available
+      var greetingKey = 'greetingEvening';
+      if (h < 12) greetingKey = 'greetingMorning';
+      else if (h < 17) greetingKey = 'greetingAfternoon';
+      var greeting = 'Good Evening, Commander.';
+      // Try to use the i18n dictionary from flashcardModule
+      if (typeof flashcardModule !== 'undefined') {
+        try {
+          var i18nDash = flashcardModule._getI18N ? flashcardModule._getI18N() : null;
+          if (i18nDash && i18nDash.dash && i18nDash.dash[greetingKey]) {
+            greeting = i18nDash.dash[greetingKey][sysLang] || i18nDash.dash[greetingKey]['en'];
+          }
+        } catch (_) {}
+      }
+      setText('dash-greeting', greeting);
     },
 
     /* ──────────────────────────────────────────────

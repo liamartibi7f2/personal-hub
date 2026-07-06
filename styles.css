@@ -7,7 +7,9 @@
 /* ----------------------------------------------------------
    CSS CUSTOM PROPERTIES (Design Tokens)
    ---------------------------------------------------------- */
-:root {
+/* Default / Cyberpunk (dark neon) theme */
+:root,
+[data-theme="cyberpunk"] {
   /* --- Color Palette --- */
   --bg-deep:        #0a0a0f;       /* Deepest background */
   --bg-surface:     #12121a;       /* Card / panel surface */
@@ -26,6 +28,12 @@
 
   --danger:         #ff4466;
   --success:        #44ff88;
+
+  /* ── Mandarin Vault Tokens (Crimson / Gold) ── */
+  --zh-accent:      #ff0055;          /* Crimson Neon */
+  --zh-gold:        #ffb347;          /* Warm Gold */
+  --zh-glow:        0 0 20px rgba(255, 0, 85, 0.3);
+  --zh-glow-gold:   0 0 12px rgba(255, 179, 71, 0.25);
 
   /* --- Typography --- */
   --font-body:   'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -60,6 +68,9 @@
   --duration-base:  300ms;
   --duration-slow:  500ms;
 
+  /* --- Theme Transition Token --- */
+  --theme-transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+
   /* --- Layout --- */
   --sidebar-width:  250px;
   --dock-height:    72px;
@@ -90,6 +101,7 @@ body {
   line-height: 1.6;
   min-height: 100vh;
   overflow-x: hidden;
+  transition: background-color 0.4s ease, color 0.4s ease;
 }
 
 /* Subtle dot-grid pattern behind everything */
@@ -133,6 +145,7 @@ ul, ol { list-style: none; }
   border: 1px solid var(--glass-border);
   backdrop-filter: blur(16px) saturate(140%);
   -webkit-backdrop-filter: blur(16px) saturate(140%);
+  transition: background-color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
 }
 
 /* Glass card — elevated surface with hover lift */
@@ -143,9 +156,8 @@ ul, ol { list-style: none; }
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   padding: var(--space-lg);
-  transition: transform var(--duration-base) var(--ease-out-expo),
-              box-shadow var(--duration-base) var(--ease-out-expo),
-              border-color var(--duration-base) var(--ease-out-expo);
+  transition: background-color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease,
+              transform var(--duration-base) var(--ease-out-expo);
 }
 .glass-card:hover {
   transform: translateY(-3px);
@@ -2097,44 +2109,36 @@ ul, ol { list-style: none; }
   font-size: 0.75rem;
 }
 
-/* Light mode overrides for editor */
-html.light-mode .card-editor-input,
-body.light-mode .card-editor-input,
-html.light-mode .card-editor-textarea,
-body.light-mode .card-editor-textarea {
+/* Light mode overrides for solar-zen theme */
+[data-theme="solar-zen"] .card-editor-input,
+[data-theme="solar-zen"] .card-editor-textarea {
   background: rgba(0, 0, 0, 0.03);
   border-color: rgba(0, 0, 0, 0.12);
   color: var(--text-primary);
 }
 
-html.light-mode .card-editor-input:focus,
-body.light-mode .card-editor-input:focus,
-html.light-mode .card-editor-textarea:focus,
-body.light-mode .card-editor-textarea:focus {
-  box-shadow: 0 0 0 3px rgba(0, 119, 182, 0.08);
+[data-theme="solar-zen"] .card-editor-input:focus,
+[data-theme="solar-zen"] .card-editor-textarea:focus {
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
 }
 
-html.light-mode .btn-manual-add,
-body.light-mode .btn-manual-add {
+[data-theme="solar-zen"] .btn-manual-add {
   color: var(--accent-secondary);
   border-color: rgba(124, 58, 237, 0.3);
 }
 
-html.light-mode .btn-manual-add:hover,
-body.light-mode .btn-manual-add:hover {
+[data-theme="solar-zen"] .btn-manual-add:hover {
   background: rgba(124, 58, 237, 0.08);
   border-color: var(--accent-secondary);
   box-shadow: 0 0 14px rgba(124, 58, 237, 0.1);
 }
 
-html.light-mode .btn-edit-card,
-body.light-mode .btn-edit-card {
+[data-theme="solar-zen"] .btn-edit-card {
   color: #d97706;
   border-color: rgba(217, 119, 6, 0.25);
 }
 
-html.light-mode .btn-edit-card:hover,
-body.light-mode .btn-edit-card:hover {
+[data-theme="solar-zen"] .btn-edit-card:hover {
   background: rgba(217, 119, 6, 0.08);
   border-color: #d97706;
   box-shadow: 0 0 14px rgba(217, 119, 6, 0.12);
@@ -5811,6 +5815,218 @@ mark.cyber-hl-pink:hover {
   border-top: 1px solid var(--glass-border);
 }
 
+/* System Language section — matches auto-save layout */
+.backup-section--sys-lang {
+  padding-top: var(--space-md);
+  margin-top: var(--space-sm);
+  border-top: 1px solid var(--glass-border);
+}
+
+.backup-section--sys-lang .backup-section-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+/* ── Language Toggle Button Group ── */
+.hub-syslang-toggle-group {
+  display: flex;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  flex-shrink: 0;
+}
+
+.hub-syslang-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 14px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.28s var(--ease-out-expo);
+  outline: none;
+  font-family: var(--font-mono);
+}
+
+.hub-syslang-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.hub-syslang-toggle-flag {
+  font-size: 1rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.hub-syslang-toggle-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  transition: color 0.28s var(--ease-out-expo);
+}
+
+/* ── Active State: English (cyan) ── */
+.hub-syslang-toggle-btn--active.hub-syslang-toggle-btn--en {
+  border-color: rgba(0, 243, 255, 0.45);
+  background: rgba(0, 243, 255, 0.1);
+  box-shadow:
+    0 0 10px rgba(0, 243, 255, 0.14),
+    inset 0 0 6px rgba(0, 243, 255, 0.04);
+}
+
+.hub-syslang-toggle-btn--active.hub-syslang-toggle-btn--en .hub-syslang-toggle-label {
+  color: var(--accent-primary);
+}
+
+/* ── Active State: Vietnamese (cyan too, for consistent neon brand) ── */
+.hub-syslang-toggle-btn--active.hub-syslang-toggle-btn--vi {
+  border-color: rgba(0, 243, 255, 0.45);
+  background: rgba(0, 243, 255, 0.1);
+  box-shadow:
+    0 0 10px rgba(0, 243, 255, 0.14),
+    inset 0 0 6px rgba(0, 243, 255, 0.04);
+}
+
+.hub-syslang-toggle-btn--active.hub-syslang-toggle-btn--vi .hub-syslang-toggle-label {
+  color: var(--accent-primary);
+}
+
+/* ── Mobile tweaks ── */
+@media (max-width: 500px) {
+  .hub-syslang-toggle-label {
+    font-size: 0.6rem;
+    letter-spacing: 0.04em;
+  }
+
+  .hub-syslang-toggle-btn {
+    padding: 6px 10px;
+    gap: 3px;
+  }
+
+  .hub-syslang-toggle-flag {
+    font-size: 0.85rem;
+  }
+}
+
+/* ── Theme Swatch Group (Workspace Theme picker) ── */
+
+.hub-theme-swatch-group {
+  display: flex;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-full);
+  padding: 4px;
+  flex-shrink: 0;
+}
+
+.hub-theme-swatch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px 7px 10px;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  transition: all var(--duration-base) var(--ease-out-expo);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.hub-theme-swatch:hover {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+}
+
+.hub-theme-swatch-circle {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+}
+
+/* Cyberpunk swatch circle — dark surface with cyan accent */
+.hub-theme-swatch-circle--cyberpunk {
+  background: #0a0a0f;
+  border-color: rgba(0, 240, 255, 0.4);
+  box-shadow: 0 0 6px rgba(0, 240, 255, 0.2);
+}
+
+/* Solar Zen swatch circle — white with indigo accent */
+.hub-theme-swatch-circle--solar-zen {
+  background: #f8fafc;
+  border-color: rgba(79, 70, 229, 0.4);
+  box-shadow: 0 0 6px rgba(79, 70, 229, 0.15);
+}
+
+/* Lo-Fi Twilight swatch circle — soft dark with lavender accent */
+.hub-theme-swatch-circle--lofi-twilight {
+  background: #1a1b26;
+  border-color: rgba(187, 154, 247, 0.4);
+  box-shadow: 0 0 6px rgba(187, 154, 247, 0.15);
+}
+
+/* Active swatch states — per-theme accent glow */
+
+.hub-theme-swatch--active.hub-theme-swatch--cyberpunk {
+  border-color: rgba(0, 240, 255, 0.45);
+  background: rgba(0, 240, 255, 0.08);
+  box-shadow:
+    0 0 10px rgba(0, 240, 255, 0.14),
+    inset 0 0 6px rgba(0, 240, 255, 0.04);
+  color: var(--accent-primary);
+}
+
+.hub-theme-swatch--active.hub-theme-swatch--solar-zen {
+  border-color: rgba(79, 70, 229, 0.45);
+  background: rgba(79, 70, 229, 0.08);
+  box-shadow:
+    0 0 10px rgba(79, 70, 229, 0.14),
+    inset 0 0 6px rgba(79, 70, 229, 0.04);
+  color: var(--accent-primary);
+}
+
+.hub-theme-swatch--active.hub-theme-swatch--lofi-twilight {
+  border-color: rgba(187, 154, 247, 0.45);
+  background: rgba(187, 154, 247, 0.08);
+  box-shadow:
+    0 0 10px rgba(187, 154, 247, 0.14),
+    inset 0 0 6px rgba(187, 154, 247, 0.04);
+  color: var(--accent-primary);
+}
+
+/* ── Mobile tweaks for swatches ── */
+@media (max-width: 500px) {
+  .hub-theme-swatch-label {
+    font-size: 0.55rem;
+  }
+
+  .hub-theme-swatch {
+    padding: 6px 10px 6px 8px;
+    gap: 4px;
+  }
+
+  .hub-theme-swatch-circle {
+    width: 14px;
+    height: 14px;
+  }
+}
+
 .backup-section--auto-save .backup-section-row {
   display: flex;
   align-items: center;
@@ -6402,45 +6618,84 @@ mark.cyber-hl-pink:hover {
    Design tokens + hardcoded-value overrides for WCAG AA
    contrast on a soft cool-gray background.
    ========================================================== */
-html.light-mode,
-body.light-mode {
+/* Solar Zen (clean light) theme */
+[data-theme="solar-zen"] {
 
   /* ── Background Palette ── */
-  --bg-deep:        #f4f5f7;
+  --bg-deep:        #f8fafc;
   --bg-surface:     #ffffff;
-  --bg-elevated:    #f0f1f5;
+  --bg-elevated:    #f1f5f9;
 
   /* ── Glassmorphism (semi-transparent white) ── */
-  --glass-bg:       rgba(255, 255, 255, 0.60);
-  --glass-border:   rgba(0, 0, 0, 0.10);
-  --glass-highlight: rgba(0, 0, 0, 0.05);
+  --glass-bg:       rgba(255, 255, 255, 0.65);
+  --glass-border:   rgba(0, 0, 0, 0.08);
+  --glass-highlight: rgba(0, 0, 0, 0.04);
 
-  /* ── Accents (darkened for readability on white) ── */
-  --accent-primary:   #0077b6;   /* Deep azure blue (from neon cyan) */
-  --accent-secondary: #7c3aed;   /* Rich violet (from neon purple) */
-  --accent-glow:      0 0 12px rgba(0, 119, 182, 0.12);
+  /* ── Accents (indigo / violet for soft authority) ── */
+  --accent-primary:   #4f46e5;
+  --accent-secondary: #7c3aed;
+  --accent-glow:      0 0 12px rgba(79, 70, 229, 0.1);
 
   /* ── Typography (WCAG AA) ── */
-  --text-primary:   #111827;
-  --text-secondary: #4b5563;
-  --text-muted:     #9ca3af;
+  --text-primary:   #1e293b;
+  --text-secondary: #475569;
+  --text-muted:     #94a3b8;
 
   /* ── Semantic Colors ── */
   --danger:  #dc2626;
   --success: #16a34a;
 
   /* ── Shadows (soft dark, no neon glows) ── */
-  --shadow-sm:   0 2px 8px rgba(0, 0, 0, 0.06);
-  --shadow-md:   0 4px 16px rgba(0, 0, 0, 0.08);
-  --shadow-lg:   0 8px 32px rgba(0, 0, 0, 0.10);
-  --shadow-glow: 0 0 12px rgba(0, 119, 182, 0.10);
+  --shadow-sm:   0 2px 8px rgba(0, 0, 0, 0.05);
+  --shadow-md:   0 4px 16px rgba(0, 0, 0, 0.07);
+  --shadow-lg:   0 8px 32px rgba(0, 0, 0, 0.09);
+  --shadow-glow: 0 0 12px rgba(79, 70, 229, 0.08);
 }
 
-/* ── Hardcoded-value overrides (not captured by variables) ── */
+/* Lo-Fi Twilight (soft dark) theme */
+[data-theme="lofi-twilight"] {
 
-html.light-mode body::before,
-body.light-mode body::before {
-  /* Dot grid: dark dots on light bg instead of white dots on dark bg */
+  /* ── Background Palette ── */
+  --bg-deep:        #1a1b26;
+  --bg-surface:     #24283b;
+  --bg-elevated:    #2f3348;
+
+  /* ── Glassmorphism (soft dark glass) ── */
+  --glass-bg:       rgba(36, 40, 59, 0.65);
+  --glass-border:   rgba(192, 202, 245, 0.06);
+  --glass-highlight: rgba(192, 202, 245, 0.05);
+
+  /* ── Accents (pastel purple / warm peach) ── */
+  --accent-primary:   #bb9af7;
+  --accent-secondary: #ff9e64;
+  --accent-glow:      0 0 24px rgba(187, 154, 247, 0.15);
+
+  /* ── Typography ── */
+  --text-primary:   #c0caf5;
+  --text-secondary: #9aa5ce;
+  --text-muted:     #565f89;
+
+  /* ── Semantic Colors ── */
+  --danger:  #f7768e;
+  --success: #9ece6a;
+
+  /* ── Shadows (deeper, warm-tinged) ── */
+  --shadow-sm:   0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md:   0 4px 20px rgba(0, 0, 0, 0.4);
+  --shadow-lg:   0 8px 40px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 20px rgba(187, 154, 247, 0.12);
+}
+
+/* ==========================================================
+   THEME HARDCODED-VALUE OVERRIDES
+   Rules that depend on hardcoded colors (not variables).
+   solar-zen = clean light mode; lofi-twilight = soft dark mode.
+   ========================================================== */
+
+/* ── Solar Zen overrides ── */
+
+[data-theme="solar-zen"] body::before {
+  /* Dot grid: dark dots on light bg */
   background-image: radial-gradient(
     circle at 1px 1px,
     rgba(0, 0, 0, 0.06) 1px,
@@ -6448,591 +6703,476 @@ body.light-mode body::before {
   );
 }
 
-html.light-mode .glass,
-body.light-mode .glass {
+[data-theme="solar-zen"] .glass {
   background: var(--glass-bg);
 }
 
-html.light-mode .glass-card,
-body.light-mode .glass-card {
+[data-theme="solar-zen"] .glass-card {
   background: var(--glass-bg);
 }
 
-html.light-mode .card-front,
-body.light-mode .card-front {
+[data-theme="solar-zen"] .card-front {
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
 }
 
-html.light-mode .card-back,
-body.light-mode .card-back {
+[data-theme="solar-zen"] .card-back {
   background: linear-gradient(135deg, rgba(124, 58, 237, 0.08), rgba(255, 255, 255, 0.85));
   border: 1px solid rgba(124, 58, 237, 0.2);
 }
 
-html.light-mode .settings-modal,
-body.light-mode .settings-modal {
+[data-theme="solar-zen"] .settings-modal {
   background: rgba(255, 255, 255, 0.92);
   box-shadow: var(--shadow-lg);
 }
 
-html.light-mode .backup-modal,
-body.light-mode .backup-modal {
+[data-theme="solar-zen"] .backup-modal {
   background: rgba(255, 255, 255, 0.92);
   box-shadow: var(--shadow-lg);
 }
 
-html.light-mode .settings-overlay,
-body.light-mode .settings-overlay,
-html.light-mode .backup-overlay,
-body.light-mode .backup-overlay,
-html.light-mode .add-card-overlay,
-body.light-mode .add-card-overlay {
+[data-theme="solar-zen"] .settings-overlay,
+[data-theme="solar-zen"] .backup-overlay,
+[data-theme="solar-zen"] .add-card-overlay {
   background: rgba(0, 0, 0, 0.25);
 }
 
-html.light-mode .generate-modal,
-body.light-mode .generate-modal {
+[data-theme="solar-zen"] .generate-modal {
   background: rgba(255, 255, 255, 0.92);
   box-shadow: var(--shadow-lg);
 }
 
-html.light-mode .focus-vibe-panel,
-body.light-mode .focus-vibe-panel {
+[data-theme="solar-zen"] .focus-vibe-panel {
   background: rgba(255, 255, 255, 0.88);
   box-shadow: var(--shadow-md);
 }
 
-html.light-mode .focus-vibe-widget.playing .focus-vibe-panel,
-body.light-mode .focus-vibe-widget.playing .focus-vibe-panel {
-  border-color: rgba(0, 119, 182, 0.15);
+[data-theme="solar-zen"] .focus-vibe-widget.playing .focus-vibe-panel {
+  border-color: rgba(79, 70, 229, 0.15);
   box-shadow: var(--shadow-md);
 }
 
-html.light-mode .focus-vibe-trigger,
-body.light-mode .focus-vibe-trigger {
+[data-theme="solar-zen"] .focus-vibe-trigger {
   background: rgba(255, 255, 255, 0.85);
   box-shadow: var(--shadow-sm);
 }
 
-html.light-mode .sidebar,
-body.light-mode .sidebar {
+[data-theme="solar-zen"] .sidebar {
   background: rgba(255, 255, 255, 0.80);
   border-color: var(--glass-border);
 }
 
-/* ── Nav items: active state uses darkened accent on light bg ── */
-html.light-mode .nav-item.active,
-body.light-mode .nav-item.active {
-  background: rgba(0, 119, 182, 0.10);
-  box-shadow: inset 0 0 0 1px rgba(0, 119, 182, 0.2);
+/* Nav items: active state darkened accent on light bg */
+[data-theme="solar-zen"] .nav-item.active {
+  background: rgba(79, 70, 229, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(79, 70, 229, 0.2);
 }
 
-html.light-mode .nav-item.active::before,
-body.light-mode .nav-item.active::before {
+[data-theme="solar-zen"] .nav-item.active::before {
   background: var(--accent-primary);
   box-shadow: 0 0 4px var(--accent-primary);
 }
 
-/* ── Inputs & textareas on light bg ── */
-html.light-mode .form-group input,
-body.light-mode .form-group input,
-html.light-mode .form-group textarea,
-body.light-mode .form-group textarea,
-html.light-mode .stepper-input,
-body.light-mode .stepper-input,
-html.light-mode .quiz-textarea,
-body.light-mode .quiz-textarea,
-html.light-mode .settings-select-wrap,
-body.light-mode .settings-select-wrap {
+/* Inputs & textareas on light bg */
+[data-theme="solar-zen"] .form-group input,
+[data-theme="solar-zen"] .form-group textarea,
+[data-theme="solar-zen"] .stepper-input,
+[data-theme="solar-zen"] .quiz-textarea,
+[data-theme="solar-zen"] .settings-select-wrap {
   background: rgba(0, 0, 0, 0.03);
   border-color: rgba(0, 0, 0, 0.12);
   color: var(--text-primary);
 }
 
-html.light-mode .settings-sound-select option,
-body.light-mode .settings-sound-select option {
+[data-theme="solar-zen"] .settings-sound-select option {
   background: #ffffff;
 }
 
-/* ── Buttons that used dark bg → light bg ── */
-html.light-mode .stepper-btn,
-body.light-mode .stepper-btn,
-html.light-mode .deck-btn,
-body.light-mode .deck-btn,
-html.light-mode .timer-btn-icon,
-body.light-mode .timer-btn-icon,
-html.light-mode .settings-close-btn,
-body.light-mode .settings-close-btn,
-html.light-mode .sidebar-settings-btn,
-body.light-mode .sidebar-settings-btn,
-html.light-mode .card-flip-back-btn,
-body.light-mode .card-flip-back-btn,
-html.light-mode .deck-delete-btn,
-body.light-mode .deck-delete-btn,
-html.light-mode .deck-rename-btn,
-body.light-mode .deck-rename-btn {
+/* Buttons that use dark bg → light bg */
+[data-theme="solar-zen"] .stepper-btn,
+[data-theme="solar-zen"] .deck-btn,
+[data-theme="solar-zen"] .timer-btn-icon,
+[data-theme="solar-zen"] .settings-close-btn,
+[data-theme="solar-zen"] .sidebar-settings-btn,
+[data-theme="solar-zen"] .card-flip-back-btn,
+[data-theme="solar-zen"] .deck-delete-btn,
+[data-theme="solar-zen"] .deck-rename-btn {
   background: rgba(0, 0, 0, 0.04);
   border-color: rgba(0, 0, 0, 0.10);
 }
 
-/* ── Settings / mode / vibe buttons bg ── */
-html.light-mode .mode-toggle,
-body.light-mode .mode-toggle,
-html.light-mode .chart-range-toggle,
-body.light-mode .chart-range-toggle {
+/* Settings / mode / vibe buttons bg */
+[data-theme="solar-zen"] .mode-toggle,
+[data-theme="solar-zen"] .chart-range-toggle {
   background: rgba(0, 0, 0, 0.04);
   border-color: rgba(0, 0, 0, 0.10);
 }
 
-html.light-mode .mode-btn,
-body.light-mode .mode-btn {
+[data-theme="solar-zen"] .mode-btn {
   color: var(--text-secondary);
 }
 
-html.light-mode .mode-btn:hover,
-body.light-mode .mode-btn:hover {
+[data-theme="solar-zen"] .mode-btn:hover {
   color: var(--text-primary);
 }
 
-html.light-mode .settings-btn,
-body.light-mode .settings-btn,
-html.light-mode .settings-toggle,
-body.light-mode .settings-toggle {
+[data-theme="solar-zen"] .settings-btn,
+[data-theme="solar-zen"] .settings-toggle {
   background: rgba(255, 255, 255, 0.70);
   border-color: rgba(0, 0, 0, 0.10);
   color: var(--text-secondary);
 }
 
-html.light-mode .settings-btn:hover,
-body.light-mode .settings-btn:hover {
+[data-theme="solar-zen"] .settings-btn:hover {
   color: var(--accent-primary);
-  border-color: rgba(0, 119, 182, 0.3);
-  box-shadow: 0 0 10px rgba(0, 119, 182, 0.08);
+  border-color: rgba(79, 70, 229, 0.3);
+  box-shadow: 0 0 10px rgba(79, 70, 229, 0.08);
 }
 
-/* ── Quiz options ── */
-html.light-mode .quiz-option,
-body.light-mode .quiz-option {
+/* Quiz options */
+[data-theme="solar-zen"] .quiz-option {
   background: rgba(0, 0, 0, 0.02);
   border-color: rgba(0, 0, 0, 0.08);
   color: var(--text-secondary);
 }
 
-html.light-mode .quiz-option:hover,
-body.light-mode .quiz-option:hover {
+[data-theme="solar-zen"] .quiz-option:hover {
   background: rgba(0, 0, 0, 0.04);
   border-color: rgba(0, 0, 0, 0.15);
   color: var(--text-primary);
   box-shadow: var(--shadow-sm);
 }
 
-/* ── Quiz correct/incorrect ── */
-html.light-mode .quiz-option.option-correct,
-body.light-mode .quiz-option.option-correct {
+/* Quiz correct/incorrect */
+[data-theme="solar-zen"] .quiz-option.option-correct {
   background: rgba(22, 163, 74, 0.08) !important;
   border-color: rgba(22, 163, 74, 0.3) !important;
 }
 
-html.light-mode .quiz-option.option-incorrect,
-body.light-mode .quiz-option.option-incorrect {
+[data-theme="solar-zen"] .quiz-option.option-incorrect {
   background: rgba(220, 38, 38, 0.06) !important;
   border-color: rgba(220, 38, 38, 0.3) !important;
 }
 
-/* ── SRS assessment buttons ── */
-html.light-mode .srs-assessment-btn,
-body.light-mode .srs-assessment-btn {
+/* SRS assessment buttons */
+[data-theme="solar-zen"] .srs-assessment-btn {
   background: rgba(255, 255, 255, 0.70);
   border-color: rgba(0, 0, 0, 0.08);
 }
 
-/* ── Timer ring background track ── */
-html.light-mode .timer-ring-bg,
-body.light-mode .timer-ring-bg {
+/* Timer ring background track */
+[data-theme="solar-zen"] .timer-ring-bg {
   stroke: rgba(0, 0, 0, 0.08);
 }
 
-/* ── Scrollbar: light track, dark thumb ── */
-html.light-mode ::-webkit-scrollbar-thumb,
-body.light-mode ::-webkit-scrollbar-thumb {
+/* Scrollbar: light track, dark thumb */
+[data-theme="solar-zen"] ::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.15);
 }
 
-html.light-mode ::-webkit-scrollbar-thumb:hover,
-body.light-mode ::-webkit-scrollbar-thumb:hover {
+[data-theme="solar-zen"] ::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.25);
 }
 
-/* ── Vibe pill inactive bg ── */
-html.light-mode .vibe-pill,
-body.light-mode .vibe-pill {
+/* Vibe pill inactive bg */
+[data-theme="solar-zen"] .vibe-pill {
   background: rgba(0, 0, 0, 0.03);
   border-color: rgba(0, 0, 0, 0.08);
   color: var(--text-secondary);
 }
 
-html.light-mode .vibe-pill:hover,
-body.light-mode .vibe-pill:hover {
-  background: rgba(0, 119, 182, 0.06);
-  border-color: rgba(0, 119, 182, 0.2);
+[data-theme="solar-zen"] .vibe-pill:hover {
+  background: rgba(79, 70, 229, 0.06);
+  border-color: rgba(79, 70, 229, 0.2);
   color: var(--text-primary);
 }
 
-/* ── Divider lines ── */
-html.light-mode .widget-stat-divider,
-body.light-mode .widget-stat-divider,
-html.light-mode .widget-footer,
-body.light-mode .widget-footer,
-html.light-mode .card-section,
-body.light-mode .card-section,
-html.light-mode .sidebar-footer > .status-indicator,
-body.light-mode .sidebar-footer > .status-indicator {
+/* Divider lines */
+[data-theme="solar-zen"] .widget-stat-divider,
+[data-theme="solar-zen"] .widget-footer,
+[data-theme="solar-zen"] .card-section,
+[data-theme="solar-zen"] .sidebar-footer > .status-indicator {
   border-color: rgba(0, 0, 0, 0.08);
 }
 
-/* ── Card-section label backgrounds (keep tint but lighter) ── */
-html.light-mode .card-section-label,
-body.light-mode .card-section-label {
+/* Card-section label backgrounds */
+[data-theme="solar-zen"] .card-section-label {
   background: rgba(0, 0, 0, 0.04);
 }
 
-/* ── Accent text on light bg needs stronger color ── */
-html.light-mode .text-gradient,
-body.light-mode .text-gradient {
-  background: linear-gradient(135deg, #0077b6, #7c3aed);
+/* Accent text on light bg needs stronger color */
+[data-theme="solar-zen"] .text-gradient {
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
   -webkit-background-clip: text;
   background-clip: text;
 }
 
-/* ── Widget buttons on light bg ── */
-html.light-mode .widget-btn,
-body.light-mode .widget-btn {
+/* Widget buttons on light bg */
+[data-theme="solar-zen"] .widget-btn {
   background: transparent;
 }
 
-html.light-mode .widget-btn-cyan,
-body.light-mode .widget-btn-cyan {
+[data-theme="solar-zen"] .widget-btn-cyan {
   color: var(--accent-primary);
-  border-color: rgba(0, 119, 182, 0.3);
+  border-color: rgba(79, 70, 229, 0.3);
 }
 
-html.light-mode .widget-btn-cyan:hover,
-body.light-mode .widget-btn-cyan:hover {
-  background: rgba(0, 119, 182, 0.08);
+[data-theme="solar-zen"] .widget-btn-cyan:hover {
+  background: rgba(79, 70, 229, 0.08);
   border-color: var(--accent-primary);
-  box-shadow: 0 0 12px rgba(0, 119, 182, 0.1);
+  box-shadow: 0 0 12px rgba(79, 70, 229, 0.1);
 }
 
-html.light-mode .widget-btn-purple,
-body.light-mode .widget-btn-purple {
+[data-theme="solar-zen"] .widget-btn-purple {
   color: var(--accent-secondary);
   border-color: rgba(124, 58, 237, 0.3);
 }
 
-html.light-mode .widget-btn-purple:hover,
-body.light-mode .widget-btn-purple:hover {
+[data-theme="solar-zen"] .widget-btn-purple:hover {
   background: rgba(124, 58, 237, 0.08);
   border-color: var(--accent-secondary);
   box-shadow: 0 0 12px rgba(124, 58, 237, 0.1);
 }
 
-html.light-mode .widget-btn-green,
-body.light-mode .widget-btn-green {
+[data-theme="solar-zen"] .widget-btn-green {
   color: var(--success);
   border-color: rgba(22, 163, 74, 0.3);
 }
 
-html.light-mode .widget-btn-green:hover,
-body.light-mode .widget-btn-green:hover {
+[data-theme="solar-zen"] .widget-btn-green:hover {
   background: rgba(22, 163, 74, 0.08);
   border-color: var(--success);
   box-shadow: 0 0 12px rgba(22, 163, 74, 0.1);
 }
 
-/* ── Stat values: kill heavy text-shadow on light bg ── */
-html.light-mode .widget-stat-value--cyan,
-body.light-mode .widget-stat-value--cyan,
-html.light-mode .widget-stat-value--due.has-due,
-body.light-mode .widget-stat-value--due.has-due,
-html.light-mode .stat-value,
-body.light-mode .stat-value,
-html.light-mode .now-value,
-body.light-mode .now-value,
-html.light-mode .focus-vibe-widget.playing .now-value,
-body.light-mode .focus-vibe-widget.playing .now-value {
+/* Stat values: kill heavy text-shadow on light bg */
+[data-theme="solar-zen"] .widget-stat-value--cyan,
+[data-theme="solar-zen"] .widget-stat-value--due.has-due,
+[data-theme="solar-zen"] .stat-value,
+[data-theme="solar-zen"] .now-value,
+[data-theme="solar-zen"] .focus-vibe-widget.playing .now-value {
   text-shadow: none;
 }
 
-/* ── Visualizer bars (light mode) ── */
-html.light-mode .vibe-bar-c,
-body.light-mode .vibe-bar-c {
-  box-shadow: 0 0 10px rgba(0, 119, 182, 0.45), 0 0 3px rgba(0, 119, 182, 0.25);
+/* Visualizer bars (light mode) */
+[data-theme="solar-zen"] .vibe-bar-c {
+  box-shadow: 0 0 10px rgba(79, 70, 229, 0.45), 0 0 3px rgba(79, 70, 229, 0.25);
 }
-html.light-mode .vibe-bar-p,
-body.light-mode .vibe-bar-p {
+[data-theme="solar-zen"] .vibe-bar-p {
   box-shadow: 0 0 10px rgba(124, 58, 237, 0.45), 0 0 3px rgba(124, 58, 237, 0.25);
 }
 
-/* ── Timer ring progress glow ── */
-html.light-mode .timer-ring-progress,
-body.light-mode .timer-ring-progress {
-  filter: drop-shadow(0 0 3px rgba(0, 119, 182, 0.15));
+/* Timer ring progress glow */
+[data-theme="solar-zen"] .timer-ring-progress {
+  filter: drop-shadow(0 0 3px rgba(79, 70, 229, 0.15));
 }
 
-html.light-mode .timer-ring-progress.break-mode,
-body.light-mode .timer-ring-progress.break-mode {
+[data-theme="solar-zen"] .timer-ring-progress.break-mode {
   filter: drop-shadow(0 0 3px rgba(124, 58, 237, 0.15));
 }
 
-/* ── Play/study buttons with accent bg ── */
-html.light-mode .timer-btn-main,
-body.light-mode .timer-btn-main,
-html.light-mode .focus-vibe-play-btn,
-body.light-mode .focus-vibe-play-btn,
-html.light-mode .studio-main-btn,
-body.light-mode .studio-main-btn {
-  background: rgba(0, 119, 182, 0.08);
+/* Play/study buttons with accent bg */
+[data-theme="solar-zen"] .timer-btn-main,
+[data-theme="solar-zen"] .focus-vibe-play-btn,
+[data-theme="solar-zen"] .studio-main-btn {
+  background: rgba(79, 70, 229, 0.08);
   border-color: var(--accent-primary);
   color: var(--accent-primary);
-  box-shadow: 0 0 12px rgba(0, 119, 182, 0.08);
+  box-shadow: 0 0 12px rgba(79, 70, 229, 0.08);
 }
 
-html.light-mode .timer-btn-main:hover,
-body.light-mode .timer-btn-main:hover,
-html.light-mode .focus-vibe-play-btn:hover,
-body.light-mode .focus-vibe-play-btn:hover,
-html.light-mode .studio-main-btn:hover,
-body.light-mode .studio-main-btn:hover {
-  background: rgba(0, 119, 182, 0.15);
-  box-shadow: 0 0 20px rgba(0, 119, 182, 0.15);
+[data-theme="solar-zen"] .timer-btn-main:hover,
+[data-theme="solar-zen"] .focus-vibe-play-btn:hover,
+[data-theme="solar-zen"] .studio-main-btn:hover {
+  background: rgba(79, 70, 229, 0.15);
+  box-shadow: 0 0 20px rgba(79, 70, 229, 0.15);
 }
 
-/* ── Deck play button ── */
-/* ── Next button (light mode, purple accent) ── */
-html.light-mode .focus-vibe-next-btn,
-body.light-mode .focus-vibe-next-btn {
+/* Next button (light mode, violet accent) */
+[data-theme="solar-zen"] .focus-vibe-next-btn {
   background: rgba(124, 58, 237, 0.08);
   border-color: var(--accent-secondary);
   color: var(--accent-secondary);
   box-shadow: 0 0 12px rgba(124, 58, 237, 0.08);
 }
-html.light-mode .focus-vibe-next-btn:hover,
-body.light-mode .focus-vibe-next-btn:hover {
+[data-theme="solar-zen"] .focus-vibe-next-btn:hover {
   background: rgba(124, 58, 237, 0.15);
   box-shadow: 0 0 20px rgba(124, 58, 237, 0.15);
 }
 
-/* ── Deck play button ── */
-html.light-mode .deck-play-btn,
-body.light-mode .deck-play-btn {
-  background: rgba(0, 119, 182, 0.06);
+/* Deck play button */
+[data-theme="solar-zen"] .deck-play-btn {
+  background: rgba(79, 70, 229, 0.06);
   border-color: var(--accent-primary);
   color: var(--accent-primary);
 }
 
-html.light-mode .deck-play-btn:hover,
-body.light-mode .deck-play-btn:hover {
-  background: rgba(0, 119, 182, 0.12);
-  box-shadow: 0 0 14px rgba(0, 119, 182, 0.1);
+[data-theme="solar-zen"] .deck-play-btn:hover {
+  background: rgba(79, 70, 229, 0.12);
+  box-shadow: 0 0 14px rgba(79, 70, 229, 0.1);
 }
 
-/* ── SRS study button ── */
-html.light-mode .srs-btn-study,
-body.light-mode .srs-btn-study {
-  box-shadow: 0 0 12px rgba(0, 119, 182, 0.12);
+/* SRS study button */
+[data-theme="solar-zen"] .srs-btn-study {
+  box-shadow: 0 0 12px rgba(79, 70, 229, 0.12);
 }
 
-html.light-mode .srs-btn-study:hover,
-body.light-mode .srs-btn-study:hover {
-  box-shadow: 0 0 24px rgba(0, 119, 182, 0.2);
+[data-theme="solar-zen"] .srs-btn-study:hover {
+  box-shadow: 0 0 24px rgba(79, 70, 229, 0.2);
 }
 
-/* ── API key input & hint ── */
-html.light-mode .api-key-input,
-body.light-mode .api-key-input,
-html.light-mode .generate-word-input,
-body.light-mode .generate-word-input,
-html.light-mode .focus-vibe-url-input,
-body.light-mode .focus-vibe-url-input {
+/* API key input & hint */
+[data-theme="solar-zen"] .api-key-input,
+[data-theme="solar-zen"] .generate-word-input,
+[data-theme="solar-zen"] .focus-vibe-url-input {
   background: rgba(0, 0, 0, 0.03);
   border-color: rgba(0, 0, 0, 0.12);
   color: var(--text-primary);
 }
 
-/* ── Focus vibe volume slider track ── */
-html.light-mode .focus-vibe-volume,
-body.light-mode .focus-vibe-volume {
+/* Focus vibe volume slider track */
+[data-theme="solar-zen"] .focus-vibe-volume {
   background: rgba(0, 0, 0, 0.10);
 }
 
-/* ── Test sound button light bg ── */
-html.light-mode .btn-test-sound,
-body.light-mode .btn-test-sound {
+/* Test sound button light bg */
+[data-theme="solar-zen"] .btn-test-sound {
   background: rgba(0, 0, 0, 0.04);
   border-color: rgba(0, 0, 0, 0.10);
 }
 
-html.light-mode .btn-test-sound:hover,
-body.light-mode .btn-test-sound:hover {
-  background: rgba(0, 119, 182, 0.10);
+[data-theme="solar-zen"] .btn-test-sound:hover {
+  background: rgba(79, 70, 229, 0.10);
   border-color: var(--accent-primary);
-  box-shadow: 0 0 8px rgba(0, 119, 182, 0.1);
+  box-shadow: 0 0 8px rgba(79, 70, 229, 0.1);
 }
 
-/* ── Deck browse button ── */
-html.light-mode .deck-browse-btn,
-body.light-mode .deck-browse-btn {
+/* Deck browse button */
+[data-theme="solar-zen"] .deck-browse-btn {
   border-color: rgba(0, 0, 0, 0.10);
   color: var(--text-secondary);
 }
 
-html.light-mode .deck-browse-btn:hover,
-body.light-mode .deck-browse-btn:hover {
+[data-theme="solar-zen"] .deck-browse-btn:hover {
   border-color: rgba(0, 0, 0, 0.2);
   color: var(--text-primary);
   background: rgba(0, 0, 0, 0.03);
 }
 
-/* ── Deck delete button ── */
-html.light-mode .deck-delete-btn:hover,
-body.light-mode .deck-delete-btn:hover {
+/* Deck delete button */
+[data-theme="solar-zen"] .deck-delete-btn:hover {
   background: rgba(220, 38, 38, 0.06);
   border-color: rgba(220, 38, 38, 0.2);
 }
 
-/* ── Sidebar settings btn hover ── */
-html.light-mode .sidebar-settings-btn:hover,
-body.light-mode .sidebar-settings-btn:hover {
-  background: rgba(0, 119, 182, 0.08);
-  border-color: rgba(0, 119, 182, 0.2);
-  box-shadow: 0 0 8px rgba(0, 119, 182, 0.08);
+/* Sidebar settings btn hover */
+[data-theme="solar-zen"] .sidebar-settings-btn:hover {
+  background: rgba(79, 70, 229, 0.08);
+  border-color: rgba(79, 70, 229, 0.2);
+  box-shadow: 0 0 8px rgba(79, 70, 229, 0.08);
 }
 
-/* ── Status dot on light bg ── */
-html.light-mode .status-dot,
-body.light-mode .status-dot {
+/* Status dot on light bg */
+[data-theme="solar-zen"] .status-dot {
   box-shadow: 0 0 3px var(--success);
 }
 
-/* ── Settings modal icon SVG glow ── */
-html.light-mode .settings-modal-icon-svg,
-body.light-mode .settings-modal-icon-svg,
-html.light-mode .backup-modal-icon-svg,
-body.light-mode .backup-modal-icon-svg {
-  filter: drop-shadow(0 0 2px rgba(0, 119, 182, 0.12));
+/* Settings modal icon SVG glow */
+[data-theme="solar-zen"] .settings-modal-icon-svg,
+[data-theme="solar-zen"] .backup-modal-icon-svg {
+  filter: drop-shadow(0 0 2px rgba(79, 70, 229, 0.12));
 }
 
-/* ── Chart bar (light bg gradient still works, just kill glow) ── */
-html.light-mode .chart-bar,
-body.light-mode .chart-bar {
-  box-shadow: 0 0 4px rgba(0, 119, 182, 0.08);
+/* Chart bar */
+[data-theme="solar-zen"] .chart-bar {
+  box-shadow: 0 0 4px rgba(79, 70, 229, 0.08);
 }
 
-html.light-mode .chart-bar--today,
-body.light-mode .chart-bar--today {
-  box-shadow: 0 0 8px rgba(0, 119, 182, 0.15);
+[data-theme="solar-zen"] .chart-bar--today {
+  box-shadow: 0 0 8px rgba(79, 70, 229, 0.15);
 }
 
-/* ── btn-primary keeps its contrast but tone down glow ── */
-html.light-mode .btn-primary,
-body.light-mode .btn-primary {
-  box-shadow: 0 0 10px rgba(0, 119, 182, 0.1);
+/* btn-primary glow */
+[data-theme="solar-zen"] .btn-primary {
+  box-shadow: 0 0 10px rgba(79, 70, 229, 0.1);
 }
 
-html.light-mode .btn-primary:hover,
-body.light-mode .btn-primary:hover {
-  box-shadow: 0 0 18px rgba(0, 119, 182, 0.15);
+[data-theme="solar-zen"] .btn-primary:hover {
+  box-shadow: 0 0 18px rgba(79, 70, 229, 0.15);
 }
 
-/* ── SRS stat value due ── */
-html.light-mode .srs-stat-value.due,
-body.light-mode .srs-stat-value.due {
+/* SRS stat value due */
+[data-theme="solar-zen"] .srs-stat-value.due {
   text-shadow: none;
 }
 
-/* ── Completion icon glow ── */
-html.light-mode .srs-completion-icon,
-body.light-mode .srs-completion-icon {
-  filter: drop-shadow(0 0 10px rgba(0, 119, 182, 0.12));
+/* Completion icon glow */
+[data-theme="solar-zen"] .srs-completion-icon {
+  filter: drop-shadow(0 0 10px rgba(79, 70, 229, 0.12));
 }
 
-/* ── Studio vibe card icon ── */
-html.light-mode .studio-vibe-card-icon,
-body.light-mode .studio-vibe-card-icon {
-  filter: drop-shadow(0 0 4px rgba(0, 119, 182, 0.08));
+/* Studio vibe card icon */
+[data-theme="solar-zen"] .studio-vibe-card-icon {
+  filter: drop-shadow(0 0 4px rgba(79, 70, 229, 0.08));
 }
 
-/* ── Tag filter pills ── */
-html.light-mode .studio-tag-pill,
-body.light-mode .studio-tag-pill {
+/* Tag filter pills */
+[data-theme="solar-zen"] .studio-tag-pill {
   background: rgba(0, 0, 0, 0.03);
   border-color: rgba(0, 0, 0, 0.08);
   color: var(--text-secondary);
 }
-html.light-mode .studio-tag-pill:hover,
-body.light-mode .studio-tag-pill:hover {
-  border-color: rgba(0, 119, 182, 0.3);
-  background: rgba(0, 119, 182, 0.04);
+[data-theme="solar-zen"] .studio-tag-pill:hover {
+  border-color: rgba(79, 70, 229, 0.3);
+  background: rgba(79, 70, 229, 0.04);
 }
-html.light-mode .studio-tag-pill.active,
-body.light-mode .studio-tag-pill.active {
+[data-theme="solar-zen"] .studio-tag-pill.active {
   border-color: var(--accent-primary);
   color: var(--accent-primary);
-  background: rgba(0, 119, 182, 0.08);
-  box-shadow: 0 0 12px rgba(0, 119, 182, 0.1);
+  background: rgba(79, 70, 229, 0.08);
+  box-shadow: 0 0 12px rgba(79, 70, 229, 0.1);
 }
-html.light-mode .studio-tag-pill-delete,
-body.light-mode .studio-tag-pill-delete {
+[data-theme="solar-zen"] .studio-tag-pill-delete {
   color: var(--text-muted);
 }
-html.light-mode .studio-tag-pill-delete:hover,
-body.light-mode .studio-tag-pill-delete:hover {
+[data-theme="solar-zen"] .studio-tag-pill-delete:hover {
   color: #dc2626;
   background: rgba(220, 38, 38, 0.12);
 }
 
-/* ── Add form card ── */
-html.light-mode .studio-add-card,
-body.light-mode .studio-add-card {
+/* Add form card */
+[data-theme="solar-zen"] .studio-add-card {
   background: rgba(255, 255, 255, 0.5);
   border-color: rgba(0, 0, 0, 0.06);
 }
-html.light-mode .studio-save-btn,
-body.light-mode .studio-save-btn {
-  background: rgba(0, 119, 182, 0.06);
-  border-color: rgba(0, 119, 182, 0.3);
+[data-theme="solar-zen"] .studio-save-btn {
+  background: rgba(79, 70, 229, 0.06);
+  border-color: rgba(79, 70, 229, 0.3);
   color: var(--accent-primary);
 }
-html.light-mode .studio-save-btn:hover,
-body.light-mode .studio-save-btn:hover {
-  background: rgba(0, 119, 182, 0.12);
-  box-shadow: 0 0 20px rgba(0, 119, 182, 0.12);
+[data-theme="solar-zen"] .studio-save-btn:hover {
+  background: rgba(79, 70, 229, 0.12);
+  box-shadow: 0 0 20px rgba(79, 70, 229, 0.12);
 }
 
-/* ── btn-danger hover bg ── */
-html.light-mode .btn-danger:hover,
-body.light-mode .btn-danger:hover {
+/* btn-danger hover bg */
+[data-theme="solar-zen"] .btn-danger:hover {
   background: rgba(220, 38, 38, 0.06);
 }
 
-/* ── SRS end session button ── */
-html.light-mode .srs-btn-end-session:hover,
-body.light-mode .srs-btn-end-session:hover {
+/* SRS end session button */
+[data-theme="solar-zen"] .srs-btn-end-session:hover {
   background: rgba(220, 38, 38, 0.04);
 }
 
-/* ── Form inputs focus ring ── */
-html.light-mode .form-group input:focus,
-body.light-mode .form-group input:focus,
-html.light-mode .form-group textarea:focus,
-body.light-mode .form-group textarea:focus,
-html.light-mode .stepper-input:focus,
-body.light-mode .stepper-input:focus {
-  box-shadow: 0 0 0 3px rgba(0, 119, 182, 0.08);
+/* Form inputs focus ring */
+[data-theme="solar-zen"] .form-group input:focus,
+[data-theme="solar-zen"] .form-group textarea:focus,
+[data-theme="solar-zen"] .stepper-input:focus {
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
 }
 
-/* ── Theme toggle button ── */
+/* ── Theme toggle button (base styles — all themes) ── */
 .theme-toggle-btn {
   width: 32px;
   height: 32px;
@@ -7060,18 +7200,134 @@ body.light-mode .stepper-input:focus {
   transform: scale(0.9);
 }
 
-html.light-mode .theme-toggle-btn,
-body.light-mode .theme-toggle-btn {
+/* Theme toggle in solar-zen */
+[data-theme="solar-zen"] .theme-toggle-btn {
   background: rgba(0, 0, 0, 0.04);
   color: var(--text-muted);
 }
 
-html.light-mode .theme-toggle-btn:hover,
-body.light-mode .theme-toggle-btn:hover {
+[data-theme="solar-zen"] .theme-toggle-btn:hover {
   color: #6366f1;
   border-color: rgba(99, 102, 241, 0.25);
   background: rgba(99, 102, 241, 0.08);
   box-shadow: 0 0 12px rgba(99, 102, 241, 0.12);
+}
+
+/* ── Lo-Fi Twilight overrides (soft dark — subset of rules that differ from cyberpunk) ── */
+
+[data-theme="lofi-twilight"] body::before {
+  /* Dot grid: dimmer than cyberpunk's white dots */
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    rgba(192, 202, 245, 0.03) 1px,
+    transparent 0
+  );
+}
+
+[data-theme="lofi-twilight"] .glass {
+  background: rgba(36, 40, 59, 0.75);
+}
+
+[data-theme="lofi-twilight"] .glass-card {
+  background: rgba(36, 40, 59, 0.75);
+}
+
+[data-theme="lofi-twilight"] .settings-modal,
+[data-theme="lofi-twilight"] .backup-modal,
+[data-theme="lofi-twilight"] .generate-modal {
+  background: rgba(36, 40, 59, 0.92);
+  box-shadow: var(--shadow-lg);
+}
+
+[data-theme="lofi-twilight"] .focus-vibe-panel {
+  background: rgba(36, 40, 59, 0.88);
+  box-shadow: var(--shadow-md);
+}
+
+[data-theme="lofi-twilight"] .sidebar {
+  background: rgba(36, 40, 59, 0.80);
+  border-color: var(--glass-border);
+}
+
+/* Inputs & textareas — darker bg with lavender border */
+[data-theme="lofi-twilight"] .form-group input,
+[data-theme="lofi-twilight"] .form-group textarea,
+[data-theme="lofi-twilight"] .stepper-input,
+[data-theme="lofi-twilight"] .quiz-textarea,
+[data-theme="lofi-twilight"] .settings-select-wrap {
+  background: rgba(0, 0, 0, 0.15);
+  border-color: rgba(187, 154, 247, 0.12);
+  color: var(--text-primary);
+}
+
+[data-theme="lofi-twilight"] .api-key-input,
+[data-theme="lofi-twilight"] .generate-word-input,
+[data-theme="lofi-twilight"] .focus-vibe-url-input {
+  background: rgba(0, 0, 0, 0.15);
+  border-color: rgba(187, 154, 247, 0.12);
+  color: var(--text-primary);
+}
+
+/* Quiz options with pastel borders */
+[data-theme="lofi-twilight"] .quiz-option {
+  background: rgba(187, 154, 247, 0.04);
+  border-color: rgba(187, 154, 247, 0.1);
+  color: var(--text-secondary);
+}
+
+[data-theme="lofi-twilight"] .quiz-option:hover {
+  background: rgba(187, 154, 247, 0.08);
+  border-color: rgba(187, 154, 247, 0.25);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* SRS assessment buttons — subtle lavender tint */
+[data-theme="lofi-twilight"] .srs-assessment-btn {
+  background: rgba(187, 154, 247, 0.06);
+  border-color: rgba(187, 154, 247, 0.12);
+}
+
+/* Vibe pill with lavender tint */
+[data-theme="lofi-twilight"] .vibe-pill {
+  background: rgba(187, 154, 247, 0.05);
+  border-color: rgba(187, 154, 247, 0.08);
+  color: var(--text-secondary);
+}
+
+[data-theme="lofi-twilight"] .vibe-pill:hover {
+  background: rgba(187, 154, 247, 0.12);
+  border-color: rgba(187, 154, 247, 0.2);
+  color: var(--text-primary);
+}
+
+/* Form inputs focus ring */
+[data-theme="lofi-twilight"] .form-group input:focus,
+[data-theme="lofi-twilight"] .form-group textarea:focus,
+[data-theme="lofi-twilight"] .stepper-input:focus {
+  box-shadow: 0 0 0 3px rgba(187, 154, 247, 0.1);
+}
+
+/* Scrollbar: dimmer track */
+[data-theme="lofi-twilight"] ::-webkit-scrollbar-thumb {
+  background: rgba(187, 154, 247, 0.1);
+}
+
+[data-theme="lofi-twilight"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(187, 154, 247, 0.2);
+}
+
+/* Theme toggle in lofi */
+[data-theme="lofi-twilight"] .theme-toggle-btn {
+  background: rgba(187, 154, 247, 0.05);
+  color: var(--text-muted);
+}
+
+[data-theme="lofi-twilight"] .theme-toggle-btn:hover {
+  color: #ff9e64;
+  border-color: rgba(255, 158, 100, 0.25);
+  background: rgba(255, 158, 100, 0.08);
+  box-shadow: 0 0 12px rgba(255, 158, 100, 0.12);
 }
 /* --- FOCUS VIBE: NEXT BUTTON NEON AESTHETICS --- */
 .cyber-control-btn {
@@ -7445,15 +7701,13 @@ body.light-mode .theme-toggle-btn:hover {
   opacity: 1;
 }
 
-html.light-mode .hub-notes-save-btn,
-body.light-mode .hub-notes-save-btn {
+[data-theme="solar-zen"] .hub-notes-save-btn {
   color: #008080;
   background: rgba(0, 128, 128, 0.04);
   border-color: rgba(0, 128, 128, 0.2);
 }
 
-html.light-mode .hub-notes-save-btn:hover,
-body.light-mode .hub-notes-save-btn:hover {
+[data-theme="solar-zen"] .hub-notes-save-btn:hover {
   color: #005f5f;
   background: rgba(0, 128, 128, 0.08);
   border-color: #008080;
@@ -7462,8 +7716,7 @@ body.light-mode .hub-notes-save-btn:hover {
     inset 0 0 8px rgba(0, 128, 128, 0.04);
 }
 
-html.light-mode .hub-notes-save-feedback,
-body.light-mode .hub-notes-save-feedback {
+[data-theme="solar-zen"] .hub-notes-save-feedback {
   color: #008080;
 }
 
@@ -7761,92 +8014,76 @@ body.light-mode .hub-notes-save-feedback {
   color: var(--accent-secondary, #b34bea);
 }
 
-html.light-mode #hn-editor li::marker,
-body.light-mode #hn-editor li::marker {
+[data-theme="solar-zen"] #hn-editor li::marker {
   color: #0080a0;
 }
 
-html.light-mode #hn-editor ul ul li::marker,
-body.light-mode #hn-editor ul ul li::marker {
+[data-theme="solar-zen"] #hn-editor ul ul li::marker {
   color: #8a2be2;
 }
 
-/* ── Light mode overrides ── */
-html.light-mode .hub-notes-btn-add:hover,
-body.light-mode .hub-notes-btn-add:hover {
+/* ── Light mode overrides for solar-zen theme ── */
+[data-theme="solar-zen"] .hub-notes-btn-add:hover {
   color: var(--accent-primary);
   border-color: var(--accent-primary);
-  box-shadow: 0 0 8px rgba(0, 119, 182, 0.1);
+  box-shadow: 0 0 8px rgba(79, 70, 229, 0.1);
 }
 
-html.light-mode .hub-notes-folder-item.hub-notes-active,
-body.light-mode .hub-notes-folder-item.hub-notes-active {
+[data-theme="solar-zen"] .hub-notes-folder-item.hub-notes-active {
   color: var(--accent-primary);
-  background: rgba(0, 119, 182, 0.08);
-  box-shadow: inset 0 0 0 1px rgba(0, 119, 182, 0.15);
+  background: rgba(79, 70, 229, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(79, 70, 229, 0.15);
 }
 
-html.light-mode .hub-notes-note-item.hub-notes-active,
-body.light-mode .hub-notes-note-item.hub-notes-active {
-  background: rgba(0, 119, 182, 0.06);
-  box-shadow: inset 0 0 0 1px rgba(0, 119, 182, 0.1);
+[data-theme="solar-zen"] .hub-notes-note-item.hub-notes-active {
+  background: rgba(79, 70, 229, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(79, 70, 229, 0.1);
 }
 
-html.light-mode .hub-notes-note-item.hub-notes-active .hub-notes-note-title,
-body.light-mode .hub-notes-note-item.hub-notes-active .hub-notes-note-title {
+[data-theme="solar-zen"] .hub-notes-note-item.hub-notes-active .hub-notes-note-title {
   color: var(--accent-primary);
 }
 
-html.light-mode .hub-notes-editor-area,
-body.light-mode .hub-notes-editor-area {
+[data-theme="solar-zen"] .hub-notes-editor-area {
   background: rgba(255, 255, 255, 0.55);
 }
 
-html.light-mode .hub-notes-title-input,
-body.light-mode .hub-notes-title-input {
+[data-theme="solar-zen"] .hub-notes-title-input {
   color: var(--text-primary);
 }
 
-html.light-mode #hn-editor h1,
-body.light-mode #hn-editor h1 {
+[data-theme="solar-zen"] #hn-editor h1 {
   color: var(--accent-primary);
 }
 
-html.light-mode #hn-editor h2,
-body.light-mode #hn-editor h2 {
+[data-theme="solar-zen"] #hn-editor h2 {
   color: var(--accent-secondary);
 }
 
-html.light-mode #hn-editor h3,
-body.light-mode #hn-editor h3 {
+[data-theme="solar-zen"] #hn-editor h3 {
   border-left-color: var(--accent-primary);
 }
 
-html.light-mode .hub-notes-float-toolbar,
-body.light-mode .hub-notes-float-toolbar {
+[data-theme="solar-zen"] .hub-notes-float-toolbar {
   background: rgba(255, 255, 255, 0.92);
   box-shadow: var(--shadow-md);
   border-color: rgba(0, 0, 0, 0.1);
 }
 
-html.light-mode .hub-notes-tb-btn:hover,
-body.light-mode .hub-notes-tb-btn:hover {
+[data-theme="solar-zen"] .hub-notes-tb-btn:hover {
   background: rgba(0, 0, 0, 0.05);
 }
 
-html.light-mode .hub-notes-tb-btn:active,
-body.light-mode .hub-notes-tb-btn:active {
-  background: rgba(0, 119, 182, 0.1);
+[data-theme="solar-zen"] .hub-notes-tb-btn:active {
+  background: rgba(79, 70, 229, 0.1);
   color: var(--accent-primary);
 }
 
-html.light-mode .hub-notes-sidebar,
-body.light-mode .hub-notes-sidebar {
+[data-theme="solar-zen"] .hub-notes-sidebar {
   background: rgba(255, 255, 255, 0.7);
 }
 
-html.light-mode .hub-notes-saving--active,
-body.light-mode .hub-notes-saving--active {
+[data-theme="solar-zen"] .hub-notes-saving--active {
   color: var(--accent-primary);
 }
 
@@ -8314,44 +8551,35 @@ body.light-mode .hub-notes-saving--active {
 }
 
 /* ── Light mode overrides ── */
-html.light-mode .cyber-auth-box,
-body.light-mode .cyber-auth-box {
+[data-theme="solar-zen"] .cyber-auth-box {
   background: rgba(245, 245, 250, 0.97);
   border-color: rgba(0, 0, 0, 0.08);
 }
-html.light-mode .cyber-input,
-body.light-mode .cyber-input {
+[data-theme="solar-zen"] .cyber-input {
   background: rgba(0, 0, 0, 0.03);
   color: #111;
 }
-html.light-mode .cyber-input:focus,
-body.light-mode .cyber-input:focus {
-  background: rgba(0, 119, 182, 0.04);
+[data-theme="solar-zen"] .cyber-input:focus {
+  background: rgba(79, 70, 229, 0.04);
 }
-html.light-mode .cyber-input:-webkit-autofill,
-body.light-mode .cyber-input:-webkit-autofill {
+[data-theme="solar-zen"] .cyber-input:-webkit-autofill {
   -webkit-box-shadow: 0 0 0 1000px rgba(245, 245, 250, 0.95) inset !important;
   -webkit-text-fill-color: #111 !important;
 }
-html.light-mode .cyber-label,
-body.light-mode .cyber-label {
+[data-theme="solar-zen"] .cyber-label {
   color: rgba(0, 0, 0, 0.45);
 }
-html.light-mode .cyber-input:focus ~ .cyber-label,
-body.light-mode .cyber-input:focus ~ .cyber-label {
+[data-theme="solar-zen"] .cyber-input:focus ~ .cyber-label {
   color: var(--accent-primary);
 }
-html.light-mode .cyber-admin-badge,
-body.light-mode .cyber-admin-badge {
+[data-theme="solar-zen"] .cyber-admin-badge {
   background: rgba(124, 58, 237, 0.08);
   border-color: rgba(124, 58, 237, 0.25);
 }
-html.light-mode .cyber-admin-badge-text,
-body.light-mode .cyber-admin-badge-text {
+[data-theme="solar-zen"] .cyber-admin-badge-text {
   color: var(--accent-secondary);
 }
-html.light-mode .cyber-auth-overlay,
-body.light-mode .cyber-auth-overlay {
+[data-theme="solar-zen"] .cyber-auth-overlay {
   background: rgba(220, 220, 235, 0.75);
 }
 
@@ -8418,14 +8646,12 @@ body.light-mode .cyber-auth-overlay {
 }
 
 /* ── Light mode: Google button ── */
-html.light-mode .cyber-btn-google,
-body.light-mode .cyber-btn-google {
+[data-theme="solar-zen"] .cyber-btn-google {
   background: rgba(0, 0, 0, 0.02);
   border-color: rgba(0, 0, 0, 0.1);
   color: rgba(0, 0, 0, 0.6);
 }
-html.light-mode .cyber-btn-google:hover:not(:disabled),
-body.light-mode .cyber-btn-google:hover:not(:disabled) {
+[data-theme="solar-zen"] .cyber-btn-google:hover:not(:disabled) {
   background: rgba(66, 133, 244, 0.04);
   border-color: rgba(66, 133, 244, 0.25);
   color: #111;
@@ -9476,41 +9702,33 @@ body.light-mode .cyber-btn-google:hover:not(:disabled) {
 }
 
 /* Light mode overrides for AI modal */
-html.light-mode .hub-flashcard-ai-input,
-body.light-mode .hub-flashcard-ai-input,
-html.light-mode .hub-flashcard-ai-textarea,
-body.light-mode .hub-flashcard-ai-textarea {
+[data-theme="solar-zen"] .hub-flashcard-ai-input,
+[data-theme="solar-zen"] .hub-flashcard-ai-textarea {
   background: rgba(0, 0, 0, 0.03);
   border-color: rgba(0, 0, 0, 0.12);
   color: var(--text-primary);
 }
 
-html.light-mode .hub-flashcard-ai-input:focus,
-body.light-mode .hub-flashcard-ai-input:focus,
-html.light-mode .hub-flashcard-ai-textarea:focus,
-body.light-mode .hub-flashcard-ai-textarea:focus {
+[data-theme="solar-zen"] .hub-flashcard-ai-input:focus,
+[data-theme="solar-zen"] .hub-flashcard-ai-textarea:focus {
   box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.08);
 }
 
-html.light-mode .hub-flashcard-ai-field-row:hover,
-body.light-mode .hub-flashcard-ai-field-row:hover {
+[data-theme="solar-zen"] .hub-flashcard-ai-field-row:hover {
   background: rgba(124, 58, 237, 0.04);
   border-color: rgba(124, 58, 237, 0.2);
 }
 
-html.light-mode .hub-flashcard-ai-section-title,
-body.light-mode .hub-flashcard-ai-section-title {
+[data-theme="solar-zen"] .hub-flashcard-ai-section-title {
   color: var(--accent-secondary);
 }
 
-html.light-mode .hub-flashcard-ai-settings-btn,
-body.light-mode .hub-flashcard-ai-settings-btn {
+[data-theme="solar-zen"] .hub-flashcard-ai-settings-btn {
   border-color: rgba(124, 58, 237, 0.25);
   color: var(--accent-secondary);
 }
 
-html.light-mode .hub-flashcard-ai-settings-btn:hover,
-body.light-mode .hub-flashcard-ai-settings-btn:hover {
+[data-theme="solar-zen"] .hub-flashcard-ai-settings-btn:hover {
   background: rgba(124, 58, 237, 0.08);
   box-shadow: 0 0 12px rgba(124, 58, 237, 0.15);
 }
@@ -9523,5 +9741,1111 @@ body.light-mode .hub-flashcard-ai-settings-btn:hover {
     -webkit-backdrop-filter: none;
     max-width: 95vw;
     max-height: 85vh;
+  }
+}
+
+/* ==========================================================
+   FLASHCARD — LANGUAGE PICKER MODAL
+   Cyberpunk dual-card language selection for deck creation.
+   ========================================================== */
+
+/* Language modal panel */
+.hub-flashcard-lang-modal {
+  width: 92%;
+  max-width: 520px;
+  padding: var(--space-xl);
+  border-radius: var(--radius-xl);
+  animation: scaleIn 300ms var(--ease-out-expo);
+}
+
+/* Two-card grid */
+.hub-flashcard-lang-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+/* Individual language card */
+.hub-flashcard-lang-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-xl) var(--space-md);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform var(--duration-base) var(--ease-out-expo),
+              box-shadow var(--duration-base) var(--ease-out-expo),
+              border-color var(--duration-base) var(--ease-out-expo);
+}
+
+/* --- ENGLISH card accent --- */
+.hub-flashcard-lang-card--en:hover {
+  transform: translateY(-5px);
+  border-color: rgba(0, 243, 255, 0.5);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 0 28px rgba(0, 243, 255, 0.25),
+    0 0 56px rgba(0, 243, 255, 0.1);
+}
+
+/* --- MANDARIN card accent --- */
+.hub-flashcard-lang-card--zh:hover {
+  transform: translateY(-5px);
+  border-color: rgba(255, 0, 85, 0.5);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 0 28px rgba(255, 0, 85, 0.25),
+    0 0 56px rgba(255, 0, 85, 0.1);
+}
+
+/* Card hover arrow reveal */
+.hub-flashcard-lang-card-arrow {
+  position: absolute;
+  bottom: 12px;
+  right: 16px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  opacity: 0;
+  transform: translateX(-8px);
+  transition: opacity var(--duration-fast) var(--ease-out-expo),
+              transform var(--duration-fast) var(--ease-out-expo);
+  color: var(--text-primary);
+}
+
+.hub-flashcard-lang-card--en:hover .hub-flashcard-lang-card-arrow {
+  opacity: 1;
+  transform: translateX(0);
+  color: var(--accent-primary);
+  text-shadow: 0 0 10px rgba(0, 243, 255, 0.6);
+}
+
+.hub-flashcard-lang-card--zh:hover .hub-flashcard-lang-card-arrow {
+  opacity: 1;
+  transform: translateX(0);
+  color: #ff0055;
+  text-shadow: 0 0 10px rgba(255, 0, 85, 0.6);
+}
+
+/* Card accent bottom bar */
+.hub-flashcard-lang-card-accent {
+  position: absolute;
+  bottom: 0;
+  left: 20%;
+  right: 20%;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  transition: left var(--duration-base) var(--ease-out-expo),
+              right var(--duration-base) var(--ease-out-expo),
+              box-shadow var(--duration-base) var(--ease-out-expo);
+}
+
+.hub-flashcard-lang-card-accent--en {
+  background: var(--accent-primary);
+  box-shadow: 0 0 8px rgba(0, 243, 255, 0.3);
+}
+
+.hub-flashcard-lang-card-accent--zh {
+  background: #ff0055;
+  box-shadow: 0 0 8px rgba(255, 0, 85, 0.3);
+}
+
+.hub-flashcard-lang-card:hover .hub-flashcard-lang-card-accent {
+  left: 8%;
+  right: 8%;
+}
+
+.hub-flashcard-lang-card--en:hover .hub-flashcard-lang-card-accent--en {
+  box-shadow: 0 0 16px rgba(0, 243, 255, 0.6), 0 0 32px rgba(0, 243, 255, 0.2);
+}
+
+.hub-flashcard-lang-card--zh:hover .hub-flashcard-lang-card-accent--zh {
+  box-shadow: 0 0 16px rgba(255, 0, 85, 0.6), 0 0 32px rgba(255, 0, 85, 0.2);
+}
+
+/* Subtle corner glow behind card */
+.hub-flashcard-lang-card-glow {
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0.4;
+  transition: opacity var(--duration-base) var(--ease-out-expo),
+              transform var(--duration-base) var(--ease-out-expo);
+}
+
+.hub-flashcard-lang-card-glow--en {
+  background: radial-gradient(circle, rgba(0, 243, 255, 0.15) 0%, transparent 70%);
+}
+
+.hub-flashcard-lang-card-glow--zh {
+  background: radial-gradient(circle, rgba(255, 0, 85, 0.12) 0%, transparent 70%);
+}
+
+.hub-flashcard-lang-card:hover .hub-flashcard-lang-card-glow {
+  opacity: 0.7;
+  transform: scale(1.2);
+}
+
+/* Card icon area */
+.hub-flashcard-lang-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+}
+
+.hub-flashcard-lang-card--en .hub-flashcard-lang-card-icon {
+  background: rgba(0, 243, 255, 0.08);
+  border: 1px solid rgba(0, 243, 255, 0.2);
+}
+
+.hub-flashcard-lang-card--zh .hub-flashcard-lang-card-icon {
+  background: rgba(255, 0, 85, 0.08);
+  border: 1px solid rgba(255, 0, 85, 0.2);
+}
+
+.hub-flashcard-lang-card-flag {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+/* Card text content */
+.hub-flashcard-lang-card-content {
+  text-align: center;
+}
+
+.hub-flashcard-lang-card-title {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.hub-flashcard-lang-card-desc {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  max-width: 180px;
+  margin: 0 auto;
+  letter-spacing: 0.02em;
+}
+
+/* --- Active/picked badge in Step 2 --- */
+.hub-flashcard-lang-picked-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 8px 16px;
+  border-radius: var(--radius-full);
+  margin-bottom: var(--space-md);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  border: 1px solid;
+}
+
+.hub-flashcard-lang-picked-badge--en {
+  color: var(--accent-primary);
+  border-color: rgba(0, 243, 255, 0.25);
+  background: rgba(0, 243, 255, 0.06);
+  box-shadow: 0 0 12px rgba(0, 243, 255, 0.08);
+}
+
+.hub-flashcard-lang-picked-badge--zh {
+  color: #ff0055;
+  border-color: rgba(255, 0, 85, 0.25);
+  background: rgba(255, 0, 85, 0.06);
+  box-shadow: 0 0 12px rgba(255, 0, 85, 0.08);
+}
+
+.hub-flashcard-lang-picked-flag {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.hub-flashcard-lang-picked-label {
+  flex: 1;
+}
+
+.hub-flashcard-lang-change-btn {
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+  white-space: nowrap;
+}
+
+.hub-flashcard-lang-change-btn:hover {
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* --- Mobile responsive language cards --- */
+@media (max-width: 500px) {
+  .hub-flashcard-lang-cards {
+    grid-template-columns: 1fr;
+    gap: var(--space-sm);
+  }
+
+  .hub-flashcard-lang-card {
+    padding: var(--space-lg) var(--space-md);
+    flex-direction: row;
+    gap: var(--space-md);
+  }
+
+  .hub-flashcard-lang-card-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .hub-flashcard-lang-card-content {
+    text-align: left;
+  }
+
+  .hub-flashcard-lang-card-title {
+    font-size: 0.85rem;
+  }
+}
+
+/* ==========================================================
+   FLASHCARD — VAULT SECTIONS (English / Mandarin split)
+   ========================================================== */
+
+/* Vault wrapper — each language section */
+.hub-flashcard-vault {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+
+/* Vault header — cyberpunk title bar */
+.hub-flashcard-vault-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  position: relative;
+  overflow: hidden;
+  transition: border-color var(--duration-base) var(--ease-out-expo),
+              box-shadow var(--duration-base) var(--ease-out-expo);
+}
+
+/* Neon top accent line */
+.hub-flashcard-vault-accent-bar {
+  position: absolute;
+  top: 0;
+  left: 12px;
+  right: 12px;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+}
+
+.hub-flashcard-vault-accent-bar--en {
+  background: var(--accent-primary);
+  box-shadow: 0 0 10px rgba(0, 243, 255, 0.4);
+}
+
+.hub-flashcard-vault-accent-bar--zh {
+  background: #ff0055;
+  box-shadow: 0 0 10px rgba(255, 0, 85, 0.4);
+}
+
+/* Vault header left group */
+.hub-flashcard-vault-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+/* Vault icon */
+.hub-flashcard-vault-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.2));
+}
+
+/* Vault title + count */
+.hub-flashcard-vault-title-group {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+}
+
+.hub-flashcard-vault-title {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 0;
+}
+
+.hub-flashcard-vault-header--en .hub-flashcard-vault-title {
+  color: var(--accent-primary);
+  text-shadow: 0 0 12px rgba(0, 243, 255, 0.3);
+}
+
+.hub-flashcard-vault-header--zh .hub-flashcard-vault-title {
+  color: #ff0055;
+  text-shadow: 0 0 12px rgba(255, 0, 85, 0.3);
+}
+
+.hub-flashcard-vault-count {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+
+/* Vault empty state placeholder */
+.hub-flashcard-vault-empty {
+  text-align: center;
+  padding: var(--space-lg) var(--space-md);
+  border-radius: var(--radius-md);
+  border: 1px dashed rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.hub-flashcard-vault-empty p {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-style: italic;
+  letter-spacing: 0.02em;
+}
+
+/* Vault header hover — subtle glow */
+.hub-flashcard-vault-header--en:hover {
+  border-color: rgba(0, 243, 255, 0.15);
+  box-shadow: 0 0 20px rgba(0, 243, 255, 0.04);
+}
+
+.hub-flashcard-vault-header--zh:hover {
+  border-color: rgba(255, 0, 85, 0.15);
+  box-shadow: 0 0 20px rgba(255, 0, 85, 0.04);
+}
+
+/* Deck grid inside vaults — inherits existing .deck-grid */
+/* Deck cards — inherit existing .deck-card, .glass-card styles */
+
+/* --- Responsive vault layout --- */
+@media (max-width: 768px) {
+  .hub-flashcard-vault-header {
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  .hub-flashcard-vault-title {
+    font-size: 0.72rem;
+  }
+
+  .hub-flashcard-vault-icon {
+    font-size: 1.2rem;
+  }
+
+  .hub-flashcard-vault-header-left {
+    gap: var(--space-sm);
+  }
+}
+
+/* ==========================================================
+   FLASHCARD — DECK LANGUAGE BADGE (on deck cards in library)
+   Small tag showing which vault a deck belongs to.
+   ========================================================== */
+
+/* Language tag inside deck card */
+.hub-flashcard-deck-lang-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border: 1px solid;
+}
+
+.hub-flashcard-deck-lang-tag--en {
+  color: var(--accent-primary);
+  border-color: rgba(0, 243, 255, 0.25);
+  background: rgba(0, 243, 255, 0.06);
+}
+
+.hub-flashcard-deck-lang-tag--zh {
+  color: #ff0055;
+  border-color: rgba(255, 0, 85, 0.25);
+  background: rgba(255, 0, 85, 0.06);
+}
+
+/* ==========================================================
+   FLASHCARD — SLIDING VAULT ARCHITECTURE
+   Tab toggles + overflow:hidden container + flex track
+   that translates to reveal the active language panel.
+   ========================================================== */
+
+/* ── Vault Tab Toggle Row ── */
+.hub-flashcard-vault-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 12px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 4px;
+  width: fit-content;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Individual tab button */
+.hub-flashcard-vault-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  outline: none;
+}
+
+.hub-flashcard-vault-tab:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Vault tab count badge */
+.hub-flashcard-vault-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  transition: all 0.3s ease;
+}
+
+/* ── Active Tab: ENGLISH ── */
+.hub-flashcard-vault-tab--active.hub-flashcard-vault-tab--en {
+  color: var(--accent-primary);
+  border-color: rgba(0, 243, 255, 0.4);
+  background: rgba(0, 243, 255, 0.08);
+  box-shadow:
+    0 0 12px rgba(0, 243, 255, 0.15),
+    inset 0 0 8px rgba(0, 243, 255, 0.04);
+}
+
+.hub-flashcard-vault-tab--active.hub-flashcard-vault-tab--en .hub-flashcard-vault-tab-count {
+  background: rgba(0, 243, 255, 0.15);
+  color: var(--accent-primary);
+}
+
+/* ── Active Tab: MANDARIN ── */
+.hub-flashcard-vault-tab--active.hub-flashcard-vault-tab--zh {
+  color: #ff0055;
+  border-color: rgba(255, 0, 85, 0.4);
+  background: rgba(255, 0, 85, 0.08);
+  box-shadow:
+    0 0 12px rgba(255, 0, 85, 0.15),
+    inset 0 0 8px rgba(255, 0, 85, 0.04);
+}
+
+.hub-flashcard-vault-tab--active.hub-flashcard-vault-tab--zh .hub-flashcard-vault-tab-count {
+  background: rgba(255, 0, 85, 0.15);
+  color: #ff0055;
+}
+
+/* ── Sliding Container (overflow: hidden mask) ── */
+.hub-flashcard-vault-container {
+  overflow: hidden;
+  width: 100%;
+  border-radius: var(--radius-lg);
+}
+
+/* ── Sliding Track (flex row, width 200% of container) ── */
+.hub-flashcard-vault-track {
+  display: flex;
+  width: 200%;
+  transition: transform 0.45s cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: transform;
+}
+
+/* ── Each Panel = 50% of the 200% track (i.e. full container width) ── */
+.hub-flashcard-vault-panel {
+  width: 50%;
+  flex-shrink: 0;
+  padding: 0 2px; /* tiny padding to prevent box-shadow clipping */
+  box-sizing: border-box;
+}
+
+/* Panel accent identity — subtle border-left glow */
+.hub-flashcard-vault-panel--en {
+  /* no extra styling needed; decks inside inherit styles */
+}
+
+.hub-flashcard-vault-panel--zh {
+  /* no extra styling needed */
+}
+
+/* ── Mobile: tighter tabs ── */
+@media (max-width: 600px) {
+  .hub-flashcard-vault-tab {
+    padding: 6px 14px;
+    font-size: 0.65rem;
+    letter-spacing: 0.05em;
+    gap: 4px;
+  }
+
+  .hub-flashcard-vault-tab-count {
+    min-width: 16px;
+    height: 15px;
+    font-size: 0.55rem;
+  }
+
+  .hub-flashcard-vault-tabs {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ==========================================================
+   FLASHCARD — SYSTEM LANGUAGE SECTION (AI Settings Modal)
+   Language toggle buttons for English / Tiếng Việt.
+   ========================================================== */
+
+.hub-flashcard-system-lang-desc {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin: 4px 0 12px 0;
+  letter-spacing: 0.02em;
+}
+
+.hub-flashcard-system-lang-row {
+  display: flex;
+  gap: 12px;
+}
+
+/* Language toggle buttons — styled like the language cards but compact */
+.hub-flashcard-system-lang-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  outline: none;
+  flex: 1;
+  max-width: 220px;
+}
+
+.hub-flashcard-system-lang-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.hub-flashcard-system-lang-flag {
+  font-size: 1.4rem;
+  flex-shrink: 0;
+}
+
+.hub-flashcard-system-lang-label {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.03em;
+}
+
+/* ── Active: ENGLISH ── */
+.hub-flashcard-system-lang-btn--active.hub-flashcard-system-lang-btn--en {
+  border-color: rgba(0, 243, 255, 0.5);
+  background: rgba(0, 243, 255, 0.08);
+  box-shadow:
+    0 0 16px rgba(0, 243, 255, 0.12),
+    inset 0 0 8px rgba(0, 243, 255, 0.03);
+}
+
+.hub-flashcard-system-lang-btn--active.hub-flashcard-system-lang-btn--en .hub-flashcard-system-lang-label {
+  color: var(--accent-primary);
+}
+
+/* ── Active: VIETNAMESE ── */
+.hub-flashcard-system-lang-btn--active.hub-flashcard-system-lang-btn--vi {
+  border-color: rgba(0, 243, 255, 0.5);
+  background: rgba(0, 243, 255, 0.08);
+  box-shadow:
+    0 0 16px rgba(0, 243, 255, 0.12),
+    inset 0 0 8px rgba(0, 243, 255, 0.03);
+}
+
+.hub-flashcard-system-lang-btn--active.hub-flashcard-system-lang-btn--vi .hub-flashcard-system-lang-label {
+  color: var(--accent-primary);
+}
+
+/* ── Mobile tweaks ── */
+@media (max-width: 500px) {
+  .hub-flashcard-system-lang-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .hub-flashcard-system-lang-btn {
+    max-width: none;
+    padding: 10px 16px;
+  }
+
+  .hub-flashcard-system-lang-label {
+    font-size: 0.7rem;
+  }
+}
+
+/* ==========================================================
+   MANDARIN VAULT — ARCHITECT ACCESS
+   Crimson/Gold neon "NEURAL INTERFACE: PENDING CONFIGURATION"
+   collaborative empty state with blueprint placeholders.
+   Shown inside the ZHO panel when zero decks exist.
+   ========================================================== */
+
+/* ── Root Container ── */
+.hub-flashcard-zh-architect {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px 20px;
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(255, 0, 85, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 100%, rgba(255, 179, 71, 0.04) 0%, transparent 50%),
+    rgba(10, 10, 18, 0.7);
+  border: 1px solid rgba(255, 0, 85, 0.12);
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    inset 0 0 60px rgba(255, 0, 85, 0.02),
+    0 4px 24px rgba(0, 0, 0, 0.3);
+}
+
+/* ── Neon Glow Orbs (background ambiance) ── */
+.zh-architect-glow-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(40px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.zh-architect-glow-orb--left {
+  width: 140px;
+  height: 140px;
+  top: -30px;
+  left: -40px;
+  background: rgba(255, 0, 85, 0.08);
+}
+
+.zh-architect-glow-orb--right {
+  width: 100px;
+  height: 100px;
+  bottom: 20px;
+  right: -30px;
+  background: rgba(255, 179, 71, 0.06);
+}
+
+/* ── Header Section ── */
+.zh-architect-header {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 0, 85, 0.1);
+}
+
+.zh-architect-header-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Circuit Sigil — pulses with crimson */
+.zh-architect-sigil {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: zhSigilPulse 3s ease-in-out infinite;
+}
+
+@keyframes zhSigilPulse {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(255, 0, 85, 0.3)); }
+  50%      { filter: drop-shadow(0 0 14px rgba(255, 0, 85, 0.55)); }
+}
+
+.zh-architect-title {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--zh-accent);
+  text-shadow: 0 0 16px rgba(255, 0, 85, 0.4);
+  text-transform: uppercase;
+}
+
+/* ── System Status Bar ── */
+.zh-architect-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 0, 85, 0.05);
+  border: 1px solid rgba(255, 0, 85, 0.1);
+}
+
+.zh-architect-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--zh-accent);
+  box-shadow: 0 0 6px rgba(255, 0, 85, 0.6);
+  animation: zhStatusPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes zhStatusPulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px rgba(255, 0, 85, 0.6); }
+  50%      { opacity: 0.4; box-shadow: 0 0 2px rgba(255, 0, 85, 0.2); }
+}
+
+.zh-architect-status-text {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 500;
+  color: rgba(255, 0, 85, 0.7);
+  letter-spacing: 0.05em;
+}
+
+/* ── Blueprint Panel ── */
+.zh-architect-blueprint {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 179, 71, 0.1);
+  box-shadow: inset 0 0 30px rgba(255, 179, 71, 0.02);
+}
+
+.zh-architect-blueprint-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed rgba(255, 179, 71, 0.1);
+}
+
+.zh-architect-blueprint-label {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--zh-gold);
+  text-transform: uppercase;
+}
+
+/* ── Blueprint Fields ── */
+.zh-architect-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.zh-architect-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  transition: all 0.3s ease;
+}
+
+.zh-architect-field:hover {
+  background: rgba(255, 179, 71, 0.04);
+  border-color: rgba(255, 179, 71, 0.15);
+}
+
+.zh-architect-field-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: var(--radius-xs);
+  background: rgba(255, 0, 85, 0.05);
+}
+
+.zh-architect-field-key {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.zh-architect-field:hover .zh-architect-field-key {
+  color: var(--zh-gold);
+  opacity: 1;
+}
+
+/* ── Schema Config Note ── */
+.zh-architect-note {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 0, 85, 0.03);
+  border-left: 2px solid rgba(255, 0, 85, 0.2);
+}
+
+.zh-architect-note-icon {
+  flex-shrink: 0;
+  font-size: 0.9rem;
+  opacity: 0.6;
+}
+
+.zh-architect-note-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.zh-architect-note-text p {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+  letter-spacing: 0.02em;
+}
+
+/* ── Action Buttons ── */
+.zh-architect-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.zh-architect-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 16px 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.35s var(--ease-out-expo);
+  outline: none;
+  text-align: center;
+}
+
+/* ── Primary: PROPOSE NEW STRUCTURE (Crimson) ── */
+.zh-architect-btn--primary {
+  border-color: rgba(255, 0, 85, 0.3);
+  background: linear-gradient(180deg, rgba(255, 0, 85, 0.06) 0%, transparent 100%);
+  color: var(--zh-accent);
+}
+
+.zh-architect-btn--primary:hover {
+  border-color: rgba(255, 0, 85, 0.6);
+  background: linear-gradient(180deg, rgba(255, 0, 85, 0.12) 0%, rgba(255, 0, 85, 0.02) 100%);
+  box-shadow:
+    0 0 24px rgba(255, 0, 85, 0.2),
+    inset 0 0 16px rgba(255, 0, 85, 0.03);
+  transform: translateY(-2px);
+}
+
+.zh-architect-btn--primary:active {
+  transform: scale(0.97);
+}
+
+.zh-architect-btn--primary .zh-architect-btn-icon {
+  color: var(--zh-accent);
+}
+
+.zh-architect-btn--primary .zh-architect-btn-label {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--zh-accent);
+  text-transform: uppercase;
+}
+
+.zh-architect-btn--primary .zh-architect-btn-hint {
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+
+/* ── Secondary: Quick Start (Gold) ── */
+.zh-architect-btn--secondary {
+  border-color: rgba(255, 179, 71, 0.2);
+  background: linear-gradient(180deg, rgba(255, 179, 71, 0.04) 0%, transparent 100%);
+}
+
+.zh-architect-btn--secondary:hover {
+  border-color: rgba(255, 179, 71, 0.45);
+  background: linear-gradient(180deg, rgba(255, 179, 71, 0.08) 0%, rgba(255, 179, 71, 0.01) 100%);
+  box-shadow:
+    0 0 18px rgba(255, 179, 71, 0.12),
+    inset 0 0 12px rgba(255, 179, 71, 0.02);
+  transform: translateY(-2px);
+}
+
+.zh-architect-btn--secondary:active {
+  transform: scale(0.97);
+}
+
+.zh-architect-btn--secondary .zh-architect-btn-icon {
+  color: var(--zh-gold);
+  opacity: 0.7;
+}
+
+.zh-architect-btn--secondary .zh-architect-btn-label {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--zh-gold);
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.zh-architect-btn--secondary .zh-architect-btn-hint {
+  font-family: var(--font-mono);
+  font-size: 0.53rem;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+/* ── Bottom Scanline Decoration ── */
+.zh-architect-scanline {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 0, 85, 0.3) 20%,
+    rgba(255, 179, 71, 0.2) 50%,
+    rgba(255, 0, 85, 0.3) 80%,
+    transparent 100%
+  );
+  animation: zhScanlineDrift 4s linear infinite;
+}
+
+@keyframes zhScanlineDrift {
+  0%   { opacity: 0.3; }
+  50%  { opacity: 0.8; }
+  100% { opacity: 0.3; }
+}
+
+/* ── Responsive: tighten on mobile ── */
+@media (max-width: 600px) {
+  .hub-flashcard-zh-architect {
+    padding: 16px 12px;
+    gap: 14px;
+  }
+
+  .zh-architect-title {
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+  }
+
+  .zh-architect-status-text {
+    font-size: 0.55rem;
+  }
+
+  .zh-architect-field {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .zh-architect-field-key {
+    font-size: 0.55rem;
+  }
+
+  .zh-architect-btn {
+    padding: 12px 14px;
+  }
+
+  .zh-architect-btn--primary .zh-architect-btn-label {
+    font-size: 0.65rem;
+  }
+
+  .zh-architect-btn--secondary .zh-architect-btn-label {
+    font-size: 0.6rem;
   }
 }

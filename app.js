@@ -117,7 +117,7 @@ const app = (function () {
   });
 
   // --- Public API ---
-  return { register, switchTo };
+  return { register, switchTo, _getActiveModuleId: function () { return _activeModule ? _activeModule.id : null; } };
 
 })();
 
@@ -132,59 +132,168 @@ const app = (function () {
 
 // On page load, route to the correct tab based on URL hash
 document.addEventListener('DOMContentLoaded', () => {
+  // Apply persisted system language to sidebar + dashboard BEFORE first render
+  // (flashcardModule.applyLanguage walks all DOM, so sidebar nav gets translated)
+  var savedLang = 'en';
+  try { savedLang = localStorage.getItem('hub_system_language') || 'en'; } catch (_) {}
+  if (savedLang !== 'en' && savedLang !== 'vi') savedLang = 'en';
+  if (typeof flashcardModule !== 'undefined' && flashcardModule.applyLanguage) {
+    flashcardModule.applyLanguage(savedLang);
+  }
+
   const initialModule = window.location.hash.replace('#', '') || 'dashboard';
   app.switchTo(initialModule);
 
   // Initialize the global backup modal (sidebar gear icon)
   _initBackupModal();
 
-  // Initialize the theme toggle (light/dark mode)
-  _initThemeToggle();
+  // Migrate legacy theme values
+  (function(){try{var t=localStorage.getItem('hub_theme');if(t==='light')localStorage.setItem('hub_theme','solar-zen');if(t==='dark')localStorage.setItem('hub_theme','cyberpunk');}catch(_){}})();
+
+  // Initialize the 3-theme switcher (cyberpunk / solar-zen / lofi-twilight)
+  _initThemeSwitcher();
 });
 
 /* ----------------------------------------------------------
-   THEME TOGGLE (Light / Dark Mode)
+   THEME SWITCHER (3 Themes: Cyberpunk / Solar Zen / Lo-Fi Twilight)
+   data-theme attribute on <html> drives all CSS theme selectors.
    ---------------------------------------------------------- */
 
-const THEME_KEY  = 'hub_theme';
-const LIGHT_MODE = 'light-mode';
+const THEME_KEY    = 'hub_theme';
+const THEME_ORDER  = ['cyberpunk', 'solar-zen', 'lofi-twilight'];
+const THEME_ICONS  = { 'cyberpunk': '☀️', 'solar-zen': '🌙', 'lofi-twilight': '🌆' };
+const THEME_TITLES = { 'cyberpunk': 'Cyberpunk — Dark Neon', 'solar-zen': 'Solar Zen — Clean Light', 'lofi-twilight': 'Lo-Fi Twilight — Soft Dark' };
 
-function _initThemeToggle() {
-  const btn   = document.getElementById('btn-theme-toggle');
-  const icon  = btn ? btn.querySelector('.theme-toggle-icon') : null;
-  if (!btn || !icon) return;
+/** Get the current theme from the DOM attribute (single source of truth) */
+function _getCurrentTheme() {
+  return document.documentElement.getAttribute('data-theme') || 'cyberpunk';
+}
 
-  /** Update icon to reflect current state */
-  function _syncIcon() {
-    const isLight = document.body.classList.contains(LIGHT_MODE);
-    icon.textContent = isLight ? '🌙' : '☀️';
-    btn.setAttribute('title', isLight ? 'Switch to dark mode' : 'Switch to light mode');
-  }
+/** Apply a theme: set data-theme attribute, update sidebar icon, save to localStorage + Firebase */
+function _applyTheme(themeName) {
+  if (!THEME_ORDER.includes(themeName)) return;
 
-  // Sync on init (flash prevention already set html.light-mode; mirror to body)
-  if (document.documentElement.classList.contains(LIGHT_MODE)) {
-    document.body.classList.add(LIGHT_MODE);
-  }
-  _syncIcon();
+  // 1) Set the DOM attribute — this triggers all CSS selectors
+  document.documentElement.setAttribute('data-theme', themeName);
 
-  // Toggle on click
-  btn.addEventListener('click', () => {
-    const isLight = document.body.classList.toggle(LIGHT_MODE);
+  // 2) Sync sidebar toggle button icon
+  _syncSidebarThemeIcon();
 
-    // Keep html and body in sync
-    if (isLight) {
-      document.documentElement.classList.add(LIGHT_MODE);
-    } else {
-      document.documentElement.classList.remove(LIGHT_MODE);
+  // 3) Sync swatch buttons in backup modal
+  _syncThemeSwatches();
+
+  // 4) Persist to localStorage
+  try {
+    localStorage.setItem(THEME_KEY, themeName);
+  } catch (_) { /* quota exceeded — ignore */ }
+
+  // 5) Persist to Firebase flashcard settings (workspaceTheme field)
+  try {
+    if (typeof flashcardModule !== 'undefined' && typeof HubDB !== 'undefined') {
+      HubDB.loadFlashcardSettings().then(function (settings) {
+        var merged = settings || {};
+        merged.workspaceTheme = themeName;
+        if (!merged.schema) {
+          merged.schema = [
+            { id: 'phonetic', name: 'Phonetic', prompt: 'Provide the IPA phonetic transcription.', isDeletable: false },
+            { id: 'synonym', name: 'Synonym', prompt: 'Provide 2-3 common synonyms.', isDeletable: true }
+          ];
+        }
+        if (typeof merged.voiceSpeed !== 'number') merged.voiceSpeed = 0.9;
+        HubDB.saveFlashcardSettings(merged).catch(function () {});
+      }).catch(function () {});
     }
+  } catch (_) {}
+}
 
-    _syncIcon();
+/** Update sidebar #btn-theme-toggle icon to match current theme */
+function _syncSidebarThemeIcon() {
+  var btn  = document.getElementById('btn-theme-toggle');
+  var icon = btn ? btn.querySelector('.theme-toggle-icon') : null;
+  if (!btn || !icon) return;
+  var current = _getCurrentTheme();
+  icon.textContent = THEME_ICONS[current] || '☀️';
+  btn.setAttribute('title', THEME_TITLES[current] || 'Switch theme');
+}
 
-    // Persist preference
-    try {
-      localStorage.setItem(THEME_KEY, isLight ? 'light' : 'dark');
-    } catch (_) { /* quota exceeded — ignore */ }
+/** Set the correct --active class on swatch buttons inside the backup modal */
+function _syncThemeSwatches() {
+  var current = _getCurrentTheme();
+  var group   = document.getElementById('backup-theme-swatch-group');
+  if (!group) return;
+  group.querySelectorAll('.hub-theme-swatch').forEach(function (swatch) {
+    var theme = swatch.getAttribute('data-theme');
+    if (theme === current) {
+      swatch.classList.add('hub-theme-swatch--active');
+    } else {
+      swatch.classList.remove('hub-theme-swatch--active');
+    }
   });
+}
+
+/** Initialize theme system: bind swatch buttons + sidebar cycle toggle */
+function _initThemeSwitcher() {
+
+  // ── Sidebar toggle button: cycle through 3 themes ──
+  var sidebarBtn = document.getElementById('btn-theme-toggle');
+  if (sidebarBtn) {
+    _syncSidebarThemeIcon();
+    sidebarBtn.addEventListener('click', function () {
+      var current = _getCurrentTheme();
+      var idx = THEME_ORDER.indexOf(current);
+      var next = THEME_ORDER[(idx + 1) % THEME_ORDER.length];
+      _applyTheme(next);
+    });
+  }
+
+  // ── Swatch buttons in backup modal ──
+  var swatchGroup = document.getElementById('backup-theme-swatch-group');
+  if (swatchGroup) {
+    swatchGroup.querySelectorAll('.hub-theme-swatch').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var theme = this.getAttribute('data-theme');
+        _applyTheme(theme);
+      });
+    });
+
+    // Hook into modal open — sync swatches after DOM is ready
+    var openBtn = document.getElementById('btn-backup-open');
+    if (openBtn) {
+      openBtn.addEventListener('click', function () {
+        setTimeout(_syncThemeSwatches, 50);
+        // Also update the desc text per current language
+        setTimeout(function () {
+          var desc = document.getElementById('backup-sys-theme-desc');
+          if (!desc) return;
+          var lang = 'en';
+          try { lang = localStorage.getItem('hub_system_language') || 'en'; } catch (_) {}
+          if (lang === 'vi') {
+            desc.textContent = 'Chọn giao diện không gian làm việc';
+          } else {
+            desc.textContent = 'Choose your visual workspace environment';
+          }
+        }, 60);
+      });
+    }
+  }
+
+  // ── Load Firebase workspaceTheme as cross-device sync (localStorage wins on init) ──
+  try {
+    if (typeof flashcardModule !== 'undefined' && typeof HubDB !== 'undefined') {
+      HubDB.loadFlashcardSettings().then(function (settings) {
+        if (settings && settings.workspaceTheme &&
+            ['cyberpunk', 'solar-zen', 'lofi-twilight'].indexOf(settings.workspaceTheme) !== -1) {
+          // Only sync from cloud if localStorage doesn't already have a theme set
+          var localTheme = null;
+          try { localTheme = localStorage.getItem(THEME_KEY); } catch (_) {}
+          if (!localTheme || localTheme === 'light' || localTheme === 'dark') {
+            // Those are stale legacy values — cloud wins
+            _applyTheme(settings.workspaceTheme);
+          }
+        }
+      }).catch(function () {}); // silently ignore — offline or not configured
+    }
+  } catch (_) {}
 }
 
 /* ----------------------------------------------------------
@@ -228,6 +337,9 @@ function _initBackupModal() {
 
   // --- Auto-save toggle ---
   _initAutoSaveToggle();
+
+  // --- System Language toggle ---
+  _initSystemLanguageToggle();
 
   // --- Close helpers ---
   function _close() {
@@ -383,6 +495,107 @@ function _importBackup(fileInput) {
   };
 
   reader.readAsText(file);
+}
+
+/**
+ * Sync the backup modal's system language toggle to match the
+ * current _systemLanguage (read from localStorage or firebase).
+ * Called every time the backup modal opens so the buttons reflect reality.
+ */
+function _syncSystemLanguageToggle() {
+  var lang = 'en';
+  try { lang = localStorage.getItem('hub_system_language') || 'en'; } catch (_) {}
+  if (lang !== 'en' && lang !== 'vi') lang = 'en';
+
+  var enBtn = document.getElementById('backup-syslang-en');
+  var viBtn = document.getElementById('backup-syslang-vi');
+  var desc  = document.getElementById('backup-sys-lang-desc');
+
+  if (!enBtn || !viBtn) return;
+
+  if (lang === 'vi') {
+    enBtn.classList.remove('hub-syslang-toggle-btn--active');
+    viBtn.classList.add('hub-syslang-toggle-btn--active');
+    if (desc) desc.textContent = 'Chọn ngôn ngữ giao diện cho Hub.OS';
+  } else {
+    viBtn.classList.remove('hub-syslang-toggle-btn--active');
+    enBtn.classList.add('hub-syslang-toggle-btn--active');
+    if (desc) desc.textContent = 'Choose the interface language for Hub.OS';
+  }
+}
+
+/**
+ * Initialize the system language toggle inside the backup modal.
+ * On click: save to localStorage + Firebase, then call
+ * flashcardModule.applyLanguage() to update the entire DOM live.
+ */
+function _initSystemLanguageToggle() {
+  var enBtn = document.getElementById('backup-syslang-en');
+  var viBtn = document.getElementById('backup-syslang-vi');
+  if (!enBtn || !viBtn) return;
+
+  // Sync on modal open — hook into the existing open flow
+  var openBtn = document.getElementById('btn-backup-open');
+  if (openBtn) {
+    var origHandler = openBtn.onclick;
+    openBtn.addEventListener('click', function () {
+      // Small delay so DOM inside the modal is ready
+      setTimeout(_syncSystemLanguageToggle, 50);
+    });
+  }
+
+  function _setLanguage(lang) {
+    // 1) Persist to localStorage immediately
+    try { localStorage.setItem('hub_system_language', lang); } catch (_) {}
+
+    // 2) Persist to Firebase flashcard settings (if available)
+    try {
+      if (typeof flashcardModule !== 'undefined' && typeof HubDB !== 'undefined') {
+        HubDB.loadFlashcardSettings().then(function (settings) {
+          var merged = settings || {};
+          merged.systemLanguage = lang;
+          if (!merged.schema) {
+            merged.schema = [
+              { id: 'phonetic', name: 'Phonetic', prompt: 'Provide the IPA phonetic transcription.', isDeletable: false },
+              { id: 'synonym', name: 'Synonym', prompt: 'Provide 2-3 common synonyms.', isDeletable: true }
+            ];
+          }
+          if (typeof merged.voiceSpeed !== 'number') merged.voiceSpeed = 0.9;
+          HubDB.saveFlashcardSettings(merged).catch(function () {});
+        }).catch(function () {});
+      }
+    } catch (_) {}
+
+    // 3) Update the DOM live (no page reload)
+    if (typeof flashcardModule !== 'undefined' && flashcardModule.applyLanguage) {
+      flashcardModule.applyLanguage(lang);
+    }
+
+    // 4) Re-render dashboard if visible (it reads greeting from i18n)
+    if (typeof dashboardModule !== 'undefined' && typeof app !== 'undefined') {
+      var activeId = app._getActiveModuleId ? app._getActiveModuleId() : null;
+      if (activeId === 'dashboard' && dashboardModule.render) {
+        var mainContent = document.getElementById('main-content');
+        if (mainContent) {
+          mainContent.innerHTML = '';
+          dashboardModule.render(mainContent);
+        }
+      }
+    }
+
+    // 5) Update the toggle button visuals
+    _syncSystemLanguageToggle();
+  }
+
+  enBtn.addEventListener('click', function () {
+    if (enBtn.classList.contains('hub-syslang-toggle-btn--active')) return; // already active
+    _setLanguage('en');
+  });
+
+  viBtn.addEventListener('click', function () {
+    if (viBtn.classList.contains('hub-syslang-toggle-btn--active')) return; // already active
+    _setLanguage('vi');
+  });
 }
 
 /**

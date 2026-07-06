@@ -14,9 +14,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-  <!-- Theme flash prevention: apply light-mode before first paint -->
+  <!-- Theme flash prevention: apply data-theme before first paint -->
   <script>
-    (function(){try{if(localStorage.getItem('hub_theme')==='light'){document.documentElement.classList.add('light-mode');}}catch(_){}})();
+    (function(){try{var t=localStorage.getItem('hub_theme')||'cyberpunk';if(t==='light')t='solar-zen';if(t==='dark')t='cyberpunk';document.documentElement.setAttribute('data-theme',t);}catch(_){}})();
   </script>
 </head>
 <body>
@@ -136,6 +136,53 @@
               <input type="checkbox" id="btn-auto-save-toggle" checked>
               <span class="toggle-slider"></span>
             </label>
+          </div>
+        </div>
+
+        <!-- System Language toggle -->
+        <div class="backup-section backup-section--sys-lang" id="backup-sys-lang-section">
+          <div class="backup-section-row">
+            <div>
+              <h4 class="backup-section-title">SYSTEM LANGUAGE</h4>
+              <p class="backup-section-desc" id="backup-sys-lang-desc">Choose the interface language for Hub.OS</p>
+            </div>
+            <div class="hub-syslang-toggle-group" id="backup-syslang-toggle-group">
+              <button class="hub-syslang-toggle-btn hub-syslang-toggle-btn--en hub-syslang-toggle-btn--active" id="backup-syslang-en" data-lang="en">
+                <span class="hub-syslang-toggle-flag">🇬🇧</span>
+                <span class="hub-syslang-toggle-label">EN</span>
+              </button>
+              <button class="hub-syslang-toggle-btn hub-syslang-toggle-btn--vi" id="backup-syslang-vi" data-lang="vi">
+                <span class="hub-syslang-toggle-flag">🇻🇳</span>
+                <span class="hub-syslang-toggle-label">VI</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Workspace Theme picker -->
+        <div class="backup-section backup-section--sys-theme" id="backup-sys-theme-section">
+          <div class="backup-section-row">
+            <div>
+              <h4 class="backup-section-title">WORKSPACE THEME</h4>
+              <p class="backup-section-desc" id="backup-sys-theme-desc">Choose your visual workspace environment</p>
+            </div>
+            <div class="hub-theme-swatch-group" id="backup-theme-swatch-group">
+              <!-- Cyberpunk (default dark neon) -->
+              <button class="hub-theme-swatch hub-theme-swatch--cyberpunk hub-theme-swatch--active" id="swatch-cyberpunk" data-theme="cyberpunk" title="Cyberpunk — Dark Neon">
+                <span class="hub-theme-swatch-circle hub-theme-swatch-circle--cyberpunk"></span>
+                <span class="hub-theme-swatch-label">Cyberpunk</span>
+              </button>
+              <!-- Solar Zen (clean light) -->
+              <button class="hub-theme-swatch hub-theme-swatch--solar-zen" id="swatch-solar-zen" data-theme="solar-zen" title="Solar Zen — Clean Light">
+                <span class="hub-theme-swatch-circle hub-theme-swatch-circle--solar-zen"></span>
+                <span class="hub-theme-swatch-label">Solar Zen</span>
+              </button>
+              <!-- Lo-Fi Twilight (soft dark) -->
+              <button class="hub-theme-swatch hub-theme-swatch--lofi-twilight" id="swatch-lofi-twilight" data-theme="lofi-twilight" title="Lo-Fi Twilight — Soft Dark">
+                <span class="hub-theme-swatch-circle hub-theme-swatch-circle--lofi-twilight"></span>
+                <span class="hub-theme-swatch-label">Lo-Fi Twilight</span>
+              </button>
+            </div>
           </div>
         </div>
 
