@@ -358,7 +358,17 @@
         _toggleAdminBadge(isAdmin);
         _resetInactivityTimer();
 
+        // ── Refresh dashboard stats from Firestore ──
+        if (typeof dashboardModule !== 'undefined' && dashboardModule.refreshFromCloud) {
+          dashboardModule.refreshFromCloud(user.uid);
+        }
+
       } else {
+        // Reset dashboard to empty state on logout
+        if (typeof dashboardModule !== 'undefined' && dashboardModule.refreshFromCloud) {
+          dashboardModule.refreshFromCloud(null);
+        }
+
         // Restore default login button
         if (loginBtn) {
           loginBtn.setAttribute('title', 'Cloud Login');

@@ -2506,8 +2506,9 @@ const prompt = buildAIPrompt(word, _aiSchema);
           </div>
 
           <div class="form-group">
-            <label>Image URL (Optional)</label>
-            <input type="text" id="ceditor-image" class="card-editor-input" value="${_esc(imageUrl)}" placeholder="Paste image link here..." autocomplete="off">
+            <label>🖼️ Visual Memory (Optional)</label>
+            <input type="text" id="ceditor-image" class="card-editor-input hub-flashcard-visual-input" value="${_esc(imageUrl)}" placeholder="Paste an image from clipboard, or type a URL..." autocomplete="off">
+            <span style="font-family:var(--font-mono);font-size:0.6rem;color:var(--text-muted);">Copy an image (Ctrl+C), then paste it here (Ctrl+V). Auto-compresses to save space.</span>
           </div>
 
           <div class="form-group">
@@ -2555,11 +2556,123 @@ const prompt = buildAIPrompt(word, _aiSchema);
       }
     });
 
+    // --- Clipboard paste: image → compressed base64 injection ---
+    _attachImagePasteHandler(overlay);
+
     // Focus first input
     setTimeout(() => {
       const inp = overlay.querySelector('#ceditor-term');
       if (inp) inp.focus();
     }, 150);
+  }
+
+  /**
+   * Attach a paste event listener to the Visual Memory input field.
+   * Detects image clipboard data, compresses it via <canvas> to JPEG
+   * @ 70% quality (max 800px), then sets the compressed Base64 Data URL
+   * as the field's value and dispatches an 'input' event so the existing
+   * save logic picks up the new value.
+   */
+  function _attachImagePasteHandler(overlay) {
+    var inputField = overlay.querySelector('#ceditor-image');
+    if (!inputField) return;
+
+    inputField.addEventListener('paste', function (e) {
+      // Abort if clipboard API not supported
+      if (!e.clipboardData || !e.clipboardData.items) return;
+
+      var items = e.clipboardData.items;
+      var imageItem = null;
+
+      // Find the first image item in the paste payload
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+          imageItem = items[i];
+          break;
+        }
+      }
+
+      // No image found — let the browser handle it as text paste normally
+      if (!imageItem) return;
+
+      // Image detected — stop the browser from pasting raw text
+      e.preventDefault();
+
+      var file = imageItem.getAsFile();
+      if (!file) return;
+
+      // --- Mark field as processing ---
+      var originalPlaceholder = inputField.placeholder;
+      inputField.value = 'Processing image...';
+      inputField.disabled = true;
+
+      // --- Read file → compress → inject ---
+      var reader = new FileReader();
+
+      reader.onload = function (loadEvt) {
+        var img = new Image();
+
+        img.onload = function () {
+          // Compute compressed dimensions (max 800px, maintain aspect ratio)
+          var MAX_DIM = 800;
+          var w = img.width;
+          var h = img.height;
+
+          if (w > MAX_DIM || h > MAX_DIM) {
+            if (w > h) {
+              h = Math.round(h * (MAX_DIM / w));
+              w = MAX_DIM;
+            } else {
+              w = Math.round(w * (MAX_DIM / h));
+              h = MAX_DIM;
+            }
+          }
+
+          // Create canvas and draw scaled image
+          var canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+
+          // Export as JPEG @ 70% quality — dramatic size reduction vs PNG base64
+          var compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+
+          // --- Inject the compressed base64 ---
+          inputField.value = compressedDataUrl;
+          inputField.placeholder = originalPlaceholder;
+          inputField.disabled = false;
+
+          // Dispatch 'input' event so any auto-save/debounce or Save button
+          // logic picks up the new value and persists it to Firestore.
+          inputField.dispatchEvent(new Event('input', { bubbles: true }));
+
+          // Clean up canvas reference
+          canvas.width = 0;
+          canvas.height = 0;
+        };
+
+        img.onerror = function () {
+          // Failed to decode the image — restore field gracefully
+          inputField.value = '';
+          inputField.placeholder = 'Image paste failed. Try again or paste a URL.';
+          inputField.disabled = false;
+        };
+
+        // Start decoding
+        img.src = loadEvt.target.result;
+      };
+
+      reader.onerror = function () {
+        // FileReader failed — restore field
+        inputField.value = '';
+        inputField.placeholder = 'Image paste failed. Try again or paste a URL.';
+        inputField.disabled = false;
+      };
+
+      // Start reading the file
+      reader.readAsDataURL(file);
+    });
   }
 
   function _closeCardEditorModal() {
