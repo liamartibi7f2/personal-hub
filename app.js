@@ -341,6 +341,7 @@ function _initBackupModal() {
   // --- System Language toggle ---
   _initSystemLanguageToggle();
 
+  
   // --- Close helpers ---
   function _close() {
     overlay.classList.remove('backup-overlay--visible');
@@ -548,30 +549,14 @@ function _initSystemLanguageToggle() {
     // 1) Persist to localStorage immediately
     try { localStorage.setItem('hub_system_language', lang); } catch (_) {}
 
-    // 2) Persist to Firebase flashcard settings (if available)
-    try {
-      if (typeof flashcardModule !== 'undefined' && typeof HubDB !== 'undefined') {
-        HubDB.loadFlashcardSettings().then(function (settings) {
-          var merged = settings || {};
-          merged.systemLanguage = lang;
-          if (!merged.schema) {
-            merged.schema = [
-              { id: 'phonetic', name: 'Phonetic', prompt: 'Provide the IPA phonetic transcription.', isDeletable: false },
-              { id: 'synonym', name: 'Synonym', prompt: 'Provide 2-3 common synonyms.', isDeletable: true }
-            ];
-          }
-          if (typeof merged.voiceSpeed !== 'number') merged.voiceSpeed = 0.9;
-          HubDB.saveFlashcardSettings(merged).catch(function () {});
-        }).catch(function () {});
-      }
-    } catch (_) {}
-
-    // 3) Update the DOM live (no page reload)
-    if (typeof flashcardModule !== 'undefined' && flashcardModule.applyLanguage) {
+    // 2) Persist via flashcardModule's central setter (saves to Firebase + applies DOM)
+    if (typeof flashcardModule !== 'undefined' && flashcardModule.setSystemLanguage) {
+      flashcardModule.setSystemLanguage(lang);
+    } else if (typeof flashcardModule !== 'undefined' && flashcardModule.applyLanguage) {
       flashcardModule.applyLanguage(lang);
     }
 
-    // 4) Re-render dashboard if visible (it reads greeting from i18n)
+    // 3) Re-render dashboard if visible (it reads greeting from i18n)
     if (typeof dashboardModule !== 'undefined' && typeof app !== 'undefined') {
       var activeId = app._getActiveModuleId ? app._getActiveModuleId() : null;
       if (activeId === 'dashboard' && dashboardModule.render) {
@@ -583,7 +568,7 @@ function _initSystemLanguageToggle() {
       }
     }
 
-    // 5) Update the toggle button visuals
+    // 4) Update the toggle button visuals
     _syncSystemLanguageToggle();
   }
 

@@ -20,21 +20,34 @@ const flashcardModule = (function () {
   const API_KEY_STORE = 'hub_gemini_api_key';
   const GEMINI_URL    = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
-  // --- SRS Quality ratings (SM-2 algorithm) ---
+  // --- SRS Quality ratings (Dynamic user-configurable algorithm) ---
+  // Quality 0=Again, 1=Hard, 2=Good, 3=Easy — mapped to userSettings.srs
   const QUALITY = {
     AGAIN: 0,
-    HARD:  3,
-    GOOD:  4,
-    EASY:  5
+    HARD:  1,
+    GOOD:  2,
+    EASY:  3
   };
 
   // SRS button definitions (used in assessment panel)
   const SRS_BUTTONS = [
     { quality: QUALITY.AGAIN, label: 'Again',  cssQuality: '0' },
-    { quality: QUALITY.HARD,  label: 'Hard',   cssQuality: '3' },
-    { quality: QUALITY.GOOD,  label: 'Good',   cssQuality: '4' },
-    { quality: QUALITY.EASY,  label: 'Easy',   cssQuality: '5' }
+    { quality: QUALITY.HARD,  label: 'Hard',   cssQuality: '1' },
+    { quality: QUALITY.GOOD,  label: 'Good',   cssQuality: '2' },
+    { quality: QUALITY.EASY,  label: 'Easy',   cssQuality: '3' }
   ];
+
+  // --- Default SRS settings (overridden by userSettings.srs from Firebase) ---
+  const DEFAULT_SRS_CONFIG = {
+    learningSteps: [1, 10, 30],    // minutes — step 0, step 1, step 2
+    easyInterval: 4,               // days — immediate graduation for EASY press
+    graduatingInterval: 1,         // days — interval after completing all learning steps
+    multiplier: 2.5,               // exponential growth factor for graduated cards
+    maxInterval: 90                // days — absolute ceiling
+  };
+
+  // Runtime SRS config — loaded from Firebase userSettings.srs
+  let _srsConfig = { ...DEFAULT_SRS_CONFIG };
 
   // --- Private state ---
   let _decks          = [];          // Array of deck objects: { id, title, cards }
@@ -124,8 +137,15 @@ const flashcardModule = (function () {
       changeLang:       { en: '↩ Change',                   vi: '↩ Đổi' },
       enterDeckTitle:   { en: 'Please enter a deck title.', vi: 'Vui lòng nhập tên bộ thẻ.' },
       createDeckBtn:    { en: 'Create Deck',                vi: 'Tạo Bộ Thẻ' },
+      saveDeckBtn:      { en: 'Save Deck',                  vi: 'Lưu Bộ Thẻ' },
       cancelBtn:        { en: 'Cancel',                     vi: 'Hủy' },
       closeBtn:         { en: 'Close',                      vi: 'Đóng' },
+      deckSettings:     { en: 'Deck Settings',              vi: 'Cài Đặt Bộ Thẻ' },
+      renameDeck:       { en: 'Rename Deck',                vi: 'Đổi Tên Bộ Thẻ' },
+      deckSrsOverrideToggle: { en: 'Use Custom SRS Settings for this Deck', vi: 'Sử dụng luật SRS riêng cho bộ thẻ này' },
+      deckSrsOverrideDesc:   { en: 'Override the global SRS defaults with custom intervals tailored to this specific deck.', vi: 'Ghi đè cài đặt SRS mặc định bằng khoảng thời gian tùy chỉnh cho riêng bộ thẻ này.' },
+      deckSrsOverrideOn:     { en: 'Custom SRS active — this deck uses its own spaced repetition rules', vi: 'SRS riêng đang bật — bộ thẻ này dùng luật lặp lại cách quãng riêng' },
+      deckSrsOverrideOff:    { en: 'Using global default SRS settings', vi: 'Đang dùng cài đặt SRS mặc định toàn cục' },
       advancedAISettings: { en: 'Advanced AI Settings',     vi: 'Cài Đặt AI Nâng Cao' },
       customizeAIPrompt:  { en: 'Customize the AI prompt fields for auto-generated cards', vi: 'Tùy chỉnh các trường prompt AI cho thẻ tạo tự động' },
       promptFields:     { en: 'Prompt Fields',              vi: 'Trường Prompt' },
@@ -157,7 +177,26 @@ const flashcardModule = (function () {
       zhProposeBtn:     { en: 'PROPOSE NEW STRUCTURE', vi: 'ĐỀ XUẤT CẤU TRÚC MỚI' },
       zhProposeHint:    { en: 'Invite a linguistic partner to help design the flashcard schema', vi: 'Mời một đối tác ngôn ngữ để cùng thiết kế schema thẻ ghi nhớ' },
       zhQuickStartBtn:  { en: 'Quick Start: Create Empty Deck', vi: 'Bắt Đầu Nhanh: Tạo Bộ Thẻ Trống' },
-      zhQuickStartHint: { en: 'Skip the blueprint — start with defaults and iterate later', vi: 'Bỏ qua bản thiết kế — bắt đầu với mặc định và điều chỉnh sau' }
+      zhQuickStartHint: { en: 'Skip the blueprint — start with defaults and iterate later', vi: 'Bỏ qua bản thiết kế — bắt đầu với mặc định và điều chỉnh sau' },
+      // ── SRS Guide Accordion (Flashcard Advanced AI Settings) ──
+      srsSectionTitle: { en: 'SPACED REPETITION (SRS) CONFIG', vi: 'CẤU HÌNH LẶP LẠI NGẮT QUÃNG (SRS)' },
+      srsSectionDesc:  { en: 'Customize the algorithm that schedules your flashcard reviews', vi: 'Tùy chỉnh thuật toán lên lịch ôn tập thẻ ghi nhớ' },
+      srsLearningStepsLabel: { en: 'Learning Steps (mins)', vi: 'Bước Học (phút)' },
+      srsLearningStepsHint:  { en: 'Comma-separated: step 1, step 2, step 3 (minutes)', vi: 'Phân cách bằng dấu phẩy: bước 1, bước 2, bước 3 (phút)' },
+      srsEasyIntervalLabel:  { en: 'Easy Interval (days)', vi: 'Khoảng Dễ (ngày)' },
+      srsEasyIntervalHint:   { en: 'Jump ahead when card is easy', vi: 'Nhảy xa khi thẻ dễ' },
+      srsGraduatingLabel:    { en: 'Graduating Interval (days)', vi: 'Khoảng Tốt Nghiệp (ngày)' },
+      srsGraduatingHint:     { en: 'Normal progression after learning phase', vi: 'Tiến trình bình thường sau giai đoạn học' },
+      srsMultiplierLabel:    { en: 'Multiplier (Ease)', vi: 'Hệ Số Nhân (Độ Dễ)' },
+      srsMultiplierHint:     { en: 'Exponential growth factor for intervals', vi: 'Yếu tố tăng trưởng lũy tiến cho khoảng cách' },
+      srsMaxIntervalLabel:   { en: 'Maximum Interval (days)', vi: 'Khoảng Tối Đa (ngày)' },
+      srsMaxIntervalHint:    { en: 'Hard cap — never exceed this review gap', vi: 'Giới hạn cứng — không bao giờ vượt quá khoảng cách ôn tập này' },
+      srsGuideTitle: { en: 'Algorithm Best Practices / Hướng dẫn tối ưu', vi: 'Hướng dẫn Tối Ưu / Algorithm Best Practices' },
+      srsGuideLearningSteps: { en: 'Learning Steps: 1m, 10m, 30m (for difficult cards / thẻ khó). Short initial steps build memory; lengthen if reviews feel too frequent.', vi: 'Bước Học: 1p, 10p, 30p (cho thẻ khó). Bước ngắn ban đầu xây dựng trí nhớ; kéo dài nếu ôn tập quá thường xuyên.' },
+      srsGuideEasyInterval: { en: 'Easy Interval: Jump to 1+ days to avoid over-reviewing known cards / Tránh lặp lại quá nhiều thẻ đã biết. Set higher (3–7d) for topics you already know well.', vi: 'Khoảng Dễ: Nhảy đến 1+ ngày để tránh lặp lại thẻ đã biết. Đặt cao hơn (3–7 ngày) cho chủ đề bạn đã nắm vững.' },
+      srsGuideGraduating: { en: 'Graduating: Normal progression after learning phase / Vượt qua giai đoạn học. Cards exit the short-step queue and enter exponential scheduling.', vi: 'Tốt Nghiệp: Tiến trình bình thường sau giai đoạn học. Thẻ rời khỏi hàng đợi bước ngắn và bước vào lịch trình lũy tiến.' },
+      srsGuideMultiplier: { en: 'Multiplier: Exponential growth factor / Hệ số nhân khoảng cách. ~2.5 is standard (Anki SM-2). Lower (1.8–2.2) = more frequent reviews; higher (3–4) = aggressive spacing.', vi: 'Hệ Số Nhân: Yếu tố tăng trưởng lũy tiến. ~2.5 là chuẩn (Anki SM-2). Thấp hơn (1.8–2.2) = ôn tập thường xuyên hơn; cao hơn (3–4) = giãn cách mạnh.' },
+      srsGuideMaxInterval: { en: 'Maximum Interval: Hard ceiling in days / Giới hạn cứng theo ngày. Prevents intervals from growing unboundedly; 90–180d is typical for vocabulary.', vi: 'Khoảng Tối Đa: Giới hạn cứng theo ngày. Ngăn khoảng cách tăng không giới hạn; 90–180 ngày là điển hình cho từ vựng.' }
     }
   };
 
@@ -405,12 +444,17 @@ const flashcardModule = (function () {
         if (data.decks.length > 0) {
           if (data.decks[0].cards !== undefined) {
             _decks = data.decks.map(function (deck) {
-              return {
+              var mapped = {
                 id: deck.id || ('deck_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8)),
                 title: deck.title || 'Untitled Deck',
                 language: deck.language || 'en', // Fallback: old decks default to English
                 cards: (deck.cards || []).map(_normalizeCard)
               };
+              // Preserve deck-level SRS override if present
+              if (deck.srs && typeof deck.srs === 'object') {
+                mapped.srs = _normalizeSRSConfig(deck.srs);
+              }
+              return mapped;
             });
           } else if (data.decks[0].term !== undefined) {
             // Legacy flat card array — migrate into a single deck
@@ -474,18 +518,137 @@ const flashcardModule = (function () {
         } else {
           _loadSystemLanguage(); // fallback to localStorage
         }
+        // Load SRS config from cloud settings
+        if (settings.srs && typeof settings.srs === 'object') {
+          _srsConfig = _normalizeSRSConfig(settings.srs);
+        } else {
+          _srsConfig = { ...DEFAULT_SRS_CONFIG };
+        }
       } else {
         _aiSchema = DEFAULT_AI_SCHEMA.map(function (s) { return { ...s }; });
         _voiceSpeed = 0.9;
         _loadSystemLanguage();
-        await HubDB.saveFlashcardSettings({ schema: _aiSchema, voiceSpeed: _voiceSpeed, systemLanguage: _systemLanguage });
+        _srsConfig = { ...DEFAULT_SRS_CONFIG };
+        await HubDB.saveFlashcardSettings({
+          schema: _aiSchema,
+          voiceSpeed: _voiceSpeed,
+          systemLanguage: _systemLanguage,
+          srs: _srsConfig
+        });
       }
     } catch (_) {
       _aiSchema = DEFAULT_AI_SCHEMA.map(function (s) { return { ...s }; });
       _voiceSpeed = 0.9;
       _loadSystemLanguage();
+      _srsConfig = { ...DEFAULT_SRS_CONFIG };
     }
     _isFlashcardSettingsLoaded = true;
+  }
+
+  /**
+   * Normalize a raw SRS config object — fill in any missing keys
+   * with defaults and ensure correct types.
+   */
+  function _normalizeSRSConfig(raw) {
+    var cfg = { ...DEFAULT_SRS_CONFIG };
+    if (raw) {
+      // learningSteps — can be array of numbers or comma-separated string
+      if (Array.isArray(raw.learningSteps) && raw.learningSteps.length >= 3) {
+        cfg.learningSteps = raw.learningSteps.map(function (s) { return Number(s) || 1; });
+      } else if (typeof raw.learningSteps === 'string' && raw.learningSteps.trim()) {
+        var parsed = raw.learningSteps.split(',').map(function (s) { return Number(s.trim()) || 1; });
+        if (parsed.length >= 3) cfg.learningSteps = parsed;
+      }
+      if (typeof raw.easyInterval === 'number' && raw.easyInterval > 0) cfg.easyInterval = raw.easyInterval;
+      if (typeof raw.graduatingInterval === 'number' && raw.graduatingInterval > 0) cfg.graduatingInterval = raw.graduatingInterval;
+      if (typeof raw.multiplier === 'number' && raw.multiplier >= 1.1) cfg.multiplier = raw.multiplier;
+      if (typeof raw.maxInterval === 'number' && raw.maxInterval > 0) cfg.maxInterval = raw.maxInterval;
+    }
+    return cfg;
+  }
+
+  /**
+   * Render the 5 SRS config input fields as an HTML string.
+   * Reused by the AI settings modal, deck create/edit modals.
+   * @param {object} cfg - SRS config object (e.g. _srsConfig or deck.srs)
+   * @param {string} idPrefix - prefix for input IDs (e.g. "srs-" or "deck-srs-")
+   * @returns {string} HTML
+   */
+  function _renderSRSConfigFields(cfg, idPrefix) {
+    var pfx = idPrefix || 'srs-';
+    return '' +
+      '<div class="hub-srs-config-grid">' +
+        _srsField(pfx + 'learning-steps',      _('fc', 'srsLearningStepsLabel'),  _('fc', 'srsLearningStepsHint'),  cfg.learningSteps.join(', '), 'text',   _('fc', 'srsLearningStepsPlaceholder')) +
+        _srsField(pfx + 'easy-interval',       _('fc', 'srsEasyIntervalLabel'),  _('fc', 'srsEasyIntervalHint'),  cfg.easyInterval,               'number', '') +
+        _srsField(pfx + 'graduating-interval', _('fc', 'srsGraduatingLabel'),    _('fc', 'srsGraduatingHint'),    cfg.graduatingInterval,         'number', '') +
+        _srsField(pfx + 'multiplier',          _('fc', 'srsMultiplierLabel'),    _('fc', 'srsMultiplierHint'),    cfg.multiplier,                 'number', '') +
+        _srsField(pfx + 'max-interval',        _('fc', 'srsMaxIntervalLabel'),   _('fc', 'srsMaxIntervalHint'),   cfg.maxInterval,                'number', '') +
+      '</div>';
+  }
+
+  function _srsField(id, label, hint, value, type, placeholder) {
+    return '' +
+      '<div class="hub-srs-field">' +
+        '<label class="hub-srs-label" for="' + _esc(id) + '">' + _esc(label) + '</label>' +
+        '<input type="' + type + '" id="' + _esc(id) + '" class="hub-srs-input" value="' + _esc(String(value)) + '"' +
+          (placeholder ? ' placeholder="' + _esc(placeholder) + '"' : '') +
+          (type === 'number' ? ' min="' + (id.indexOf('multiplier') !== -1 ? '1.1' : '1') + '" max="' + (id.indexOf('max-interval') !== -1 ? '3650' : '365') + '" step="' + (id.indexOf('multiplier') !== -1 ? '0.1' : '1') + '"' : '') +
+          ' autocomplete="off">' +
+        '<span class="hub-srs-hint">' + _esc(hint) + '</span>' +
+      '</div>';
+  }
+
+  /**
+   * Parse SRS config from DOM inputs with the given prefix.
+   * @param {string} idPrefix
+   * @returns {object} parsed SRS config
+   */
+  function _readSRSConfigFromDOM(idPrefix) {
+    var pfx = idPrefix || 'srs-';
+    var rawSteps = _val(pfx + 'learning-steps');
+    var parsedSteps = rawSteps ? rawSteps.split(',').map(function (s) { var n = Number(s.trim()); return n > 0 ? n : 1; }) : null;
+    return {
+      learningSteps:      (parsedSteps && parsedSteps.length >= 3) ? parsedSteps : DEFAULT_SRS_CONFIG.learningSteps,
+      easyInterval:       _numVal(pfx + 'easy-interval', DEFAULT_SRS_CONFIG.easyInterval),
+      graduatingInterval: _numVal(pfx + 'graduating-interval', DEFAULT_SRS_CONFIG.graduatingInterval),
+      multiplier:         _numVal(pfx + 'multiplier', DEFAULT_SRS_CONFIG.multiplier),
+      maxInterval:        _numVal(pfx + 'max-interval', DEFAULT_SRS_CONFIG.maxInterval)
+    };
+  }
+
+  function _val(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; }
+  function _numVal(id, fallback) { var v = parseFloat(_val(id)); return isNaN(v) || v <= 0 ? fallback : v; }
+
+  /**
+   * Bind SRS input change events that auto-save via callback.
+   * @param {string} idPrefix
+   * @param {function} onChange — called with the parsed config object whenever a field changes
+   */
+  function _bindSRSFieldEvents(idPrefix, onChange) {
+    var fieldIds = [
+      idPrefix + 'learning-steps',
+      idPrefix + 'easy-interval',
+      idPrefix + 'graduating-interval',
+      idPrefix + 'multiplier',
+      idPrefix + 'max-interval'
+    ];
+    fieldIds.forEach(function (fid) {
+      var el = document.getElementById(fid);
+      if (!el) return;
+      el.addEventListener('change', function () {
+        if (typeof onChange === 'function') onChange(_readSRSConfigFromDOM(idPrefix));
+      });
+      el.addEventListener('blur', function () {
+        if (typeof onChange === 'function') onChange(_readSRSConfigFromDOM(idPrefix));
+      });
+    });
+    // Special handling for text input (learning steps): save on blur only
+    var stepsEl = document.getElementById(idPrefix + 'learning-steps');
+    if (stepsEl) {
+      stepsEl.addEventListener('blur', function () {
+        if (typeof onChange === 'function') onChange(_readSRSConfigFromDOM(idPrefix));
+      });
+    }
   }
 
   /**
@@ -494,7 +657,12 @@ const flashcardModule = (function () {
    */
   function _saveAISettings() {
     if (!_isFlashcardSettingsLoaded) return;
-    HubDB.saveFlashcardSettings({ schema: _aiSchema, voiceSpeed: _voiceSpeed, systemLanguage: _systemLanguage }).catch(function () {});
+    HubDB.saveFlashcardSettings({
+      schema: _aiSchema,
+      voiceSpeed: _voiceSpeed,
+      systemLanguage: _systemLanguage,
+      srs: _srsConfig
+    }).catch(function () {});
   }
 
   /**
@@ -618,19 +786,58 @@ const flashcardModule = (function () {
             '</div>' +
           '</div>' +
 
-          '<div class="hub-flashcard-ai-section">' +
-            '<h4 class="hub-flashcard-ai-section-title">' + _('fc', 'systemLanguage') + '</h4>' +
-            '<p class="hub-flashcard-system-lang-desc">' + _('fc', 'systemLangDesc') + '</p>' +
-            '<div class="hub-flashcard-system-lang-row">' +
-              '<button class="hub-flashcard-system-lang-btn hub-flashcard-system-lang-btn--en' + (_systemLanguage === 'en' ? ' hub-flashcard-system-lang-btn--active' : '') + '" id="hub-syslang-en">' +
-                '<span class="hub-flashcard-system-lang-flag">🇬🇧</span>' +
-                '<span class="hub-flashcard-system-lang-label">English</span>' +
-              '</button>' +
-              '<button class="hub-flashcard-system-lang-btn hub-flashcard-system-lang-btn--vi' + (_systemLanguage === 'vi' ? ' hub-flashcard-system-lang-btn--active' : '') + '" id="hub-syslang-vi">' +
-                '<span class="hub-flashcard-system-lang-flag">🇻🇳</span>' +
-                '<span class="hub-flashcard-system-lang-label">Tiếng Việt</span>' +
-              '</button>' +
+          '<div class="hub-flashcard-ai-section hub-flashcard-ai-section--srs">' +
+            '<h4 class="hub-flashcard-ai-section-title" data-i18n="fc.srsSectionTitle">' + _('fc', 'srsSectionTitle') + '</h4>' +
+            '<p class="hub-flashcard-ai-section-desc" data-i18n="fc.srsSectionDesc">' + _('fc', 'srsSectionDesc') + '</p>' +
+
+            '<div class="hub-srs-config-grid">' +
+              // a. Learning Steps
+              '<div class="hub-srs-field">' +
+                '<label class="hub-srs-label" for="srs-learning-steps" data-i18n="fc.srsLearningStepsLabel">' + _('fc', 'srsLearningStepsLabel') + '</label>' +
+                '<input type="text" id="srs-learning-steps" class="hub-srs-input" value="' + _esc(_srsConfig.learningSteps.join(', ')) + '" placeholder="e.g. 1, 10, 30" autocomplete="off">' +
+                '<span class="hub-srs-hint" data-i18n="fc.srsLearningStepsHint">' + _('fc', 'srsLearningStepsHint') + '</span>' +
+              '</div>' +
+              // b. Easy Interval
+              '<div class="hub-srs-field">' +
+                '<label class="hub-srs-label" for="srs-easy-interval" data-i18n="fc.srsEasyIntervalLabel">' + _('fc', 'srsEasyIntervalLabel') + '</label>' +
+                '<input type="number" id="srs-easy-interval" class="hub-srs-input" value="' + _srsConfig.easyInterval + '" min="1" max="365" step="1">' +
+                '<span class="hub-srs-hint" data-i18n="fc.srsEasyIntervalHint">' + _('fc', 'srsEasyIntervalHint') + '</span>' +
+              '</div>' +
+              // c. Graduating Interval
+              '<div class="hub-srs-field">' +
+                '<label class="hub-srs-label" for="srs-graduating-interval" data-i18n="fc.srsGraduatingLabel">' + _('fc', 'srsGraduatingLabel') + '</label>' +
+                '<input type="number" id="srs-graduating-interval" class="hub-srs-input" value="' + _srsConfig.graduatingInterval + '" min="1" max="365" step="1">' +
+                '<span class="hub-srs-hint" data-i18n="fc.srsGraduatingHint">' + _('fc', 'srsGraduatingHint') + '</span>' +
+              '</div>' +
+              // d. Multiplier
+              '<div class="hub-srs-field">' +
+                '<label class="hub-srs-label" for="srs-multiplier" data-i18n="fc.srsMultiplierLabel">' + _('fc', 'srsMultiplierLabel') + '</label>' +
+                '<input type="number" id="srs-multiplier" class="hub-srs-input" value="' + _srsConfig.multiplier + '" min="1.1" max="10" step="0.1">' +
+                '<span class="hub-srs-hint" data-i18n="fc.srsMultiplierHint">' + _('fc', 'srsMultiplierHint') + '</span>' +
+              '</div>' +
+              // e. Max Interval
+              '<div class="hub-srs-field">' +
+                '<label class="hub-srs-label" for="srs-max-interval" data-i18n="fc.srsMaxIntervalLabel">' + _('fc', 'srsMaxIntervalLabel') + '</label>' +
+                '<input type="number" id="srs-max-interval" class="hub-srs-input" value="' + _srsConfig.maxInterval + '" min="1" max="3650" step="1">' +
+                '<span class="hub-srs-hint" data-i18n="fc.srsMaxIntervalHint">' + _('fc', 'srsMaxIntervalHint') + '</span>' +
+              '</div>' +
             '</div>' +
+
+            // Accordion
+            '<details class="hub-srs-accordion" id="hub-srs-accordion">' +
+              '<summary class="hub-srs-accordion-summary" id="hub-srs-accordion-summary">' +
+                '<span class="hub-srs-accordion-icon">💡</span>' +
+                '<span class="hub-srs-accordion-title" data-i18n="fc.srsGuideTitle">' + _('fc', 'srsGuideTitle') + '</span>' +
+                '<span class="hub-srs-accordion-chevron">▼</span>' +
+              '</summary>' +
+              '<div class="hub-srs-accordion-content">' +
+                '<div class="hub-srs-guide-item"><span class="hub-srs-guide-bullet"></span><span class="hub-srs-guide-text" data-i18n="fc.srsGuideLearningSteps">' + _('fc', 'srsGuideLearningSteps') + '</span></div>' +
+                '<div class="hub-srs-guide-item"><span class="hub-srs-guide-bullet"></span><span class="hub-srs-guide-text" data-i18n="fc.srsGuideEasyInterval">' + _('fc', 'srsGuideEasyInterval') + '</span></div>' +
+                '<div class="hub-srs-guide-item"><span class="hub-srs-guide-bullet"></span><span class="hub-srs-guide-text" data-i18n="fc.srsGuideGraduating">' + _('fc', 'srsGuideGraduating') + '</span></div>' +
+                '<div class="hub-srs-guide-item"><span class="hub-srs-guide-bullet"></span><span class="hub-srs-guide-text" data-i18n="fc.srsGuideMultiplier">' + _('fc', 'srsGuideMultiplier') + '</span></div>' +
+                '<div class="hub-srs-guide-item"><span class="hub-srs-guide-bullet"></span><span class="hub-srs-guide-text" data-i18n="fc.srsGuideMaxInterval">' + _('fc', 'srsGuideMaxInterval') + '</span></div>' +
+              '</div>' +
+            '</details>' +
           '</div>' +
 
           '<div class="hub-flashcard-ai-status" id="hub-ai-status"></div>' +
@@ -697,34 +904,36 @@ const flashcardModule = (function () {
       });
     }
 
-    // --- System Language toggle buttons ---
-    var sysLangEn = overlay.querySelector('#hub-syslang-en');
-    var sysLangVi = overlay.querySelector('#hub-syslang-vi');
-    if (sysLangEn) {
-      sysLangEn.addEventListener('click', function () {
-        if (_systemLanguage === 'en') return;
-        _systemLanguage = 'en';
-        sysLangEn.classList.add('hub-flashcard-system-lang-btn--active');
-        if (sysLangVi) sysLangVi.classList.remove('hub-flashcard-system-lang-btn--active');
-        applyLanguage('en');
-        _saveAISettings();
-        // Re-render AI modal to reflect updated labels
-        _closeAISettingsModal();
-        _showAISettingsModal();
+    // --- SRS Config Input Bindings ---
+    var srsFieldMap = {
+      'srs-learning-steps':      { key: 'learningSteps',      parse: function (s) { var p = s.split(',').map(function (x) { return Number(x.trim()) || 1; }); if (p.length < 3) { while (p.length < 3) p.push(10); } return p.slice(0, 6); }, validate: function (v) { return Array.isArray(v) && v.length >= 3 && v.every(function (n) { return n > 0; }); } },
+      'srs-easy-interval':       { key: 'easyInterval',       parse: function (s) { return Number(s); },                   validate: function (v) { return typeof v === 'number' && v >= 1; } },
+      'srs-graduating-interval': { key: 'graduatingInterval', parse: function (s) { return Number(s); },                   validate: function (v) { return typeof v === 'number' && v >= 1; } },
+      'srs-multiplier':          { key: 'multiplier',          parse: function (s) { return Number(s); },                   validate: function (v) { return typeof v === 'number' && v >= 1.1; } },
+      'srs-max-interval':        { key: 'maxInterval',        parse: function (s) { return Number(s); },                   validate: function (v) { return typeof v === 'number' && v >= 1; } }
+    };
+
+    Object.keys(srsFieldMap).forEach(function (fieldId) {
+      var input = overlay.querySelector('#' + fieldId);
+      if (!input) return;
+      var meta = srsFieldMap[fieldId];
+
+      input.addEventListener('change', function () {
+        var parsed = meta.parse(input.value.trim());
+        if (meta.validate(parsed)) {
+          _srsConfig[meta.key] = parsed;
+          _saveAISettings();
+        } else {
+          // Revert display to current valid value
+          var cur = _srsConfig[meta.key];
+          input.value = Array.isArray(cur) ? cur.join(', ') : String(cur);
+        }
       });
-    }
-    if (sysLangVi) {
-      sysLangVi.addEventListener('click', function () {
-        if (_systemLanguage === 'vi') return;
-        _systemLanguage = 'vi';
-        sysLangVi.classList.add('hub-flashcard-system-lang-btn--active');
-        if (sysLangEn) sysLangEn.classList.remove('hub-flashcard-system-lang-btn--active');
-        applyLanguage('vi');
-        _saveAISettings();
-        _closeAISettingsModal();
-        _showAISettingsModal();
+
+      input.addEventListener('blur', function () {
+        input.dispatchEvent(new Event('change', { bubbles: true }));
       });
-    }
+    });
 
     setTimeout(function () {
       if (idInput) idInput.focus();
@@ -907,78 +1116,200 @@ const flashcardModule = (function () {
   }
 
   /* ==========================================================
-     SRS: SM-2 ALGORITHM
+     SRS: DYNAMIC USER-CONFIGURABLE ALGORITHM (FSRS-inspired)
+     Uses userSettings.srs from Firebase (fallback: DEFAULT_SRS_CONFIG).
+     Params:
+       quality  - 0=Again, 1=Hard, 2=Good, 3=Easy
+       card     - the card being rated
+       isAgainInSession - if true, sets nextReviewDate to now
      Returns a NEW card object with updated SRS fields.
-     @param {number} quality - 0 (Again), 3 (Hard), 4 (Good), 5 (Easy)
-     @param {Object} card   - the card being rated
-     @param {boolean} isAgainInSession - if true, sets nextReviewDate to now
-     @returns {Object} updated card
      ========================================================== */
 
-  function calculateSRS(quality, card, isAgainInSession) {
+  /**
+   * FSRS/Anki-style SRS calculation using user-configured parameters.
+   *
+   * Learning phase: card steps through learningSteps[0→1→2] via Hard/Good.
+   *   - AGAIN (0): reset to step 0, 1m
+   *   - HARD  (1): advance to step 1, 10m (or stay at step 1 if already there)
+   *   - GOOD  (2): advance to step 2, 30m; if already at step 2, GRADUATE
+   *   - EASY  (3): graduate immediately → easyInterval
+   *
+   * Graduated phase (repetition ≥ 1):
+   *   - AGAIN: reset streak, back to learning step 0
+   *   - HARD:  interval × 1.2
+   *   - GOOD:  interval × multiplier
+   *   - EASY:  interval × multiplier × 1.3
+   *
+   * @param {number} quality - QUALITY.AGAIN(0) | HARD(1) | GOOD(2) | EASY(3)
+   * @param {object} card   - the card object (mutated copy returned)
+   * @param {boolean} isAgainInSession - if true, sets nextReviewDate = now
+   * @param {object} [deckSrs] - optional deck-level SRS override (falls back to _srsConfig)
+   * @returns {object} updated card
+   */
+  function calculateSRS(quality, card, isAgainInSession, deckSrs) {
     const updated = { ...card };
+    // If the deck has its own SRS config, use it; otherwise fall back to global defaults
+    const cfg = (deckSrs && typeof deckSrs === 'object' && deckSrs.learningSteps) ? deckSrs : _srsConfig;
+    const now = Date.now();
 
-    if (quality >= 3) {
-      if (updated.repetition === 0) {
-        if (quality === QUALITY.HARD) {
-          updated.interval = 1;
-        } else if (quality === QUALITY.GOOD) {
-          updated.interval = 2;
-        } else {
-          updated.interval = 4;
-        }
-      } else if (updated.repetition === 1) {
-        updated.interval = 6;
-      } else {
-        updated.interval = Math.round(updated.interval * updated.easeFactor);
-      }
-      updated.repetition++;
-    } else {
+    // Parse learning steps array (minutes) — ensure we have 3 valid numbers
+    const steps = (Array.isArray(cfg.learningSteps) && cfg.learningSteps.length >= 3)
+      ? cfg.learningSteps.map(function (s) { return Math.max(1, Number(s) || 1); })
+      : [1, 10, 30];
+
+    // Track learning progress via a dedicated counter (0 = step 0, 1 = step 1, 2 = step 2)
+    const learningStep = (typeof updated.learningStep === 'number') ? updated.learningStep : 0;
+    // A card is graduated if it has ever passed step 2 (repetition ≥ 1)
+    const isGraduated = (updated.repetition || 0) >= 1;
+
+    if (quality === QUALITY.AGAIN) {
+      // ── AGAIN (0): Reset to the beginning of learning ──
       updated.repetition = 0;
-      updated.interval = 1;
+      updated.learningStep = 0;
+      updated.interval = steps[0] / (24 * 60); // stored as days fraction
+      updated.nextReviewDate = now + (steps[0] * 60 * 1000);
+
+    } else if (quality === QUALITY.HARD) {
+      // ── HARD (1): Advance exactly 1 step (clamped to step 1 minimum) ──
+      if (!isGraduated) {
+        updated.repetition = 0; // not graduated yet
+        // From step 0 → step 1. From step 1 → stay at step 1.
+        const targetStep = Math.min(Math.max(learningStep + 1, 1), steps.length - 1);
+        updated.learningStep = targetStep;
+        updated.interval = steps[targetStep] / (24 * 60);
+        updated.nextReviewDate = now + (steps[targetStep] * 60 * 1000);
+      } else {
+        // Graduated: interval × 1.2 (conservative growth)
+        updated.repetition = (updated.repetition || 0) + 1;
+        updated.interval = Math.round((updated.interval || 1) * 1.2);
+        updated.interval = Math.min(updated.interval, cfg.maxInterval);
+        updated.nextReviewDate = now + (updated.interval * 24 * 60 * 60 * 1000);
+      }
+
+    } else if (quality === QUALITY.GOOD) {
+      // ── GOOD (2): Jump straight to step 2 (30m) from any earlier step, or graduate if already at step 2 ──
+      if (!isGraduated) {
+        if (learningStep >= steps.length - 1) {
+          // Already at the final learning step → GRADUATE
+          updated.repetition = 1;
+          updated.learningStep = steps.length - 1; // mark final step
+          updated.interval = cfg.graduatingInterval;
+          updated.interval = Math.min(updated.interval, cfg.maxInterval);
+          updated.nextReviewDate = now + (cfg.graduatingInterval * 24 * 60 * 60 * 1000);
+        } else {
+          // Jump to step 2 (the final learning step, e.g. 30m)
+          updated.repetition = 0;
+          updated.learningStep = steps.length - 1; // land at step 2
+          updated.interval = steps[steps.length - 1] / (24 * 60);
+          updated.nextReviewDate = now + (steps[steps.length - 1] * 60 * 1000);
+        }
+      } else {
+        // Graduated: standard exponential growth
+        updated.repetition = (updated.repetition || 0) + 1;
+        updated.interval = Math.round((updated.interval || 1) * cfg.multiplier);
+        updated.interval = Math.min(updated.interval, cfg.maxInterval);
+        updated.nextReviewDate = now + (updated.interval * 24 * 60 * 60 * 1000);
+      }
+
+    } else {
+      // ── EASY (3): Immediate graduation, jump to easyInterval days ──
+      updated.repetition = Math.max(1, (updated.repetition || 0) + 1);
+      updated.learningStep = steps.length - 1; // mark as having completed learning
+      if (isGraduated) {
+        // Already graduated: interval × multiplier × 1.3
+        updated.interval = Math.round((updated.interval || 1) * cfg.multiplier * 1.3);
+      } else {
+        // New card graduating via EASY: use easyInterval directly
+        updated.interval = cfg.easyInterval;
+      }
+      updated.interval = Math.min(updated.interval, cfg.maxInterval);
+      updated.nextReviewDate = now + (updated.interval * 24 * 60 * 60 * 1000);
     }
 
-    const qDiff = 5 - quality;
-    updated.easeFactor = updated.easeFactor + (0.1 - qDiff * (0.08 + qDiff * 0.02));
-    if (updated.easeFactor < 1.3) updated.easeFactor = 1.3;
+    // Ease factor adjustment (only for graduated cards receiving Good/Easy)
+    if (updated.repetition >= 1 && quality >= QUALITY.GOOD) {
+      const qBonus = quality === QUALITY.EASY ? 0.15 : 0;
+      updated.easeFactor = (updated.easeFactor || 2.5) + (0.1 + qBonus);
+      if (updated.easeFactor < 1.3) updated.easeFactor = 1.3;
+    }
 
+    // If marked Again in current session, re-add immediately
     if (isAgainInSession) {
-      updated.nextReviewDate = Date.now();
-    } else {
-      updated.nextReviewDate = Date.now() + (updated.interval * 24 * 60 * 60 * 1000);
+      updated.nextReviewDate = now;
     }
 
     return updated;
   }
 
-  function _getNextReviewLabel(quality, card) {
+  /**
+   * Predict the next review label for the assessment button tooltip.
+   * Mirrors the exact state-machine logic in calculateSRS.
+   * @param {number} quality - QUALITY.AGAIN(0) | HARD(1) | GOOD(2) | EASY(3)
+   * @param {object} card   - current card state
+   * @param {object} [deckSrs] - optional deck-level SRS override
+   * @returns {string} human-readable interval label (e.g. "< 1m", "30m", "4d", "6mo")
+   */
+  function _getNextReviewLabel(quality, card, deckSrs) {
     if (quality === QUALITY.AGAIN) return '< 1m';
 
-    let interval, easeFactor;
+    const cfg = (deckSrs && typeof deckSrs === 'object' && deckSrs.learningSteps) ? deckSrs : _srsConfig;
+    const steps = (Array.isArray(cfg.learningSteps) && cfg.learningSteps.length >= 3)
+      ? cfg.learningSteps.map(function (s) { return Math.max(1, Number(s) || 1); })
+      : [1, 10, 30];
 
-    easeFactor = card.easeFactor +
-      (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
-    if (easeFactor < 1.3) easeFactor = 1.3;
+    const learningStep = (typeof card.learningStep === 'number') ? card.learningStep : 0;
+    const isGraduated = (card.repetition || 0) >= 1;
 
-    if (quality >= 3) {
-      if (card.repetition === 0) {
-        if (quality === QUALITY.HARD) {
-          interval = 1;
-        } else if (quality === QUALITY.GOOD) {
-          interval = 2;
-        } else {
-          interval = 4;
-        }
-      } else if (card.repetition === 1) {
-        interval = 6;
-      } else {
-        interval = Math.round(card.interval * easeFactor);
+    // ── Quick helper: format minutes or days ──
+    function _label(minutes, days) {
+      if (minutes !== null) {
+        if (minutes < 60) return `< ${minutes}m`;
+        const hrs = Math.round(minutes / 60);
+        return `< ${hrs}h`;
       }
-    } else {
-      interval = 1;
+      return _formatInterval(days);
     }
 
-    return _formatInterval(interval);
+    if (quality === QUALITY.HARD) {
+      if (!isGraduated) {
+        // Learning: advance 1 step (min clamp at step 1)
+        const targetStep = Math.min(Math.max(learningStep + 1, 1), steps.length - 1);
+        return _label(steps[targetStep], null);
+      } else {
+        // Graduated: interval × 1.2
+        const raw = Math.round((card.interval || 1) * 1.2);
+        return _formatInterval(Math.min(raw, cfg.maxInterval));
+      }
+    }
+
+    if (quality === QUALITY.GOOD) {
+      if (!isGraduated) {
+        if (learningStep >= steps.length - 1) {
+          // Already at final step → will graduate
+          return _formatInterval(Math.min(cfg.graduatingInterval, cfg.maxInterval));
+        } else {
+          // Jump to step 2 (the final learning step) — show its minutes
+          return _label(steps[steps.length - 1], null);
+        }
+      } else {
+        // Graduated: interval × multiplier
+        const raw = Math.round((card.interval || 1) * cfg.multiplier);
+        return _formatInterval(Math.min(raw, cfg.maxInterval));
+      }
+    }
+
+    if (quality === QUALITY.EASY) {
+      if (!isGraduated) {
+        // New card graduating via EASY: easyInterval
+        return _formatInterval(Math.min(cfg.easyInterval, cfg.maxInterval));
+      } else {
+        // Graduated: interval × multiplier × 1.3
+        const raw = Math.round((card.interval || 1) * cfg.multiplier * 1.3);
+        return _formatInterval(Math.min(raw, cfg.maxInterval));
+      }
+    }
+
+    return '1d';
   }
 
   /**
@@ -1526,7 +1857,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
         } else if (action === 'delete-deck') {
           _showDeckDeleteConfirm(deckId);
         } else if (action === 'rename-deck') {
-          _handleRenameDeck(deckId);
+          _showDeckSettingsModal(deckId);
         }
       });
     });
@@ -1620,13 +1951,14 @@ const prompt = buildAIPrompt(word, _aiSchema);
       if (cancelBtn) cancelBtn.addEventListener('click', _closeCreateDeckModal);
     }
 
-    // --- STEP 2: Deck Name ---
+    // --- STEP 2: Deck Name + Optional SRS Override ---
     function _renderNameStep() {
       var langLabel = _pickedLanguage === 'zh' ? '中文 / Mandarin' : 'English';
       var langEmoji = _pickedLanguage === 'zh' ? '🇨🇳' : '🇬🇧';
+      var srsCfg = { ..._srsConfig }; // start with global defaults as pre-fill
 
       overlay.innerHTML = `
-        <div class="hub-flashcard-lang-modal glass">
+        <div class="hub-flashcard-lang-modal glass" style="max-width:600px;">
           <div class="generate-modal-header">
             <div class="generate-modal-icon">
               <span style="font-size:1.8rem;">${langEmoji}</span>
@@ -1654,6 +1986,25 @@ const prompt = buildAIPrompt(word, _aiSchema);
             >
           </div>
 
+          <!-- ── Deck-Specific SRS Override Toggle ── -->
+          <div class="hub-deck-srs-section">
+            <div class="hub-deck-srs-toggle-row">
+              <label class="hub-deck-srs-switch">
+                <input type="checkbox" id="deck-srs-toggle">
+                <span class="hub-deck-srs-slider hub-deck-srs-slider--round"></span>
+              </label>
+              <span class="hub-deck-srs-toggle-label" data-i18n="fc.deckSrsOverrideToggle">${_('fc', 'deckSrsOverrideToggle')}</span>
+            </div>
+            <p class="hub-deck-srs-toggle-desc" data-i18n="fc.deckSrsOverrideDesc">${_('fc', 'deckSrsOverrideDesc')}</p>
+
+            <!-- Collapsible SRS fields (hidden when toggle OFF) -->
+            <div class="hub-deck-srs-fields" id="deck-srs-fields" style="display:none;">
+              ${_renderSRSConfigFields(srsCfg, 'deck-srs-')}
+              <p class="hub-deck-srs-active-hint hub-deck-srs-active-hint--on" data-i18n="fc.deckSrsOverrideOn">${_('fc', 'deckSrsOverrideOn')}</p>
+            </div>
+            <p class="hub-deck-srs-active-hint hub-deck-srs-active-hint--off" id="deck-srs-off-hint" data-i18n="fc.deckSrsOverrideOff">${_('fc', 'deckSrsOverrideOff')}</p>
+          </div>
+
           <div class="generate-status" id="create-deck-status"></div>
 
           <div class="generate-modal-footer">
@@ -1663,12 +2014,31 @@ const prompt = buildAIPrompt(word, _aiSchema);
         </div>
       `;
 
+      // --- Toggle: reveal/hide SRS fields ---
+      var srsToggle = overlay.querySelector('#deck-srs-toggle');
+      var srsFields = overlay.querySelector('#deck-srs-fields');
+      var srsOffHint = overlay.querySelector('#deck-srs-off-hint');
+      if (srsToggle && srsFields && srsOffHint) {
+        srsToggle.addEventListener('change', function () {
+          if (srsToggle.checked) {
+            srsFields.style.display = '';
+            srsOffHint.style.display = 'none';
+          } else {
+            srsFields.style.display = 'none';
+            srsOffHint.style.display = '';
+          }
+        });
+      }
+
+      // --- Live-sync pulled SRS fields to a temp config (stored on the overlay DOM for confirm to read) ---
+      _bindSRSFieldEvents('deck-srs-', function (cfg) {
+        overlay._deckSrsOverride = cfg;
+      });
+
       // Change language button (only show if not smart-creation)
       var changeBtn = overlay.querySelector('#btn-change-lang');
       if (changeBtn) {
         if (useActiveVault) {
-          // In smart-creation mode, hide the change button — user can still
-          // navigate back to vault and pick a different one
           changeBtn.style.display = 'none';
         } else {
           changeBtn.addEventListener('click', function (e) { e.stopPropagation(); _renderLanguageStep(); });
@@ -1693,7 +2063,12 @@ const prompt = buildAIPrompt(word, _aiSchema);
             }
             return;
           }
-          _createDeck(title, _pickedLanguage);
+          var srsOverride = null;
+          var toggleEl = document.getElementById('deck-srs-toggle');
+          if (toggleEl && toggleEl.checked) {
+            srsOverride = overlay._deckSrsOverride || _readSRSConfigFromDOM('deck-srs-');
+          }
+          _createDeck(title, _pickedLanguage, srsOverride);
           _closeCreateDeckModal();
           _renderApp();
         });
@@ -1746,30 +2121,163 @@ const prompt = buildAIPrompt(word, _aiSchema);
     if (overlay) overlay.remove();
   }
 
-  function _createDeck(title, language) {
+  function _createDeck(title, language, srsOverride) {
     const deck = {
       id: 'deck_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8),
       title: title,
       language: language || 'en',
       cards: []
     };
+    // Attach deck-specific SRS override if provided and valid
+    if (srsOverride && typeof srsOverride === 'object') {
+      deck.srs = _normalizeSRSConfig(srsOverride);
+    }
     _decks.push(deck);
     _saveDecks();
   }
 
+  /**
+   * Persist changes to a single deck (used by deck settings modal).
+   * @param {string} deckId
+   * @param {object} updates — keys to merge into the deck (e.g. { title, srs })
+   */
+  function _saveDeck(deckId, updates) {
+    var deck = _decks.find(function (d) { return d.id === deckId; });
+    if (!deck) return;
+    if (updates.title !== undefined) deck.title = updates.title;
+    if (updates.hasOwnProperty('srs')) {
+      if (updates.srs && typeof updates.srs === 'object') {
+        deck.srs = _normalizeSRSConfig(updates.srs);
+      } else {
+        delete deck.srs; // toggle OFF → remove override
+      }
+    }
+    _saveDecks();
+  }
+
   /* ==========================================================
-     RENAME DECK
+     DECK SETTINGS MODAL (Rename + SRS Override)
      ========================================================== */
 
-  function _handleRenameDeck(deckId) {
-    const deck = _decks.find(d => d.id === deckId);
+  function _showDeckSettingsModal(deckId) {
+    if (document.getElementById('deck-settings-overlay')) return;
+
+    var deck = _decks.find(function (d) { return d.id === deckId; });
     if (!deck) return;
-    const newName = prompt('Enter new name for this deck:', deck.title);
-    if (!newName || newName.trim() === '') return;
-    if (newName.trim() === deck.title) return;
-    deck.title = newName.trim();
-    _saveDecks();
-    _renderApp();
+    var hasSrsOverride = !!(deck.srs && typeof deck.srs === 'object');
+    var srsCfg = hasSrsOverride ? { ..._normalizeSRSConfig(deck.srs) } : { ..._srsConfig };
+
+    var overlay = document.createElement('div');
+    overlay.id = 'deck-settings-overlay';
+    overlay.className = 'add-card-overlay';
+
+    overlay.innerHTML = `
+      <div class="hub-flashcard-lang-modal glass" style="max-width:580px;">
+        <div class="generate-modal-header">
+          <div class="generate-modal-icon">
+            <span style="font-size:1.6rem;">⚙️</span>
+          </div>
+          <h3 class="generate-modal-title" data-i18n="fc.deckSettings">${_('fc', 'deckSettings')}</h3>
+          <p class="generate-modal-subtitle">"${_esc(deck.title)}" &middot; ${deck.cards.length} ${_('fc', 'totalCardsLabel').toLowerCase()}</p>
+        </div>
+
+        <!-- Rename -->
+        <div class="generate-input-row" style="flex-direction:column;">
+          <label class="hub-srs-label" data-i18n="fc.renameDeck" style="margin-bottom:4px;">${_('fc', 'renameDeck')}</label>
+          <input type="text" id="deck-settings-title" class="generate-word-input" value="${_esc(deck.title)}" autocomplete="off">
+        </div>
+
+        <!-- SRS Override Toggle -->
+        <div class="hub-deck-srs-section">
+          <div class="hub-deck-srs-toggle-row">
+            <label class="hub-deck-srs-switch">
+              <input type="checkbox" id="deck-settings-srs-toggle" ${hasSrsOverride ? 'checked' : ''}>
+              <span class="hub-deck-srs-slider hub-deck-srs-slider--round"></span>
+            </label>
+            <span class="hub-deck-srs-toggle-label" data-i18n="fc.deckSrsOverrideToggle">${_('fc', 'deckSrsOverrideToggle')}</span>
+          </div>
+          <p class="hub-deck-srs-toggle-desc" data-i18n="fc.deckSrsOverrideDesc">${_('fc', 'deckSrsOverrideDesc')}</p>
+
+          <div class="hub-deck-srs-fields" id="deck-settings-srs-fields" style="${hasSrsOverride ? '' : 'display:none;'}">
+            ${_renderSRSConfigFields(srsCfg, 'deck-settings-srs-')}
+            <p class="hub-deck-srs-active-hint hub-deck-srs-active-hint--on" data-i18n="fc.deckSrsOverrideOn">${_('fc', 'deckSrsOverrideOn')}</p>
+          </div>
+          <p class="hub-deck-srs-active-hint hub-deck-srs-active-hint--off" id="deck-settings-srs-off-hint" style="${hasSrsOverride ? 'display:none;' : ''}" data-i18n="fc.deckSrsOverrideOff">${_('fc', 'deckSrsOverrideOff')}</p>
+        </div>
+
+        <div class="generate-status" id="deck-settings-status"></div>
+
+        <div class="generate-modal-footer">
+          <button class="btn btn-ghost" id="btn-deck-settings-cancel">${_('fc', 'cancelBtn')}</button>
+          <button class="btn btn-primary" id="btn-deck-settings-save">${_('fc', 'saveDeckBtn')}</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    // --- Toggle reveal/hide SRS fields ---
+    var srsToggle = overlay.querySelector('#deck-settings-srs-toggle');
+    var srsFields = overlay.querySelector('#deck-settings-srs-fields');
+    var srsOffHint = overlay.querySelector('#deck-settings-srs-off-hint');
+    if (srsToggle && srsFields && srsOffHint) {
+      srsToggle.addEventListener('change', function () {
+        if (srsToggle.checked) {
+          srsFields.style.display = '';
+          srsOffHint.style.display = 'none';
+        } else {
+          srsFields.style.display = 'none';
+          srsOffHint.style.display = '';
+        }
+      });
+    }
+
+    // --- Live-sync SRS field changes ---
+    _bindSRSFieldEvents('deck-settings-srs-', function (cfg) {
+      overlay._deckSrsOverride = cfg;
+    });
+
+    // --- Save button ---
+    var saveBtn = overlay.querySelector('#btn-deck-settings-save');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', function () {
+        var titleInput = document.getElementById('deck-settings-title');
+        var newTitle = titleInput ? titleInput.value.trim() : '';
+        if (!newTitle) {
+          var status = document.getElementById('deck-settings-status');
+          if (status) { status.className = 'generate-status status-error'; status.textContent = _('fc', 'enterDeckTitle'); }
+          return;
+        }
+        var updates = { title: newTitle };
+        var toggleEl = document.getElementById('deck-settings-srs-toggle');
+        if (toggleEl && toggleEl.checked) {
+          updates.srs = overlay._deckSrsOverride || _readSRSConfigFromDOM('deck-settings-srs-');
+        } else {
+          updates.srs = null; // explicitly remove override
+        }
+        _saveDeck(deckId, updates);
+        _closeDeckSettingsModal();
+        _renderApp();
+      });
+    }
+
+    // --- Cancel / close ---
+    var cancelBtn = overlay.querySelector('#btn-deck-settings-cancel');
+    if (cancelBtn) cancelBtn.addEventListener('click', _closeDeckSettingsModal);
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) _closeDeckSettingsModal(); });
+    var escHandler = function (e) { if (e.key === 'Escape') { _closeDeckSettingsModal(); document.removeEventListener('keydown', escHandler); } };
+    document.addEventListener('keydown', escHandler);
+
+    // Focus title input
+    setTimeout(function () {
+      var inp = overlay.querySelector('#deck-settings-title');
+      if (inp) inp.focus();
+    }, 150);
+  }
+
+  function _closeDeckSettingsModal() {
+    var overlay = document.getElementById('deck-settings-overlay');
+    if (overlay) overlay.remove();
   }
 
   /* ==========================================================
@@ -2034,7 +2542,8 @@ const prompt = buildAIPrompt(word, _aiSchema);
           <p class="srs-assessment-label">How well did you remember?</p>
           <div class="srs-assessment-row">
             ${SRS_BUTTONS.map(btn => {
-              const timeLabel = _getNextReviewLabel(btn.quality, card);
+              const deckSrs = deck && deck.srs ? deck.srs : null;
+              const timeLabel = _getNextReviewLabel(btn.quality, card, deckSrs);
               return `
                 <button class="srs-assessment-btn" data-quality="${btn.cssQuality}" data-label="${btn.label}">
                   <span class="srs-time-badge">${timeLabel}</span>
@@ -2274,8 +2783,9 @@ const prompt = buildAIPrompt(word, _aiSchema);
     const card = deck.cards[cardIdx];
     const isAgain = (quality === QUALITY.AGAIN);
 
-    // Apply SM-2 algorithm
-    const updated = calculateSRS(quality, card, isAgain);
+    // Apply SRS algorithm — use deck-level override if present
+    const deckSrs = deck.srs || null;
+    const updated = calculateSRS(quality, card, isAgain, deckSrs);
     deck.cards[cardIdx] = updated;
     _saveDecks();
 
@@ -3547,7 +4057,22 @@ const prompt = buildAIPrompt(word, _aiSchema);
     destroy,
     // Expose for cross-module access (dashboard greeting, sidebar i18n, etc.)
     applyLanguage: applyLanguage,
-    _getI18N: function () { return I18N; }
+    _getI18N: function () { return I18N; },
+    // Expose SRS config for the backup modal settings UI
+    getSRSConfig: function () { return { ..._srsConfig }; },
+    setSRSConfig: function (cfg) {
+      _srsConfig = _normalizeSRSConfig(cfg);
+      _saveAISettings();
+    },
+    // Expose systemLanguage for backup modal sync
+    getSystemLanguage: function () { return _systemLanguage; },
+    setSystemLanguage: function (lang) {
+      if (lang === 'en' || lang === 'vi') {
+        _systemLanguage = lang;
+        applyLanguage(lang);
+        _saveAISettings();
+      }
+    }
   };
 
 })();

@@ -4675,23 +4675,23 @@ mark.cyber-hl-pink:hover {
   transform: scale(0.95);
 }
 
-/* Quality-specific colors */
+/* Quality-specific colors (0=Again, 1=Hard, 2=Good, 3=Easy) */
 .srs-assessment-btn[data-quality="0"]:hover {
   border-color: rgba(255, 68, 102, 0.4);
   box-shadow: 0 4px 20px rgba(255, 68, 102, 0.12);
 }
 
-.srs-assessment-btn[data-quality="3"]:hover {
+.srs-assessment-btn[data-quality="1"]:hover {
   border-color: rgba(255, 146, 43, 0.4);
   box-shadow: 0 4px 20px rgba(255, 146, 43, 0.12);
 }
 
-.srs-assessment-btn[data-quality="4"]:hover {
+.srs-assessment-btn[data-quality="2"]:hover {
   border-color: rgba(68, 255, 136, 0.4);
   box-shadow: 0 4px 20px rgba(68, 255, 136, 0.12);
 }
 
-.srs-assessment-btn[data-quality="5"]:hover {
+.srs-assessment-btn[data-quality="3"]:hover {
   border-color: rgba(0, 240, 255, 0.5);
   box-shadow: 0 4px 24px rgba(0, 240, 255, 0.18);
 }
@@ -4707,9 +4707,9 @@ mark.cyber-hl-pink:hover {
 }
 
 .srs-assessment-btn[data-quality="0"]:hover .srs-time-badge { color: var(--danger); }
-.srs-assessment-btn[data-quality="3"]:hover .srs-time-badge { color: #ff922b; }
-.srs-assessment-btn[data-quality="4"]:hover .srs-time-badge { color: var(--success); }
-.srs-assessment-btn[data-quality="5"]:hover .srs-time-badge { color: var(--accent-primary); }
+.srs-assessment-btn[data-quality="1"]:hover .srs-time-badge { color: #ff922b; }
+.srs-assessment-btn[data-quality="2"]:hover .srs-time-badge { color: var(--success); }
+.srs-assessment-btn[data-quality="3"]:hover .srs-time-badge { color: var(--accent-primary); }
 
 /* Button label */
 .srs-btn-label {
@@ -4723,9 +4723,9 @@ mark.cyber-hl-pink:hover {
 }
 
 .srs-assessment-btn[data-quality="0"]:hover .srs-btn-label { color: var(--danger); }
-.srs-assessment-btn[data-quality="3"]:hover .srs-btn-label { color: #ff922b; }
-.srs-assessment-btn[data-quality="4"]:hover .srs-btn-label { color: var(--success); }
-.srs-assessment-btn[data-quality="5"]:hover .srs-btn-label { color: var(--accent-primary); }
+.srs-assessment-btn[data-quality="1"]:hover .srs-btn-label { color: #ff922b; }
+.srs-assessment-btn[data-quality="2"]:hover .srs-btn-label { color: var(--success); }
+.srs-assessment-btn[data-quality="3"]:hover .srs-btn-label { color: var(--accent-primary); }
 
 /* ----------------------------------------------------------
    SRS COMPLETION SCREEN
@@ -9699,6 +9699,417 @@ mark.cyber-hl-pink:hover {
 .hub-flashcard-ai-status-error {
   color: var(--danger);
   text-shadow: 0 0 8px rgba(255, 68, 102, 0.3);
+}
+
+/* ── SRS Configuration inside AI Settings Modal ── */
+
+.hub-flashcard-ai-section--srs {
+  border-bottom: 1px solid var(--glass-border);
+  padding-bottom: var(--space-md);
+}
+
+.hub-flashcard-ai-section-desc {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  margin: -2px 0 14px 0;
+  letter-spacing: 0.02em;
+}
+
+.hub-srs-config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 14px;
+  margin-bottom: 4px;
+}
+
+.hub-srs-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hub-srs-label {
+  font-family: var(--font-mono);
+  font-size: 0.61rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.hub-srs-input {
+  padding: 8px 12px;
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  outline: none;
+  transition: all 0.28s var(--ease-out-expo);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.hub-srs-input:focus {
+  border-color: rgba(0, 243, 255, 0.45);
+  background: rgba(0, 243, 255, 0.06);
+  box-shadow:
+    0 0 12px rgba(0, 243, 255, 0.12),
+    inset 0 0 6px rgba(0, 243, 255, 0.03);
+}
+
+.hub-srs-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.hub-srs-hint {
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+  opacity: 0.7;
+}
+
+/* Hide number input spinners */
+.hub-srs-input[type="number"]::-webkit-inner-spin-button,
+.hub-srs-input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.hub-srs-input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* ── SRS Algorithm Best Practices Accordion ── */
+
+.hub-srs-accordion {
+  margin-top: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.015);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.hub-srs-accordion[open] {
+  border-color: rgba(0, 243, 255, 0.18);
+  background: rgba(0, 243, 255, 0.025);
+  box-shadow: 0 0 14px rgba(0, 243, 255, 0.06);
+}
+
+.hub-srs-accordion-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  transition: background 0.2s ease;
+}
+.hub-srs-accordion-summary::-webkit-details-marker { display: none; }
+.hub-srs-accordion-summary::marker { display: none; content: none; }
+
+.hub-srs-accordion-summary:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.hub-srs-accordion-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.hub-srs-accordion-title {
+  font-family: var(--font-display);
+  font-size: 0.71rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.03em;
+  flex: 1;
+}
+
+.hub-srs-accordion-chevron {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: transform 0.3s ease;
+}
+.hub-srs-accordion[open] .hub-srs-accordion-chevron {
+  transform: rotate(180deg);
+  color: var(--accent-primary);
+}
+
+.hub-srs-accordion-content {
+  padding: 4px 16px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hub-srs-guide-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.hub-srs-guide-bullet {
+  width: 6px;
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  opacity: 0.6;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px rgba(0, 243, 255, 0.3);
+}
+
+.hub-srs-guide-text {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  letter-spacing: 0.01em;
+}
+
+/* ── Deck-Specific SRS Override (Create/Edit Deck Modals) ── */
+
+.hub-deck-srs-section {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.015);
+  transition: border-color 0.3s ease;
+}
+
+.hub-deck-srs-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.hub-deck-srs-toggle-label {
+  font-family: var(--font-display);
+  font-size: 0.71rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.hub-deck-srs-toggle-desc {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
+  line-height: 1.4;
+  margin: 2px 0 12px 0;
+  opacity: 0.75;
+}
+
+/* ── Cyberpunk toggle switch ── */
+.hub-deck-srs-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.hub-deck-srs-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.hub-deck-srs-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  transition: all 0.28s var(--ease-out-expo);
+}
+
+.hub-deck-srs-slider::before {
+  content: '';
+  position: absolute;
+  height: 18px;
+  width: 18px;
+  left: 2px;
+  bottom: 2px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  transition: all 0.28s var(--ease-out-expo);
+}
+
+.hub-deck-srs-switch input:checked + .hub-deck-srs-slider {
+  background: rgba(0, 243, 255, 0.18);
+  border-color: rgba(0, 243, 255, 0.45);
+  box-shadow: 0 0 12px rgba(0, 243, 255, 0.15);
+}
+
+.hub-deck-srs-switch input:checked + .hub-deck-srs-slider::before {
+  transform: translateX(20px);
+  background: var(--accent-primary);
+  box-shadow: 0 0 8px rgba(0, 243, 255, 0.4);
+}
+
+/* SRS fields container inside deck modal */
+.hub-deck-srs-fields {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.hub-deck-srs-active-hint {
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.02em;
+  margin: 8px 0 0 0;
+  line-height: 1.3;
+}
+
+.hub-deck-srs-active-hint--on {
+  color: var(--accent-primary);
+  opacity: 0.8;
+}
+
+.hub-deck-srs-active-hint--off {
+  color: var(--text-muted);
+  opacity: 0.55;
+}
+
+/* ── Solar Zen overrides for SRS inputs ── */
+[data-theme="solar-zen"] .hub-srs-input {
+  border-color: rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, 0.02);
+  color: var(--text-primary);
+}
+[data-theme="solar-zen"] .hub-srs-input:focus {
+  border-color: rgba(0, 140, 200, 0.5);
+  background: rgba(0, 140, 200, 0.05);
+  box-shadow: 0 0 10px rgba(0, 140, 200, 0.1);
+}
+[data-theme="solar-zen"] .hub-srs-accordion {
+  border-color: rgba(0, 0, 0, 0.08);
+}
+[data-theme="solar-zen"] .hub-srs-accordion[open] {
+  border-color: rgba(0, 140, 200, 0.25);
+  background: rgba(0, 140, 200, 0.04);
+}
+[data-theme="solar-zen"] .hub-srs-guide-bullet {
+  background: #008cc8;
+  box-shadow: 0 0 6px rgba(0, 140, 200, 0.3);
+}
+
+[data-theme="solar-zen"] .hub-deck-srs-section {
+  border-color: rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.015);
+}
+[data-theme="solar-zen"] .hub-deck-srs-slider {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+[data-theme="solar-zen"] .hub-deck-srs-slider::before {
+  background: rgba(0, 0, 0, 0.35);
+}
+[data-theme="solar-zen"] .hub-deck-srs-switch input:checked + .hub-deck-srs-slider {
+  background: rgba(79, 70, 229, 0.12);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 12px rgba(79, 70, 229, 0.12);
+}
+[data-theme="solar-zen"] .hub-deck-srs-switch input:checked + .hub-deck-srs-slider::before {
+  background: var(--accent-primary);
+  box-shadow: 0 0 8px rgba(79, 70, 229, 0.3);
+}
+[data-theme="solar-zen"] .hub-deck-srs-active-hint--on { color: var(--accent-primary); }
+[data-theme="solar-zen"] .hub-deck-srs-fields {
+  border-top-color: rgba(0, 0, 0, 0.06);
+}
+
+/* ── Lo-Fi Twilight overrides for SRS inputs ── */
+[data-theme="lofi-twilight"] .hub-srs-input {
+  border-color: rgba(180, 160, 220, 0.15);
+  background: rgba(180, 160, 220, 0.04);
+}
+[data-theme="lofi-twilight"] .hub-srs-input:focus {
+  border-color: rgba(180, 160, 220, 0.45);
+  box-shadow: 0 0 12px rgba(180, 160, 220, 0.12);
+}
+[data-theme="lofi-twilight"] .hub-srs-accordion {
+  border-color: rgba(180, 160, 220, 0.1);
+}
+[data-theme="lofi-twilight"] .hub-srs-accordion[open] {
+  border-color: rgba(180, 160, 220, 0.25);
+  background: rgba(180, 160, 220, 0.03);
+  box-shadow: 0 0 14px rgba(180, 160, 220, 0.08);
+}
+[data-theme="lofi-twilight"] .hub-srs-guide-bullet {
+  background: #b4a0dc;
+  box-shadow: 0 0 6px rgba(180, 160, 220, 0.3);
+}
+
+[data-theme="lofi-twilight"] .hub-deck-srs-section {
+  border-color: rgba(180, 160, 220, 0.1);
+  background: rgba(180, 160, 220, 0.02);
+}
+[data-theme="lofi-twilight"] .hub-deck-srs-slider {
+  background: rgba(180, 160, 220, 0.08);
+  border-color: rgba(180, 160, 220, 0.15);
+}
+[data-theme="lofi-twilight"] .hub-deck-srs-slider::before {
+  background: rgba(200, 190, 230, 0.45);
+}
+[data-theme="lofi-twilight"] .hub-deck-srs-switch input:checked + .hub-deck-srs-slider {
+  background: rgba(180, 160, 220, 0.15);
+  border-color: rgba(180, 160, 220, 0.45);
+  box-shadow: 0 0 14px rgba(180, 160, 220, 0.15);
+}
+[data-theme="lofi-twilight"] .hub-deck-srs-switch input:checked + .hub-deck-srs-slider::before {
+  background: #b4a0dc;
+  box-shadow: 0 0 10px rgba(180, 160, 220, 0.35);
+}
+[data-theme="lofi-twilight"] .hub-deck-srs-active-hint--on { color: #b4a0dc; }
+[data-theme="lofi-twilight"] .hub-deck-srs-fields {
+  border-top-color: rgba(180, 160, 220, 0.08);
+}
+
+/* ── Mobile tweaks for SRS config inside AI modal ── */
+@media (max-width: 500px) {
+  .hub-srs-config-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .hub-srs-input {
+    font-size: 0.71rem;
+    padding: 7px 10px;
+  }
+
+  .hub-srs-accordion-title {
+    font-size: 0.64rem;
+  }
+
+  .hub-srs-guide-text {
+    font-size: 0.56rem;
+  }
+
+  .hub-deck-srs-section {
+    padding: 10px 12px;
+  }
+
+  .hub-deck-srs-toggle-label {
+    font-size: 0.64rem;
+  }
 }
 
 /* Light mode overrides for AI modal */
