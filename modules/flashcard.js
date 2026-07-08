@@ -61,8 +61,9 @@ const flashcardModule = (function () {
   let _mode           = 'library';  // 'library' | 'study' | 'browse'
   let _studyQueue     = [];         // Array of card indices for current study session
   let _sessionStats   = null;       // { reviewed: 0, correct: 0, hard: 0, again: 0, started: timestamp }
-  let _cardFlipped    = false;      // Whether the card is flipped in study mode
-  let _studyLocked    = false;      // Prevents double-click ghost advances during SRS assessment
+  let _cardFlipped     = false;      // Whether the card is flipped in study mode
+  let _studyLocked     = false;      // Prevents double-click ghost advances during SRS assessment
+  let _isProcessing    = false;      // HARD LOCK: prevents any action during state transitions
 
   // --- AI Settings state ---
   let _aiSchema       = [];
@@ -392,6 +393,8 @@ const flashcardModule = (function () {
     _studyQueue = [];
     _sessionStats = null;
     _cardFlipped = false;
+    _isProcessing = false;
+    _studyLocked = false;
     _renderApp();
   }
 
@@ -401,7 +404,21 @@ const flashcardModule = (function () {
     _cardFlipped = false;
     _mode = 'library';
     _activeDeckId = null;
+    _isProcessing = false;
+    _studyLocked = false;
+
+    // Clean up container-level delegated click handlers (THE PRIMARY LEAK)
+    if (window._hubFlashcardStudyClickHandler && _container) {
+      _container.removeEventListener('click', window._hubFlashcardStudyClickHandler);
+      delete window._hubFlashcardStudyClickHandler;
+    }
+    if (window._hubFlashcardBrowseClickHandler && _container) {
+      _container.removeEventListener('click', window._hubFlashcardBrowseClickHandler);
+      delete window._hubFlashcardBrowseClickHandler;
+    }
+
     _container = null;
+
     // Clean up all global keyboard listeners to prevent leak/accumulation
     if (window._hubFlashcardBrowseKeyHandler) {
       document.removeEventListener('keydown', window._hubFlashcardBrowseKeyHandler);
@@ -2789,6 +2806,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
     _mode = 'study';
     _cardFlipped = false;
     _studyLocked = false;
+    _isProcessing = false;
     _renderStudySession();
   }
 
@@ -2898,151 +2916,210 @@ const prompt = buildAIPrompt(word, _aiSchema);
       const panel = _container.querySelector('#srs-assessment-panel');
       if (panel) {
         // Small delay for the flip animation to start
-        setTimeout(() => panel.classList.add('revealed'), 150);
+        setTimeout(() => { if (panel) panel.classList.add('revealed'); }, 150);
       }
     }
 
+    // ── CRITICAL: bind events AFTER DOM is ready ──
+    // This MUST happen after innerHTML replaces the DOM tree.
     _bindStudyEvents(cardIdx);
+
+    // ── RELEASE THE HARD LOCK: only after the DOM is fully rendered
+    //    and events are bound. This prevents any action from firing
+    //    during the render window.
+    _isProcessing = false;
+    _studyLocked = false;
+    _disableAllStudyButtons(false);
   }
 
   /* ==========================================================
      BIND STUDY SESSION EVENTS
+     ── CRITICAL ARCHITECTURE (Memory Leak Prevention) ──
+
+     1. GLOBAL HANDLERS (document-level): stored on window.* globals
+        and ALWAYS cleaned up before re-attaching. Every call to
+        _bindStudyEvents first REMOVES the old handler, then adds
+        the new one. No accumulation.
+
+     2. CONTAINER-LEVEL DELEGATION (_container click): stored in
+        a module-scoped variable _studyClickDelegateHandler.
+        Removed before re-attaching. This was THE primary leak —
+        _container persists across renders, and every _bindStudyEvents
+        call was adding a NEW listener without removing the old one.
+
+     3. DOM-ELEMENT HANDLERS (card-3d, cloze-input, buttons): these
+        are destroyed when _container.innerHTML is replaced, so they
+        don't accumulate. But to be safe, we don't store references
+        to stale elements.
+
+     4. HARD LOCK (_isProcessing): every actionable handler checks
+        _isProcessing on its VERY FIRST LINE and returns if true.
+        This prevents any handler from firing during state transitions
+        or while the next card is rendering.
      ========================================================== */
 
   function _bindStudyEvents(cardIdx) {
     if (!_container) return;
+
+    // ─────────────────────────────────────────────
+    // STEP 0: CLEAN UP ALL PREVIOUS LISTENERS
+    // This is the fix for the exponential counter bug.
+    // Without this, each render adds N more handlers
+    // and after K renders you get K× handlers firing.
+    // ─────────────────────────────────────────────
+
+    // 0a. Remove container-level delegated click handler (THE PRIMARY LEAK)
+    if (window._hubFlashcardStudyClickHandler) {
+      _container.removeEventListener('click', window._hubFlashcardStudyClickHandler);
+      delete window._hubFlashcardStudyClickHandler;
+    }
+
+    // 0b. Remove document-level keyboard handlers
+    if (window._hubFlashcardSpaceHandler) {
+      document.removeEventListener('keydown', window._hubFlashcardSpaceHandler);
+      delete window._hubFlashcardSpaceHandler;
+    }
+    if (window._hubFlashcardNumberHandler) {
+      document.removeEventListener('keydown', window._hubFlashcardNumberHandler);
+      delete window._hubFlashcardNumberHandler;
+    }
+
+    // ─────────────────────────────────────────────
+    // STEP 1: Query fresh DOM elements
+    // (These are brand-new after innerHTML replacement)
+    // ─────────────────────────────────────────────
 
     const card3d = _container.querySelector('#card-3d');
     const panel = _container.querySelector('#srs-assessment-panel');
     const clozeInput = _container.querySelector('#cloze-input');
     const isCloze = !!clozeInput;
 
-    if (card3d && panel) {
+    if (!card3d || !panel) return;
 
-      if (isCloze) {
-        // --- Cloze mode: lock normal flip ---
+    if (isCloze) {
+      // ═══════════════════════════════════════════
+      // CLOZE MODE
+      // ═══════════════════════════════════════════
 
-        // Prevent click-to-flip on the card (cloze input captures clicks)
-        card3d.addEventListener('click', (e) => {
-          if (!_cardFlipped && e.target !== clozeInput) {
-            clozeInput.focus();
-          }
-        });
+      // Shared flip helper
+      const _doFlip = () => {
+        if (_cardFlipped || _studyLocked || _isProcessing) return;
+        _cardFlipped = true;
+        card3d.classList.add('flipped');
+        setTimeout(() => { if (panel) panel.classList.add('revealed'); }, 150);
+      };
 
-        // Prevent spacebar flip when cloze input is focused
-        // Clean up any previous handlers to prevent accumulation
-        if (window._hubFlashcardSpaceHandler) {
-          document.removeEventListener('keydown', window._hubFlashcardSpaceHandler);
+      // Cloze card click → focus input (do NOT flip)
+      card3d.addEventListener('click', (e) => {
+        if (_isProcessing) return;
+        if (!_cardFlipped && e.target !== clozeInput) {
+          clozeInput.focus();
         }
-        const spaceHandler = (e) => {
-          if ((e.key === ' ' || e.key === 'Spacebar') && !_cardFlipped) {
-            // Always allow typing in any input or textarea (including overlays/modals)
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-            if (e.target === clozeInput) return;
-            e.preventDefault();
-            clozeInput.focus();
-          }
-        };
-        document.addEventListener('keydown', spaceHandler);
-        window._hubFlashcardSpaceHandler = spaceHandler;
+      });
 
-        // --- Cloze: flip helper ---
-        const _doFlip = () => {
-          if (_cardFlipped || _studyLocked) return;
-          _cardFlipped = true;
-          card3d.classList.add('flipped');
-          setTimeout(() => panel.classList.add('revealed'), 150);
-        };
-
-        // --- Cloze: Check answer ---
-        const _checkCloze = () => {
-          if (_cardFlipped || _studyLocked) return;
-          const cards = _getActiveCards();
-          const card = cards[cardIdx];
-          const userAnswer = _normalizeStr(clozeInput.value);
-          const correctAnswer = _normalizeStr(card.term);
-          const feedback = _container.querySelector('#cloze-feedback');
-
-          if (userAnswer === correctAnswer) {
-            if (feedback) {
-              feedback.textContent = 'Correct!';
-              feedback.className = 'cloze-feedback-correct';
-            }
-            setTimeout(() => {
-              _doFlip();
-            }, 400);
-          } else {
-            if (feedback) {
-              feedback.textContent = 'Incorrect, try again!';
-              feedback.className = 'cloze-feedback-incorrect';
-            }
-            clozeInput.value = '';
-            clozeInput.focus();
-          }
-        };
-
-        // Enter key on input
-        clozeInput.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            _checkCloze();
-          }
-        });
-
-        // Check button
-        const checkBtn = _container.querySelector('#cloze-check-btn');
-        if (checkBtn) checkBtn.addEventListener('click', _checkCloze);
-
-        // Reveal button
-        const revealBtn = _container.querySelector('#cloze-reveal-btn');
-        if (revealBtn) {
-          revealBtn.addEventListener('click', () => {
-            if (_cardFlipped) return;
-            const feedback = _container.querySelector('#cloze-feedback');
-            if (feedback) {
-              feedback.textContent = 'Revealed';
-              feedback.className = 'cloze-feedback-incorrect';
-            }
-            _doFlip();
-          });
+      // Spacebar → focus input
+      const spaceHandler = (e) => {
+        if (_isProcessing) return;
+        if ((e.key === ' ' || e.key === 'Spacebar') && !_cardFlipped) {
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+          if (e.target === clozeInput) return;
+          e.preventDefault();
+          clozeInput.focus();
         }
+      };
+      document.addEventListener('keydown', spaceHandler);
+      window._hubFlashcardSpaceHandler = spaceHandler;
 
-        // Focus input after render
-        setTimeout(() => clozeInput.focus(), 200);
+      // Check answer helper
+      const _checkCloze = () => {
+        if (_cardFlipped || _studyLocked || _isProcessing) return;
+        const cards = _getActiveCards();
+        const card = cards[cardIdx];
+        const userAnswer = _normalizeStr(clozeInput.value);
+        const correctAnswer = _normalizeStr(card.term);
+        const feedback = _container.querySelector('#cloze-feedback');
 
-      } else {
-        // --- Normal mode: click/space to flip ---
+        if (userAnswer === correctAnswer) {
+          if (feedback) {
+            feedback.textContent = 'Correct!';
+            feedback.className = 'cloze-feedback-correct';
+          }
+          setTimeout(() => { _doFlip(); }, 400);
+        } else {
+          if (feedback) {
+            feedback.textContent = 'Incorrect, try again!';
+            feedback.className = 'cloze-feedback-incorrect';
+          }
+          clozeInput.value = '';
+          clozeInput.focus();
+        }
+      };
 
-        card3d.addEventListener('click', () => {
+      // Enter key on cloze input
+      clozeInput.addEventListener('keydown', (e) => {
+        if (_isProcessing) return;
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          _checkCloze();
+        }
+      });
+
+      // Check button
+      const checkBtn = _container.querySelector('#cloze-check-btn');
+      if (checkBtn) checkBtn.addEventListener('click', () => {
+        if (_isProcessing) return;
+        _checkCloze();
+      });
+
+      // Reveal button
+      const revealBtn = _container.querySelector('#cloze-reveal-btn');
+      if (revealBtn) revealBtn.addEventListener('click', () => {
+        if (_isProcessing || _cardFlipped) return;
+        const feedback = _container.querySelector('#cloze-feedback');
+        if (feedback) {
+          feedback.textContent = 'Revealed';
+          feedback.className = 'cloze-feedback-incorrect';
+        }
+        _doFlip();
+      });
+
+      // Focus input after render
+      setTimeout(() => { if (clozeInput) clozeInput.focus(); }, 200);
+
+    } else {
+      // ═══════════════════════════════════════════
+      // NORMAL MODE (click/space to flip)
+      // ═══════════════════════════════════════════
+
+      card3d.addEventListener('click', () => {
+        if (_isProcessing || _cardFlipped || _studyLocked) return;
+        _cardFlipped = true;
+        card3d.classList.add('flipped');
+        setTimeout(() => { if (panel) panel.classList.add('revealed'); }, 150);
+      });
+
+      const spaceHandler = (e) => {
+        if (_isProcessing) return;
+        if (e.key === ' ' || e.key === 'Spacebar') {
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+          e.preventDefault();
           if (!_cardFlipped && !_studyLocked) {
             _cardFlipped = true;
             card3d.classList.add('flipped');
-            setTimeout(() => panel.classList.add('revealed'), 150);
+            setTimeout(() => { if (panel) panel.classList.add('revealed'); }, 150);
           }
-        });
-
-        // Clean up any previous study space handler to prevent accumulation
-        if (window._hubFlashcardSpaceHandler) {
-          document.removeEventListener('keydown', window._hubFlashcardSpaceHandler);
         }
-        const spaceHandler = (e) => {
-          if (e.key === ' ' || e.key === 'Spacebar') {
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-            e.preventDefault();
-            if (!_cardFlipped && !_studyLocked) {
-              _cardFlipped = true;
-              card3d.classList.add('flipped');
-              setTimeout(() => panel.classList.add('revealed'), 150);
-            }
-          }
-        };
-        document.addEventListener('keydown', spaceHandler);
-        window._hubFlashcardSpaceHandler = spaceHandler;
-      }
+      };
+      document.addEventListener('keydown', spaceHandler);
+      window._hubFlashcardSpaceHandler = spaceHandler;
     }
 
-    // Assessment buttons — also allow number keys 1-4
+    // ═══════════════════════════════════════════
+    // NUMBER KEYS 1-4 → rate card (document-level)
+    // Cleaned up above, re-attached here.
+    // ═══════════════════════════════════════════
     const numberHandler = (e) => {
+      if (_isProcessing) return;                         // HARD LOCK
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       if (!_cardFlipped || _studyLocked) return;
       const keyMap = { '1': QUALITY.AGAIN, '2': QUALITY.HARD, '3': QUALITY.GOOD, '4': QUALITY.EASY };
@@ -3055,23 +3132,30 @@ const prompt = buildAIPrompt(word, _aiSchema);
     document.addEventListener('keydown', numberHandler);
     window._hubFlashcardNumberHandler = numberHandler;
 
-    // Assessment button clicks (delegated)
-    _container.addEventListener('click', function (e) {
-      if (_studyLocked) return;
+    // ═══════════════════════════════════════════
+    // ASSESSMENT BUTTON CLICKS — delegated on _container
+    // ═══════════════════════════════════════════
+    const studyClickHandler = function (e) {
+      if (_isProcessing || _studyLocked) return;        // HARD LOCK — first line
       var btn = e.target.closest('.srs-assessment-btn');
       if (!btn) return;
       var quality = parseInt(btn.dataset.quality, 10);
+      if (isNaN(quality)) return;
       _handleAssessment(quality, cardIdx);
-    });
+    };
+    _container.addEventListener('click', studyClickHandler);
+    window._hubFlashcardStudyClickHandler = studyClickHandler;  // store for cleanup
 
     // End session button
     const btnEnd = _container.querySelector('#btn-end-session');
     if (btnEnd) {
       btnEnd.addEventListener('click', () => {
+        if (_isProcessing) return;
         _studyQueue = [];
         _mode = 'library';
         _activeDeckId = null;
         _cardFlipped = false;
+        _isProcessing = false;
         _renderApp();
       });
     }
@@ -3080,6 +3164,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
     if (_container) {
       _container.querySelectorAll('.hub-flashcard-speaker-btn').forEach(function (btn) {
         btn.addEventListener('click', function (e) {
+          if (_isProcessing) return;
           e.stopPropagation();
           var term = btn.dataset.speakerTerm;
           if (term) {
@@ -3125,16 +3210,37 @@ const prompt = buildAIPrompt(word, _aiSchema);
 
   function _handleAssessment(quality, cardIdx) {
     if (!_container) return;
-    if (_studyLocked) return; // Prevent double-click ghost advances
 
-    const deck = _getActiveDeck();
-    if (!deck) return;
-
-    // LOCK: disable all action buttons until the next card is rendered
+    // ═══════════════════════════════════════════════════
+    // HARD LOCK — FIRST LINE CHECK
+    // This prevents ANY handler from entering while we
+    // are already processing a rating or rendering.
+    // Without this, a single click could fire N stacked
+    // handlers before _studyLocked was set to true.
+    // ═══════════════════════════════════════════════════
+    if (_isProcessing || _studyLocked) return;
+    _isProcessing = true;
     _studyLocked = true;
     _disableAllStudyButtons(true);
 
+    const deck = _getActiveDeck();
+    if (!deck) {
+      _isProcessing = false;
+      _studyLocked = false;
+      _disableAllStudyButtons(false);
+      return;
+    }
+
+    // Guard: make sure the queue still has this card
+    if (_studyQueue.length === 0 || _studyQueue[0] !== cardIdx) {
+      _isProcessing = false;
+      _studyLocked = false;
+      _disableAllStudyButtons(false);
+      return;
+    }
+
     // Remove the current card from the front of the queue
+    // EXACTLY ONE card is removed per assessment.
     _studyQueue.shift();
 
     const card = deck.cards[cardIdx];
@@ -3146,7 +3252,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
     deck.cards[cardIdx] = updated;
     _saveDecks();
 
-    // Track stats
+    // Track stats — incremented ONCE per assessment
     if (_sessionStats) {
       _sessionStats.reviewed++;
       if (isAgain) _sessionStats.again++;
@@ -3154,7 +3260,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
       else _sessionStats.correct++;
     }
 
-    // If "Again", re-add to the end of the queue
+    // If "Again", re-add to the end of the queue for additional practice
     if (isAgain) {
       _studyQueue.push(cardIdx);
     }
@@ -3162,12 +3268,22 @@ const prompt = buildAIPrompt(word, _aiSchema);
     // Update reviewed count in dashboard
     _incrementReviewed();
 
-    // Reset flip state and render next card
+    // Reset flip state BEFORE rendering next card
     _cardFlipped = false;
-    _studyLocked = false;
+
+    // ═══════════════════════════════════════════════════
+    // IMPORTANT: DO NOT unlock _studyLocked or _isProcessing here.
+    // They are unlocked INSIDE _renderStudySession() AFTER the
+    // DOM has been fully rebuilt and events have been re-bound.
+    // Unlocking before render is what caused the ghost-click
+    // avalanche — handlers fired on DOM that wasn't ready yet.
+    // ═══════════════════════════════════════════════════
 
     if (_studyQueue.length === 0) {
-      // Session complete
+      // Session complete — unlock here since we're not re-rendering study
+      _isProcessing = false;
+      _studyLocked = false;
+      _disableAllStudyButtons(false);
       _renderCompletionScreen();
     } else {
       _renderStudySession();
@@ -3502,6 +3618,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
     // Keyboard nav — clean up any previous listener to prevent accumulation
     if (window._hubFlashcardBrowseKeyHandler) {
       document.removeEventListener('keydown', window._hubFlashcardBrowseKeyHandler);
+      delete window._hubFlashcardBrowseKeyHandler;
     }
     const keyHandler = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -3523,13 +3640,23 @@ const prompt = buildAIPrompt(word, _aiSchema);
     document.addEventListener('keydown', keyHandler);
     window._hubFlashcardBrowseKeyHandler = keyHandler;
 
-    // Dot indicators (click to jump, delegated)
-    _container.addEventListener('click', function (e) {
+    // ── Dot indicators (click to jump, delegated on _container) ──
+    // CRITICAL: clean up the previous delegated click handler BEFORE
+    // attaching a new one. _renderBrowseMode() calls itself recursively
+    // on arrow-key nav, so without cleanup each re-render stacks another
+    // handler and a single dot click fires N times.
+    if (window._hubFlashcardBrowseClickHandler) {
+      _container.removeEventListener('click', window._hubFlashcardBrowseClickHandler);
+      delete window._hubFlashcardBrowseClickHandler;
+    }
+    const browseClickHandler = function (e) {
       var dot = e.target.closest('.deck-dot');
       if (!dot) return;
       _currentIndex = parseInt(dot.dataset.index, 10);
       _renderBrowseMode();
-    });
+    };
+    _container.addEventListener('click', browseClickHandler);
+    window._hubFlashcardBrowseClickHandler = browseClickHandler;
 
     // Delete card
     const btnDelete = _container.querySelector('#btn-delete-card');
