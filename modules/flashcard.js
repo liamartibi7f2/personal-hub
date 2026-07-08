@@ -417,6 +417,23 @@ const flashcardModule = (function () {
       delete window._hubFlashcardBrowseClickHandler;
     }
 
+    // Clean up tip-related delegation and input handlers
+    if (window._hubFlashcardTipClickHandler && _container) {
+      var tipContainer = _container.querySelector('#tip-container');
+      if (tipContainer) tipContainer.removeEventListener('click', window._hubFlashcardTipClickHandler);
+      delete window._hubFlashcardTipClickHandler;
+    }
+    if (window._hubFlashcardTipKeyHandler && _container) {
+      var tipInputEl = _container.querySelector('#tip-input');
+      if (tipInputEl) tipInputEl.removeEventListener('keydown', window._hubFlashcardTipKeyHandler);
+      delete window._hubFlashcardTipKeyHandler;
+    }
+    if (window._hubFlashcardTipBlurHandler && _container) {
+      var tipInputBlur = _container.querySelector('#tip-input');
+      if (tipInputBlur) tipInputBlur.removeEventListener('blur', window._hubFlashcardTipBlurHandler);
+      delete window._hubFlashcardTipBlurHandler;
+    }
+
     _container = null;
 
     // Clean up all global keyboard listeners to prevent leak/accumulation
@@ -2855,13 +2872,9 @@ const prompt = buildAIPrompt(word, _aiSchema);
             <div class="card-face card-front card-front-cloze">
               <!-- 💡 Tip / Analogy (inline-editable) -->
               <div class="hub-flashcard-tip-container" id="tip-container">
-                ${card.tip ? `
-                  <span class="hub-flashcard-tip-icon">💡</span>
-                  <span class="hub-flashcard-tip-text" id="tip-text" title="Click to edit">${_esc(card.tip)}</span>
-                ` : `
-                  <span class="hub-flashcard-tip-icon" style="opacity:0.5;">💡</span>
-                  <span class="hub-flashcard-tip-placeholder" id="tip-placeholder" title="Add a memory hook or analogy">+ Add a tip...</span>
-                `}
+                <span class="hub-flashcard-tip-icon" id="tip-icon">💡</span>
+                <span class="hub-flashcard-tip-text" id="tip-text" style="${card.tip ? '' : 'display:none;'}">${_esc(card.tip || '')}</span>
+                <span class="hub-flashcard-tip-placeholder" id="tip-placeholder" style="${card.tip ? 'display:none;' : ''}">+ Add a tip...</span>
                 <input type="text" id="tip-input" class="hub-flashcard-tip-input" style="display:none;" placeholder="e.g. 'it's' = 'it is' contracted" autocomplete="off" maxlength="200">
                 <span class="hub-flashcard-tip-hint" id="tip-hint" style="display:none;">Enter ↵ to save · Esc to cancel</span>
               </div>
@@ -2983,10 +2996,25 @@ const prompt = buildAIPrompt(word, _aiSchema);
     // and after K renders you get K× handlers firing.
     // ─────────────────────────────────────────────
 
-    // 0a. Remove container-level delegated click handler (THE PRIMARY LEAK)
+    // 0a. Remove container-level delegated click handlers (THE PRIMARY LEAK)
     if (window._hubFlashcardStudyClickHandler) {
       _container.removeEventListener('click', window._hubFlashcardStudyClickHandler);
       delete window._hubFlashcardStudyClickHandler;
+    }
+    if (window._hubFlashcardTipClickHandler) {
+      var oldTipContainer = _container.querySelector('#tip-container');
+      if (oldTipContainer) oldTipContainer.removeEventListener('click', window._hubFlashcardTipClickHandler);
+      delete window._hubFlashcardTipClickHandler;
+    }
+    if (window._hubFlashcardTipKeyHandler) {
+      var oldTipInput = _container.querySelector('#tip-input');
+      if (oldTipInput) oldTipInput.removeEventListener('keydown', window._hubFlashcardTipKeyHandler);
+      delete window._hubFlashcardTipKeyHandler;
+    }
+    if (window._hubFlashcardTipBlurHandler) {
+      var oldTipInputBlur = _container.querySelector('#tip-input');
+      if (oldTipInputBlur) oldTipInputBlur.removeEventListener('blur', window._hubFlashcardTipBlurHandler);
+      delete window._hubFlashcardTipBlurHandler;
     }
 
     // 0b. Remove document-level keyboard handlers
@@ -3046,91 +3074,125 @@ const prompt = buildAIPrompt(word, _aiSchema);
       window._hubFlashcardSpaceHandler = spaceHandler;
 
       // ─────────────────────────────────────────────
-      // 💡 TIP INLINE-EDITING LOGIC
+      // 💡 TIP INLINE-EDITING LOGIC (EVENT DELEGATION)
+      //
+      // Uses event delegation on the static #tip-container so that
+      // click listeners survive any content swaps.  Both #tip-text
+      // and #tip-placeholder are ALWAYS rendered in the HTML — one
+      // is hidden based on whether card.tip exists.  After save/
+      // cancel we update their textContent and toggled display in
+      // place without destroying elements, so the delegation path
+      // works indefinitely.
       // ─────────────────────────────────────────────
-      const tipContainer = _container.querySelector('#tip-container');
-      const tipText = _container.querySelector('#tip-text');
-      const tipPlaceholder = _container.querySelector('#tip-placeholder');
-      const tipInput = _container.querySelector('#tip-input');
-      const tipHint = _container.querySelector('#tip-hint');
+      const tipContainerEl = _container.querySelector('#tip-container');
+      const tipIconEl       = _container.querySelector('#tip-icon');
+      const tipTextEl       = _container.querySelector('#tip-text');
+      const tipPlaceholderEl = _container.querySelector('#tip-placeholder');
+      const tipInputEl      = _container.querySelector('#tip-input');
+      const tipHintEl       = _container.querySelector('#tip-hint');
 
       const _enterTipEditMode = () => {
         if (_isProcessing || _cardFlipped) return;
         var cards = _getActiveCards();
         var card = cards[cardIdx];
         var currentTip = card.tip || '';
-        if (tipInput) {
-          tipInput.value = currentTip;
-          tipInput.style.display = 'block';
-          tipInput.focus();
-          tipInput.select();
+        if (tipInputEl) {
+          tipInputEl.value = currentTip;
+          tipInputEl.style.display = 'block';
+          tipInputEl.focus();
+          if (currentTip) tipInputEl.select();
         }
-        if (tipHint) tipHint.style.display = 'block';
-        if (tipText) tipText.style.display = 'none';
-        if (tipPlaceholder) tipPlaceholder.style.display = 'none';
-        if (tipContainer) {
-          tipContainer.classList.add('hub-flashcard-tip-container--editing');
+        if (tipHintEl)   tipHintEl.style.display = 'block';
+        if (tipTextEl)   tipTextEl.style.display = 'none';
+        if (tipPlaceholderEl) tipPlaceholderEl.style.display = 'none';
+        if (tipIconEl)   tipIconEl.style.opacity = '1';
+        if (tipContainerEl) tipContainerEl.classList.add('hub-flashcard-tip-container--editing');
+      };
+
+      const _exitEditModeAndUpdateUI = (newTip) => {
+        // Close the input
+        if (tipInputEl)    tipInputEl.style.display = 'none';
+        if (tipHintEl)     tipHintEl.style.display = 'none';
+        if (tipContainerEl) tipContainerEl.classList.remove('hub-flashcard-tip-container--editing');
+
+        if (newTip) {
+          // Has content: show text, hide placeholder
+          if (tipTextEl) {
+            tipTextEl.textContent = newTip;
+            tipTextEl.style.display = '';
+          }
+          if (tipPlaceholderEl) tipPlaceholderEl.style.display = 'none';
+          if (tipIconEl) tipIconEl.style.opacity = '1';
+        } else {
+          // Empty: hide text, show placeholder
+          if (tipTextEl) tipTextEl.style.display = 'none';
+          if (tipPlaceholderEl) tipPlaceholderEl.style.display = '';
+          if (tipIconEl) tipIconEl.style.opacity = '0.5';
         }
       };
 
       const _saveTipAndExit = () => {
         var cards = _getActiveCards();
         var card = cards[cardIdx];
-        var newTip = tipInput ? tipInput.value.trim() : '';
+        var newTipVal = tipInputEl ? tipInputEl.value.trim() : '';
         var deck = _getActiveDeck();
 
-        // Save to card in the deck
-        card.tip = newTip;
+        // Persist to card → deck → Firestore
+        card.tip = newTipVal;
         if (deck && deck.cards[cardIdx]) {
           deck.cards[cardIdx] = card;
           _saveDecks();
         }
 
-        // Update UI
-        if (tipInput) tipInput.style.display = 'none';
-        if (tipHint) tipHint.style.display = 'none';
-        if (tipContainer) tipContainer.classList.remove('hub-flashcard-tip-container--editing');
-
-        if (newTip) {
-          if (tipText) {
-            tipText.textContent = newTip;
-            tipText.style.display = '';
-          }
-          if (tipPlaceholder) tipPlaceholder.style.display = 'none';
-        } else {
-          if (tipText) tipText.style.display = 'none';
-          if (tipPlaceholder) tipPlaceholder.style.display = '';
-        }
+        _exitEditModeAndUpdateUI(newTipVal);
 
         // Return focus to cloze input
-        setTimeout(() => { if (clozeInput) clozeInput.focus(); }, 50);
+        setTimeout(function () { if (clozeInput) clozeInput.focus(); }, 50);
       };
 
       const _cancelTipEdit = () => {
-        if (tipInput) tipInput.style.display = 'none';
-        if (tipHint) tipHint.style.display = 'none';
-        if (tipContainer) tipContainer.classList.remove('hub-flashcard-tip-container--editing');
-
         var cards = _getActiveCards();
         var card = cards[cardIdx];
-        if (card.tip) {
-          if (tipText) { tipText.textContent = card.tip; tipText.style.display = ''; }
-          if (tipPlaceholder) tipPlaceholder.style.display = 'none';
-        } else {
-          if (tipText) tipText.style.display = 'none';
-          if (tipPlaceholder) tipPlaceholder.style.display = '';
-        }
-
-        setTimeout(() => { if (clozeInput) clozeInput.focus(); }, 50);
+        _exitEditModeAndUpdateUI(card.tip || '');
+        setTimeout(function () { if (clozeInput) clozeInput.focus(); }, 50);
       };
 
-      // Click tip text → enter edit mode
-      if (tipText) tipText.addEventListener('click', _enterTipEditMode);
-      if (tipPlaceholder) tipPlaceholder.addEventListener('click', _enterTipEditMode);
+      // ═══════════════════════════════════════════════════
+      // EVENT DELEGATION: click on tip-container
+      //
+      // This single listener on the STATIC container handles
+      // clicks on #tip-text AND #tip-placeholder, even after
+      // their display toggles or textContent changes.  No need
+      // to re-attach per-element listeners after save/cancel.
+      // ═══════════════════════════════════════════════════
+      if (tipContainerEl) {
+        // Clean up previous delegation handler to prevent accumulation
+        if (window._hubFlashcardTipClickHandler) {
+          tipContainerEl.removeEventListener('click', window._hubFlashcardTipClickHandler);
+          delete window._hubFlashcardTipClickHandler;
+        }
 
-      // Tip input key handlers
-      if (tipInput) {
-        tipInput.addEventListener('keydown', function (e) {
+        var tipClickHandler = function (e) {
+          if (_isProcessing || _cardFlipped) return;
+          // Only respond to clicks on the text/placeholder display elements
+          // (not the input itself, not the icon)
+          var target = e.target;
+          if (!target) return;
+          if (target.id === 'tip-text' || target.id === 'tip-placeholder') {
+            _enterTipEditMode();
+          }
+        };
+        tipContainerEl.addEventListener('click', tipClickHandler);
+        window._hubFlashcardTipClickHandler = tipClickHandler;
+      }
+
+      // ── Tip input keyboard handlers ──
+      if (tipInputEl) {
+        // Clean up previous keydown handler on same element
+        if (window._hubFlashcardTipKeyHandler && tipInputEl) {
+          tipInputEl.removeEventListener('keydown', window._hubFlashcardTipKeyHandler);
+        }
+        var tipKeyHandler = function (e) {
           if (e.key === 'Enter') {
             e.preventDefault();
             _saveTipAndExit();
@@ -3138,17 +3200,23 @@ const prompt = buildAIPrompt(word, _aiSchema);
             e.preventDefault();
             _cancelTipEdit();
           }
-        });
+        };
+        tipInputEl.addEventListener('keydown', tipKeyHandler);
+        window._hubFlashcardTipKeyHandler = tipKeyHandler;
 
-        tipInput.addEventListener('blur', function () {
-          // Small delay so click on other parts of the card settles first
+        // Clean up previous blur handler
+        if (window._hubFlashcardTipBlurHandler && tipInputEl) {
+          tipInputEl.removeEventListener('blur', window._hubFlashcardTipBlurHandler);
+        }
+        var tipBlurHandler = function () {
           setTimeout(function () {
-            // Only save if still in edit mode (not already cancelled)
-            if (tipInput && tipInput.style.display !== 'none') {
+            if (tipInputEl && tipInputEl.style.display !== 'none') {
               _saveTipAndExit();
             }
           }, 100);
-        });
+        };
+        tipInputEl.addEventListener('blur', tipBlurHandler);
+        window._hubFlashcardTipBlurHandler = tipBlurHandler;
       }
 
       // ─────────────────────────────────────────────
