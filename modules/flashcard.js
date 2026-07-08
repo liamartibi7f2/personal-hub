@@ -1853,6 +1853,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
       collocations: _ensureArray(parsed.collocations),
       clozeSentence: parsed.clozeSentence || '',
       imageUrl: parsed.imageUrl || '',
+      tip: parsed.tip || '',
       // Dynamic fields from AI schema
       ...(_buildDynamicFields(parsed)),
       repetition: 0,
@@ -2852,6 +2853,19 @@ const prompt = buildAIPrompt(word, _aiSchema);
             <!-- ============ FRONT FACE ============ -->
             ${card.clozeSentence ? `
             <div class="card-face card-front card-front-cloze">
+              <!-- 💡 Tip / Analogy (inline-editable) -->
+              <div class="hub-flashcard-tip-container" id="tip-container">
+                ${card.tip ? `
+                  <span class="hub-flashcard-tip-icon">💡</span>
+                  <span class="hub-flashcard-tip-text" id="tip-text" title="Click to edit">${_esc(card.tip)}</span>
+                ` : `
+                  <span class="hub-flashcard-tip-icon" style="opacity:0.5;">💡</span>
+                  <span class="hub-flashcard-tip-placeholder" id="tip-placeholder" title="Add a memory hook or analogy">+ Add a tip...</span>
+                `}
+                <input type="text" id="tip-input" class="hub-flashcard-tip-input" style="display:none;" placeholder="e.g. 'it's' = 'it is' contracted" autocomplete="off" maxlength="200">
+                <span class="hub-flashcard-tip-hint" id="tip-hint" style="display:none;">Enter ↵ to save · Esc to cancel</span>
+              </div>
+
               <div class="cloze-sentence">
                 <span>${_esc(card.clozeSentence.split('___')[0] || '')}</span>
                 <input type="text" id="cloze-input" class="cyber-cloze-input" placeholder="Type answer..." autocomplete="off">
@@ -2862,6 +2876,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
                 <button id="cloze-reveal-btn" class="cloze-btn cloze-btn-reveal">Reveal (Give up)</button>
               </div>
               <div id="cloze-feedback"></div>
+              <div id="cloze-diff-mask" class="hub-flashcard-diff-mask"></div>
             </div>
             ` : `
             <div class="card-face card-front">
@@ -2998,7 +3013,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
 
     if (isCloze) {
       // ═══════════════════════════════════════════
-      // CLOZE MODE
+      // CLOZE MODE — with Smart Diff Mask + Tip Editing
       // ═══════════════════════════════════════════
 
       // Shared flip helper
@@ -3009,15 +3024,15 @@ const prompt = buildAIPrompt(word, _aiSchema);
         setTimeout(() => { if (panel) panel.classList.add('revealed'); }, 150);
       };
 
-      // Cloze card click → focus input (do NOT flip)
+      // Cloze card click → focus input (unless clicking tip area)
       card3d.addEventListener('click', (e) => {
         if (_isProcessing) return;
-        if (!_cardFlipped && e.target !== clozeInput) {
+        if (!_cardFlipped && e.target !== clozeInput && !e.target.closest('.hub-flashcard-tip-container')) {
           clozeInput.focus();
         }
       });
 
-      // Spacebar → focus input
+      // Spacebar → focus input (unless editing tip)
       const spaceHandler = (e) => {
         if (_isProcessing) return;
         if ((e.key === ' ' || e.key === 'Spacebar') && !_cardFlipped) {
@@ -3030,33 +3045,227 @@ const prompt = buildAIPrompt(word, _aiSchema);
       document.addEventListener('keydown', spaceHandler);
       window._hubFlashcardSpaceHandler = spaceHandler;
 
-      // Check answer helper
+      // ─────────────────────────────────────────────
+      // 💡 TIP INLINE-EDITING LOGIC
+      // ─────────────────────────────────────────────
+      const tipContainer = _container.querySelector('#tip-container');
+      const tipText = _container.querySelector('#tip-text');
+      const tipPlaceholder = _container.querySelector('#tip-placeholder');
+      const tipInput = _container.querySelector('#tip-input');
+      const tipHint = _container.querySelector('#tip-hint');
+
+      const _enterTipEditMode = () => {
+        if (_isProcessing || _cardFlipped) return;
+        var cards = _getActiveCards();
+        var card = cards[cardIdx];
+        var currentTip = card.tip || '';
+        if (tipInput) {
+          tipInput.value = currentTip;
+          tipInput.style.display = 'block';
+          tipInput.focus();
+          tipInput.select();
+        }
+        if (tipHint) tipHint.style.display = 'block';
+        if (tipText) tipText.style.display = 'none';
+        if (tipPlaceholder) tipPlaceholder.style.display = 'none';
+        if (tipContainer) {
+          tipContainer.classList.add('hub-flashcard-tip-container--editing');
+        }
+      };
+
+      const _saveTipAndExit = () => {
+        var cards = _getActiveCards();
+        var card = cards[cardIdx];
+        var newTip = tipInput ? tipInput.value.trim() : '';
+        var deck = _getActiveDeck();
+
+        // Save to card in the deck
+        card.tip = newTip;
+        if (deck && deck.cards[cardIdx]) {
+          deck.cards[cardIdx] = card;
+          _saveDecks();
+        }
+
+        // Update UI
+        if (tipInput) tipInput.style.display = 'none';
+        if (tipHint) tipHint.style.display = 'none';
+        if (tipContainer) tipContainer.classList.remove('hub-flashcard-tip-container--editing');
+
+        if (newTip) {
+          if (tipText) {
+            tipText.textContent = newTip;
+            tipText.style.display = '';
+          }
+          if (tipPlaceholder) tipPlaceholder.style.display = 'none';
+        } else {
+          if (tipText) tipText.style.display = 'none';
+          if (tipPlaceholder) tipPlaceholder.style.display = '';
+        }
+
+        // Return focus to cloze input
+        setTimeout(() => { if (clozeInput) clozeInput.focus(); }, 50);
+      };
+
+      const _cancelTipEdit = () => {
+        if (tipInput) tipInput.style.display = 'none';
+        if (tipHint) tipHint.style.display = 'none';
+        if (tipContainer) tipContainer.classList.remove('hub-flashcard-tip-container--editing');
+
+        var cards = _getActiveCards();
+        var card = cards[cardIdx];
+        if (card.tip) {
+          if (tipText) { tipText.textContent = card.tip; tipText.style.display = ''; }
+          if (tipPlaceholder) tipPlaceholder.style.display = 'none';
+        } else {
+          if (tipText) tipText.style.display = 'none';
+          if (tipPlaceholder) tipPlaceholder.style.display = '';
+        }
+
+        setTimeout(() => { if (clozeInput) clozeInput.focus(); }, 50);
+      };
+
+      // Click tip text → enter edit mode
+      if (tipText) tipText.addEventListener('click', _enterTipEditMode);
+      if (tipPlaceholder) tipPlaceholder.addEventListener('click', _enterTipEditMode);
+
+      // Tip input key handlers
+      if (tipInput) {
+        tipInput.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            _saveTipAndExit();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            _cancelTipEdit();
+          }
+        });
+
+        tipInput.addEventListener('blur', function () {
+          // Small delay so click on other parts of the card settles first
+          setTimeout(function () {
+            // Only save if still in edit mode (not already cancelled)
+            if (tipInput && tipInput.style.display !== 'none') {
+              _saveTipAndExit();
+            }
+          }, 100);
+        });
+      }
+
+      // ─────────────────────────────────────────────
+      // SMART DIFF MASK — Word-by-word comparison
+      // ─────────────────────────────────────────────
+
+      /**
+       * Build the diff mask HTML by comparing user input against
+       * the target answer word-by-word.
+       *
+       * Algorithm:
+       *  1. Tokenize both strings into words (preserving original case & punctuation).
+       *  2. For each position, if the user's word matches the target word
+       *     (case-insensitive trimmed), wrap it in .correct-glow.
+       *  3. Otherwise, show asterisks matching the target word's length,
+       *     wrapped in .masked-char (punctuation preserved verbatim).
+       *  4. If the user typed fewer words, show trailing targets as masked.
+       */
+      const _buildDiffMask = (userRaw, targetRaw) => {
+        // Tokenize: split on whitespace but preserve punctuation as part of the token
+        var userTokens = (userRaw || '').trim().split(/\s+/);
+        var targetTokens = targetRaw.trim().split(/\s+/);
+
+        var resultHtml = '';
+        var maxLen = Math.max(userTokens.length, targetTokens.length);
+
+        for (var i = 0; i < maxLen; i++) {
+          if (i > 0) resultHtml += ' ';
+
+          var targetWord = targetTokens[i] || '';
+          var userWord = userTokens[i] || '';
+
+          // Case-insensitive compare
+          if (userWord.toLowerCase() === targetWord.toLowerCase()) {
+            // ✅ CORRECT — glow green
+            resultHtml += '<span class="correct-glow">' + _esc(targetWord) + '</span>';
+          } else {
+            // ❌ WRONG or MISSING — masked placeholder
+            if (!targetWord) {
+              // Extra user word beyond target length — show as dim stray
+              resultHtml += '<span class="masked-stray">' + _esc(userWord) + '</span>';
+            } else {
+              // Build masked representation
+              var masked = '';
+              for (var c = 0; c < targetWord.length; c++) {
+                var ch = targetWord.charAt(c);
+                // Preserve punctuation characters visible
+                if (/[.,;:'"!?\-–—()\[\]{}…\/&]/.test(ch)) {
+                  masked += ch;
+                } else {
+                  masked += '*';
+                }
+              }
+              resultHtml += '<span class="masked-char">' + _esc(masked) + '</span>';
+            }
+          }
+        }
+
+        return resultHtml;
+      };
+
       const _checkCloze = () => {
         if (_cardFlipped || _studyLocked || _isProcessing) return;
-        const cards = _getActiveCards();
-        const card = cards[cardIdx];
-        const userAnswer = _normalizeStr(clozeInput.value);
-        const correctAnswer = _normalizeStr(card.term);
-        const feedback = _container.querySelector('#cloze-feedback');
+        var cards = _getActiveCards();
+        var card = cards[cardIdx];
+        var userAnswer = (clozeInput.value || '').trim();
+        var userNorm = userAnswer.toLowerCase().replace(/\s+/g, ' ');
+        var correctNorm = (card.term || '').trim().toLowerCase().replace(/\s+/g, ' ');
 
-        if (userAnswer === correctAnswer) {
+        var feedback = _container.querySelector('#cloze-feedback');
+        var diffMask = _container.querySelector('#cloze-diff-mask');
+
+        // Clear any previous state
+        if (diffMask) diffMask.innerHTML = '';
+        if (feedback) feedback.className = '';
+        clozeInput.classList.remove('cloze-input-correct-pulse', 'cloze-input-incorrect-shake');
+
+        if (userNorm === correctNorm) {
+          // ✅ PERFECT MATCH
           if (feedback) {
-            feedback.textContent = 'Correct!';
+            feedback.textContent = '✓ Perfect!';
             feedback.className = 'cloze-feedback-correct';
           }
-          setTimeout(() => { _doFlip(); }, 400);
+          clozeInput.classList.add('cloze-input-correct-pulse');
+          setTimeout(() => { _doFlip(); }, 500);
         } else {
-          if (feedback) {
-            feedback.textContent = 'Incorrect, try again!';
-            feedback.className = 'cloze-feedback-incorrect';
+          // ⚡ PARTIAL OR INCORRECT — show diff mask
+          var maskHTML = _buildDiffMask(userAnswer, card.term);
+          if (diffMask) {
+            diffMask.innerHTML = maskHTML;
+            diffMask.style.display = 'block';
+            // Trigger animation
+            diffMask.classList.remove('diff-mask-reveal');
+            void diffMask.offsetWidth; // force reflow
+            diffMask.classList.add('diff-mask-reveal');
           }
-          clozeInput.value = '';
+
+          if (feedback) {
+            feedback.textContent = 'Keep going — check the hints below';
+            feedback.className = 'cloze-feedback-partial';
+          }
+
+          clozeInput.classList.add('cloze-input-incorrect-shake');
+          // Keep the user's text so they can see where they went wrong
+          // Don't clear it — let them edit and retry
           clozeInput.focus();
+          clozeInput.select();
+
+          // Auto-remove shake class
+          setTimeout(function () {
+            clozeInput.classList.remove('cloze-input-incorrect-shake');
+          }, 400);
         }
       };
 
       // Enter key on cloze input
-      clozeInput.addEventListener('keydown', (e) => {
+      clozeInput.addEventListener('keydown', function (e) {
         if (_isProcessing) return;
         if (e.key === 'Enter') {
           e.preventDefault();
@@ -3065,26 +3274,28 @@ const prompt = buildAIPrompt(word, _aiSchema);
       });
 
       // Check button
-      const checkBtn = _container.querySelector('#cloze-check-btn');
-      if (checkBtn) checkBtn.addEventListener('click', () => {
+      var checkBtn = _container.querySelector('#cloze-check-btn');
+      if (checkBtn) checkBtn.addEventListener('click', function () {
         if (_isProcessing) return;
         _checkCloze();
       });
 
-      // Reveal button
-      const revealBtn = _container.querySelector('#cloze-reveal-btn');
-      if (revealBtn) revealBtn.addEventListener('click', () => {
+      // Reveal button — show answer + flip
+      var revealBtn = _container.querySelector('#cloze-reveal-btn');
+      if (revealBtn) revealBtn.addEventListener('click', function () {
         if (_isProcessing || _cardFlipped) return;
-        const feedback = _container.querySelector('#cloze-feedback');
+        var feedback = _container.querySelector('#cloze-feedback');
+        var diffMask = _container.querySelector('#cloze-diff-mask');
+        if (diffMask) diffMask.innerHTML = '';
         if (feedback) {
-          feedback.textContent = 'Revealed';
+          feedback.textContent = 'Card revealed';
           feedback.className = 'cloze-feedback-incorrect';
         }
         _doFlip();
       });
 
       // Focus input after render
-      setTimeout(() => { if (clozeInput) clozeInput.focus(); }, 200);
+      setTimeout(function () { if (clozeInput) clozeInput.focus(); }, 200);
 
     } else {
       // ═══════════════════════════════════════════
@@ -4085,6 +4296,12 @@ const prompt = buildAIPrompt(word, _aiSchema);
             <textarea id="ceditor-cloze" class="card-editor-textarea" rows="2" placeholder="Example sentence with ___ where the word goes, e.g. We need a ___ approach to solve this.">${_esc(clozeSentence)}</textarea>
             <span style="font-family:var(--font-mono);font-size:0.6rem;color:var(--text-muted);">Use ___ (three underscores) as placeholder for the target word.</span>
           </div>
+
+          <div class="form-group">
+            <label>💡 Tip / Analogy (Memory Hook)</label>
+            <textarea id="ceditor-tip" class="card-editor-textarea" rows="2" placeholder="e.g. Remember 'Serendipity' by thinking of the movie + 'dip' = lucky dip into fate" autocomplete="off">${_esc(card && card.tip ? card.tip : '')}</textarea>
+            <span style="font-family:var(--font-mono);font-size:0.6rem;color:var(--text-muted);">A mnemonic, analogy, or memory hook shown on the card front during study sessions.</span>
+          </div>
         </div>
 
         <!-- Footer actions -->
@@ -4274,6 +4491,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
     const noteRaw       = (overlay.querySelector('#ceditor-note')?.value || '').trim();
     const clozeRaw      = (overlay.querySelector('#ceditor-cloze')?.value || '').trim();
     const imageUrl     = (overlay.querySelector('#ceditor-image')?.value || '').trim();
+    const tipRaw       = (overlay.querySelector('#ceditor-tip')?.value || '').trim();
 
     // --- Build the card fields ---
     const cardFields = {
@@ -4289,7 +4507,8 @@ const prompt = buildAIPrompt(word, _aiSchema);
       idioms: existingCard ? (existingCard.idioms || []) : [],
       collocations: existingCard ? (existingCard.collocations || []) : [],
       clozeSentence: clozeRaw,
-      imageUrl: imageUrl
+      imageUrl: imageUrl,
+      tip: tipRaw
     };
 
     if (isEdit) {
@@ -4457,6 +4676,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
         collocations: _ensureArray(card.collocations),
         clozeSentence: card.clozeSentence || '',
         imageUrl: card.imageUrl || '',
+        tip: card.tip || '',
         ...srsDefaults
       };
     }
@@ -4490,6 +4710,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
       collocations: [],
       clozeSentence: card.clozeSentence || '',
       imageUrl: card.imageUrl || '',
+      tip: card.tip || '',
       ...srsDefaults
     };
   }

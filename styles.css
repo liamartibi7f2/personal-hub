@@ -11320,3 +11320,224 @@ mark.cyber-hl-pink:hover {
     font-size: 0.6rem;
   }
 }
+
+/* ============================================================
+   HUB.OS — SMART CLOZE DIFF MASK & TIP EDITOR
+   Cyberpunk light-up feedback loop + inline-editable tip field
+   ============================================================ */
+
+/* ── Correct Glow: neon green for matching words ── */
+.correct-glow {
+  color: #4ade80;
+  font-weight: 700;
+  text-shadow:
+    0 0 8px rgba(74, 222, 128, 0.6),
+    0 0 18px rgba(74, 222, 128, 0.3),
+    0 0 32px rgba(74, 222, 128, 0.12);
+  transition: text-shadow var(--duration-fast) var(--ease-out-expo);
+}
+
+/* ── Masked Characters: dim placeholder glyphs ── */
+.masked-char {
+  color: #64748b;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  font-family: var(--font-mono);
+  opacity: 0.85;
+  transition: opacity var(--duration-fast) var(--ease-out-expo);
+}
+
+/* ── Masked Stray: extra user words beyond target ── */
+.masked-stray {
+  color: #475569;
+  font-style: italic;
+  opacity: 0.5;
+  text-decoration: line-through;
+  text-decoration-color: rgba(100, 116, 139, 0.3);
+  text-underline-offset: 4px;
+}
+
+/* ── Diff Mask Container ── */
+.hub-flashcard-diff-mask {
+  display: none;
+  margin-top: var(--space-sm);
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(100, 116, 139, 0.2);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+  text-align: center;
+  line-height: 1.6;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  min-height: 2.2em;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition:
+    opacity 0.25s var(--ease-out-expo),
+    transform 0.25s var(--ease-out-expo);
+}
+
+.hub-flashcard-diff-mask.diff-mask-reveal {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Partial Feedback State ── */
+.cloze-feedback-partial {
+  color: #f59e0b; /* amber — not red, not green */
+  text-shadow: 0 0 12px rgba(245, 158, 11, 0.4);
+  animation: clozeFeedbackPop 0.3s var(--ease-out-expo);
+}
+
+/* ── Input Feedback Animations ── */
+.cloze-input-correct-pulse {
+  animation: clozeInputPulse 0.5s var(--ease-out-expo);
+  border-color: #4ade80 !important;
+  box-shadow: 0 0 20px rgba(74, 222, 128, 0.4),
+              0 0 40px rgba(74, 222, 128, 0.15) !important;
+}
+
+@keyframes clozeInputPulse {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.04); border-color: #4ade80; }
+  100% { transform: scale(1); border-color: rgba(0, 240, 255, 0.3); }
+}
+
+.cloze-input-incorrect-shake {
+  animation: clozeInputShake 0.35s var(--ease-out-expo);
+  border-color: #f59e0b !important;
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.3) !important;
+}
+
+@keyframes clozeInputShake {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(-3px); }
+  40%      { transform: translateX(3px); }
+  60%      { transform: translateX(-2px); }
+  80%      { transform: translateX(2px); }
+}
+
+/* ───────────────────────────────────────────
+   💡 TIP / ANALOGY CONTAINER (Glassmorphism)
+   ─────────────────────────────────────────── */
+
+.hub-flashcard-tip-container {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  margin-bottom: var(--space-md);
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 2px solid #0df;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition:
+    all 0.3s ease,
+    border-left-color 0.3s ease,
+    box-shadow 0.3s ease;
+  cursor: default;
+  min-height: 36px;
+}
+
+.hub-flashcard-tip-container:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-left-color: rgba(0, 221, 255, 0.7);
+}
+
+/* ── Tip Icon ── */
+.hub-flashcard-tip-icon {
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+/* ── Tip Text (display mode) ── */
+.hub-flashcard-tip-text {
+  flex: 1;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  cursor: text;
+  transition: color 0.3s ease;
+  word-break: break-word;
+}
+
+.hub-flashcard-tip-text:hover {
+  color: var(--text-primary);
+}
+
+/* ── Tip Placeholder (empty state) ── */
+.hub-flashcard-tip-placeholder {
+  flex: 1;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-style: italic;
+  opacity: 0.5;
+  cursor: text;
+  transition: opacity 0.3s ease;
+}
+
+.hub-flashcard-tip-placeholder:hover {
+  opacity: 0.8;
+}
+
+/* ── Tip Input (edit mode) ── */
+.hub-flashcard-tip-input {
+  flex: 1;
+  min-width: 160px;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed rgba(0, 221, 255, 0.6);
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  outline: none;
+  transition:
+    border-color 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+.hub-flashcard-tip-input:focus {
+  border-color: var(--accent-primary);
+  border-style: solid;
+  box-shadow:
+    0 0 12px rgba(0, 240, 255, 0.3),
+    0 0 24px rgba(0, 240, 255, 0.1),
+    inset 0 0 8px rgba(0, 240, 255, 0.04);
+}
+
+.hub-flashcard-tip-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.4;
+  font-style: italic;
+}
+
+/* ── Tip Hint (edit mode keyboard hint) ── */
+.hub-flashcard-tip-hint {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  color: var(--text-muted);
+  opacity: 0.6;
+  letter-spacing: 0.04em;
+  flex-basis: 100%;
+  margin-top: 2px;
+}
+
+/* ── Editing state modifier ── */
+.hub-flashcard-tip-container--editing {
+  border-left-color: var(--accent-primary);
+  background: rgba(0, 240, 255, 0.05);
+  box-shadow:
+    inset 0 0 14px rgba(0, 240, 255, 0.04),
+    0 0 8px rgba(0, 240, 255, 0.06);
+}
