@@ -62,6 +62,7 @@ const flashcardModule = (function () {
   let _studyQueue     = [];         // Array of card indices for current study session
   let _sessionStats   = null;       // { reviewed: 0, correct: 0, hard: 0, again: 0, started: timestamp }
   let _cardFlipped    = false;      // Whether the card is flipped in study mode
+  let _studyLocked    = false;      // Prevents double-click ghost advances during SRS assessment
 
   // --- AI Settings state ---
   let _aiSchema       = [];
@@ -324,10 +325,20 @@ const flashcardModule = (function () {
   }
 
   
+  // Supported display positions for custom fields
+  // 'top' = Below Definition, 'after_examples' = After Examples,
+  // 'after_synonyms' = After Synonyms, 'bottom' = Bottom (Default)
+  const CUSTOM_FIELD_POSITIONS = [
+    { value: 'top',             label: 'Top (Below Definition)' },
+    { value: 'after_examples',  label: 'After Examples' },
+    { value: 'after_synonyms',  label: 'After Synonyms' },
+    { value: 'bottom',          label: 'Bottom (Default)' }
+  ];
+
   // Default AI schema (used when no cloud data exists)
   const DEFAULT_AI_SCHEMA = [
-    { id: 'phonetic', name: 'Phonetic', prompt: 'Provide the IPA phonetic transcription.', isDeletable: false },
-    { id: 'synonym', name: 'Synonym', prompt: 'Provide 2-3 common synonyms.', isDeletable: true }
+    { id: 'phonetic', name: 'Phonetic', prompt: 'Provide the IPA phonetic transcription.', isDeletable: false, position: 'top' },
+    { id: 'synonym', name: 'Synonym', prompt: 'Provide 2-3 common synonyms.', isDeletable: true, position: 'bottom' }
   ];
 
   // --- Default starter cards (new Gemini-compatible format) ---
@@ -477,15 +488,29 @@ const flashcardModule = (function () {
     } catch (_) {
       _decks = [];
     }
+
+    // ── DATA REPAIR MIGRATION: auto-fix corrupted timestamps on every load ──
+    _repairCardTimestamps();
   }
 
   /**
    * Save decks to HubDB (Firestore when online, localStorage fallback).
    * Fire-and-forget wrapper for callers that don't need to await.
+   *
+   * ALSO syncs to localStorage so the Dashboard widget sees live data
+   * even when the user is online (the dashboard reads localStorage).
    */
   function _saveDecks() {
     if (_pageUnloading) return; // Prevent ghost saves during page reload
-    // Fire-and-forget: the async save is handled internally;
+
+    // Always mirror to localStorage so the Dashboard widget
+    // (which reads localStorage) sees the latest data immediately,
+    // regardless of whether we're online or offline.
+    try {
+      localStorage.setItem('hub_flashcards', JSON.stringify({ decks: _decks }));
+    } catch (_) { /* quota exceeded — non-fatal */ }
+
+    // Fire-and-forget: the async Firestore save is handled internally;
     // we don't need UI to block on it.
     HubDB.saveFlashcardsData({ decks: _decks }).catch(function () {});
   }
@@ -713,12 +738,19 @@ const flashcardModule = (function () {
       var delBtn = field.isDeletable
         ? '<button class="hub-flashcard-ai-del-btn" data-index="' + index + '" title="Delete field">&times;</button>'
         : '';
+      var posLabel = 'bottom';
+      CUSTOM_FIELD_POSITIONS.forEach(function (p) {
+        if (p.value === (field.position || 'bottom')) posLabel = p.label;
+      });
       return '' +
         '<div class="hub-flashcard-ai-field-row">' +
           '<div class="hub-flashcard-ai-field-info">' +
             '<span class="hub-flashcard-ai-field-id">' + _esc(field.id) + '</span>' +
             '<span class="hub-flashcard-ai-field-name">' + _esc(field.name) + '</span>' +
             '<span class="hub-flashcard-ai-field-prompt">' + _esc(field.prompt) + '</span>' +
+          '</div>' +
+          '<div class="hub-flashcard-ai-field-meta">' +
+            '<span class="hub-flashcard-ai-field-position">📍 ' + _esc(posLabel) + '</span>' +
           '</div>' +
           delBtn +
         '</div>';
@@ -778,9 +810,21 @@ const flashcardModule = (function () {
                   '<input type="text" id="hub-ai-new-name" class="hub-flashcard-ai-input" placeholder="e.g. Phrasal Verb" autocomplete="off">' +
                 '</div>' +
               '</div>' +
-              '<div class="hub-flashcard-ai-form-group">' +
-                '<label class="hub-flashcard-ai-label">' + _('fc', 'aiInstruction') + '</label>' +
-                '<textarea id="hub-ai-new-prompt" class="hub-flashcard-ai-textarea" placeholder="e.g. Provide a common phrasal verb using this word" rows="2"></textarea>' +
+              '<div class="hub-flashcard-ai-form-row">' +
+                '<div class="hub-flashcard-ai-form-group">' +
+                  '<label class="hub-flashcard-ai-label">' + _('fc', 'aiInstruction') + '</label>' +
+                  '<textarea id="hub-ai-new-prompt" class="hub-flashcard-ai-textarea" placeholder="e.g. Provide a common phrasal verb using this word" rows="2"></textarea>' +
+                '</div>' +
+              '</div>' +
+              '<div class="hub-flashcard-ai-form-row">' +
+                '<div class="hub-flashcard-ai-form-group" style="flex:0 0 240px;">' +
+                  '<label class="hub-flashcard-ai-label">Display Position</label>' +
+                  '<select id="hub-ai-new-position" class="hub-flashcard-ai-input hub-flashcard-ai-select">' +
+                    CUSTOM_FIELD_POSITIONS.map(function (p) {
+                      return '<option value="' + _esc(p.value) + '"' + (p.value === 'bottom' ? ' selected' : '') + '>' + _esc(p.label) + '</option>';
+                    }).join('') +
+                  '</select>' +
+                '</div>' +
               '</div>' +
               '<button class="btn btn-primary" id="hub-ai-add-field-btn">' + _('fc', 'addFieldBtn') + '</button>' +
             '</div>' +
@@ -952,11 +996,13 @@ const flashcardModule = (function () {
     var idInput = overlay.querySelector('#hub-ai-new-id');
     var nameInput = overlay.querySelector('#hub-ai-new-name');
     var promptInput = overlay.querySelector('#hub-ai-new-prompt');
+    var positionSelect = overlay.querySelector('#hub-ai-new-position');
     var statusEl = overlay.querySelector('#hub-ai-status');
 
     var fieldId = (idInput ? idInput.value : '').trim();
     var fieldName = (nameInput ? nameInput.value : '').trim();
     var fieldPrompt = (promptInput ? promptInput.value : '').trim();
+    var fieldPosition = positionSelect ? positionSelect.value : 'bottom';
 
     if (!fieldId) {
       if (statusEl) {
@@ -982,6 +1028,10 @@ const flashcardModule = (function () {
       if (promptInput) promptInput.focus();
       return;
     }
+    // Validate position is one of the known slots
+    if (CUSTOM_FIELD_POSITIONS.every(function (p) { return p.value !== fieldPosition; })) {
+      fieldPosition = 'bottom';
+    }
 
     var exists = _aiSchema.some(function (f) { return f.id === fieldId; });
     if (exists) {
@@ -997,6 +1047,7 @@ const flashcardModule = (function () {
       id: fieldId,
       name: fieldName,
       prompt: fieldPrompt,
+      position: fieldPosition,
       isDeletable: true
     });
 
@@ -1005,6 +1056,7 @@ const flashcardModule = (function () {
     if (idInput) idInput.value = '';
     if (nameInput) nameInput.value = '';
     if (promptInput) promptInput.value = '';
+    if (positionSelect) positionSelect.value = 'bottom';
 
     if (statusEl) {
       statusEl.className = 'hub-flashcard-ai-status hub-flashcard-ai-status-success';
@@ -1044,12 +1096,19 @@ const flashcardModule = (function () {
       var delBtn = field.isDeletable
         ? '<button class="hub-flashcard-ai-del-btn" data-index="' + index + '" title="Delete field">&times;</button>'
         : '';
+      var posLabel = 'bottom';
+      CUSTOM_FIELD_POSITIONS.forEach(function (p) {
+        if (p.value === (field.position || 'bottom')) posLabel = p.label;
+      });
       return '' +
         '<div class="hub-flashcard-ai-field-row">' +
           '<div class="hub-flashcard-ai-field-info">' +
             '<span class="hub-flashcard-ai-field-id">' + _esc(field.id) + '</span>' +
             '<span class="hub-flashcard-ai-field-name">' + _esc(field.name) + '</span>' +
             '<span class="hub-flashcard-ai-field-prompt">' + _esc(field.prompt) + '</span>' +
+          '</div>' +
+          '<div class="hub-flashcard-ai-field-meta">' +
+            '<span class="hub-flashcard-ai-field-position">📍 ' + _esc(posLabel) + '</span>' +
           '</div>' +
           delBtn +
         '</div>';
@@ -1100,19 +1159,55 @@ const flashcardModule = (function () {
   }
 
   /* ==========================================================
-     SRS HELPER: Count due cards in a deck
+     SRS HELPER: Unified due-card query engine
+     ==========================================================
+     A SINGLE canonical function that BOTH the count display AND
+     the study-session builder use.  Prevents any mismatch between
+     "DUE FOR REVIEW" badges and the cards that actually load when
+     the user clicks "Study Due".
+
+     RULES:
+       • Threshold is STRICT absolute-millisecond `Date.now()`.
+       • A card scheduled for 5 min from now is NOT due yet.
+       • Never rounds up to end-of-day or uses local date strings.
+       • `nextReviewDate` is validated as a finite number.
      ========================================================== */
 
-  function _countDueCards(deck) {
+  /**
+   * Return the INDEXES (NOT card objects) of due cards in a deck.
+   * This is the single source of truth — counters AND study loaders
+   * both derive their results from this function.
+   * @param {object} deck
+   * @returns {number[]} array of indices into deck.cards
+   */
+  function _getDueCardIndices(deck) {
+    if (!deck || !Array.isArray(deck.cards)) return [];
     const now = Date.now();
-    return deck.cards.filter(c => c.nextReviewDate <= now).length;
+    const indices = [];
+    deck.cards.forEach(function (card, i) {
+      // Validate the field: must be a finite number (not NaN, not null,
+      // not undefined, not Infinity) and MUST be in the past.
+      if (typeof card.nextReviewDate === 'number'
+          && isFinite(card.nextReviewDate)
+          && card.nextReviewDate <= now) {
+        indices.push(i);
+      }
+    });
+    return indices;
   }
 
   /**
-   * Count total due cards across all decks.
+   * Count due cards in a single deck (used for deck-card badges).
+   */
+  function _countDueCards(deck) {
+    return _getDueCardIndices(deck).length;
+  }
+
+  /**
+   * Count total due cards across all decks (used for global header).
    */
   function _countTotalDueCards() {
-    return _decks.reduce((sum, d) => sum + _countDueCards(d), 0);
+    return _decks.reduce(function (sum, d) { return sum + _countDueCards(d); }, 0);
   }
 
   /* ==========================================================
@@ -1152,6 +1247,9 @@ const flashcardModule = (function () {
     const cfg = (deckSrs && typeof deckSrs === 'object' && deckSrs.learningSteps) ? deckSrs : _srsConfig;
     const now = Date.now();
 
+    // ── AUDIT TRAIL: stamp every assessment with the exact moment it happened ──
+    updated.lastReviewed = now;
+
     // Parse learning steps array (minutes) — ensure we have 3 valid numbers
     const steps = (Array.isArray(cfg.learningSteps) && cfg.learningSteps.length >= 3)
       ? cfg.learningSteps.map(function (s) { return Math.max(1, Number(s) || 1); })
@@ -1161,6 +1259,12 @@ const flashcardModule = (function () {
     const learningStep = (typeof updated.learningStep === 'number') ? updated.learningStep : 0;
     // A card is graduated if it has ever passed step 2 (repetition ≥ 1)
     const isGraduated = (updated.repetition || 0) >= 1;
+
+    // ── Safety: clamp the existing interval to a reasonable range ──
+    //    If a card somehow has interval=0 or interval=NaN, fall back to 1 day.
+    var currentInterval = (typeof updated.interval === 'number' && updated.interval > 0)
+      ? updated.interval
+      : 1;
 
     if (quality === QUALITY.AGAIN) {
       // ── AGAIN (0): Reset to the beginning of learning ──
@@ -1181,7 +1285,8 @@ const flashcardModule = (function () {
       } else {
         // Graduated: interval × 1.2 (conservative growth)
         updated.repetition = (updated.repetition || 0) + 1;
-        updated.interval = Math.round((updated.interval || 1) * 1.2);
+        updated.interval = Math.round(currentInterval * 1.2);
+        updated.interval = Math.max(updated.interval, 1);
         updated.interval = Math.min(updated.interval, cfg.maxInterval);
         updated.nextReviewDate = now + (updated.interval * 24 * 60 * 60 * 1000);
       }
@@ -1194,8 +1299,9 @@ const flashcardModule = (function () {
           updated.repetition = 1;
           updated.learningStep = steps.length - 1; // mark final step
           updated.interval = cfg.graduatingInterval;
+          updated.interval = Math.max(updated.interval, 1);
           updated.interval = Math.min(updated.interval, cfg.maxInterval);
-          updated.nextReviewDate = now + (cfg.graduatingInterval * 24 * 60 * 60 * 1000);
+          updated.nextReviewDate = now + (updated.interval * 24 * 60 * 60 * 1000);
         } else {
           // Jump to step 2 (the final learning step, e.g. 30m)
           updated.repetition = 0;
@@ -1206,7 +1312,8 @@ const flashcardModule = (function () {
       } else {
         // Graduated: standard exponential growth
         updated.repetition = (updated.repetition || 0) + 1;
-        updated.interval = Math.round((updated.interval || 1) * cfg.multiplier);
+        updated.interval = Math.round(currentInterval * cfg.multiplier);
+        updated.interval = Math.max(updated.interval, 1);
         updated.interval = Math.min(updated.interval, cfg.maxInterval);
         updated.nextReviewDate = now + (updated.interval * 24 * 60 * 60 * 1000);
       }
@@ -1217,11 +1324,12 @@ const flashcardModule = (function () {
       updated.learningStep = steps.length - 1; // mark as having completed learning
       if (isGraduated) {
         // Already graduated: interval × multiplier × 1.3
-        updated.interval = Math.round((updated.interval || 1) * cfg.multiplier * 1.3);
+        updated.interval = Math.round(currentInterval * cfg.multiplier * 1.3);
       } else {
         // New card graduating via EASY: use easyInterval directly
         updated.interval = cfg.easyInterval;
       }
+      updated.interval = Math.max(updated.interval, 1);
       updated.interval = Math.min(updated.interval, cfg.maxInterval);
       updated.nextReviewDate = now + (updated.interval * 24 * 60 * 60 * 1000);
     }
@@ -1231,11 +1339,21 @@ const flashcardModule = (function () {
       const qBonus = quality === QUALITY.EASY ? 0.15 : 0;
       updated.easeFactor = (updated.easeFactor || 2.5) + (0.1 + qBonus);
       if (updated.easeFactor < 1.3) updated.easeFactor = 1.3;
+      if (!isFinite(updated.easeFactor)) updated.easeFactor = 2.5;
     }
 
     // If marked Again in current session, re-add immediately
     if (isAgainInSession) {
       updated.nextReviewDate = now;
+    }
+
+    // ── FINAL GUARD: nextReviewDate MUST be a finite positive number ──
+    if (typeof updated.nextReviewDate !== 'number'
+        || !isFinite(updated.nextReviewDate)
+        || updated.nextReviewDate < 0) {
+      // Fallback: schedule for 1 minute from now (worst case, card
+      // shows up quickly rather than disappearing forever)
+      updated.nextReviewDate = now + 60 * 1000;
     }
 
     return updated;
@@ -1260,6 +1378,11 @@ const flashcardModule = (function () {
     const learningStep = (typeof card.learningStep === 'number') ? card.learningStep : 0;
     const isGraduated = (card.repetition || 0) >= 1;
 
+    // ── Safety: clamp current interval ──
+    var curInterval = (typeof card.interval === 'number' && isFinite(card.interval) && card.interval > 0)
+      ? card.interval
+      : 1;
+
     // ── Quick helper: format minutes or days ──
     function _label(minutes, days) {
       if (minutes !== null) {
@@ -1277,8 +1400,8 @@ const flashcardModule = (function () {
         return _label(steps[targetStep], null);
       } else {
         // Graduated: interval × 1.2
-        const raw = Math.round((card.interval || 1) * 1.2);
-        return _formatInterval(Math.min(raw, cfg.maxInterval));
+        const raw = Math.round(curInterval * 1.2);
+        return _formatInterval(Math.min(Math.max(raw, 1), cfg.maxInterval));
       }
     }
 
@@ -1293,8 +1416,8 @@ const flashcardModule = (function () {
         }
       } else {
         // Graduated: interval × multiplier
-        const raw = Math.round((card.interval || 1) * cfg.multiplier);
-        return _formatInterval(Math.min(raw, cfg.maxInterval));
+        const raw = Math.round(curInterval * cfg.multiplier);
+        return _formatInterval(Math.min(Math.max(raw, 1), cfg.maxInterval));
       }
     }
 
@@ -1304,12 +1427,299 @@ const flashcardModule = (function () {
         return _formatInterval(Math.min(cfg.easyInterval, cfg.maxInterval));
       } else {
         // Graduated: interval × multiplier × 1.3
-        const raw = Math.round((card.interval || 1) * cfg.multiplier * 1.3);
-        return _formatInterval(Math.min(raw, cfg.maxInterval));
+        const raw = Math.round(curInterval * cfg.multiplier * 1.3);
+        return _formatInterval(Math.min(Math.max(raw, 1), cfg.maxInterval));
       }
     }
 
     return '1d';
+  }
+
+  /* ==========================================================
+     MODULAR CARD BACK RENDERER — _renderCardBackContent()
+     ==========================================================
+     Assembles the card back HTML dynamically by treating STANDARD
+     fields (phonetic, vietnamese, definition, examples, synonyms,
+     word family, idioms, collocations, notes, image) and CUSTOM
+     fields from _aiSchema as render BLOCKS.
+
+     Each custom field is injected at its saved `position` slot
+     relative to the standard blocks:
+       'top'             → right after Definition
+       'after_examples'  → after Examples
+       'after_synonyms'  → after Synonyms
+       'bottom'          → before the image (or last)
+
+     ========================================================== */
+
+  /**
+   * Render a single standard card-section block.
+   * @param {string} label   — emoji + label text (e.g. "💬 Examples")
+   * @param {string} labelCSS — CSS class suffix (e.g. "examples")
+   * @param {string} bodyHTML — inner HTML
+   * @returns {string} HTML for the card-section div
+   */
+  function _sectionBlock(label, labelCSS, bodyHTML) {
+    return '<div class="card-section">' +
+             '<span class="card-section-label label-' + labelCSS + '">' + label + '</span>' +
+             bodyHTML +
+           '</div>';
+  }
+
+  /**
+   * Render a single custom field from _aiSchema for a given card.
+   * @param {object} fieldEntry — { id, name, prompt, position, isDeletable }
+   * @param {object} card       — the card data (may have card[fieldEntry.id])
+   * @returns {string} HTML or '' if no data
+   */
+  function _renderCustomFieldBlock(fieldEntry, card) {
+    var val = card[fieldEntry.id];
+    if (val === undefined || val === null || val === '') return '';
+    if (Array.isArray(val) && val.length === 0) return '';
+
+    var labelName = fieldEntry.name || fieldEntry.id;
+    var labelCSS = 'custom'; // uniform cyberpunk style for all custom fields
+    var bodyHTML = '';
+
+    if (Array.isArray(val)) {
+      // The AI returned a list — could be bullet points or tag-style
+      // Check if items look like bullet points (start with '-' or '*')
+      var looksBulleted = val.some(function (item) {
+        return typeof item === 'string' && /^[-*•]\s/.test(item.trim());
+      });
+      if (looksBulleted) {
+        bodyHTML = '<ul class="card-bullet-list">' +
+          val.map(function (v) {
+            var clean = String(v).replace(/^[-*•]\s*/, '');
+            return '<li>' + _esc(clean) + '</li>';
+          }).join('') +
+          '</ul>';
+      } else {
+        // Render as tag cloud (like synonyms/collocations)
+        bodyHTML = '<div class="card-tags">' +
+          val.map(function (v) { return '<span class="card-tag tag-custom">' + _esc(String(v)) + '</span>'; }).join('') +
+          '</div>';
+      }
+    } else if (typeof val === 'object') {
+      // Object (like word_family) — render key:value pairs
+      var entries = Object.entries(val).filter(function (e) {
+        return e[1] !== null && e[1] !== undefined && e[1] !== '';
+      });
+      if (entries.length === 0) return '';
+      bodyHTML = '<div class="card-word-family">' +
+        entries.map(function (e) {
+          return '<span class="family-item"><span class="family-pos">' + _esc(e[0]) + '</span> ' + _esc(String(e[1])) + '</span>';
+        }).join('') +
+        '</div>';
+    } else {
+      // String — auto-detect bullet content
+      var str = String(val);
+      if (str.indexOf('\n') !== -1) {
+        // Multi-line string
+        var lines = str.split('\n').filter(function (l) { return l.trim(); });
+        if (lines.some(function (l) { return /^[-*•]\s/.test(l.trim()); })) {
+          bodyHTML = '<ul class="card-bullet-list">' +
+            lines.map(function (l) {
+              var clean = l.replace(/^[-*•]\s*/, '');
+              return '<li>' + _esc(clean) + '</li>';
+            }).join('') +
+            '</ul>';
+        } else {
+          bodyHTML = lines.map(function (l) { return '<p>' + _esc(l) + '</p>'; }).join('');
+        }
+      } else {
+        bodyHTML = '<span class="card-custom-text">' + _esc(str) + '</span>';
+      }
+    }
+
+    return _sectionBlock('⚡ ' + labelName.toUpperCase(), labelCSS, bodyHTML);
+  }
+
+  /**
+   * MAIN: Assemble the full card-back-scroll inner HTML for a card.
+   * Used by BOTH _renderStudySession and _renderBrowseMode.
+   *
+   * @param {object} card   — the card object
+   * @param {boolean} isStudy — true if study mode (needs pronunciation btn),
+   *                            false for browse mode
+   * @returns {string} complete HTML for .card-back-scroll content
+   */
+  function _renderCardBackContent(card, isStudy) {
+    var blocks = [];
+
+    // ── BLOCK 0: Phonetic (standard, always first) ──
+    if (card.phonetic) {
+      var speakerBtn = '';
+      if (isStudy) {
+        speakerBtn = '<button class="hub-flashcard-speaker-btn" data-speaker-term="' +
+          _esc(card.term) + '" title="Listen to pronunciation" aria-label="Listen to pronunciation">&#9654;</button>';
+      }
+      blocks.push({ slot: 'fixed_top', html: _sectionBlock('🔊 Phonetic' + speakerBtn, 'phonetic',
+        '<span class="card-phonetic">' + _esc(card.phonetic) + '</span>') });
+    }
+
+    // ── BLOCK 1: Vietnamese ──
+    if (card.vietnamese) {
+      blocks.push({ slot: 'fixed_top', html: _sectionBlock('🇻🇳 Vietnamese', 'vietnamese',
+        '<span class="card-vietnamese">' + _esc(card.vietnamese) + '</span>') });
+    }
+
+    // ── BLOCK 2: Definition ("top" anchor) ──
+    var defHTML = '';
+    if (card.describe && card.describe.length > 0) {
+      defHTML = _sectionBlock('📖 Definition', 'definition',
+        '<ul class="card-bullet-list">' +
+          card.describe.map(function (d) { return '<li>' + _esc(d) + '</li>'; }).join('') +
+        '</ul>');
+      blocks.push({ slot: 'definition', html: defHTML });
+    } else {
+      // Even without a definition block we need the "top" anchor
+      blocks.push({ slot: 'definition', html: '' });
+    }
+
+    // ── COLLECT custom fields into their position slots ──
+    var customSlots = { top: [], after_examples: [], after_synonyms: [], bottom: [] };
+    _aiSchema.forEach(function (field) {
+      var pos = field.position || 'bottom';
+      // Validate position
+      if (!customSlots[pos]) pos = 'bottom';
+      var html = _renderCustomFieldBlock(field, card);
+      if (html) customSlots[pos].push(html);
+    });
+
+    // ── BLOCK 3: Examples ──
+    var hasExamples = card.examples && card.examples.length > 0;
+    if (hasExamples) {
+      blocks.push({ slot: 'examples', html: _sectionBlock('💬 Examples', 'examples',
+        '<ul class="card-bullet-list">' +
+          card.examples.map(function (e) { return '<li class="card-example-item">' + _esc(e) + '</li>'; }).join('') +
+        '</ul>') });
+    } else {
+      blocks.push({ slot: 'examples', html: '' });
+    }
+
+    // ── BLOCK 4: Synonyms ──
+    var hasSynonyms = card.synonyms && card.synonyms.length > 0;
+    if (hasSynonyms) {
+      blocks.push({ slot: 'synonyms', html: _sectionBlock('🔗 Synonyms', 'synonyms',
+        '<div class="card-tags">' +
+          card.synonyms.map(function (s) { return '<span class="card-tag tag-synonym">' + _esc(s) + '</span>'; }).join('') +
+        '</div>') });
+    } else {
+      blocks.push({ slot: 'synonyms', html: '' });
+    }
+
+    // ── Standard blocks after synonyms ──
+    var hasWordFamily = card.word_family && Object.keys(card.word_family).length > 0;
+    if (hasWordFamily) {
+      blocks.push({ slot: 'word_family', html: _sectionBlock('🌳 Word Family', 'family',
+        '<div class="card-word-family">' +
+          Object.entries(card.word_family).map(function (e) {
+            return '<span class="family-item"><span class="family-pos">' + _esc(e[0]) + '</span> ' + _esc(e[1]) + '</span>';
+          }).join('') +
+        '</div>') });
+    }
+
+    var hasIdioms = card.idioms && card.idioms.length > 0;
+    if (hasIdioms) {
+      blocks.push({ slot: 'idioms', html: _sectionBlock('📜 Idioms & Phrases', 'idioms',
+        card.idioms.map(function (i) { return '<p class="card-idiom-item">' + _esc(i) + '</p>'; }).join('')) });
+    }
+
+    var hasCollocations = card.collocations && card.collocations.length > 0;
+    if (hasCollocations) {
+      blocks.push({ slot: 'collocations', html: _sectionBlock('🧩 Collocations', 'collocations',
+        '<div class="card-tags">' +
+          card.collocations.map(function (c) { return '<span class="card-tag tag-collocation">' + _esc(c) + '</span>'; }).join('') +
+        '</div>') });
+    }
+
+    var hasNotes = card.note && card.note.length > 0;
+    if (hasNotes) {
+      blocks.push({ slot: 'notes', html: _sectionBlock('⚠️ Usage Notes', 'notes',
+        '<ul class="card-bullet-list card-notes-list">' +
+          card.note.map(function (n) { return '<li>' + _esc(n) + '</li>'; }).join('') +
+        '</ul>') });
+    }
+
+    // ── Image ──
+    var imageHTML = '';
+    if (card.imageUrl) {
+      imageHTML = _sectionBlock('🖼️ Visual Memory', 'image',
+        '<img src="' + _esc(card.imageUrl) + '" alt="Vocabulary Image" class="card-visual-img" loading="lazy">');
+    }
+
+    // ── ASSEMBLE: ordered list of slots ──
+    //   fixed_top → definition(+top customs) → examples(+after_examples customs)
+    //   → synonyms(+after_synonyms customs) → word_family → idioms
+    //   → collocations → notes → bottom customs → image
+    var slotOrder = [
+      'fixed_top',
+      'definition',
+      'examples',
+      'synonyms',
+      'word_family',
+      'idioms',
+      'collocations',
+      'notes',
+      'bottom',
+      'image'
+    ];
+
+    var outputParts = [];
+
+    slotOrder.forEach(function (slotKey) {
+      switch (slotKey) {
+        case 'fixed_top':
+          blocks.filter(function (b) { return b.slot === 'fixed_top' && b.html; })
+            .forEach(function (b) { outputParts.push(b.html); });
+          break;
+        case 'definition':
+          // Find the definition block
+          var defBlock = blocks.find(function (b) { return b.slot === 'definition'; });
+          if (defBlock && defBlock.html) outputParts.push(defBlock.html);
+          // Inject 'top' custom fields right after definition
+          customSlots.top.forEach(function (h) { outputParts.push(h); });
+          break;
+        case 'examples':
+          var exBlock = blocks.find(function (b) { return b.slot === 'examples'; });
+          if (exBlock && exBlock.html) outputParts.push(exBlock.html);
+          // Inject 'after_examples' custom fields
+          customSlots.after_examples.forEach(function (h) { outputParts.push(h); });
+          break;
+        case 'synonyms':
+          var synBlock = blocks.find(function (b) { return b.slot === 'synonyms'; });
+          if (synBlock && synBlock.html) outputParts.push(synBlock.html);
+          // Inject 'after_synonyms' custom fields
+          customSlots.after_synonyms.forEach(function (h) { outputParts.push(h); });
+          break;
+        case 'word_family':
+          blocks.filter(function (b) { return b.slot === 'word_family' && b.html; })
+            .forEach(function (b) { outputParts.push(b.html); });
+          break;
+        case 'idioms':
+          blocks.filter(function (b) { return b.slot === 'idioms' && b.html; })
+            .forEach(function (b) { outputParts.push(b.html); });
+          break;
+        case 'collocations':
+          blocks.filter(function (b) { return b.slot === 'collocations' && b.html; })
+            .forEach(function (b) { outputParts.push(b.html); });
+          break;
+        case 'notes':
+          blocks.filter(function (b) { return b.slot === 'notes' && b.html; })
+            .forEach(function (b) { outputParts.push(b.html); });
+          break;
+        case 'bottom':
+          // 'bottom' custom fields before image
+          customSlots.bottom.forEach(function (h) { outputParts.push(h); });
+          break;
+        case 'image':
+          if (imageHTML) outputParts.push(imageHTML);
+          break;
+      }
+    });
+
+    return outputParts.join('\n');
   }
 
   /**
@@ -1431,7 +1841,9 @@ const prompt = buildAIPrompt(word, _aiSchema);
       repetition: 0,
       interval: 0,
       easeFactor: 2.5,
-      nextReviewDate: Date.now()
+      nextReviewDate: Date.now(),
+      lastReviewed: 0,
+      learningStep: 0
     };
   }
 
@@ -2350,13 +2762,8 @@ const prompt = buildAIPrompt(word, _aiSchema);
       return;
     }
 
-    const now = Date.now();
-    _studyQueue = [];
-    deck.cards.forEach(function (card, i) {
-      if (card.nextReviewDate <= now) {
-        _studyQueue.push(i);
-      }
-    });
+    // ── SINGLE SOURCE OF TRUTH: unified due-card query ──
+    _studyQueue = _getDueCardIndices(deck);
 
     if (_studyQueue.length === 0) {
       _showToast('No cards due in this deck! You\'re all caught up.');
@@ -2381,6 +2788,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
 
     _mode = 'study';
     _cardFlipped = false;
+    _studyLocked = false;
     _renderStudySession();
   }
 
@@ -2457,81 +2865,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
                   </div>
                 </div>
 
-                ${card.phonetic ? `
-                <div class="card-section">
-                  <span class="card-section-label label-phonetic">🔊 Phonetic
-                    <button class="hub-flashcard-speaker-btn" data-speaker-term="${_esc(card.term)}" title="Listen to pronunciation" aria-label="Listen to pronunciation">&#9654;</button>
-                  </span>
-                  <span class="card-phonetic">${_esc(card.phonetic)}</span>
-                </div>` : ''}
-
-                ${card.vietnamese ? `
-                <div class="card-section">
-                  <span class="card-section-label label-vietnamese">🇻🇳 Vietnamese</span>
-                  <span class="card-vietnamese">${_esc(card.vietnamese)}</span>
-                </div>` : ''}
-
-                ${card.describe && card.describe.length > 0 ? `
-                <div class="card-section">
-                  <span class="card-section-label label-definition">📖 Definition</span>
-                  <ul class="card-bullet-list">
-                    ${card.describe.map(d => `<li>${_esc(d)}</li>`).join('')}
-                  </ul>
-                </div>` : ''}
-
-                ${card.examples && card.examples.length > 0 ? `
-                <div class="card-section">
-                  <span class="card-section-label label-examples">💬 Examples</span>
-                  <ul class="card-bullet-list">
-                    ${card.examples.map(e => `<li class="card-example-item">${_esc(e)}</li>`).join('')}
-                  </ul>
-                </div>` : ''}
-
-                ${card.synonyms && card.synonyms.length > 0 ? `
-                <div class="card-section">
-                  <span class="card-section-label label-synonyms">🔗 Synonyms</span>
-                  <div class="card-tags">
-                    ${card.synonyms.map(s => `<span class="card-tag tag-synonym">${_esc(s)}</span>`).join('')}
-                  </div>
-                </div>` : ''}
-
-                ${card.word_family && Object.keys(card.word_family).length > 0 ? `
-                <div class="card-section">
-                  <span class="card-section-label label-family">🌳 Word Family</span>
-                  <div class="card-word-family">
-                    ${Object.entries(card.word_family).map(([pos, w]) =>
-                      `<span class="family-item"><span class="family-pos">${_esc(pos)}</span> ${_esc(w)}</span>`
-                    ).join('')}
-                  </div>
-                </div>` : ''}
-
-                ${card.idioms && card.idioms.length > 0 ? `
-                <div class="card-section">
-                  <span class="card-section-label label-idioms">📜 Idioms & Phrases</span>
-                  ${card.idioms.map(i => `<p class="card-idiom-item">${_esc(i)}</p>`).join('')}
-                </div>` : ''}
-
-                ${card.collocations && card.collocations.length > 0 ? `
-                <div class="card-section">
-                  <span class="card-section-label label-collocations">🧩 Collocations</span>
-                  <div class="card-tags">
-                    ${card.collocations.map(c => `<span class="card-tag tag-collocation">${_esc(c)}</span>`).join('')}
-                  </div>
-                </div>` : ''}
-
-                ${card.note && card.note.length > 0 ? `
-                <div class="card-section">
-                  <span class="card-section-label label-notes">⚠️ Usage Notes</span>
-                  <ul class="card-bullet-list card-notes-list">
-                    ${card.note.map(n => `<li>${_esc(n)}</li>`).join('')}
-                  </ul>
-                </div>` : ''}
-
-                ${card.imageUrl ? `
-                <div class="card-section">
-                  <span class="card-section-label label-image">🖼️ Visual Memory</span>
-                  <img src="${_esc(card.imageUrl)}" alt="Vocabulary Image" class="card-visual-img" loading="lazy">
-                </div>` : ''}
+                ${_renderCardBackContent(card, true)}
               </div><!-- /card-back-scroll -->
             </div><!-- /card-back -->
           </div><!-- /card-3d -->
@@ -2614,6 +2948,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
 
         // --- Cloze: flip helper ---
         const _doFlip = () => {
+          if (_cardFlipped || _studyLocked) return;
           _cardFlipped = true;
           card3d.classList.add('flipped');
           setTimeout(() => panel.classList.add('revealed'), 150);
@@ -2621,7 +2956,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
 
         // --- Cloze: Check answer ---
         const _checkCloze = () => {
-          if (_cardFlipped) return;
+          if (_cardFlipped || _studyLocked) return;
           const cards = _getActiveCards();
           const card = cards[cardIdx];
           const userAnswer = _normalizeStr(clozeInput.value);
@@ -2679,7 +3014,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
         // --- Normal mode: click/space to flip ---
 
         card3d.addEventListener('click', () => {
-          if (!_cardFlipped) {
+          if (!_cardFlipped && !_studyLocked) {
             _cardFlipped = true;
             card3d.classList.add('flipped');
             setTimeout(() => panel.classList.add('revealed'), 150);
@@ -2694,7 +3029,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
           if (e.key === ' ' || e.key === 'Spacebar') {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
             e.preventDefault();
-            if (!_cardFlipped) {
+            if (!_cardFlipped && !_studyLocked) {
               _cardFlipped = true;
               card3d.classList.add('flipped');
               setTimeout(() => panel.classList.add('revealed'), 150);
@@ -2709,7 +3044,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
     // Assessment buttons — also allow number keys 1-4
     const numberHandler = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-      if (!_cardFlipped) return;
+      if (!_cardFlipped || _studyLocked) return;
       const keyMap = { '1': QUALITY.AGAIN, '2': QUALITY.HARD, '3': QUALITY.GOOD, '4': QUALITY.EASY };
       const quality = keyMap[e.key];
       if (quality !== undefined) {
@@ -2722,6 +3057,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
 
     // Assessment button clicks (delegated)
     _container.addEventListener('click', function (e) {
+      if (_studyLocked) return;
       var btn = e.target.closest('.srs-assessment-btn');
       if (!btn) return;
       var quality = parseInt(btn.dataset.quality, 10);
@@ -2767,15 +3103,36 @@ const prompt = buildAIPrompt(word, _aiSchema);
     }
   }
 
+  /* ───────────────────────────────────────────────
+     Disable/enable all study action buttons
+     Prevents phantom double-click ghost advances
+     ─────────────────────────────────────────────── */
+  function _disableAllStudyButtons(disable) {
+    if (!_container) return;
+    var btns = _container.querySelectorAll(
+      '.srs-assessment-btn, .cloze-btn, #btn-end-session'
+    );
+    btns.forEach(function (b) {
+      b.disabled = disable;
+      b.style.pointerEvents = disable ? 'none' : '';
+      b.style.opacity = disable ? '0.5' : '';
+    });
+  }
+
   /* ==========================================================
      HANDLE ASSESSMENT (SM-2 update + advance queue)
      ========================================================== */
 
   function _handleAssessment(quality, cardIdx) {
     if (!_container) return;
+    if (_studyLocked) return; // Prevent double-click ghost advances
 
     const deck = _getActiveDeck();
     if (!deck) return;
+
+    // LOCK: disable all action buttons until the next card is rendered
+    _studyLocked = true;
+    _disableAllStudyButtons(true);
 
     // Remove the current card from the front of the queue
     _studyQueue.shift();
@@ -2807,6 +3164,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
 
     // Reset flip state and render next card
     _cardFlipped = false;
+    _studyLocked = false;
 
     if (_studyQueue.length === 0) {
       // Session complete
@@ -3027,81 +3385,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
                   </button>
                 </div>
 
-                ${card.phonetic ? `
-                <div class="card-section">
-                  <span class="card-section-label label-phonetic">🔊 Phonetic
-                    <button class="hub-flashcard-speaker-btn" data-speaker-term="${_esc(card.term)}" title="Listen to pronunciation" aria-label="Listen to pronunciation">&#9654;</button>
-                  </span>
-                  <span class="card-phonetic">${_esc(card.phonetic)}</span>
-                </div>` : ''}
-
-                ${card.vietnamese ? `
-                <div class="card-section">
-                  <span class="card-section-label label-vietnamese">🇻🇳 Vietnamese</span>
-                  <span class="card-vietnamese">${_esc(card.vietnamese)}</span>
-                </div>` : ''}
-
-                ${card.describe && card.describe.length > 0 ? `
-                <div class="card-section">
-                  <span class="card-section-label label-definition">📖 Definition</span>
-                  <ul class="card-bullet-list">
-                    ${card.describe.map(d => `<li>${_esc(d)}</li>`).join('')}
-                  </ul>
-                </div>` : ''}
-
-                ${card.examples && card.examples.length > 0 ? `
-                <div class="card-section">
-                  <span class="card-section-label label-examples">💬 Examples</span>
-                  <ul class="card-bullet-list">
-                    ${card.examples.map(e => `<li class="card-example-item">${_esc(e)}</li>`).join('')}
-                  </ul>
-                </div>` : ''}
-
-                ${hasSynonyms ? `
-                <div class="card-section">
-                  <span class="card-section-label label-synonyms">🔗 Synonyms</span>
-                  <div class="card-tags">
-                    ${card.synonyms.map(s => `<span class="card-tag tag-synonym">${_esc(s)}</span>`).join('')}
-                  </div>
-                </div>` : ''}
-
-                ${hasWordFamily ? `
-                <div class="card-section">
-                  <span class="card-section-label label-family">🌳 Word Family</span>
-                  <div class="card-word-family">
-                    ${Object.entries(card.word_family).map(([pos, w]) =>
-                      `<span class="family-item"><span class="family-pos">${_esc(pos)}</span> ${_esc(w)}</span>`
-                    ).join('')}
-                  </div>
-                </div>` : ''}
-
-                ${hasIdioms ? `
-                <div class="card-section">
-                  <span class="card-section-label label-idioms">📜 Idioms & Phrases</span>
-                  ${card.idioms.map(i => `<p class="card-idiom-item">${_esc(i)}</p>`).join('')}
-                </div>` : ''}
-
-                ${hasCollocations ? `
-                <div class="card-section">
-                  <span class="card-section-label label-collocations">🧩 Collocations</span>
-                  <div class="card-tags">
-                    ${card.collocations.map(c => `<span class="card-tag tag-collocation">${_esc(c)}</span>`).join('')}
-                  </div>
-                </div>` : ''}
-
-                ${hasNotes ? `
-                <div class="card-section">
-                  <span class="card-section-label label-notes">⚠️ Usage Notes</span>
-                  <ul class="card-bullet-list card-notes-list">
-                    ${card.note.map(n => `<li>${_esc(n)}</li>`).join('')}
-                  </ul>
-                </div>` : ''}
-
-                ${card.imageUrl ? `
-                <div class="card-section">
-                  <span class="card-section-label label-image">🖼️ Visual Memory</span>
-                  <img src="${_esc(card.imageUrl)}" alt="Vocabulary Image" class="card-visual-img" loading="lazy">
-                </div>` : ''}
+                ${_renderCardBackContent(card, true)}
 
                 <!-- SRS Info Footer -->
                 <div class="srs-info-footer">
@@ -3898,7 +4182,9 @@ const prompt = buildAIPrompt(word, _aiSchema);
         repetition: 0,
         interval: 0,
         easeFactor: 2.5,
-        nextReviewDate: Date.now()
+        nextReviewDate: Date.now(),
+        lastReviewed: 0,
+        learningStep: 0
       };
       deck.cards.push(newCard);
       _currentIndex = deck.cards.length - 1;
@@ -3982,11 +4268,49 @@ const prompt = buildAIPrompt(word, _aiSchema);
    */
   function _normalizeCard(card) {
     // --- SRS defaults (for migration of existing cards) ---
+    // STRICT validation: nextReviewDate MUST be a finite number.
+    // null, undefined, NaN, Infinity, or negative values → reset to now.
+    var nextReview = Date.now();
+    if (typeof card.nextReviewDate === 'number'
+        && isFinite(card.nextReviewDate)
+        && card.nextReviewDate >= 0) {
+      nextReview = card.nextReviewDate;
+    }
+
+    var repetition = 0;
+    if (typeof card.repetition === 'number' && isFinite(card.repetition) && card.repetition >= 0) {
+      repetition = card.repetition;
+    }
+
+    var interval = 0;
+    if (typeof card.interval === 'number' && isFinite(card.interval) && card.interval >= 0) {
+      interval = card.interval;
+    }
+
+    var easeFactor = 2.5;
+    if (typeof card.easeFactor === 'number' && isFinite(card.easeFactor) && card.easeFactor >= 1.3) {
+      easeFactor = card.easeFactor;
+    }
+
+    var lastReviewed = 0;
+    if (typeof card.lastReviewed === 'number'
+        && isFinite(card.lastReviewed)
+        && card.lastReviewed > 0) {
+      lastReviewed = card.lastReviewed;
+    }
+
+    var learningStep = 0;
+    if (typeof card.learningStep === 'number' && card.learningStep >= 0 && card.learningStep <= 2) {
+      learningStep = card.learningStep;
+    }
+
     const srsDefaults = {
-      repetition: (typeof card.repetition === 'number') ? card.repetition : 0,
-      interval: (typeof card.interval === 'number') ? card.interval : 0,
-      easeFactor: (typeof card.easeFactor === 'number') ? card.easeFactor : 2.5,
-      nextReviewDate: (typeof card.nextReviewDate === 'number') ? card.nextReviewDate : Date.now()
+      repetition: repetition,
+      interval: interval,
+      easeFactor: easeFactor,
+      nextReviewDate: nextReview,
+      lastReviewed: lastReviewed,
+      learningStep: learningStep
     };
 
     // If the card already has 'describe' as an array, it's likely
@@ -4041,6 +4365,109 @@ const prompt = buildAIPrompt(word, _aiSchema);
       imageUrl: card.imageUrl || '',
       ...srsDefaults
     };
+  }
+
+  /* ==========================================================
+     DATA REPAIR MIGRATION — _repairCardTimestamps()
+     ==========================================================
+     Runs automatically after every deck load (Firestore or
+     localStorage).  Scans ALL cards across ALL decks and fixes
+     corrupted / invalid / missing SRS timestamp fields.
+
+     Fixes applied:
+       1. nextReviewDate missing / null / NaN / negative → set to
+          Date.now() so the card surfaces in the next study session
+          instead of disappearing forever.
+       2. interval = 0, NaN, or negative on a graduated card →
+          reset to 1 day so future interval calculations don't
+          produce zero-day schedules.
+       3. easeFactor out of range → reset to the default 2.5.
+       4. learningStep > 2 → clamp to 2.
+
+     Returns { fixed: number } — count of cards repaired so the
+     caller can log it and optionally save.
+     ========================================================== */
+  function _repairCardTimestamps() {
+    var fixed = 0;
+    var now = Date.now();
+
+    _decks.forEach(function (deck) {
+      if (!deck || !Array.isArray(deck.cards)) return;
+
+      deck.cards.forEach(function (card, i) {
+        if (!card) return;
+        var wasFixed = false;
+
+        // ── 1. nextReviewDate ──
+        if (typeof card.nextReviewDate !== 'number'
+            || !isFinite(card.nextReviewDate)
+            || card.nextReviewDate < 0) {
+          // If the card has an interval that looks reasonable
+          // and a lastReviewed timestamp, try to reconstruct:
+          //   nextReview = lastReviewed + (interval * 24h)
+          if (typeof card.lastReviewed === 'number'
+              && isFinite(card.lastReviewed)
+              && card.lastReviewed > 0
+              && typeof card.interval === 'number'
+              && isFinite(card.interval)
+              && card.interval > 0) {
+            card.nextReviewDate = card.lastReviewed + (card.interval * 24 * 60 * 60 * 1000);
+          } else {
+            // Cannot reconstruct — surface card immediately
+            card.nextReviewDate = now;
+          }
+          wasFixed = true;
+        }
+
+        // ── 2. interval: graduated cards must have >= 1 day ──
+        if (card.repetition >= 1
+            && (typeof card.interval !== 'number'
+                || !isFinite(card.interval)
+                || card.interval < 1)) {
+          card.interval = 1;
+          wasFixed = true;
+        }
+
+        // ── 3. easeFactor ──
+        if (typeof card.easeFactor !== 'number'
+            || !isFinite(card.easeFactor)
+            || card.easeFactor < 1.3
+            || card.easeFactor > 10) {
+          card.easeFactor = 2.5;
+          wasFixed = true;
+        }
+
+        // ── 4. learningStep ──
+        if (typeof card.learningStep === 'number'
+            && (card.learningStep < 0 || card.learningStep > 2)) {
+          var clamped = Math.min(Math.max(Math.round(card.learningStep), 0), 2);
+          card.learningStep = clamped;
+          wasFixed = true;
+        }
+
+        // ── 5. lastReviewed: if missing but card was reviewed ──
+        if (card.repetition > 0
+            || (typeof card.lastReviewed === 'number' && card.lastReviewed > 0)) {
+          // Ensure it's at least a valid number
+          if (typeof card.lastReviewed !== 'number'
+              || !isFinite(card.lastReviewed)
+              || card.lastReviewed <= 0) {
+            card.lastReviewed = card.nextReviewDate || now;
+            wasFixed = true;
+          }
+        }
+
+        if (wasFixed) fixed++;
+      });
+    });
+
+    if (fixed > 0) {
+      console.log('[Flashcard] _repairCardTimestamps — repaired ' + fixed + ' card(s)');
+      // Persist the repairs so the next load picks up clean data
+      _saveDecks();
+    }
+
+    return { fixed: fixed };
   }
 
   // --- Public API (module contract) ---

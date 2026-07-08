@@ -318,7 +318,10 @@ const dashboardModule = (function () {
         if (!Array.isArray(cards)) return;
         totalCards += cards.length;
         cards.forEach(function (card) {
-          if (typeof card.nextReviewDate === 'number' && card.nextReviewDate <= now) {
+          // Strict validation: must be a finite number AND ≤ now
+          if (typeof card.nextReviewDate === 'number'
+              && isFinite(card.nextReviewDate)
+              && card.nextReviewDate <= now) {
             dueCards++;
           }
         });
