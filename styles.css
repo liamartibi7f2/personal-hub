@@ -7990,6 +7990,393 @@ mark.cyber-hl-pink:hover {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 18px rgba(246, 190, 124, 0.12);
 }
 
+/* ── History Button ── */
+.hub-notes-history-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+  position: relative;
+  overflow: hidden;
+}
+
+.hub-notes-history-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(255, 200, 60, 0.08) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out-expo);
+}
+
+.hub-notes-history-btn:hover {
+  color: #fff;
+  background: rgba(255, 200, 60, 0.1);
+  border-color: rgba(255, 200, 60, 0.4);
+  box-shadow:
+    0 0 12px rgba(255, 200, 60, 0.12),
+    0 2px 8px rgba(0, 0, 0, 0.3);
+  transform: translateY(-1px);
+}
+
+.hub-notes-history-btn:hover::before {
+  opacity: 1;
+}
+
+.hub-notes-history-btn:active {
+  transform: scale(0.95);
+  box-shadow:
+    0 0 8px rgba(255, 200, 60, 0.15),
+    inset 0 0 16px rgba(255, 200, 60, 0.06);
+}
+
+.hub-notes-history-btn .hub-notes-history-icon {
+  width: 14px;
+  height: 14px;
+  transition: transform var(--duration-fast) var(--ease-out-expo);
+  flex-shrink: 0;
+}
+
+.hub-notes-history-btn:hover .hub-notes-history-icon {
+  transform: scale(1.1);
+}
+
+/* Theme: Solar Zen */
+[data-theme="solar-zen"] .hub-notes-history-btn {
+  color: #6d28d9;
+  background: rgba(109, 40, 217, 0.04);
+  border-color: rgba(109, 40, 217, 0.15);
+}
+
+[data-theme="solar-zen"] .hub-notes-history-btn:hover {
+  color: #5b21b6;
+  background: rgba(109, 40, 217, 0.08);
+  border-color: #6d28d9;
+  box-shadow:
+    0 0 12px rgba(109, 40, 217, 0.1),
+    0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* Theme: Lo-Fi Twilight */
+[data-theme="lofi-twilight"] .hub-notes-history-btn {
+  color: var(--accent-secondary);
+  background: rgba(246, 190, 124, 0.04);
+  border-color: rgba(246, 190, 124, 0.15);
+}
+
+[data-theme="lofi-twilight"] .hub-notes-history-btn:hover {
+  color: #fff;
+  background: rgba(246, 190, 124, 0.1);
+  border-color: var(--accent-secondary);
+  box-shadow:
+    0 0 12px rgba(246, 190, 124, 0.15),
+    0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+/* ── History Modal Overlay ── */
+.hub-notes-history-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10001;
+  background: rgba(4, 4, 12, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-base) var(--ease-out-expo);
+}
+
+.hub-notes-history-overlay--visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ── History Modal Panel ── */
+.hub-notes-history-modal {
+  width: 100%;
+  max-width: 460px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--glass-border);
+  padding: var(--space-xl);
+  gap: var(--space-lg);
+  transform: scale(0.92) translateY(16px);
+  transition: transform var(--duration-base) var(--ease-out-expo);
+  box-shadow:
+    0 16px 64px rgba(0, 0, 0, 0.5),
+    0 0 40px rgba(255, 200, 60, 0.06);
+}
+
+.hub-notes-history-overlay--visible .hub-notes-history-modal {
+  transform: scale(1) translateY(0);
+}
+
+/* Header */
+.hub-notes-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.hub-notes-history-title {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.03em;
+  margin: 0;
+}
+
+.hub-notes-history-close {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+  flex-shrink: 0;
+}
+
+.hub-notes-history-close:hover {
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.hub-notes-history-close:active {
+  transform: scale(0.9);
+}
+
+/* Body — scrollable list area */
+.hub-notes-history-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  overflow-y: auto;
+  max-height: 52vh;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+.hub-notes-history-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.hub-notes-history-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.hub-notes-history-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+/* Loading state */
+.hub-notes-history-loading {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  text-align: center;
+  padding: var(--space-lg) 0;
+}
+
+/* Empty state */
+.hub-notes-history-empty {
+  text-align: center;
+  padding: var(--space-lg) 0;
+}
+
+.hub-notes-history-empty p {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.hub-notes-history-empty-sub {
+  margin-top: var(--space-xs) !important;
+  font-size: 0.68rem !important;
+  opacity: 0.6;
+}
+
+/* ── History List Item ── */
+.hub-notes-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+  transition: all var(--duration-fast) var(--ease-out-expo);
+}
+
+.hub-notes-history-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 200, 60, 0.15);
+}
+
+.hub-notes-history-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.hub-notes-history-item-time {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--accent-primary);
+  letter-spacing: 0.02em;
+}
+
+.hub-notes-history-item-snippet {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* Restore button inside each item */
+.hub-notes-history-restore-btn {
+  flex-shrink: 0;
+  padding: 5px 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 240, 255, 0.08);
+  color: var(--accent-primary);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+}
+
+.hub-notes-history-restore-btn:hover {
+  background: rgba(0, 240, 255, 0.18);
+  border-color: var(--accent-primary);
+  color: #fff;
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.2);
+}
+
+.hub-notes-history-restore-btn:active {
+  transform: scale(0.93);
+}
+
+/* ── Theme: Solar Zen History Overlay ── */
+[data-theme="solar-zen"] .hub-notes-history-modal {
+  background: rgba(255, 255, 255, 0.92);
+}
+
+[data-theme="solar-zen"] .hub-notes-history-overlay {
+  background: rgba(240, 240, 235, 0.6);
+}
+
+[data-theme="solar-zen"] .hub-notes-history-item-time {
+  color: #008080;
+}
+
+[data-theme="solar-zen"] .hub-notes-history-restore-btn {
+  background: rgba(0, 128, 128, 0.08);
+  color: #008080;
+  border-color: rgba(0, 128, 128, 0.2);
+}
+
+[data-theme="solar-zen"] .hub-notes-history-restore-btn:hover {
+  background: rgba(0, 128, 128, 0.18);
+  border-color: #008080;
+  color: #fff;
+  box-shadow: 0 0 14px rgba(0, 128, 128, 0.2);
+}
+
+[data-theme="solar-zen"] .hub-notes-history-item:hover {
+  border-color: rgba(0, 128, 128, 0.2);
+}
+
+/* ── Theme: Lo-Fi Twilight History Overlay ── */
+[data-theme="lofi-twilight"] .hub-notes-history-modal {
+  box-shadow:
+    0 16px 64px rgba(0, 0, 0, 0.55),
+    0 0 40px rgba(246, 190, 124, 0.06);
+}
+
+[data-theme="lofi-twilight"] .hub-notes-history-item-time {
+  color: var(--accent-secondary);
+}
+
+[data-theme="lofi-twilight"] .hub-notes-history-restore-btn {
+  background: rgba(246, 190, 124, 0.08);
+  color: var(--accent-secondary);
+  border-color: rgba(246, 190, 124, 0.2);
+}
+
+[data-theme="lofi-twilight"] .hub-notes-history-restore-btn:hover {
+  background: rgba(246, 190, 124, 0.18);
+  border-color: var(--accent-secondary);
+  color: #fff;
+  box-shadow: 0 0 14px rgba(246, 190, 124, 0.2);
+}
+
+[data-theme="lofi-twilight"] .hub-notes-history-item:hover {
+  border-color: rgba(246, 190, 124, 0.2);
+}
+
+/* ── Mobile responsiveness ── */
+@media (max-width: 768px) {
+  .hub-notes-history-modal {
+    max-width: 100%;
+    max-height: 80vh;
+    padding: var(--space-md);
+  }
+
+  .hub-notes-history-body {
+    max-height: 60vh;
+  }
+
+  .hub-notes-history-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-xs);
+  }
+
+  .hub-notes-history-restore-btn {
+    align-self: flex-end;
+  }
+}
+
 /* ── Right Pane ── */
 .hub-notes-editor-pane {
   flex: 1;

@@ -300,6 +300,14 @@ const notesModule = (function () {
               '</svg>' +
               '<span class="hub-notes-save-label">Vault</span>' +
             '</button>' +
+            '<button class="hub-notes-history-btn" id="hn-btn-history" title="Restore History" aria-label="Restore notes from vault history">' +
+              '<svg width="14" height="14" viewBox="0 0 20 20" fill="none" class="hub-notes-history-icon">' +
+                '<circle cx="10" cy="10" r="7.5" stroke="currentColor" stroke-width="1.4" fill="none"/>' +
+                '<path d="M10 6v4.5l3 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>' +
+                '<path d="M2 10h2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>' +
+              '</svg>' +
+              '<span class="hub-notes-save-label">History</span>' +
+            '</button>' +
             '<span class="hub-notes-save-feedback" id="hn-save-feedback"></span>' +
           '</div>' +
           '<div class="hub-notes-editor-area">' +
@@ -320,7 +328,25 @@ const notesModule = (function () {
             '<p class="hub-notes-empty-sub">Create a new note to get started</p>' +
           '</div>' +
         '</main>' +
-        '<div class="hub-notes-float-toolbar" id="hn-float-toolbar" style="display:none">' +
+        '<div class="hub-notes-history-overlay" id="hn-history-overlay" role="dialog" aria-modal="true" aria-label="Vault History">' +
+                '<div class="hub-notes-history-modal glass">' +
+                  '<div class="hub-notes-history-header">' +
+                    '<h3 class="hub-notes-history-title">🕒 Vault History</h3>' +
+                    '<button class="hub-notes-history-close" id="hn-history-close" aria-label="Close history">✕</button>' +
+                  '</div>' +
+                  '<div class="hub-notes-history-body">' +
+                    '<div class="hub-notes-history-loading" id="hn-history-loading">' +
+                      '<span class="hub-notes-loading-dot">●</span> Loading backups...' +
+                    '</div>' +
+                    '<div class="hub-notes-history-list" id="hn-history-list" style="display:none"></div>' +
+                    '<div class="hub-notes-history-empty" id="hn-history-empty" style="display:none">' +
+                      '<p>No backups found in the vault.</p>' +
+                      '<p class="hub-notes-history-empty-sub">Use the Vault button to create your first snapshot backup.</p>' +
+                    '</div>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+              '<div class="hub-notes-float-toolbar" id="hn-float-toolbar" style="display:none">' +
           '<button class="hub-notes-tb-btn" data-cmd="bold" title="Bold" aria-label="Bold"><b>B</b></button>' +
           '<button class="hub-notes-tb-btn" data-cmd="italic" title="Italic" aria-label="Italic"><i>I</i></button>' +
           '<button class="hub-notes-tb-btn" data-cmd="underline" title="Underline" aria-label="Underline"><u>U</u></button>' +
@@ -358,6 +384,13 @@ const notesModule = (function () {
     _el.dateText        = _qs('hn-date-text');
     _el.dateInput       = _qs('hn-date-input');
     _el.backupBtn       = _qs('hn-btn-backup');
+    _el.historyBtn      = _qs('hn-btn-history');
+    _el.historyOverlay  = _qs('hn-history-overlay');
+    _el.historyClose    = _qs('hn-history-close');
+    _el.historyList     = _qs('hn-history-list');
+    _el.historyLoading  = _qs('hn-history-loading');
+    _el.historyEmpty    = _qs('hn-history-empty');
+    _el.historyBody     = null; // will be scoped from overlay
 
     // Render lists
     _renderFolders();
@@ -374,6 +407,7 @@ const notesModule = (function () {
     _bindManualSave();
     _bindDateEvents();
     _bindBackupVault();
+    _bindHistoryVault();
   }
 
   // ============================================================
@@ -1238,7 +1272,7 @@ function _updateToolbarPosition() {
         toolbar: null, savingIndicator: null, emptyState: null, editorPane: null,
         addBtn: null, addFolderBtn: null, searchBtn: null, searchBar: null,
         searchInput: null, searchClear: null, manualSaveBtn: null, saveFeedback: null,
-        dateContainer: null, dateText: null, dateInput: null, backupBtn: null
+        dateContainer: null, dateText: null, dateInput: null, backupBtn: null, historyBtn: null, historyOverlay: null, historyClose: null, historyList: null, historyLoading: null, historyEmpty: null, historyBody: null
       };
     }
 
@@ -1275,7 +1309,7 @@ function _updateToolbarPosition() {
       toolbar: null, savingIndicator: null, emptyState: null, editorPane: null,
       addBtn: null, addFolderBtn: null, searchBtn: null, searchBar: null,
       searchInput: null, searchClear: null, manualSaveBtn: null, saveFeedback: null,
-      dateContainer: null, dateText: null, dateInput: null, backupBtn: null
+      dateContainer: null, dateText: null, dateInput: null, backupBtn: null, historyBtn: null, historyOverlay: null, historyClose: null, historyList: null, historyLoading: null, historyEmpty: null, historyBody: null
     };
     // ⚡ PRESERVE _data, _activeNote, _activeFolder, _sessionInitialized,
     //    and _isNotesDataLoaded across tab switches so the in-memory cache
@@ -1457,6 +1491,240 @@ function _updateToolbarPosition() {
         if (toast.parentNode) toast.remove();
       }, 400); // match CSS transition
     }, duration);
+  }
+
+  // ============================================================
+  //   HISTORY — Restore Vault Backups
+  // ============================================================
+
+  /**
+   * Bind the HISTORY button: open overlay → query Firestore →
+   * render backup list with restore buttons.
+   */
+  function _bindHistoryVault() {
+    // ── Open overlay ──
+    if (_el.historyBtn) {
+      _el.historyBtn.addEventListener('click', function () {
+        _openHistoryOverlay();
+        _fetchAndRenderHistory();
+      });
+    }
+
+    // ── Close button ──
+    if (_el.historyClose) {
+      _el.historyClose.addEventListener('click', function () {
+        _closeHistoryOverlay();
+      });
+    }
+
+    // ── Close on backdrop click ──
+    if (_el.historyOverlay) {
+      _el.historyOverlay.addEventListener('click', function (e) {
+        if (e.target === _el.historyOverlay) {
+          _closeHistoryOverlay();
+        }
+      });
+    }
+
+    // ── Close on Escape ──
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && _el.historyOverlay && _el.historyOverlay.classList.contains('hub-notes-history-overlay--visible')) {
+        _closeHistoryOverlay();
+      }
+    });
+  }
+
+  function _openHistoryOverlay() {
+    if (!_el.historyOverlay) return;
+    // Reset UI state
+    if (_el.historyLoading) _el.historyLoading.style.display = '';
+    if (_el.historyList) _el.historyList.style.display = 'none';
+    if (_el.historyEmpty) _el.historyEmpty.style.display = 'none';
+    if (_el.historyList) _el.historyList.innerHTML = '';
+    _el.historyBody = _el.historyOverlay.querySelector('.hub-notes-history-body');
+    _el.historyOverlay.classList.add('hub-notes-history-overlay--visible');
+  }
+
+  function _closeHistoryOverlay() {
+    if (_el.historyOverlay) {
+      _el.historyOverlay.classList.remove('hub-notes-history-overlay--visible');
+    }
+  }
+
+  /**
+   * Query Firestore for backups and render them as list items.
+   */
+  async function _fetchAndRenderHistory() {
+    // ── 1. Check auth / online status ──
+    var authStatus = HubDB.getAuthStatus();
+    if (!authStatus.loggedIn || navigator.onLine === false) {
+      _showHistoryEmpty('⚠️ Bạn cần đăng nhập và có kết nối mạng để xem lịch sử sao lưu.');
+      return;
+    }
+
+    // ── 2. Get Firestore ──
+    var db;
+    try {
+      db = firebase.firestore();
+    } catch (e) {
+      _showHistoryEmpty('❌ Không thể kết nối tới Firestore.');
+      return;
+    }
+
+    var vaultRef = db.collection('users').doc(authStatus.uid).collection('notes_backup_vault');
+
+    // ── 3. Query newest-first ──
+    var snap;
+    try {
+      snap = await Promise.race([
+        vaultRef.orderBy('created_at', 'desc').get(),
+        new Promise(function (_, reject) { setTimeout(function () { reject(new Error('timeout')); }, 3000); })
+      ]);
+    } catch (err) {
+      console.error('[Notes History] Fetch failed:', err.message || err);
+      _showHistoryEmpty('❌ Tải dữ liệu thất bại: ' + (err.message || 'timeout'));
+      return;
+    }
+
+    var docs = snap.docs;
+    if (!docs || docs.length === 0) {
+      _showHistoryEmpty('No backups found in the vault.');
+      return;
+    }
+
+    // ── 4. Hide loading, show list ──
+    if (_el.historyLoading) _el.historyLoading.style.display = 'none';
+    if (_el.historyList) _el.historyList.style.display = '';
+    if (_el.historyEmpty) _el.historyEmpty.style.display = 'none';
+
+    var frag = document.createDocumentFragment();
+
+    docs.forEach(function (docSnap) {
+      var data = docSnap.data();
+      if (!data || !data.note_content) return; // skip malformed docs
+
+      var snapshotData = data.note_content;
+
+      // ── Build timestamp string ──
+      var dateStr = '';
+      if (data.created_at && data.created_at.toDate) {
+        // Firestore Timestamp → JS Date
+        var d = data.created_at.toDate();
+        var dd = String(d.getDate()).padStart(2, '0');
+        var mm = String(d.getMonth() + 1).padStart(2, '0');
+        var yyyy = d.getFullYear();
+        var hh = String(d.getHours()).padStart(2, '0');
+        var min = String(d.getMinutes()).padStart(2, '0');
+        dateStr = dd + '/' + mm + '/' + yyyy + ' - ' + hh + ':' + min;
+      } else if (snapshotData.capturedAt) {
+        // Fallback to client-side timestamp
+        var d = new Date(snapshotData.capturedAt);
+        var dd = String(d.getDate()).padStart(2, '0');
+        var mm = String(d.getMonth() + 1).padStart(2, '0');
+        var yyyy = d.getFullYear();
+        var hh = String(d.getHours()).padStart(2, '0');
+        var min = String(d.getMinutes()).padStart(2, '0');
+        dateStr = dd + '/' + mm + '/' + yyyy + ' - ' + hh + ':' + min;
+      }
+
+      // ── Build text snippet (first 30 chars, strip HTML) ──
+      var rawContent = snapshotData.content || '';
+      var plain = rawContent.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
+      var snippet = plain.substring(0, 30);
+      if (plain.length > 30) snippet += '…';
+
+      // ── Build item DOM ──
+      var item = document.createElement('div');
+      item.className = 'hub-notes-history-item';
+      item.setAttribute('data-doc-id', docSnap.id);
+
+      var infoDiv = document.createElement('div');
+      infoDiv.className = 'hub-notes-history-item-info';
+
+      var timeSpan = document.createElement('span');
+      timeSpan.className = 'hub-notes-history-item-time';
+      timeSpan.textContent = dateStr || '(unknown date)';
+
+      var snippetSpan = document.createElement('span');
+      snippetSpan.className = 'hub-notes-history-item-snippet';
+      snippetSpan.textContent = snippet || '(empty)';
+
+      infoDiv.appendChild(timeSpan);
+      infoDiv.appendChild(snippetSpan);
+
+      var restoreBtn = document.createElement('button');
+      restoreBtn.className = 'hub-notes-history-restore-btn';
+      restoreBtn.textContent = 'Restore';
+      restoreBtn.addEventListener('click', function () {
+        _restoreBackup(docSnap.id, snapshotData);
+      });
+
+      item.appendChild(infoDiv);
+      item.appendChild(restoreBtn);
+      frag.appendChild(item);
+    });
+
+    if (_el.historyList) {
+      _el.historyList.innerHTML = '';
+      _el.historyList.appendChild(frag);
+    }
+  }
+
+  /**
+   * Confirm → inject backup content into editor → close modal → toast.
+   */
+  function _restoreBackup(docId, snapshotData) {
+    if (!confirm('Bạn có chắc chắn muốn ghi đè nội dung hiện tại bằng bản sao lưu này không?')) {
+      return;
+    }
+
+    // ── Inject content into active note ──
+    if (_activeNote) {
+      _activeNote.title   = snapshotData.title || 'Untitled';
+      _activeNote.content = snapshotData.content || '';
+      _loadNoteIntoEditor();
+    } else {
+      // If no active note, create one from the backup
+      if (!_activeFolder) {
+        // Create a default folder if none exists
+        var folder = {
+          id: _uid(),
+          name: 'Personal',
+          notes: []
+        };
+        _data.folders.push(folder);
+        _activeFolder = folder;
+      }
+      var note = _buildNoteObject(snapshotData.title || 'Restored Note', snapshotData.content || '');
+      note.folderId = _activeFolder.id;
+      _activeFolder.notes.unshift(note);
+      _activeNote = note;
+      _renderFolders();
+      _renderNoteList();
+      _loadNoteIntoEditor();
+    }
+
+    // ── Persist the restored content ──
+    _scheduleSave();
+
+    // ── Close modal ──
+    _closeHistoryOverlay();
+
+    // ── Success toast ──
+    _showBackupToast('✅ Đã khôi phục dữ liệu từ Két sắt');
+  }
+
+  /**
+   * Show the empty-state placeholder inside the modal body.
+   */
+  function _showHistoryEmpty(message) {
+    if (_el.historyLoading) _el.historyLoading.style.display = 'none';
+    if (_el.historyList) _el.historyList.style.display = 'none';
+    if (_el.historyEmpty) {
+      _el.historyEmpty.style.display = '';
+      var p = _el.historyEmpty.querySelector('p');
+      if (p) p.textContent = message;
+    }
   }
 
   // ============================================================
