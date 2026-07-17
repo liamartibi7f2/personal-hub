@@ -7726,6 +7726,270 @@ mark.cyber-hl-pink:hover {
   color: #008080;
 }
 
+/* ── Vault Backup Button ── */
+.hub-notes-backup-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-primary);
+  background: rgba(0, 240, 255, 0.06);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+  position: relative;
+  overflow: hidden;
+}
+
+.hub-notes-backup-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(0, 240, 255, 0.12) 0%,
+    transparent 50%,
+    rgba(179, 71, 234, 0.08) 100%
+  );
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out-expo);
+}
+
+.hub-notes-backup-btn:hover {
+  color: #fff;
+  background: rgba(0, 240, 255, 0.12);
+  border-color: var(--accent-primary);
+  box-shadow:
+    0 0 14px rgba(0, 240, 255, 0.3),
+    0 0 30px rgba(0, 240, 255, 0.08),
+    inset 0 0 12px rgba(0, 240, 255, 0.05);
+  transform: translateY(-1px);
+}
+
+.hub-notes-backup-btn:hover::before {
+  opacity: 1;
+}
+
+.hub-notes-backup-btn:active {
+  transform: scale(0.95);
+  box-shadow:
+    0 0 8px rgba(0, 240, 255, 0.15),
+    inset 0 0 16px rgba(0, 240, 255, 0.08);
+}
+
+.hub-notes-backup-btn .hub-notes-backup-icon {
+  width: 14px;
+  height: 14px;
+  transition: transform var(--duration-fast) var(--ease-out-expo);
+  flex-shrink: 0;
+}
+
+.hub-notes-backup-btn:hover .hub-notes-backup-icon {
+  transform: scale(1.1);
+}
+
+/* Theme: Solar Zen */
+[data-theme="solar-zen"] .hub-notes-backup-btn {
+  color: #008080;
+  background: rgba(0, 128, 128, 0.04);
+  border-color: rgba(0, 128, 128, 0.2);
+}
+
+[data-theme="solar-zen"] .hub-notes-backup-btn:hover {
+  color: #005f5f;
+  background: rgba(0, 128, 128, 0.08);
+  border-color: #008080;
+  box-shadow:
+    0 0 8px rgba(0, 128, 128, 0.15),
+    inset 0 0 8px rgba(0, 128, 128, 0.04);
+}
+
+/* Theme: Lo-Fi Twilight */
+[data-theme="lofi-twilight"] .hub-notes-backup-btn {
+  color: var(--accent-secondary);
+  background: rgba(246, 190, 124, 0.04);
+  border-color: rgba(246, 190, 124, 0.2);
+}
+
+[data-theme="lofi-twilight"] .hub-notes-backup-btn:hover {
+  color: #fff;
+  background: rgba(246, 190, 124, 0.1);
+  border-color: var(--accent-secondary);
+  box-shadow:
+    0 0 12px rgba(246, 190, 124, 0.2),
+    inset 0 0 8px rgba(246, 190, 124, 0.04);
+}
+
+/* ── Backup Confirmation Dialog ── */
+.hub-notes-backup-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: hub-notes-dialog-fade-in 0.2s var(--ease-out-expo);
+}
+
+@keyframes hub-notes-dialog-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.hub-notes-backup-dialog {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl) var(--space-2xl);
+  max-width: 420px;
+  width: 90%;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 32px rgba(0, 240, 255, 0.1);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  animation: hub-notes-dialog-pop 0.25s var(--ease-out-expo);
+}
+
+@keyframes hub-notes-dialog-pop {
+  from { transform: scale(0.92); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.hub-notes-backup-dialog-title {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-xs) 0;
+  letter-spacing: 0.04em;
+}
+
+.hub-notes-backup-dialog-desc {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin: 0 0 var(--space-lg) 0;
+  line-height: 1.5;
+}
+
+.hub-notes-backup-dialog-actions {
+  display: flex;
+  gap: var(--space-sm);
+  justify-content: flex-end;
+}
+
+.hub-notes-backup-dialog-btn {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 8px 20px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+}
+
+.hub-notes-backup-dialog-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.15);
+}
+
+.hub-notes-backup-dialog-btn--confirm {
+  color: #fff;
+  background: rgba(0, 240, 255, 0.15);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.2);
+}
+
+.hub-notes-backup-dialog-btn--confirm:hover {
+  background: rgba(0, 240, 255, 0.25);
+  box-shadow: 0 0 24px rgba(0, 240, 255, 0.35), 0 0 40px rgba(0, 240, 255, 0.08);
+}
+
+/* Theme: Solar Zen dialog */
+[data-theme="solar-zen"] .hub-notes-backup-dialog-btn--confirm {
+  color: #fff;
+  background: rgba(0, 128, 128, 0.2);
+  border-color: #008080;
+  box-shadow: 0 0 12px rgba(0, 128, 128, 0.2);
+}
+
+[data-theme="solar-zen"] .hub-notes-backup-dialog-btn--confirm:hover {
+  background: rgba(0, 128, 128, 0.3);
+  box-shadow: 0 0 20px rgba(0, 128, 128, 0.3);
+}
+
+/* Theme: Lo-Fi Twilight dialog */
+[data-theme="lofi-twilight"] .hub-notes-backup-dialog-btn--confirm {
+  color: #fff;
+  background: rgba(246, 190, 124, 0.15);
+  border-color: var(--accent-secondary);
+  box-shadow: 0 0 12px rgba(246, 190, 124, 0.2);
+}
+
+[data-theme="lofi-twilight"] .hub-notes-backup-dialog-btn--confirm:hover {
+  background: rgba(246, 190, 124, 0.25);
+  box-shadow: 0 0 20px rgba(246, 190, 124, 0.3);
+}
+
+/* ── Vault Backup Toast ── */
+.hub-notes-backup-toast {
+  position: fixed;
+  bottom: var(--space-2xl);
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  z-index: 10001;
+  padding: 14px 28px;
+  border-radius: var(--radius-full);
+  background: rgba(18, 18, 30, 0.92);
+  border: 1px solid var(--accent-primary);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 24px rgba(0, 240, 255, 0.15);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 350ms var(--ease-out-expo), transform 350ms var(--ease-out-expo);
+  pointer-events: none;
+}
+
+.hub-notes-backup-toast--visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Theme: Solar Zen toast */
+[data-theme="solar-zen"] .hub-notes-backup-toast {
+  background: rgba(250, 250, 245, 0.94);
+  border-color: #008080;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 0 18px rgba(0, 128, 128, 0.12);
+  color: #1a1a2e;
+}
+
+/* Theme: Lo-Fi Twilight toast */
+[data-theme="lofi-twilight"] .hub-notes-backup-toast {
+  background: rgba(30, 28, 46, 0.94);
+  border-color: var(--accent-secondary);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 18px rgba(246, 190, 124, 0.12);
+}
+
 /* ── Right Pane ── */
 .hub-notes-editor-pane {
   flex: 1;

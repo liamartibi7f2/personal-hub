@@ -291,6 +291,15 @@ const notesModule = (function () {
               '</svg>' +
               '<span class="hub-notes-save-label">Save</span>' +
             '</button>' +
+            '<button class="hub-notes-backup-btn" id="hn-btn-backup" title="Cloud Snapshot Backup" aria-label="Backup notes to cloud vault">' +
+              '<svg width="14" height="14" viewBox="0 0 20 20" fill="none" class="hub-notes-backup-icon">' +
+                '<path d="M10 4v8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
+                '<path d="M6 9l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '<path d="M3 12v3a1.5 1.5 0 001.5 1.5h11A1.5 1.5 0 0017 15v-3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>' +
+                '<path d="M10 3a3 3 0 00-3 3h6a3 3 0 00-3-3z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>' +
+              '</svg>' +
+              '<span class="hub-notes-save-label">Vault</span>' +
+            '</button>' +
             '<span class="hub-notes-save-feedback" id="hn-save-feedback"></span>' +
           '</div>' +
           '<div class="hub-notes-editor-area">' +
@@ -348,6 +357,7 @@ const notesModule = (function () {
     _el.dateContainer   = _qs('hn-date-container');
     _el.dateText        = _qs('hn-date-text');
     _el.dateInput       = _qs('hn-date-input');
+    _el.backupBtn       = _qs('hn-btn-backup');
 
     // Render lists
     _renderFolders();
@@ -363,6 +373,7 @@ const notesModule = (function () {
     _bindFolderClicks();
     _bindManualSave();
     _bindDateEvents();
+    _bindBackupVault();
   }
 
   // ============================================================
@@ -1227,7 +1238,7 @@ function _updateToolbarPosition() {
         toolbar: null, savingIndicator: null, emptyState: null, editorPane: null,
         addBtn: null, addFolderBtn: null, searchBtn: null, searchBar: null,
         searchInput: null, searchClear: null, manualSaveBtn: null, saveFeedback: null,
-        dateContainer: null, dateText: null, dateInput: null
+        dateContainer: null, dateText: null, dateInput: null, backupBtn: null
       };
     }
 
@@ -1264,13 +1275,188 @@ function _updateToolbarPosition() {
       toolbar: null, savingIndicator: null, emptyState: null, editorPane: null,
       addBtn: null, addFolderBtn: null, searchBtn: null, searchBar: null,
       searchInput: null, searchClear: null, manualSaveBtn: null, saveFeedback: null,
-      dateContainer: null, dateText: null, dateInput: null
+      dateContainer: null, dateText: null, dateInput: null, backupBtn: null
     };
     // ⚡ PRESERVE _data, _activeNote, _activeFolder, _sessionInitialized,
     //    and _isNotesDataLoaded across tab switches so the in-memory cache
     //    survives destroy() → render() cycles. Only the DOM refs and
     //    listeners need to go — they are re-created on the next render.
     _container = null;
+  }
+
+  // ============================================================
+  //   VAULT BACKUP — Rolling Cloud Snapshot (isolated from auto-save)
+  // ============================================================
+
+  /**
+   * Bind the backup button to trigger the confirmation dialog,
+   * then execute the rolling backup workflow to Firestore.
+   */
+  function _bindBackupVault() {
+    var btn = _el.backupBtn;
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      _showBackupConfirmDialog();
+    });
+  }
+
+  /**
+   * Render a clean glass dialog asking the user to confirm the backup.
+   * Handles both confirm and cancel paths.
+   */
+  function _showBackupConfirmDialog() {
+    // Remove any existing dialog first
+    var existing = document.querySelector('.hub-notes-backup-dialog-overlay');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.className = 'hub-notes-backup-dialog-overlay';
+    overlay.innerHTML =
+      '<div class="hub-notes-backup-dialog glass">' +
+        '<h3 class="hub-notes-backup-dialog-title">☁️ Cloud Snapshot Backup</h3>' +
+        '<p class="hub-notes-backup-dialog-desc">Tạo bản sao lưu an toàn cho ghi chú hiện tại?</p>' +
+        '<div class="hub-notes-backup-dialog-actions">' +
+          '<button class="hub-notes-backup-dialog-btn" id="hn-backup-cancel">Cancel</button>' +
+          '<button class="hub-notes-backup-dialog-btn hub-notes-backup-dialog-btn--confirm" id="hn-backup-confirm">Backup Now</button>' +
+        '</div>' +
+      '</div>';
+
+    document.body.appendChild(overlay);
+
+    // Cancel handler — click button or click overlay background
+    function _dismiss() {
+      overlay.remove();
+    }
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) _dismiss();
+    });
+    var cancelBtn = overlay.querySelector('#hn-backup-cancel');
+    if (cancelBtn) cancelBtn.addEventListener('click', _dismiss);
+
+    // Confirm handler
+    var confirmBtn = overlay.querySelector('#hn-backup-confirm');
+    if (confirmBtn) {
+      confirmBtn.addEventListener('click', function () {
+        overlay.remove();
+        _executeRollingBackup();
+      });
+    }
+  }
+
+  /**
+   * Execute the rolling backup workflow:
+   * 1. Capture current editor content
+   * 2. Query notes_backup_vault ordered by created_at ASC
+   * 3. If ≥10 docs exist, delete the oldest surplus
+   * 4. addDoc the new backup with note_content + serverTimestamp()
+   * 5. Show success toast
+   *
+   * IMPORTANT: This NEVER touches HubDB.saveNotesData / hub_notes localStorage key.
+   * It operates on a fully isolated collection: users/{uid}/notes_backup_vault
+   */
+  async function _executeRollingBackup() {
+    // ── 1. Capture current note content ──
+    // Flush live editor state into _activeNote so we snapshot what the user sees
+    if (_activeNote && _el.titleInput && _el.editor) {
+      _activeNote.title   = _el.titleInput.value || 'Untitled';
+      _activeNote.content = _el.editor.innerHTML;
+    }
+
+    var snapshot = {
+      title: _activeNote ? _activeNote.title : '(empty)',
+      content: _activeNote ? _activeNote.content : '',
+      noteId: _activeNote ? _activeNote.id : null,
+      folderName: _activeFolder ? _activeFolder.name : '(none)',
+      capturedAt: Date.now() // client-side timestamp as fallback
+    };
+
+    // ── 2. Check auth / online status ──
+    var authStatus = HubDB.getAuthStatus();
+    if (!authStatus.loggedIn || navigator.onLine === false) {
+      _showBackupToast('⚠️ Bạn cần đăng nhập và có kết nối mạng để sao lưu lên Cloud.', true);
+      return;
+    }
+
+    // ── 3. Get Firestore reference ──
+    var db;
+    try {
+      db = firebase.firestore();
+    } catch (e) {
+      _showBackupToast('❌ Không thể kết nối tới Firestore.', true);
+      return;
+    }
+
+    var vaultRef = db.collection('users').doc(authStatus.uid).collection('notes_backup_vault');
+
+    try {
+      // ── 4. Rolling window: query existing backups, prune if ≥10 ──
+      var existingSnap = await Promise.race([
+        vaultRef.orderBy('created_at', 'asc').get(),
+        new Promise(function (_, reject) { setTimeout(function () { reject(new Error('timeout')); }, 3000); })
+      ]);
+
+      var existingDocs = existingSnap.docs; // array of QueryDocumentSnapshot
+      var count = existingDocs.length;
+
+      // If 10 or more exist, delete the oldest so that 9 remain before adding
+      if (count >= 10) {
+        var deleteCount = count - 9; // how many to prune
+        var batch = db.batch();
+        for (var i = 0; i < deleteCount; i++) {
+          batch.delete(existingDocs[i].ref);
+        }
+        await batch.commit();
+      }
+
+      // ── 5. Insert new backup via addDoc (always creates a new doc) ──
+      await Promise.race([
+        vaultRef.add({
+          note_content: snapshot,
+          created_at: firebase.firestore.FieldValue.serverTimestamp()
+        }),
+        new Promise(function (_, reject) { setTimeout(function () { reject(new Error('timeout')); }, 3000); })
+      ]);
+
+      // ── 6. Success toast ──
+      _showBackupToast('✅ Đã đẩy bản sao lưu lên Két sắt an toàn');
+    } catch (err) {
+      console.error('[Notes Vault] Backup failed:', err.message || err);
+      _showBackupToast('❌ Sao lưu thất bại: ' + (err.message || 'unknown error'), true);
+    }
+  }
+
+  /**
+   * Show a temporary toast notification anchored at the bottom center.
+   * @param {string} message - The message to display
+   * @param {boolean} [isError=false] - If true, styles as error
+   */
+  function _showBackupToast(message, isError) {
+    // Remove any existing toast
+    var existing = document.querySelector('.hub-notes-backup-toast');
+    if (existing) existing.remove();
+
+    var toast = document.createElement('div');
+    toast.className = 'hub-notes-backup-toast';
+    toast.textContent = message;
+    if (isError) {
+      toast.style.borderColor = '#ff4466';
+      toast.style.color = '#ff6688';
+    }
+    document.body.appendChild(toast);
+
+    // Trigger animation
+    requestAnimationFrame(function () {
+      toast.classList.add('hub-notes-backup-toast--visible');
+    });
+
+    // Auto-dismiss
+    var duration = isError ? 4000 : 2500;
+    setTimeout(function () {
+      toast.classList.remove('hub-notes-backup-toast--visible');
+      setTimeout(function () {
+        if (toast.parentNode) toast.remove();
+      }, 400); // match CSS transition
+    }, duration);
   }
 
   // ============================================================
