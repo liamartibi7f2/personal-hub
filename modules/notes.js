@@ -31,6 +31,12 @@ const notesModule = (function () {
   let _autoSaveEnabled = true;
   let _pageUnloading = false; // Prevents ghost saves during page reload
 
+  // ── Vault / History listener management ──
+  /** @type {function|null} Firestore onSnapshot unsubscribe for vault history */
+  let _vaultHistoryListener = null;
+  /** @type {boolean} Track whether the history modal is currently open */
+  let _historyModalOpen = false;
+
   // Cached DOM refs
   let _el = {
     sidebarNotes:    null,
@@ -51,7 +57,15 @@ const notesModule = (function () {
     searchClear:     null,
     dateContainer:   null,
     dateText:        null,
-    dateInput:       null
+    dateInput:       null,
+    backupBtn:       null,
+    historyBtn:      null,
+    historyOverlay:  null,
+    historyClose:    null,
+    historyList:     null,
+    historyLoading:  null,
+    historyEmpty:    null,
+    historyBody:     null
   };
 
   // ── Ghost save guard ──
@@ -362,6 +376,12 @@ const notesModule = (function () {
           '</button>' +
         '</div>' +
       '</div>';
+
+    // ⚠ CLEANUP STALE LISTENERS: Any previous render cycle may have
+    //    left a dangling onSnapshot subscription. Kill it before we
+    //    re-cache DOM refs and re-bind events so the new history overlay
+    //    gets a clean subscription slate.
+    _unsubscribeVaultListeners();
 
     // Cache all DOM refs
     _el.sidebarNotes    = _qs('hn-note-list');
@@ -1276,7 +1296,11 @@ function _updateToolbarPosition() {
       };
     }
 
-    // 5) Clear DOM listeners (same as destroy)
+    // 5) Kill vault listeners — prevent any Firestore stream from
+    //    surviving the logout / data-clear cycle.
+    _unsubscribeVaultListeners();
+
+    // 6) Clear DOM listeners (same as destroy)
     if (_boundDocMouseup)   document.removeEventListener('mouseup', _boundDocMouseup);
     if (_boundDocMousedown) document.removeEventListener('mousedown', _boundDocMousedown);
     if (_boundDocKeyup)     document.removeEventListener('keyup', _boundDocKeyup);
@@ -1289,6 +1313,22 @@ function _updateToolbarPosition() {
     }
 
   // ============================================================
+  //   VAULT LISTENER LIFECYCLE
+  // ============================================================
+
+  /**
+   * Unsubscribe ALL active Firestore vault listeners and reset
+   * tracking state. Called on modal close, tab switch, and logout.
+   */
+  function _unsubscribeVaultListeners() {
+    if (_vaultHistoryListener) {
+      try { _vaultHistoryListener(); } catch (_) { /* ignore unsubscribe errors */ }
+      _vaultHistoryListener = null;
+    }
+    _historyModalOpen = false;
+  }
+
+  // ============================================================
   //   DESTROY
   // ============================================================
 
@@ -1296,6 +1336,11 @@ function _updateToolbarPosition() {
     // Fire-and-forget save on destroy; no need to block teardown
     _saveImmediate().catch(function () {});
     HubDebounce.cancel('notes-auto-save');
+
+    // ⚠ KILL VAULT LISTENERS: Unsubscribe any active Firestore
+    //    onSnapshot listeners to prevent memory leaks when the
+    //    user switches tabs away from Notes.
+    _unsubscribeVaultListeners();
 
     // Remove document-level listeners
     if (_boundDocMouseup)   document.removeEventListener('mouseup', _boundDocMouseup);
@@ -1424,8 +1469,11 @@ function _updateToolbarPosition() {
 
     try {
       // ── 4. Rolling window: query existing backups, prune if ≥10 ──
+      //    limit(11) is optimal: we only need to know if 10+ docs exist
+      //    and which are the oldest. Fetching all docs would freeze the
+      //    browser if the vault grows unbounded.
       var existingSnap = await Promise.race([
-        vaultRef.orderBy('created_at', 'asc').get(),
+        vaultRef.orderBy('created_at', 'asc').limit(11).get(),
         new Promise(function (_, reject) { setTimeout(function () { reject(new Error('timeout')); }, 3000); })
       ]);
 
@@ -1494,19 +1542,20 @@ function _updateToolbarPosition() {
   }
 
   // ============================================================
-  //   HISTORY — Restore Vault Backups
+  //   HISTORY — Real-time Vault Backups (onSnapshot + limit)
   // ============================================================
 
   /**
-   * Bind the HISTORY button: open overlay → query Firestore →
-   * render backup list with restore buttons.
+   * Bind the HISTORY button: open overlay → subscribe Firestore
+   * onSnapshot with limit(10) → render backup list with restore
+   * buttons. Unsubscribe on modal close to prevent memory leaks.
    */
   function _bindHistoryVault() {
-    // ── Open overlay ──
+    // ── Open overlay → subscribe live listener ──
     if (_el.historyBtn) {
       _el.historyBtn.addEventListener('click', function () {
         _openHistoryOverlay();
-        _fetchAndRenderHistory();
+        _subscribeHistoryListener();
       });
     }
 
@@ -1536,33 +1585,49 @@ function _updateToolbarPosition() {
 
   function _openHistoryOverlay() {
     if (!_el.historyOverlay) return;
-    // Reset UI state
+    // Reset UI state — show loading spinner, hide list + empty states
     if (_el.historyLoading) _el.historyLoading.style.display = '';
-    if (_el.historyList) _el.historyList.style.display = 'none';
+    if (_el.historyList) { _el.historyList.style.display = 'none'; _el.historyList.innerHTML = ''; }
     if (_el.historyEmpty) _el.historyEmpty.style.display = 'none';
-    if (_el.historyList) _el.historyList.innerHTML = '';
     _el.historyBody = _el.historyOverlay.querySelector('.hub-notes-history-body');
     _el.historyOverlay.classList.add('hub-notes-history-overlay--visible');
+    _historyModalOpen = true;
   }
 
   function _closeHistoryOverlay() {
     if (_el.historyOverlay) {
       _el.historyOverlay.classList.remove('hub-notes-history-overlay--visible');
     }
+    // ⚠ CRITICAL: Unsubscribe the Firestore onSnapshot listener
+    //    immediately. Don't wait for tab-switch destroy() — the
+    //    listener was created specifically for this modal session.
+    _unsubscribeVaultListeners();
   }
 
   /**
-   * Query Firestore for backups and render them as list items.
+   * Subscribe to notes_backup_vault via Firestore onSnapshot with
+   * limit(10). The listener stays alive ONLY while the modal is open,
+   * giving real-time updates. It is killed on modal close or tab switch.
+   *
+   * PREVENTS MEMORY LEAKS: The unsubscribe function is stored in
+   * _vaultHistoryListener and cleaned up in _closeHistoryOverlay(),
+   * destroy(), and clearData().
+   *
+   * PREVENTS BROWSER FREEZE: limit(10) ensures we never fetch the
+   * entire vault history — only the 10 most recent backups.
    */
-  async function _fetchAndRenderHistory() {
-    // ── 1. Check auth / online status ──
+  function _subscribeHistoryListener() {
+    // ── 1. Defensive: kill any existing listener before starting a new one ──
+    _unsubscribeVaultListeners();
+
+    // ── 2. Check auth / online status ──
     var authStatus = HubDB.getAuthStatus();
     if (!authStatus.loggedIn || navigator.onLine === false) {
       _showHistoryEmpty('⚠️ Bạn cần đăng nhập và có kết nối mạng để xem lịch sử sao lưu.');
       return;
     }
 
-    // ── 2. Get Firestore ──
+    // ── 3. Get Firestore ──
     var db;
     try {
       db = firebase.firestore();
@@ -1573,30 +1638,48 @@ function _updateToolbarPosition() {
 
     var vaultRef = db.collection('users').doc(authStatus.uid).collection('notes_backup_vault');
 
-    // ── 3. Query newest-first ──
-    var snap;
+    // ── 4. Subscribe onSnapshot with limit(10) newest-first ──
+    //    limit(10) ensures the browser never freezes from fetching
+    //    hundreds of backup documents.
     try {
-      snap = await Promise.race([
-        vaultRef.orderBy('created_at', 'desc').get(),
-        new Promise(function (_, reject) { setTimeout(function () { reject(new Error('timeout')); }, 3000); })
-      ]);
+      _vaultHistoryListener = vaultRef
+        .orderBy('created_at', 'desc')
+        .limit(10)
+        .onSnapshot(
+          function (snap) {
+            _renderHistoryFromSnapshot(snap);
+          },
+          function (err) {
+            console.error('[Notes History] onSnapshot error:', err.message || err);
+            _showHistoryEmpty('❌ Lỗi kết nối: ' + (err.message || 'permission denied'));
+          }
+        );
     } catch (err) {
-      console.error('[Notes History] Fetch failed:', err.message || err);
-      _showHistoryEmpty('❌ Tải dữ liệu thất bại: ' + (err.message || 'timeout'));
-      return;
+      console.error('[Notes History] Failed to subscribe:', err.message || err);
+      _showHistoryEmpty('❌ Không thể kết nối tới Firestore.');
     }
+  }
 
-    var docs = snap.docs;
+  /**
+   * Render history items from an onSnapshot result.
+   * Uses requestAnimationFrame batching to prevent layout thrashing.
+   * @param {firebase.firestore.QuerySnapshot} snap
+   */
+  function _renderHistoryFromSnapshot(snap) {
+    var docs = snap ? snap.docs : [];
     if (!docs || docs.length === 0) {
       _showHistoryEmpty('No backups found in the vault.');
       return;
     }
 
-    // ── 4. Hide loading, show list ──
-    if (_el.historyLoading) _el.historyLoading.style.display = 'none';
-    if (_el.historyList) _el.historyList.style.display = '';
-    if (_el.historyEmpty) _el.historyEmpty.style.display = 'none';
+    // ── 1. Batch all DOM reads BEFORE any writes (prevent layout thrash) ──
+    //    Read current display states first, then write them in one frame.
+    var loadingEl = _el.historyLoading;
+    var listEl    = _el.historyList;
+    var emptyEl   = _el.historyEmpty;
 
+    // ── 2. Use requestAnimationFrame to defer DOM writes ──
+    //    Build the fragment off-screen first, then attach in one atomic operation.
     var frag = document.createDocumentFragment();
 
     docs.forEach(function (docSnap) {
@@ -1608,23 +1691,11 @@ function _updateToolbarPosition() {
       // ── Build timestamp string ──
       var dateStr = '';
       if (data.created_at && data.created_at.toDate) {
-        // Firestore Timestamp → JS Date
         var d = data.created_at.toDate();
-        var dd = String(d.getDate()).padStart(2, '0');
-        var mm = String(d.getMonth() + 1).padStart(2, '0');
-        var yyyy = d.getFullYear();
-        var hh = String(d.getHours()).padStart(2, '0');
-        var min = String(d.getMinutes()).padStart(2, '0');
-        dateStr = dd + '/' + mm + '/' + yyyy + ' - ' + hh + ':' + min;
+        dateStr = _pad2(d.getDate()) + '/' + _pad2(d.getMonth() + 1) + '/' + d.getFullYear() + ' - ' + _pad2(d.getHours()) + ':' + _pad2(d.getMinutes());
       } else if (snapshotData.capturedAt) {
-        // Fallback to client-side timestamp
         var d = new Date(snapshotData.capturedAt);
-        var dd = String(d.getDate()).padStart(2, '0');
-        var mm = String(d.getMonth() + 1).padStart(2, '0');
-        var yyyy = d.getFullYear();
-        var hh = String(d.getHours()).padStart(2, '0');
-        var min = String(d.getMinutes()).padStart(2, '0');
-        dateStr = dd + '/' + mm + '/' + yyyy + ' - ' + hh + ':' + min;
+        dateStr = _pad2(d.getDate()) + '/' + _pad2(d.getMonth() + 1) + '/' + d.getFullYear() + ' - ' + _pad2(d.getHours()) + ':' + _pad2(d.getMinutes());
       }
 
       // ── Build text snippet (first 30 chars, strip HTML) ──
@@ -1633,7 +1704,7 @@ function _updateToolbarPosition() {
       var snippet = plain.substring(0, 30);
       if (plain.length > 30) snippet += '…';
 
-      // ── Build item DOM ──
+      // ── Build item DOM (off-screen, no reflow triggered) ──
       var item = document.createElement('div');
       item.className = 'hub-notes-history-item';
       item.setAttribute('data-doc-id', docSnap.id);
@@ -1655,19 +1726,44 @@ function _updateToolbarPosition() {
       var restoreBtn = document.createElement('button');
       restoreBtn.className = 'hub-notes-history-restore-btn';
       restoreBtn.textContent = 'Restore';
-      restoreBtn.addEventListener('click', function () {
-        _restoreBackup(docSnap.id, snapshotData);
-      });
+      // Capture docId + snapshotData in closure for restore
+      restoreBtn.addEventListener('click', (function (id, snapData) {
+        return function () { _restoreBackup(id, snapData); };
+      })(docSnap.id, snapshotData));
 
       item.appendChild(infoDiv);
       item.appendChild(restoreBtn);
       frag.appendChild(item);
     });
 
-    if (_el.historyList) {
-      _el.historyList.innerHTML = '';
-      _el.historyList.appendChild(frag);
-    }
+    // ── 3. Atomic DOM write: attach fragment + toggle visibility in one microtask ──
+    requestAnimationFrame(function () {
+      if (loadingEl) loadingEl.style.display = 'none';
+      if (emptyEl) emptyEl.style.display = 'none';
+      if (listEl) {
+        listEl.innerHTML = '';
+        listEl.appendChild(frag);
+        listEl.style.display = '';
+      }
+    });
+  }
+
+  /**
+   * Zero-pad a number to 2 digits. Tiny utility to avoid repeating
+   * String(n).padStart(2,'0') throughout the history render loop.
+   */
+  function _pad2(n) {
+    var s = String(n);
+    return s.length === 1 ? '0' + s : s;
+  }
+
+  /**
+   * Deprecated: replaced by _subscribeHistoryListener + onSnapshot.
+   * Kept as a no-op so any stale references don't throw.
+   */
+  function _fetchAndRenderHistory() {
+    // Forward to the new subscription-based approach
+    _subscribeHistoryListener();
   }
 
   /**
