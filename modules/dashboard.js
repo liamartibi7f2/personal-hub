@@ -40,17 +40,22 @@ const dashboardModule = (function () {
             <p class="dashboard-date" id="dash-date"></p>
           </div>
 
-          <!-- Widget Grid — Command Center -->
+          <!-- Widget Grid — Command Center 2.0 -->
           <div>
-            <p class="section-header">Command Center</p>
+            <p class="section-header dashboard-v2-header">⚡ Command Center</p>
             <div class="dashboard-widgets">
 
               <!-- ───────── Widget A: Pomodoro / Productivity ───────── -->
-              <div class="widget-card glass-card widget-pomodoro">
-                <div class="widget-accent"></div>
-                <div class="widget-header">
-                  <span class="widget-icon">⏱️</span>
-                  <h3 class="widget-title">Focus &amp; Productivity</h3>
+              <div class="widget-card-v2 glass-card widget-pomodoro">
+                <div class="widget-v2-accent"></div>
+                <div class="widget-v2-header">
+                  <div class="widget-v2-icon-ring">
+                    <span class="widget-icon">⏱️</span>
+                  </div>
+                  <div class="widget-v2-title-group">
+                    <h3 class="widget-title">Focus &amp; Productivity</h3>
+                    <span class="widget-v2-subtitle">Pomodoro Engine</span>
+                  </div>
                 </div>
                 <div class="widget-body">
                   <div class="widget-stat-row">
@@ -78,11 +83,16 @@ const dashboardModule = (function () {
               </div>
 
               <!-- ───────── Widget B: Flashcards / SRS ───────── -->
-              <div class="widget-card glass-card widget-flashcards">
-                <div class="widget-accent"></div>
-                <div class="widget-header">
-                  <span class="widget-icon">🃏</span>
-                  <h3 class="widget-title">Flashcard SRS</h3>
+              <div class="widget-card-v2 glass-card widget-flashcards">
+                <div class="widget-v2-accent"></div>
+                <div class="widget-v2-header">
+                  <div class="widget-v2-icon-ring">
+                    <span class="widget-icon">🃏</span>
+                  </div>
+                  <div class="widget-v2-title-group">
+                    <h3 class="widget-title">Flashcard SRS</h3>
+                    <span class="widget-v2-subtitle">Spaced Repetition</span>
+                  </div>
                 </div>
                 <div class="widget-body">
                   <div class="widget-stat-row">
@@ -110,11 +120,16 @@ const dashboardModule = (function () {
               </div>
 
               <!-- ───────── Widget C: Quiz / Knowledge Base ───────── -->
-              <div class="widget-card glass-card widget-quiz">
-                <div class="widget-accent"></div>
-                <div class="widget-header">
-                  <span class="widget-icon">📝</span>
-                  <h3 class="widget-title">Quiz &amp; Knowledge Base</h3>
+              <div class="widget-card-v2 glass-card widget-quiz">
+                <div class="widget-v2-accent"></div>
+                <div class="widget-v2-header">
+                  <div class="widget-v2-icon-ring">
+                    <span class="widget-icon">📝</span>
+                  </div>
+                  <div class="widget-v2-title-group">
+                    <h3 class="widget-title">Quiz &amp; Knowledge Base</h3>
+                    <span class="widget-v2-subtitle">Challenge Mode</span>
+                  </div>
                 </div>
                 <div class="widget-body">
                   <div class="widget-stat-row">
@@ -144,30 +159,74 @@ const dashboardModule = (function () {
             </div><!-- /dashboard-widgets -->
           </div>
 
-          <!-- Legacy quick-launch row — preserved for full-deck access -->
+          <!-- Quick Launch 2.0 -->
           <div>
-            <p class="section-header">Quick Launch</p>
+            <p class="section-header dashboard-v2-header">🚀 Quick Launch</p>
             <div class="dashboard-launch">
-              <div class="launch-card glass-card" data-target="flashcards">
-                <div class="launch-card-icon">🃏</div>
-                <div class="launch-card-info">
-                  <h3>Flashcards</h3>
-                  <p>Study vocabulary with 3D flip cards</p>
+              <div class="launch-card-v2 glass-card" data-target="flashcards">
+                <div class="launch-card-v2-icon">
+                  <span>🃏</span>
+                </div>
+                <div class="launch-card-v2-body">
+                  <h3 class="launch-card-v2-title">Flashcards</h3>
+                  <p class="launch-card-v2-desc">Study vocabulary with 3D flip cards</p>
+                </div>
+                <div class="launch-card-v2-arrow">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
                 </div>
               </div>
-              <div class="launch-card glass-card" data-target="pomodoro">
-                <div class="launch-card-icon">⏱️</div>
-                <div class="launch-card-info">
-                  <h3>Pomodoro</h3>
-                  <p>Focus timer with progress tracking</p>
+              <div class="launch-card-v2 glass-card" data-target="pomodoro">
+                <div class="launch-card-v2-icon">
+                  <span>⏱️</span>
+                </div>
+                <div class="launch-card-v2-body">
+                  <h3 class="launch-card-v2-title">Pomodoro</h3>
+                  <p class="launch-card-v2-desc">Focus timer with progress tracking</p>
+                </div>
+                <div class="launch-card-v2-arrow">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
                 </div>
               </div>
-              <div class="launch-card glass-card" data-target="quiz">
-                <div class="launch-card-icon">📝</div>
-                <div class="launch-card-info">
-                  <h3>Quiz</h3>
-                  <p>Multiple-choice challenge mode</p>
+              <div class="launch-card-v2 glass-card" data-target="quiz">
+                <div class="launch-card-v2-icon">
+                  <span>📝</span>
                 </div>
+                <div class="launch-card-v2-body">
+                  <h3 class="launch-card-v2-title">Quiz</h3>
+                  <p class="launch-card-v2-desc">Multiple-choice challenge mode</p>
+                </div>
+                <div class="launch-card-v2-arrow">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- KatsuDuckling Reserved Footer -->
+          <div class="dashboard-footer">
+            <div class="dashboard-footer-divider"></div>
+            <div class="dashboard-footer-content">
+              <p class="dashboard-footer-copy">© 2026 Developed by <span class="dashboard-footer-brand">KatsuDuckling</span>. All rights reserved.</p>
+              <div class="dashboard-footer-links">
+                <a href="https://www.facebook.com/HochirinoFromDuckland" class="dashboard-footer-link" target="_blank" rel="noopener noreferrer" title="Facebook">
+                  <svg class="dashboard-footer-link-icon" width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3V2z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  <span>Facebook</span>
+                </a>
+                <span class="dashboard-footer-sep">·</span>
+                <span class="dashboard-footer-link dashboard-footer-link--text" title="Discord">
+                  <svg class="dashboard-footer-link-icon" width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <path d="M18.5 5.5c-1.2-.6-2.5-1-3.8-1.2l-.2.4c-1.3-.2-2.7-.2-4 0l-.2-.4c-1.3.2-2.6.6-3.8 1.2C4 9.5 3 13.5 3 17.5c1.5 1 3 1.5 4.5 1.5l.6-.8c-.8-.3-1.6-.7-2.3-1.3l1-1c1.9 1.3 4 2 6.2 2s4.3-.7 6.2-2l1 1c-.7.6-1.5 1-2.3 1.3l.6.8c1.5 0 3-.5 4.5-1.5 0-4-.9-8-3-12zM8.5 15c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2zm7 0c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2z" fill="currentColor"/>
+                  </svg>
+                  <span>katsu5869</span>
+                </span>
               </div>
             </div>
           </div>
@@ -180,10 +239,9 @@ const dashboardModule = (function () {
       _clockInterval = setInterval(() => this._updateClock(), 1000);
       this._updateWidgets();
 
-      // ── Bind navigation clicks ──
-      container.querySelectorAll('[data-target]').forEach(el => {
+      // ── Bind Quick Launch card clicks ──
+      container.querySelectorAll('.launch-card-v2[data-target]').forEach(el => {
         el.addEventListener('click', (e) => {
-          // Ignore clicks on widget buttons (they already have the listener below)
           if (e.target.closest('.widget-btn')) return;
           const target = el.dataset.target;
           if (target && typeof app !== 'undefined' && app.switchTo) {
