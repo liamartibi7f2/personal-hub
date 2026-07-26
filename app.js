@@ -152,6 +152,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize the 3-theme switcher (cyberpunk / solar-zen / lofi-twilight)
   _initThemeSwitcher();
+
+  // Initialize optimize mode toggle (black & green terminal, max performance)
+  _initOptimizeModeToggle();
 });
 
 /* ----------------------------------------------------------
@@ -297,6 +300,60 @@ function _initThemeSwitcher() {
 }
 
 /* ----------------------------------------------------------
+   OPTIMIZE MODE — Max Performance & Focus (Black + Green Terminal)
+   ---------------------------------------------------------- */
+
+const OPTIMIZE_KEY = 'hubos_optimize_mode';
+
+function _initOptimizeModeToggle() {
+  const toggle = document.getElementById('btn-optimize-toggle');
+  if (!toggle) return;
+
+  // ── Restore persisted state on page load ──
+  var enabled = false;
+  try {
+    enabled = localStorage.getItem(OPTIMIZE_KEY) === 'true';
+  } catch (_) {}
+  toggle.checked = enabled;
+  if (enabled) {
+    document.body.classList.add('theme-optimized');
+  } else {
+    document.body.classList.remove('theme-optimized');
+  }
+
+  // ── Toggle handler ──
+  toggle.addEventListener('change', function () {
+    var checked = toggle.checked;
+    if (checked) {
+      document.body.classList.add('theme-optimized');
+    } else {
+      document.body.classList.remove('theme-optimized');
+    }
+    try {
+      localStorage.setItem(OPTIMIZE_KEY, checked ? 'true' : 'false');
+    } catch (_) {}
+  });
+
+  // ── Sync desc language on modal open ──
+  var openBtn = document.getElementById('btn-backup-open');
+  if (openBtn) {
+    openBtn.addEventListener('click', function () {
+      setTimeout(function () {
+        var desc = document.getElementById('backup-optimize-desc');
+        if (!desc) return;
+        var lang = 'en';
+        try { lang = localStorage.getItem('hub_system_language') || 'en'; } catch (_) {}
+        if (lang === 'vi') {
+          desc.textContent = 'Đen & Xanh Terminal — tắt mọi hiệu ứng, làm mờ & đổ bóng để không tốn GPU';
+        } else {
+          desc.textContent = 'Black & Green Terminal — disables all animations, blurs & shadows for zero GPU latency';
+        }
+      }, 70);
+    });
+  }
+}
+
+/* ----------------------------------------------------------
    GLOBAL BACKUP MODAL (Export / Import)
    ---------------------------------------------------------- */
 
@@ -314,7 +371,8 @@ const BACKUP_KEYS = [
   'hub_gemini_api_key',
   'hub_notes',
   'quiz_decks',
-  'hub_quiz_scores'
+  'hub_quiz_scores',
+  'hubos_optimize_mode'
 ];
 
 function _initBackupModal() {

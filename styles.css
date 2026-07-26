@@ -8540,6 +8540,121 @@ mark.cyber-hl-pink:hover {
   transform: scale(1.1);
 }
 
+/* ── Spellcheck Toggle Button ── */
+.hub-notes-spellcheck-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+  position: relative;
+  overflow: hidden;
+}
+
+.hub-notes-spellcheck-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(0, 240, 255, 0.08) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out-expo);
+}
+
+.hub-notes-spellcheck-btn:hover {
+  color: #fff;
+  background: rgba(0, 240, 255, 0.1);
+  border-color: rgba(0, 240, 255, 0.4);
+  box-shadow:
+    0 0 12px rgba(0, 240, 255, 0.12),
+    0 2px 8px rgba(0, 0, 0, 0.3);
+  transform: translateY(-1px);
+}
+
+.hub-notes-spellcheck-btn:hover::before {
+  opacity: 1;
+}
+
+.hub-notes-spellcheck-btn:active {
+  transform: scale(0.95);
+  box-shadow:
+    0 0 8px rgba(0, 240, 255, 0.15),
+    inset 0 0 16px rgba(0, 240, 255, 0.06);
+}
+
+/* Enabled (spellcheck ON) state */
+.hub-notes-spellcheck-btn--active {
+  color: var(--accent-primary);
+  border-color: rgba(0, 240, 255, 0.3);
+  background: rgba(0, 240, 255, 0.08);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.1);
+}
+
+.hub-notes-spellcheck-btn--active:hover {
+  color: #fff;
+  border-color: rgba(255, 68, 102, 0.5);
+  background: rgba(255, 68, 102, 0.12);
+  box-shadow:
+    0 0 14px rgba(255, 68, 102, 0.2),
+    0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.hub-notes-spellcheck-btn--active::before {
+  background: radial-gradient(ellipse at center, rgba(0, 240, 255, 0.12) 0%, transparent 70%);
+}
+
+.hub-notes-spellcheck-btn--active:hover::before {
+  background: radial-gradient(ellipse at center, rgba(255, 68, 102, 0.12) 0%, transparent 70%);
+}
+
+.hub-notes-spellcheck-btn-svg {
+  width: 14px;
+  height: 14px;
+  transition: transform var(--duration-fast) var(--ease-out-expo);
+  flex-shrink: 0;
+}
+
+.hub-notes-spellcheck-btn:hover .hub-notes-spellcheck-btn-svg {
+  transform: scale(1.1);
+}
+
+/* Theme overrides */
+[data-theme="solar-zen"] .hub-notes-spellcheck-btn {
+  border-color: rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.4);
+}
+[data-theme="solar-zen"] .hub-notes-spellcheck-btn:hover {
+  background: rgba(0, 240, 255, 0.12);
+  border-color: rgba(0, 180, 200, 0.5);
+}
+[data-theme="solar-zen"] .hub-notes-spellcheck-btn--active {
+  background: rgba(0, 240, 255, 0.15);
+  border-color: rgba(0, 180, 200, 0.5);
+}
+
+[data-theme="lofi-twilight"] .hub-notes-spellcheck-btn {
+  border-color: rgba(255, 255, 255, 0.06);
+  background: rgba(30, 28, 46, 0.5);
+}
+[data-theme="lofi-twilight"] .hub-notes-spellcheck-btn:hover {
+  background: rgba(246, 190, 124, 0.1);
+  border-color: rgba(246, 190, 124, 0.4);
+}
+[data-theme="lofi-twilight"] .hub-notes-spellcheck-btn--active {
+  background: rgba(246, 190, 124, 0.12);
+  border-color: rgba(246, 190, 124, 0.4);
+  color: var(--accent-secondary);
+}
+
 /* Theme: Solar Zen */
 [data-theme="solar-zen"] .hub-notes-history-btn {
   color: #6d28d9;
@@ -12714,4 +12829,93 @@ mark.cyber-hl-pink:hover {
   box-shadow:
     -2px 0 14px rgba(0, 243, 255, 0.35),
     inset 0 0 24px rgba(0, 243, 255, 0.06);
+}
+
+/* ============================================================
+   OPTIMIZE MODE — Black & Green Terminal (Max Performance + Focus)
+   Appended to <body> via JS toggle; overrides ALL CSS variables.
+   ============================================================ */
+
+/* ── CSS Variable Overrides ── */
+body.theme-optimized {
+  --bg-deep:        #000000;
+  --bg-surface:     #0a0a0a;
+  --bg-elevated:    #111111;
+  --glass-bg:       rgba(0, 0, 0, 0.92);
+  --glass-border:   rgba(0, 255, 65, 0.2);
+  --glass-highlight: rgba(0, 255, 65, 0.08);
+
+  --accent-primary:   #00FF41;
+  --accent-secondary: #00CC33;
+  --accent-glow:      0 0 8px rgba(0, 255, 65, 0.3);
+
+  --text-primary:   #E8E8E8;
+  --text-secondary: #AAAAAA;
+  --text-muted:     #666666;
+
+  --danger:         #FF4444;
+  --success:        #00FF41;
+
+  --zh-accent:      #00FF41;
+  --zh-gold:        #33FF66;
+  --zh-glow:        0 0 8px rgba(0, 255, 65, 0.2);
+  --zh-glow-gold:   0 0 6px rgba(51, 255, 102, 0.15);
+
+  --shadow-sm:   none;
+  --shadow-md:   none;
+  --shadow-lg:   none;
+  --shadow-glow: 0 0 4px rgba(0, 255, 65, 0.15);
+
+  --duration-fast:  0ms;
+  --duration-base:  0ms;
+  --duration-slow:  0ms;
+  --theme-transition: none;
+}
+
+/* ── Kill ALL expensive rendering at the root ── */
+body.theme-optimized *,
+body.theme-optimized *::before,
+body.theme-optimized *::after {
+  transition: none !important;
+  animation: none !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+  background-image: none !important;
+}
+
+/* ── Restore minimal shadow for readability-critical dialogs ── */
+body.theme-optimized .modal-content,
+body.theme-optimized .backup-modal-content,
+body.theme-optimized [role="dialog"] {
+  box-shadow: 0 0 0 1px rgba(0, 255, 65, 0.3) !important;
+}
+
+/* ── Toggle switch special styling in optimize mode ── */
+body.theme-optimized .toggle-switch input:checked + .toggle-slider {
+  background: rgba(0, 255, 65, 0.15);
+  border-color: #00FF41;
+  box-shadow: 0 0 6px rgba(0, 255, 65, 0.3);
+}
+
+body.theme-optimized .toggle-switch input:checked + .toggle-slider::before {
+  background: #00FF41;
+}
+
+/* ── Focus ring: green outline on active inputs ── */
+body.theme-optimized *:focus-visible {
+  outline: 2px solid #00FF41;
+  outline-offset: 2px;
+}
+
+/* ── Scrollbar: green minimal ── */
+body.theme-optimized ::-webkit-scrollbar-thumb {
+  background: rgba(0, 255, 65, 0.3);
+  border-radius: 4px;
+}
+
+/* ── Mute all glass panels to solid black ── */
+body.theme-optimized .glass,
+body.theme-optimized [class*="glass"] {
+  background: #0a0a0a !important;
+  border-color: rgba(0, 255, 65, 0.15) !important;
 }

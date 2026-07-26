@@ -65,7 +65,8 @@ const notesModule = (function () {
     historyList:     null,
     historyLoading:  null,
     historyEmpty:    null,
-    historyBody:     null
+    historyBody:     null,
+    spellcheckBtn:  null
   };
 
   // ── Ghost save guard ──
@@ -322,6 +323,14 @@ const notesModule = (function () {
               '</svg>' +
               '<span class="hub-notes-save-label">History</span>' +
             '</button>' +
+            '<button class="hub-notes-spellcheck-btn" id="hn-btn-spellcheck" title="Toggle Spellcheck" aria-label="Toggle spellcheck">' +
+              '<svg class="hub-notes-spellcheck-btn-svg" width="14" height="14" viewBox="0 0 20 20" fill="none">' +
+                '<path d="M4 2h12a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V4a2 2 0 012-2z" stroke="currentColor" stroke-width="1.3" fill="none"/>' +
+                '<text x="10" y="14.5" text-anchor="middle" font-size="11" font-family="serif" font-style="italic" fill="currentColor">abc</text>' +
+                '<line x1="3" y1="3" x2="17" y2="17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>' +
+              '</svg>' +
+              '<span class="hub-notes-save-label">Spell</span>' +
+            '</button>' +
             '<span class="hub-notes-save-feedback" id="hn-save-feedback"></span>' +
           '</div>' +
           '<div class="hub-notes-editor-area">' +
@@ -411,11 +420,16 @@ const notesModule = (function () {
     _el.historyLoading  = _qs('hn-history-loading');
     _el.historyEmpty    = _qs('hn-history-empty');
     _el.historyBody     = null; // will be scoped from overlay
+    _el.spellcheckBtn  = _qs('hn-btn-spellcheck');
 
     // Render lists
     _renderFolders();
     _renderNoteList();
     _loadNoteIntoEditor();
+
+    // Apply persisted spellcheck preference
+    var spellPref = _loadSpellcheckPreference();
+    _applySpellcheck(spellPref);
 
     // Bind all events
     _bindSearchEvents();
@@ -428,6 +442,7 @@ const notesModule = (function () {
     _bindDateEvents();
     _bindBackupVault();
     _bindHistoryVault();
+    _bindSpellcheckToggle();
   }
 
   // ============================================================
@@ -490,6 +505,43 @@ const notesModule = (function () {
     var diffHrs = Math.floor(diffMin / 60);
     if (diffHrs < 24) return diffHrs + 'h ago';
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  // ── Spellcheck persistence ──
+  function _getSpellcheckKey() {
+    return 'hubos_notes_spellcheck';
+  }
+
+  function _loadSpellcheckPreference() {
+    var stored = localStorage.getItem(_getSpellcheckKey());
+    // Default to true (spellcheck ON) if no preference saved yet
+    return stored === null ? true : stored === 'true';
+  }
+
+  function _applySpellcheck(enabled) {
+    if (_el.editor) {
+      _el.editor.spellcheck = enabled;
+    }
+    if (_el.titleInput) {
+      _el.titleInput.spellcheck = enabled;
+    }
+    if (_el.spellcheckBtn) {
+      if (enabled) {
+        _el.spellcheckBtn.classList.add('hub-notes-spellcheck-btn--active');
+      } else {
+        _el.spellcheckBtn.classList.remove('hub-notes-spellcheck-btn--active');
+      }
+    }
+  }
+
+  function _bindSpellcheckToggle() {
+    if (!_el.spellcheckBtn) return;
+    _el.spellcheckBtn.addEventListener('click', function () {
+      var current = _el.editor ? _el.editor.spellcheck : true;
+      var next = !(current !== false);
+      localStorage.setItem(_getSpellcheckKey(), String(next));
+      _applySpellcheck(next);
+    });
   }
 
   // ============================================================
@@ -1292,7 +1344,7 @@ function _updateToolbarPosition() {
         toolbar: null, savingIndicator: null, emptyState: null, editorPane: null,
         addBtn: null, addFolderBtn: null, searchBtn: null, searchBar: null,
         searchInput: null, searchClear: null, manualSaveBtn: null, saveFeedback: null,
-        dateContainer: null, dateText: null, dateInput: null, backupBtn: null, historyBtn: null, historyOverlay: null, historyClose: null, historyList: null, historyLoading: null, historyEmpty: null, historyBody: null
+        dateContainer: null, dateText: null, dateInput: null, backupBtn: null, historyBtn: null, historyOverlay: null, historyClose: null, historyList: null, historyLoading: null, historyEmpty: null, historyBody: null, spellcheckBtn: null
       };
     }
 
@@ -1354,7 +1406,7 @@ function _updateToolbarPosition() {
       toolbar: null, savingIndicator: null, emptyState: null, editorPane: null,
       addBtn: null, addFolderBtn: null, searchBtn: null, searchBar: null,
       searchInput: null, searchClear: null, manualSaveBtn: null, saveFeedback: null,
-      dateContainer: null, dateText: null, dateInput: null, backupBtn: null, historyBtn: null, historyOverlay: null, historyClose: null, historyList: null, historyLoading: null, historyEmpty: null, historyBody: null
+      dateContainer: null, dateText: null, dateInput: null, backupBtn: null, historyBtn: null, historyOverlay: null, historyClose: null, historyList: null, historyLoading: null, historyEmpty: null, historyBody: null, spellcheckBtn: null
     };
     // ⚡ PRESERVE _data, _activeNote, _activeFolder, _sessionInitialized,
     //    and _isNotesDataLoaded across tab switches so the in-memory cache
