@@ -373,7 +373,22 @@ const notesModule = (function () {
           '<button class="hub-notes-tb-btn" data-cmd="bold" title="Bold" aria-label="Bold"><b>B</b></button>' +
           '<button class="hub-notes-tb-btn" data-cmd="italic" title="Italic" aria-label="Italic"><i>I</i></button>' +
           '<button class="hub-notes-tb-btn" data-cmd="underline" title="Underline" aria-label="Underline"><u>U</u></button>' +
-          '<button class="hub-notes-tb-btn hub-notes-tb-highlight" data-cmd="foreColor" data-value="#00f0ff" title="Neon Cyan" aria-label="Neon Cyan text color">A</button>' +
+          '<span class="hub-notes-tb-sep"></span>' +
+          '<button class="hub-notes-tb-btn" data-cmd="justifyLeft" title="Align Left" aria-label="Align Left">' +
+            '<svg width="14" height="14" viewBox="0 0 16 16" fill="none">' +
+              '<path d="M2 3h12M2 6.5h8M2 10h10M2 13.5h7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>' +
+            '</svg>' +
+          '</button>' +
+          '<button class="hub-notes-tb-btn" data-cmd="justifyCenter" title="Align Center" aria-label="Align Center">' +
+            '<svg width="14" height="14" viewBox="0 0 16 16" fill="none">' +
+              '<path d="M2 3h12M4.5 6.5h7M3 10h10M5 13.5h6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>' +
+            '</svg>' +
+          '</button>' +
+          '<button class="hub-notes-tb-btn" data-cmd="justifyRight" title="Align Right" aria-label="Align Right">' +
+            '<svg width="14" height="14" viewBox="0 0 16 16" fill="none">' +
+              '<path d="M2 8h12M6 6.5h8M4 10h10M7 13.5h7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>' +
+            '</svg>' +
+          '</button>' +
           '<span class="hub-notes-tb-sep"></span>' +
           '<button class="hub-notes-tb-btn" data-cmd="insertUnorderedList" title="Bullet List" aria-label="Bullet List">' +
             '<svg width="14" height="14" viewBox="0 0 16 16" fill="none">' +
@@ -383,6 +398,9 @@ const notesModule = (function () {
               '<circle cx="2" cy="11.5" r="1" fill="currentColor"/>' +
             '</svg>' +
           '</button>' +
+          '<span class="hub-notes-tb-sep"></span>' +
+          '<input type="color" id="hn-color-picker" class="hub-notes-color-input" value="#00f0ff">' +
+          '<label for="hn-color-picker" class="hub-notes-tb-btn hub-notes-tb-highlight" title="Text Color" aria-label="Text color picker" tabindex="0">A</label>' +
         '</div>' +
       '</div>';
 
@@ -1063,7 +1081,9 @@ const notesModule = (function () {
       if (!_el.editor || !_el.toolbar || !e) return;
       var t = e.target;
       if (!t) return;
+      // Don't hide if clicking inside the editor, toolbar, or the color input
       if (_el.editor.contains(t) || _el.toolbar.contains(t)) return;
+      if (t && t.id === 'hn-color-picker') return;
       _hideToolbar();
     };
 
@@ -1083,47 +1103,39 @@ const notesModule = (function () {
     document.addEventListener('keyup', _boundDocKeyup);
     document.addEventListener('keydown', _boundDocKeydown);
 
-    // Toolbar button clicks
+    // Toolbar button clicks — use mousedown + preventDefault to avoid stealing focus
     _el.toolbar.addEventListener('mousedown', function (e) {
-      e.preventDefault();
       var btn = e.target.closest('.hub-notes-tb-btn');
       if (!btn) return;
+
+      var isColorLabel = btn.tagName === 'LABEL' && btn.getAttribute('for') === 'hn-color-picker';
+      if (!isColorLabel) {
+        e.preventDefault(); // prevent editor focus loss for command buttons
+      }
+      // For color label: let default label behavior click the hidden input
+
       var cmd = btn.getAttribute('data-cmd');
       var val = btn.getAttribute('data-value');
-      if (cmd === 'foreColor' && val) {
-        // Toggle: if selection is already the highlight color, revert to default
-        var currentColor = '';
-        try { currentColor = document.queryCommandValue('foreColor'); } catch (_) {}
-        // Convert both to lowercase hex for comparison
-        var normalizeColor = function (c) {
-          if (!c) return '';
-          c = c.toLowerCase().replace(/\s/g, '');
-          // rgb(0, 240, 255) → #00f0ff
-          var rgb = c.match(/^rgb\((\d+),(\d+),(\d+)\)$/);
-          if (rgb) {
-            return '#' + [rgb[1], rgb[2], rgb[3]].map(function (n) {
-              var h = parseInt(n, 10).toString(16);
-              return h.length === 1 ? '0' + h : h;
-            }).join('');
-          }
-          return c;
-        };
-        var tgt = normalizeColor(val);
-        var cur = normalizeColor(currentColor);
-        if (cur === tgt) {
-          document.execCommand('foreColor', false, '#ffffff');
-        } else {
-          document.execCommand('foreColor', false, val);
-        }
-      } else if (cmd) {
-        document.execCommand(cmd, false, null);
+      if (cmd) {
+        document.execCommand(cmd, false, val || null);
       }
-      if (_el.editor) _el.editor.focus();
+
+      if (_el.editor && !isColorLabel) _el.editor.focus();
       setTimeout(_updateToolbarPosition, 10);
     });
+
+    // Color picker change → apply foreColor
+    var colorPicker = _el.toolbar.querySelector('#hn-color-picker');
+    if (colorPicker) {
+      colorPicker.addEventListener('input', function (e) {
+        var color = e.target.value;
+        document.execCommand('foreColor', false, color);
+        if (_el.editor) _el.editor.focus();
+      });
+    }
   }
 
-function _updateToolbarPosition() {
+  function _updateToolbarPosition() {
     var sel = window.getSelection();
     var text = sel ? sel.toString().trim() : '';
     if (text.length === 0 || !sel || !sel.rangeCount || !_el.editor || !_el.toolbar) {
@@ -1131,7 +1143,7 @@ function _updateToolbarPosition() {
       return;
     }
 
-    // Kiểm tra xem đoạn bôi đen có nằm trong editor không
+    // Verify selection is inside the editor
     var node = sel.anchorNode;
     var inside = false;
     while (node) {
@@ -1151,18 +1163,24 @@ function _updateToolbarPosition() {
       return;
     }
 
-    // Ép thanh menu dùng tọa độ "Fixed" (Bám dính chính xác theo màn hình)
+    // Display first so offsetWidth is accurate
     _el.toolbar.style.position = 'fixed';
-    _el.toolbar.style.display = 'flex'; // Bật hiển thị trước để đo chiều rộng
+    _el.toolbar.style.display = 'flex';
 
-    var tbWidth = _el.toolbar.offsetWidth || 140;
-    
-    // Tính toán: Nổi lên đúng 45px ngay trên đầu chữ bôi đen, và nằm ngay chính giữa
+    var tbWidth  = _el.toolbar.offsetWidth || 140;
+    var margin   = 10;
+
+    // Position centered above the selection, 45px up
     var top  = rect.top - 45;
     var left = rect.left + (rect.width / 2) - (tbWidth / 2);
 
-    _el.toolbar.style.top  = Math.max(10, top) + 'px';
-    _el.toolbar.style.left = Math.max(10, left) + 'px';
+    // ── Viewport boundary clamp ──
+    var maxLeft = window.innerWidth - tbWidth - margin;
+    if (maxLeft < margin) maxLeft = margin; // toolbar wider than viewport — pin left
+    left = Math.max(margin, Math.min(left, maxLeft));
+
+    _el.toolbar.style.top  = Math.max(margin, top) + 'px';
+    _el.toolbar.style.left = left + 'px';
     _el.toolbar.classList.add('hub-notes-toolbar--visible');
   }
 

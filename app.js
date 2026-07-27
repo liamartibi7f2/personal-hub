@@ -372,7 +372,8 @@ const BACKUP_KEYS = [
   'hub_notes',
   'quiz_decks',
   'hub_quiz_scores',
-  'hubos_optimize_mode'
+  'hubos_optimize_mode',
+  'hub_cashflow'
 ];
 
 function _initBackupModal() {

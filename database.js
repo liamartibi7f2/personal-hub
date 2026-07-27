@@ -237,6 +237,193 @@ const HubDB = (function () {
     return null;
   }
 
+  // ──────────────────────────────────────────────
+  //  CashFlow data (subcollection-based, same pattern as Notes)
+  // ──────────────────────────────────────────────
+
+  const CF_LOCAL_KEY       = 'hub_cf_cloud_data';
+  const CF_LOCAL_OFFSET    = 'hub_cf_cloud_offset';
+  const CF_LOCAL_SAVINGS   = 'hub_cf_cloud_savings';
+
+  function _cfDataDocRef() {
+    if (!_isOnline()) return null;
+    return _db.collection('users').doc(_user.uid).collection('cashflow_store').doc('data');
+  }
+
+  function _cfMetaDocRef() {
+    if (!_isOnline()) return null;
+    return _db.collection('users').doc(_user.uid).collection('cashflow_store').doc('meta');
+  }
+
+  /**
+   * Save CashFlow data (transactions + balances) to Firestore subcollection.
+   * Cloud-first — same architecture as Notes.
+   * @param {Object} data — { transactions: [], balanceSnapshots: [], startingBalance: 0 }
+   */
+  async function saveCashFlowData(data) {
+    await _ensureReady();
+
+    if (_isOnline()) {
+      try {
+        await Promise.race([
+          _cfDataDocRef()
+            .set({ payload: data }, { merge: true })
+            .catch(function (err) {
+              console.error('[HubDB] CashFlow Firestore write failed:', err);
+              throw err;
+            }),
+          _timeout(2500)
+        ]);
+        // Cloud write succeeded — also cache locally for offline resilience
+        try { localStorage.setItem(CF_LOCAL_KEY, JSON.stringify(data)); } catch (_) {}
+        return;
+      } catch (err) {
+        console.error('[HubDB] CashFlow save failed:', err.message || err);
+        // Fallback: save to localStorage so data isn't lost
+        try { localStorage.setItem(CF_LOCAL_KEY, JSON.stringify(data)); } catch (_) {}
+        return;
+      }
+    }
+
+    // Offline → localStorage only
+    try { localStorage.setItem(CF_LOCAL_KEY, JSON.stringify(data)); } catch (_) {}
+  }
+
+  /**
+   * Save CashFlow meta settings (netWorthOffset + savingsBalance).
+   * Stored in a separate doc to avoid heavy rewrites on offset changes.
+   * @param {Object} meta — { netWorthOffset: number, savingsBalance: number }
+   */
+  async function saveCashFlowMeta(meta) {
+    await _ensureReady();
+
+    if (_isOnline()) {
+      try {
+        await Promise.race([
+          _cfMetaDocRef()
+            .set(meta, { merge: true })
+            .catch(function (err) {
+              console.error('[HubDB] CashFlow Meta write failed:', err);
+              throw err;
+            }),
+          _timeout(2500)
+        ]);
+        try { localStorage.setItem(CF_LOCAL_OFFSET, JSON.stringify(meta)); } catch (_) {}
+        return;
+      } catch (err) {
+        try { localStorage.setItem(CF_LOCAL_OFFSET, JSON.stringify(meta)); } catch (_) {}
+        return;
+      }
+    }
+
+    try { localStorage.setItem(CF_LOCAL_OFFSET, JSON.stringify(meta)); } catch (_) {}
+  }
+
+  /**
+   * Load CashFlow data (transactions) — cloud first, then localStorage fallback.
+   * @returns {Object|null}
+   */
+  async function loadCashFlowData() {
+    if (navigator.onLine === false) {
+      try {
+        var rawLocal = localStorage.getItem(CF_LOCAL_KEY);
+        if (rawLocal) return JSON.parse(rawLocal);
+      } catch (_) {}
+      return null;
+    }
+
+    await _ensureReady();
+
+    if (_isOnline()) {
+      try {
+        var doc = await Promise.race([
+          _cfDataDocRef().get(),
+          _timeout(2500)
+        ]);
+        if (doc && doc.exists) {
+          var cloudData = doc.data().payload;
+          if (cloudData && Array.isArray(cloudData.transactions)) {
+            // Merge any offline-local changes into the cloud
+            try {
+              var localRaw = localStorage.getItem(CF_LOCAL_KEY);
+              if (localRaw) {
+                var localData = JSON.parse(localRaw);
+                if (localData && Array.isArray(localData.transactions) && localData.transactions.length > 0) {
+                  // Simple merge: union by id
+                  var existingIds = {};
+                  cloudData.transactions.forEach(function (t) { existingIds[t.id] = true; });
+                  var merged = false;
+                  localData.transactions.forEach(function (t) {
+                    if (!existingIds[t.id]) { cloudData.transactions.push(t); merged = true; }
+                  });
+                  if (merged) {
+                    _cfDataDocRef().set({ payload: cloudData }, { merge: true }).catch(function () {});
+                  }
+                }
+              }
+              try { localStorage.removeItem(CF_LOCAL_KEY); } catch (_) {}
+            } catch (_) {}
+            return cloudData;
+          }
+          return null;
+        }
+        return null;
+      } catch (err) {
+        console.warn('[HubDB] CashFlow Cloud load failed, trying localStorage:', err.message);
+      }
+    }
+
+    try {
+      var raw = localStorage.getItem(CF_LOCAL_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return null;
+  }
+
+  /**
+   * Load CashFlow meta (netWorthOffset + savingsBalance).
+   * @returns {Object} — { netWorthOffset: 0, savingsBalance: 0 }
+   */
+  async function loadCashFlowMeta() {
+    var defaults = { netWorthOffset: 0, savingsBalance: 0 };
+
+    if (navigator.onLine === false) {
+      try {
+        var rawL = localStorage.getItem(CF_LOCAL_OFFSET);
+        if (rawL) return JSON.parse(rawL);
+      } catch (_) {}
+      return defaults;
+    }
+
+    await _ensureReady();
+
+    if (_isOnline()) {
+      try {
+        var doc = await Promise.race([
+          _cfMetaDocRef().get(),
+          _timeout(2500)
+        ]);
+        if (doc && doc.exists) {
+          var meta = doc.data();
+          try { localStorage.setItem(CF_LOCAL_OFFSET, JSON.stringify(meta)); } catch (_) {}
+          return {
+            netWorthOffset: Number(meta.netWorthOffset) || 0,
+            savingsBalance: Number(meta.savingsBalance) || 0
+          };
+        }
+        return defaults;
+      } catch (err) {
+        console.warn('[HubDB] CashFlow Meta load failed:', err.message);
+      }
+    }
+
+    try {
+      var raw = localStorage.getItem(CF_LOCAL_OFFSET);
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return defaults;
+  }
+
   /**
    * Merge any notes/folders that exist locally but not in the cloud.
    * This prevents data loss when the user adds notes offline.
@@ -1110,6 +1297,10 @@ const HubDB = (function () {
     loadQuizData: loadQuizData,
     saveFocusData: saveFocusData,
     loadFocusData: loadFocusData,
+    saveCashFlowData: saveCashFlowData,
+    loadCashFlowData: loadCashFlowData,
+    saveCashFlowMeta: saveCashFlowMeta,
+    loadCashFlowMeta: loadCashFlowMeta,
     savePomodoroData: savePomodoroData,
     loadPomodoroData: loadPomodoroData,
     saveFlashcardSettings: saveFlashcardSettings,

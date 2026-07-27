@@ -288,6 +288,20 @@
     try { localStorage.removeItem('hub_pomodoro_sessions'); } catch (_) {}
     try { localStorage.removeItem('hub_pomodoro_ref'); } catch (_) {}
     try { localStorage.removeItem('hub_pomodoro_stats'); } catch (_) {}
+    // CashFlow data — legacy keys (pre-account-scoping)
+    try { localStorage.removeItem('hub_cashflow'); } catch (_) {}
+    try { localStorage.removeItem('hubos_networth_offset'); } catch (_) {}
+    try { localStorage.removeItem('hubos_savings_balance'); } catch (_) {}
+    // CashFlow data — account-scoped keys (old pattern)
+    var _logoutUser = window.HubAuth && window.HubAuth.getCurrentUser ? window.HubAuth.getCurrentUser() : 'admin';
+    try { localStorage.removeItem('hub_cf_' + _logoutUser + '_cashflow'); } catch (_) {}
+    try { localStorage.removeItem('hub_cf_' + _logoutUser + '_networth_offset'); } catch (_) {}
+    try { localStorage.removeItem('hub_cf_' + _logoutUser + '_savings_balance'); } catch (_) {}
+    try { localStorage.removeItem('hubos_active_user'); } catch (_) {}
+    // CashFlow data — cloud-first fallback keys (HubDB)
+    try { localStorage.removeItem('hub_cf_cloud_data'); } catch (_) {}
+    try { localStorage.removeItem('hub_cf_cloud_offset'); } catch (_) {}
+    try { localStorage.removeItem('hub_cf_cloud_savings'); } catch (_) {}
 
     // 2) Sign out of Firebase — await the promise, THEN reload
     //    This prevents the race where the page reloads while auth
@@ -312,7 +326,29 @@
     if (typeof notesModule !== 'undefined' && typeof notesModule.clearData === 'function') {
       notesModule.clearData();
     }
-    // Other modules can be added here as they adopt the Load Guard pattern.
+    // CashFlow module — purge sensitive financial DOM data immediately
+    if (typeof cashflowModule !== 'undefined' && typeof cashflowModule.purgeUI === 'function') {
+      cashflowModule.purgeUI();
+    }
+  }
+
+  // ── Set hubos_active_user after successful login ──
+  function _setCurrentUserKey() {
+    if (!_currentUser) return;
+    var username = _currentUser.email || 'admin';
+    try {
+      localStorage.setItem('hubos_active_user', username.toLowerCase().trim());
+    } catch (_) {}
+  }
+
+  /**
+   * Re-initialize CashFlow module so the DOM is hydrated
+   * with the newly scoped account data after login.
+   */
+  function _reinitCashFlowIfNeeded() {
+    if (typeof cashflowModule !== 'undefined' && typeof cashflowModule.reinit === 'function') {
+      cashflowModule.reinit();
+    }
   }
 
   // ── Listen to Firebase auth state ──
@@ -357,6 +393,10 @@
         // Show admin badge if applicable
         _toggleAdminBadge(isAdmin);
         _resetInactivityTimer();
+
+        // ── Account scoping: persist username + re-init modules ──
+        _setCurrentUserKey();
+        _reinitCashFlowIfNeeded();
 
         // ── Refresh dashboard stats from Firestore ──
         if (typeof dashboardModule !== 'undefined' && dashboardModule.refreshFromCloud) {
@@ -468,8 +508,17 @@
 
   // ── Expose a minimal API for other modules ──
   window.HubAuth = {
-    isLoggedIn: function () { return !!_currentUser; },
-    getUser:    function () { return _currentUser; },
+    isLoggedIn:     function () { return !!_currentUser; },
+    getUser:        function () { return _currentUser; },
+    getCurrentUser: function () {
+      // Case-insensitive: always lowercase + trimmed
+      try {
+        var raw = localStorage.getItem('hubos_active_user') || (_currentUser && _currentUser.email ? _currentUser.email : 'admin');
+        return String(raw).toLowerCase().trim();
+      } catch (_) {
+        return 'admin';
+      }
+    },
     logout:     _logout,
     openModal:  _openModal
   };

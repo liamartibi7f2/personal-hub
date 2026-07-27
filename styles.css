@@ -6121,12 +6121,14 @@ mark.cyber-hl-pink:hover {
 .backup-modal {
   width: 100%;
   max-width: 400px;
+  max-height: 85vh;
   border-radius: var(--radius-xl);
   border: 1px solid var(--glass-border);
   padding: var(--space-xl);
   display: flex;
   flex-direction: column;
   gap: var(--space-lg);
+  overflow: hidden;
   transform: scale(0.92) translateY(16px);
   transition: transform var(--duration-base) var(--ease-out-expo);
   box-shadow: 0 16px 64px rgba(0, 0, 0, 0.5),
@@ -6137,11 +6139,18 @@ mark.cyber-hl-pink:hover {
   transform: scale(1) translateY(0);
 }
 
-/* Header */
+/* Header — sticky so the title and X stay visible during scroll */
 .backup-modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding-bottom: var(--space-sm);
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
 }
 
 .backup-modal-title-group {
@@ -6164,15 +6173,17 @@ mark.cyber-hl-pink:hover {
   letter-spacing: 0.03em;
 }
 
-/* Close X button */
+/* Close X button — 40×40 touch target min */
 .backup-close-btn {
-  width: 32px;
-  height: 32px;
+  min-width: 40px;
+  min-height: 40px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--radius-full);
   border: 1px solid var(--glass-border);
   background: rgba(255, 255, 255, 0.03);
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -6191,11 +6202,38 @@ mark.cyber-hl-pink:hover {
   transform: scale(0.9);
 }
 
-/* Body */
+/* Body — scrollable content area */
 .backup-modal-body {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  min-height: 0;
+  padding-right: 4px;
+}
+
+/* ── Custom scrollbar for the settings body (dark theme) ── */
+.backup-modal-body::-webkit-scrollbar {
+  width: 5px;
+}
+.backup-modal-body::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-full);
+}
+.backup-modal-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-full);
+}
+.backup-modal-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 240, 255, 0.3);
+}
+
+/* Firefox slim scrollbar for body */
+.backup-modal-body {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) rgba(255, 255, 255, 0.03);
 }
 
 /* Auto-save toggle row */
@@ -6563,6 +6601,7 @@ mark.cyber-hl-pink:hover {
   }
   .backup-modal {
     max-width: 100%;
+    max-height: 95vh;
     border-radius: var(--radius-xl) var(--radius-xl) 0 0;
     padding: var(--space-lg);
   }
@@ -7290,6 +7329,13 @@ mark.cyber-hl-pink:hover {
   background: rgba(0, 0, 0, 0.25);
 }
 
+[data-theme="solar-zen"] .backup-modal-body::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+}
+[data-theme="solar-zen"] .backup-modal-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(79, 70, 229, 0.3);
+}
+
 /* Vibe pill inactive bg */
 [data-theme="solar-zen"] .vibe-pill {
   background: rgba(0, 0, 0, 0.03);
@@ -7809,6 +7855,13 @@ mark.cyber-hl-pink:hover {
 
 [data-theme="lofi-twilight"] ::-webkit-scrollbar-thumb:hover {
   background: rgba(187, 154, 247, 0.2);
+}
+
+[data-theme="lofi-twilight"] .backup-modal-body::-webkit-scrollbar-thumb {
+  background: rgba(187, 154, 247, 0.15);
+}
+[data-theme="lofi-twilight"] .backup-modal-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(187, 154, 247, 0.3);
 }
 
 /* Theme toggle in lofi */
@@ -9200,6 +9253,14 @@ mark.cyber-hl-pink:hover {
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 240, 255, 0.08);
   transition: opacity 120ms var(--ease-out-expo);
   pointer-events: auto;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.hub-notes-float-toolbar::-webkit-scrollbar {
+  display: none;
 }
 
 .hub-notes-toolbar--visible {
@@ -9207,8 +9268,9 @@ mark.cyber-hl-pink:hover {
 }
 
 .hub-notes-tb-btn {
-  width: 30px;
-  height: 30px;
+  min-width: 35px;
+  min-height: 35px;
+  padding: 4px 7px;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -9219,7 +9281,10 @@ mark.cyber-hl-pink:hover {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   transition: all var(--duration-fast) var(--ease-out-expo);
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
 }
 .hub-notes-tb-btn:hover {
   color: var(--text-primary);
@@ -9228,6 +9293,15 @@ mark.cyber-hl-pink:hover {
 .hub-notes-tb-btn:active {
   background: rgba(0, 240, 255, 0.12);
   color: var(--accent-primary);
+}
+
+/* Increase touch target on mobile */
+@media (max-width: 640px) {
+  .hub-notes-tb-btn {
+    min-width: 38px;
+    min-height: 38px;
+    padding: 6px 8px;
+  }
 }
 
 .hub-notes-tb-highlight {
@@ -9244,6 +9318,24 @@ mark.cyber-hl-pink:hover {
   height: 20px;
   background: var(--glass-border);
   margin: 0 3px;
+  flex-shrink: 0;
+}
+
+/* Hidden native color input — triggered by its <label> */
+.hub-notes-color-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── Align button icon alignment ── */
+.hub-notes-tb-btn svg {
+  display: block;
   flex-shrink: 0;
 }
 
@@ -12890,6 +12982,17 @@ body.theme-optimized [role="dialog"] {
   box-shadow: 0 0 0 1px rgba(0, 255, 65, 0.3) !important;
 }
 
+body.theme-optimized .backup-modal-header {
+  background: #0a0a0a;
+}
+
+body.theme-optimized .backup-modal-body::-webkit-scrollbar-thumb {
+  background: rgba(0, 255, 65, 0.12);
+}
+body.theme-optimized .backup-modal-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 255, 65, 0.25);
+}
+
 /* ── Toggle switch special styling in optimize mode ── */
 body.theme-optimized .toggle-switch input:checked + .toggle-slider {
   background: rgba(0, 255, 65, 0.15);
@@ -12918,4 +13021,1268 @@ body.theme-optimized .glass,
 body.theme-optimized [class*="glass"] {
   background: #0a0a0a !important;
   border-color: rgba(0, 255, 65, 0.15) !important;
+}
+
+/* ============================================================
+   CASHFLOW (WALLET.OS) — Financial Module
+   Namespace: hub-cf-
+   Multi-theme: Cyberpunk | Solar Zen | Lo-Fi Twilight | Optimize
+   ============================================================ */
+
+/* ───────────────────────────────────────────────
+   1. CONTAINER & LAYOUT
+   ─────────────────────────────────────────────── */
+
+.hub-cf-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  width: 100%;
+  max-width: 880px;
+}
+
+/* ── Dashboard Cards ── */
+.hub-cf-dashboard {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+}
+
+/* ── Unified summary card (all 4 cells share this block) ── */
+.hub-cf-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xl) var(--space-lg);
+  min-height: 118px;
+  border-radius: var(--radius-lg);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: background-color 0.4s ease, border-color 0.4s ease,
+              transform var(--duration-base) var(--ease-out-expo);
+}
+
+.hub-cf-card:hover {
+  transform: translateY(-2px);
+}
+
+/* ── Card label (small uppercase mono) ── */
+.hub-cf-card-label {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+/* ── Value row (value + edit button) ── */
+.hub-cf-card-value-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── Card value ── */
+.hub-cf-card-value {
+  font-family: var(--font-mono);
+  font-size: 1.65rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Per-card value colors ── */
+.hub-cf-card-value--networth {
+  background: linear-gradient(135deg, var(--success), #00e676);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hub-cf-card-value--savings {
+  background: linear-gradient(135deg, #00e5ff, #00b8d4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hub-cf-card-value--income  { color: var(--success); }
+.hub-cf-card-value--expense { color: var(--danger); }
+
+/* ── Sub-label (bottom) ── */
+.hub-cf-card-sub {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* ── Edit button (shared for Net Worth + Savings) ── */
+.hub-cf-card-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+  flex-shrink: 0;
+  padding: 0;
+  line-height: 1;
+}
+
+.hub-cf-card-edit-btn:hover {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  background: rgba(0, 240, 255, 0.08);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.18);
+}
+
+.hub-cf-card-edit-btn:active {
+  transform: scale(0.93);
+}
+
+/* ───────────────────────────────────────────────
+   2. ACTION BAR
+   ─────────────────────────────────────────────── */
+
+.hub-cf-action-bar {
+  display: flex;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.hub-cf-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 12px 28px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.hub-cf-btn:active {
+  transform: scale(0.97);
+}
+
+.hub-cf-btn--add {
+  background: var(--accent-primary);
+  color: #000;
+  box-shadow: 0 0 18px rgba(0, 240, 255, 0.25);
+}
+
+.hub-cf-btn--add:hover {
+  box-shadow: 0 0 32px rgba(0, 240, 255, 0.45);
+  transform: translateY(-1px);
+}
+
+.hub-cf-btn--export {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: var(--glass-border);
+}
+
+.hub-cf-btn--export:hover {
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
+  background: rgba(0, 240, 255, 0.05);
+}
+
+/* Import button — amber accent to distinguish from Export */
+.hub-cf-btn--import {
+  color: var(--text-primary);
+  background: transparent;
+  border: 1.5px solid var(--border-subtle);
+}
+
+.hub-cf-btn--import:hover {
+  color: #fff;
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.08);
+}
+
+/* Hidden file input — never shown, only triggered programmatically */
+.hub-cf-import-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+  pointer-events: none;
+}
+
+/* ───────────────────────────────────────────────
+   2.5. REAL-TIME CHART (Income vs Expense)
+   ─────────────────────────────────────────────── */
+
+.hub-cf-chart-section {
+  margin-bottom: var(--space-lg);
+  padding: var(--space-lg);
+}
+
+.hub-cf-chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-md);
+}
+
+.hub-cf-chart-title {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.hub-cf-chart-filter {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  outline: none;
+  appearance: auto;
+}
+
+.hub-cf-chart-filter:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(0, 240, 255, 0.15);
+}
+
+.hub-cf-chart-canvas-wrap {
+  position: relative;
+  width: 100%;
+  height: 280px;
+  overflow: hidden;
+}
+
+.hub-cf-chart-legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin-top: var(--space-sm);
+  justify-content: center;
+}
+
+.hub-cf-chart-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+
+.hub-cf-chart-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.hub-cf-chart-legend-dot--income {
+  background: var(--success);
+}
+
+.hub-cf-chart-legend-dot--expense {
+  background: var(--danger);
+}
+
+/* Chart theme overrides for dark text on light backgrounds */
+[data-theme="solar-zen"] .hub-cf-chart-filter {
+  background: var(--bg-card);
+  border-color: rgba(0,0,0,0.12);
+  color: var(--text-primary);
+}
+
+/* Optimize mode — monochrome terminal styling */
+body.theme-optimized .hub-cf-chart-section {
+  border: 1px solid #00ff41;
+  box-shadow: none;
+}
+
+body.theme-optimized .hub-cf-chart-filter {
+  background: #000;
+  color: #00ff41;
+  border: 1px solid #00ff41;
+}
+
+body.theme-optimized .hub-cf-chart-canvas-wrap canvas {
+  filter: hue-rotate(0deg) saturate(0.8);
+}
+
+/* ───────────────────────────────────────────────
+   3. TRANSACTION LEDGER
+   ─────────────────────────────────────────────── */
+
+.hub-cf-ledger {
+  display: flex;
+  flex-direction: column;
+  min-height: 180px;
+  max-height: 600px;
+  overflow: hidden;
+}
+
+.hub-cf-ledger-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-md);
+  flex-shrink: 0;
+}
+
+.hub-cf-ledger-title {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+}
+
+.hub-cf-ledger-count {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  color: var(--text-muted);
+}
+
+/* ── Empty state ── */
+.hub-cf-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: var(--space-2xl) var(--space-lg);
+  text-align: center;
+}
+
+.hub-cf-empty-icon {
+  font-size: 2.2rem;
+  margin-bottom: var(--space-sm);
+  opacity: 0.55;
+}
+
+.hub-cf-empty-text {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-xs);
+}
+
+.hub-cf-empty-hint {
+  font-family: var(--font-body);
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.hub-cf-empty-hint strong {
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
+/* ── Table ── */
+.hub-cf-table-wrap {
+  flex: 1;
+  max-height: 340px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ── Scrollbar styling for the ledger table (cyberpunk dark theme) ── */
+.hub-cf-table-wrap::-webkit-scrollbar {
+  width: 5px;
+}
+.hub-cf-table-wrap::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-full);
+}
+.hub-cf-table-wrap::-webkit-scrollbar-thumb {
+  background: var(--accent-primary);
+  border-radius: var(--radius-full);
+  opacity: 0.6;
+}
+.hub-cf-table-wrap::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-secondary);
+}
+
+/* Firefox slim scrollbar */
+.hub-cf-table-wrap {
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-primary) rgba(255, 255, 255, 0.03);
+}
+
+.hub-cf-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.hub-cf-table thead {
+  position: sticky;
+  top: -1px;
+  z-index: 2;
+}
+
+.hub-cf-table th {
+  text-align: left;
+  padding: 10px var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.hub-cf-table td {
+  padding: 12px var(--space-sm);
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--glass-border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hub-cf-col--date { width: 14%; }
+.hub-cf-col--desc { width: 32%; }
+.hub-cf-col--cat  { width: 26%; }
+.hub-cf-col--amt  { width: 16%; }
+.hub-cf-col--act  { width: 12%; text-align: center; }
+
+.hub-cf-table td:last-child {
+  text-align: center;
+}
+
+.hub-cf-tx-income td:nth-child(4) {
+  color: var(--success);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.hub-cf-tx-expense td:nth-child(4) {
+  color: var(--danger);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.hub-cf-table tbody tr:hover td {
+  background: var(--glass-highlight);
+}
+
+/* ── Category chip ── */
+.hub-cf-cat-chip {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent-primary);
+  background: rgba(0, 240, 255, 0.07);
+  border: 1px solid rgba(0, 240, 255, 0.14);
+}
+
+/* ── Delete button in table ── */
+.hub-cf-delete-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  background: rgba(255, 68, 102, 0.06);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.7rem;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+}
+
+.hub-cf-delete-btn:hover {
+  color: var(--danger);
+  background: rgba(255, 68, 102, 0.12);
+  border-color: rgba(255, 68, 102, 0.25);
+}
+
+/* ───────────────────────────────────────────────
+   4. MODAL OVERLAY
+   ─────────────────────────────────────────────── */
+
+.hub-cf-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: hub-cf-fadeIn 200ms var(--ease-out-expo);
+}
+
+@keyframes hub-cf-fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.hub-cf-modal {
+  width: 92%;
+  max-width: 460px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 0;
+  border-radius: var(--radius-xl);
+  animation: hub-cf-scaleIn 300ms var(--ease-out-expo);
+}
+
+@keyframes hub-cf-scaleIn {
+  from { transform: scale(0.92); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+/* ── Modal header + tabs ── */
+.hub-cf-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.hub-cf-tab-group {
+  display: flex;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-full);
+  padding: 3px;
+}
+
+.hub-cf-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+  white-space: nowrap;
+}
+
+.hub-cf-tab:hover {
+  color: var(--text-secondary);
+}
+
+.hub-cf-tab--active {
+  color: var(--text-primary);
+  background: var(--glass-highlight);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.hub-cf-tab-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.hub-cf-tab-dot--expense {
+  background: var(--danger);
+  box-shadow: 0 0 6px var(--danger);
+}
+
+.hub-cf-tab-dot--income {
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success);
+}
+
+.hub-cf-modal-close {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+}
+
+.hub-cf-modal-close:hover {
+  color: var(--text-primary);
+  border-color: var(--danger);
+  background: rgba(255, 68, 102, 0.08);
+}
+
+/* ── Modal body ── */
+.hub-cf-modal-body {
+  padding: var(--space-lg);
+}
+
+.hub-cf-form-group {
+  margin-bottom: var(--space-md);
+}
+
+.hub-cf-form-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.hub-cf-form-input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  outline: none;
+  transition: border-color var(--duration-fast);
+}
+
+.hub-cf-form-input:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.1);
+}
+
+.hub-cf-form-input::placeholder {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.hub-cf-amount-input {
+  font-family: var(--font-mono);
+  font-size: 1.2rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.hub-cf-date-input {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.hub-cf-category-select {
+  font-family: var(--font-body);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238b8b9e' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 36px;
+}
+
+.hub-cf-category-select option {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+/* ── Form actions ── */
+.hub-cf-form-actions {
+  display: flex;
+  gap: var(--space-sm);
+  justify-content: flex-end;
+  margin-top: var(--space-lg);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--glass-border);
+}
+
+.hub-cf-modal-btn {
+  padding: 10px 24px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border: none;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-expo);
+}
+
+.hub-cf-modal-btn--cancel {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--glass-border);
+}
+
+.hub-cf-modal-btn--cancel:hover {
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+}
+
+.hub-cf-modal-btn--save {
+  background: var(--accent-primary);
+  color: #000;
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.25);
+}
+
+.hub-cf-modal-btn--save:hover {
+  box-shadow: 0 0 24px rgba(0, 240, 255, 0.45);
+  transform: translateY(-1px);
+}
+
+/* ───────────────────────────────────────────────
+   5. MONTH PICKER + SUMMARY SECTION
+   ─────────────────────────────────────────────── */
+
+.hub-cf-month-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.hub-cf-month-nav {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: all var(--duration-fast);
+}
+
+.hub-cf-month-nav:hover {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.hub-cf-month-label {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 90px;
+  text-align: center;
+}
+
+.hub-cf-category-breakdown {
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--glass-border);
+}
+
+.hub-cf-breakdown-title {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: var(--space-sm);
+}
+
+.hub-cf-breakdown-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hub-cf-breakdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.78rem;
+}
+
+.hub-cf-breakdown-name {
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+
+.hub-cf-breakdown-amt {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.hub-cf-breakdown-amt--income { color: var(--success); }
+.hub-cf-breakdown-amt--expense { color: var(--danger); }
+
+.hub-cf-breakdown-bar-track {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-full);
+  margin-bottom: var(--space-xs);
+}
+
+.hub-cf-breakdown-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--accent-primary);
+  transition: width var(--duration-base) var(--ease-out-expo);
+}
+
+.hub-cf-breakdown-bar-fill--expense { background: var(--danger); }
+.hub-cf-breakdown-bar-fill--income { background: var(--success); }
+
+
+/* ============================================================
+   THEME OVERRIDES
+   ============================================================ */
+
+/* ── SOLAR ZEN ─────────────────────────────────── */
+
+[data-theme="solar-zen"] .hub-cf-card-value--networth {
+  background: linear-gradient(135deg, #059669, #10b981);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+[data-theme="solar-zen"] .hub-cf-card-value--savings {
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+[data-theme="solar-zen"] .hub-cf-card-edit-btn {
+  color: #6b7280;
+  border-color: #d1d5db;
+}
+[data-theme="solar-zen"] .hub-cf-card-edit-btn:hover {
+  color: #4f46e5;
+  border-color: #4f46e5;
+  background: rgba(79, 70, 229, 0.08);
+}
+
+[data-theme="solar-zen"] .hub-cf-btn--add {
+  background: var(--accent-primary);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(79, 70, 229, 0.2);
+}
+
+[data-theme="solar-zen"] .hub-cf-btn--export {
+  border-color: rgba(0, 0, 0, 0.12);
+  color: var(--text-secondary);
+}
+
+[data-theme="solar-zen"] .hub-cf-btn--export:hover {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  background: rgba(79, 70, 229, 0.06);
+}
+
+[data-theme="solar-zen"] .hub-cf-form-input {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="solar-zen"] .hub-cf-form-input:focus {
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+}
+
+[data-theme="solar-zen"] .hub-cf-card--income {
+  border-left: 3px solid rgba(22, 163, 74, 0.35);
+}
+[data-theme="solar-zen"] .hub-cf-card--expense {
+  border-left: 3px solid rgba(220, 38, 38, 0.3);
+}
+
+[data-theme="solar-zen"] .hub-cf-cat-chip {
+  color: var(--accent-primary);
+  background: rgba(79, 70, 229, 0.08);
+  border-color: rgba(79, 70, 229, 0.15);
+}
+
+[data-theme="solar-zen"] .hub-cf-tab--active {
+  background: rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="solar-zen"] .hub-cf-tab-group {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="solar-zen"] .hub-cf-modal-close {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="solar-zen"] .hub-cf-modal-btn--save {
+  background: var(--accent-primary);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(79, 70, 229, 0.2);
+}
+
+[data-theme="solar-zen"] .hub-cf-category-select {
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23475569' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+[data-theme="solar-zen"] .hub-cf-delete-btn:hover {
+  background: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.25);
+}
+
+[data-theme="solar-zen"] .hub-cf-month-nav:hover {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+/* ── LO-FI TWILIGHT ───────────────────────────── */
+
+[data-theme="lofi-twilight"] .hub-cf-form-input {
+  background: rgba(0, 0, 0, 0.15);
+  border-color: rgba(187, 154, 247, 0.12);
+}
+
+[data-theme="lofi-twilight"] .hub-cf-form-input:focus {
+  box-shadow: 0 0 0 3px rgba(187, 154, 247, 0.1);
+}
+
+[data-theme="lofi-twilight"] .hub-cf-card--income {
+  border-left: 3px solid rgba(158, 206, 106, 0.3);
+}
+[data-theme="lofi-twilight"] .hub-cf-card--expense {
+  border-left: 3px solid rgba(247, 118, 142, 0.25);
+}
+
+[data-theme="lofi-twilight"] .hub-cf-btn--export {
+  border-color: rgba(187, 154, 247, 0.12);
+}
+
+[data-theme="lofi-twilight"] .hub-cf-btn--export:hover {
+  border-color: var(--accent-primary);
+  background: rgba(187, 154, 247, 0.08);
+}
+
+[data-theme="lofi-twilight"] .hub-cf-btn--add {
+  background: var(--accent-primary);
+  color: #1a1b26;
+  box-shadow: 0 0 16px rgba(187, 154, 247, 0.25);
+}
+
+[data-theme="lofi-twilight"] .hub-cf-cat-chip {
+  color: var(--accent-primary);
+  background: rgba(187, 154, 247, 0.08);
+  border-color: rgba(187, 154, 247, 0.15);
+}
+
+[data-theme="lofi-twilight"] .hub-cf-tab-group {
+  background: rgba(187, 154, 247, 0.05);
+}
+
+[data-theme="lofi-twilight"] .hub-cf-tab--active {
+  background: rgba(187, 154, 247, 0.12);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="lofi-twilight"] .hub-cf-modal-btn--save {
+  background: var(--accent-primary);
+  color: #1a1b26;
+  box-shadow: 0 0 14px rgba(187, 154, 247, 0.25);
+}
+
+[data-theme="lofi-twilight"] .hub-cf-category-select {
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239aa5ce' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+[data-theme="lofi-twilight"] .hub-cf-delete-btn:hover {
+  background: rgba(247, 118, 142, 0.12);
+  border-color: rgba(247, 118, 142, 0.25);
+}
+
+[data-theme="lofi-twilight"] .hub-cf-card-edit-btn {
+  color: #8a8ea0;
+  border-color: #3b3e52;
+}
+[data-theme="lofi-twilight"] .hub-cf-card-edit-btn:hover {
+  color: #b4a0dc;
+  border-color: #b4a0dc;
+  background: rgba(180, 160, 220, 0.08);
+}
+
+[data-theme="lofi-twilight"] .hub-cf-card-value--savings {
+  background: linear-gradient(135deg, #b4a0dc, #9b8ec4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+[data-theme="lofi-twilight"] .hub-cf-table-wrap::-webkit-scrollbar-thumb {
+  background: rgba(180, 160, 220, 0.5);
+}
+[data-theme="lofi-twilight"] .hub-cf-table-wrap::-webkit-scrollbar-thumb:hover {
+  background: rgba(180, 160, 220, 0.75);
+}
+
+[data-theme="solar-zen"] .hub-cf-table-wrap::-webkit-scrollbar-thumb {
+  background: rgba(79, 70, 229, 0.45);
+}
+[data-theme="solar-zen"] .hub-cf-table-wrap::-webkit-scrollbar-thumb:hover {
+  background: rgba(79, 70, 229, 0.7);
+}
+
+
+/* ============================================================
+   OPTIMIZE MODE — Black & Green Terminal
+   Global .theme-optimized already kills:
+     backdrop-filter, box-shadow, transition, animation, background-image
+   We override only what needs to be structurally different.
+   ============================================================ */
+
+body.theme-optimized .hub-cf-card-value--networth {
+  background: none !important;
+  -webkit-text-fill-color: var(--success);
+  color: var(--success);
+}
+
+body.theme-optimized .hub-cf-card-value--savings {
+  background: none !important;
+  -webkit-text-fill-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+body.theme-optimized .hub-cf-card-edit-btn {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: transparent;
+  box-shadow: none;
+}
+body.theme-optimized .hub-cf-card-edit-btn:hover {
+  background: rgba(0, 255, 0, 0.08);
+}
+
+body.theme-optimized .hub-cf-table-wrap::-webkit-scrollbar-thumb {
+  background: var(--accent-primary);
+}
+
+body.theme-optimized .hub-cf-card {
+  background: #0a0a0a !important;
+  border: 1px solid rgba(0, 255, 65, 0.15) !important;
+}
+
+body.theme-optimized .hub-cf-tab-group {
+  background: #111111;
+  border: 1px solid rgba(0, 255, 65, 0.15);
+}
+
+body.theme-optimized .hub-cf-tab--active {
+  background: rgba(0, 255, 65, 0.08);
+  color: var(--accent-primary);
+  box-shadow: none !important;
+}
+
+body.theme-optimized .hub-cf-form-input {
+  background: #0a0a0a;
+  border: 1px solid rgba(0, 255, 65, 0.2);
+  font-family: var(--font-mono);
+}
+
+body.theme-optimized .hub-cf-form-input:focus {
+  border-color: var(--accent-primary);
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 1px;
+  box-shadow: none !important;
+}
+
+body.theme-optimized .hub-cf-btn--add {
+  background: var(--accent-primary);
+  color: #000;
+  border: 1px solid var(--accent-primary);
+  box-shadow: none !important;
+}
+
+body.theme-optimized .hub-cf-btn--export {
+  border-color: rgba(0, 255, 65, 0.2);
+  color: var(--accent-primary);
+}
+
+body.theme-optimized .hub-cf-table th {
+  background: #0a0a0a;
+  border-bottom-color: rgba(0, 255, 65, 0.2);
+}
+
+body.theme-optimized .hub-cf-table td {
+  border-bottom-color: rgba(0, 255, 65, 0.08);
+}
+
+body.theme-optimized .hub-cf-modal {
+  border: 1px solid rgba(0, 255, 65, 0.2) !important;
+}
+
+body.theme-optimized .hub-cf-modal-header,
+body.theme-optimized .hub-cf-form-actions {
+  border-color: rgba(0, 255, 65, 0.15);
+}
+
+body.theme-optimized .hub-cf-modal-close {
+  background: #0a0a0a;
+  border-color: rgba(0, 255, 65, 0.2);
+}
+
+body.theme-optimized .hub-cf-modal-btn--save {
+  background: var(--accent-primary);
+  color: #000;
+  box-shadow: none !important;
+}
+
+body.theme-optimized .hub-cf-modal-btn--cancel {
+  border-color: rgba(0, 255, 65, 0.2);
+}
+
+body.theme-optimized .hub-cf-category-select {
+  background-image: none;
+}
+
+body.theme-optimized .hub-cf-cat-chip {
+  color: var(--accent-primary);
+  background: rgba(0, 255, 65, 0.06);
+  border-color: rgba(0, 255, 65, 0.2);
+}
+
+body.theme-optimized .hub-cf-delete-btn:hover {
+  color: var(--danger);
+  background: rgba(255, 68, 68, 0.1);
+  border-color: rgba(255, 68, 68, 0.3);
+}
+
+body.theme-optimized .hub-cf-month-nav {
+  border-color: rgba(0, 255, 65, 0.2);
+}
+
+body.theme-optimized .hub-cf-month-nav:hover {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+body.theme-optimized .hub-cf-breakdown-bar {
+  background: rgba(0, 255, 65, 0.08);
+}
+
+body.theme-optimized .hub-cf-breakdown-bar-fill {
+  background: var(--accent-primary);
+}
+body.theme-optimized .hub-cf-breakdown-bar-fill--expense { background: var(--danger); }
+body.theme-optimized .hub-cf-breakdown-bar-fill--income { background: var(--success); }
+
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 640px) {
+  .hub-cf-dashboard {
+    grid-template-columns: 1fr;
+    gap: var(--space-sm);
+  }
+
+  .hub-cf-card {
+    min-height: 90px;
+    padding: var(--space-lg);
+  }
+
+  .hub-cf-card-value {
+    font-size: 1.35rem;
+  }
+
+  .hub-cf-action-bar {
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .hub-cf-btn {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .hub-cf-ledger {
+    max-height: 380px;
+  }
+
+  .hub-cf-table th,
+  .hub-cf-table td {
+    font-size: 0.66rem;
+    padding: 8px var(--space-xs);
+  }
+
+  .hub-cf-col--cat { width: 22%; }
+  .hub-cf-col--amt { width: 18%; }
+
+  .hub-cf-modal {
+    width: 94%;
+    max-width: 100%;
+    margin: var(--space-sm);
+    max-height: 95vh;
+    border-radius: var(--radius-lg);
+  }
+
+  .hub-cf-tab-group {
+    width: 100%;
+  }
+
+  .hub-cf-tab {
+    flex: 1;
+    justify-content: center;
+  }
 }
