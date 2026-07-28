@@ -14,7 +14,6 @@ const cashflowModule = (function () {
   'use strict';
 
   // ── Constants ──
-  const STORAGE_KEY = 'hub_cashflow';
   const SAVE_DELAY  = 400;
 
   // ── Category definitions (mirrors CashDuck Tracking.xlsx) ──
@@ -47,9 +46,176 @@ const cashflowModule = (function () {
     { id: 'no',             name: 'Nợ',             nameVI: 'Nợ' }
   ];
 
+  // ============================================================
+  //   I18N DICTIONARY — All static UI strings for CashFlow
+  // ============================================================
+
+  var CASHFLOW_I18N = {
+    en: {
+      // Summary cards
+      netWorthLabel:    'NET WORTH',
+      netWorthSub:      'ALL-TIME NET WORTH',
+      savingsLabel:     'SAVINGS / INVESTMENTS',
+      savingsSub:       'SAVINGS & INVESTMENTS',
+      incomeLabel:      'INCOME',
+      incomeSub:        'TOTAL INCOME',
+      expenseLabel:     'EXPENSE',
+      expenseSub:       'TOTAL EXPENSE',
+
+      // Chart
+      chartTitle:       'INCOME VS EXPENSE',
+      chartIncome:      'Income',
+      chartExpense:     'Expense',
+      chartDay:         'Day',
+      chartMonth:       'Month',
+      chartYear:        'Year',
+
+      // Action bar
+      addTx:            'Add Transaction',
+      importXlsx:       'Import .xlsx',
+      exportXlsx:       'Export to .xlsx',
+
+      // Ledger
+      categoryToggle:   '📊 Detailed Stats',
+      categoryTitle:    'CATEGORY BREAKDOWN',
+      breakdownIncome:  '⬆ Income',
+      breakdownExpense: 'Expense',
+
+      // Table
+      thDate:           'Date',
+      thDesc:           'Description',
+      thCat:            'Category',
+      thAmt:            'Amount',
+      noCategoryData:   'No category data for this month.',
+      noTxYet:          'No transactions yet.',
+      noTxHint:         'Tap <strong>Add Transaction</strong> to start tracking.',
+      txCount_zero:     '0 entries',
+      txCount_one:      '1 entry',
+      txCount_other:    'entries',
+
+      // Modal
+      modalTitle:       'New Transaction',
+      tabExpense:       'Expense',
+      tabIncome:        'Income',
+      labelAmount:      'Amount (VND)',
+      labelDate:        'Date',
+      labelDesc:        'Description',
+      labelCategory:    'Category',
+      placeholderDesc:  'e.g. Grab, coffee, books...',
+      btnCancel:        'Cancel',
+      btnSave:          'Save',
+
+      // Import
+      importNoRows:     'No valid rows found in the file (all',
+      importRowsInvalid: 'rows were invalid).',
+      importSuccess:    'Imported',
+      importSuccess1:   'transactions (replaced all existing data).',
+      importSkipped:    'Skipped',
+      importInvalidRows: 'invalid rows.',
+      importSkippedSheets: 'Skipped sheets:',
+      importFailed:     'Import failed — check console for details.',
+      importNotLoaded:  'XLSX library not loaded.'
+    },
+
+    vi: {
+      // Summary cards
+      netWorthLabel:    'TỔNG TÀI SẢN',
+      netWorthSub:      'TÀI SẢN HIỆN CÓ',
+      savingsLabel:     'TIẾT KIỆM / ĐẦU TƯ',
+      savingsSub:       'TIẾT KIỆM & ĐẦU TƯ',
+      incomeLabel:      'THU NHẬP',
+      incomeSub:        'TỔNG THU NHẬP',
+      expenseLabel:     'CHI PHÍ',
+      expenseSub:       'TỔNG CHI PHÍ',
+
+      // Chart
+      chartTitle:       'THU NHẬP VÀ CHI PHÍ',
+      chartIncome:      'Thu Nhập',
+      chartExpense:     'Chi Phí',
+      chartDay:         'Ngày',
+      chartMonth:       'Tháng',
+      chartYear:        'Năm',
+
+      // Action bar
+      addTx:            'Thêm Giao Dịch',
+      importXlsx:       'Nhập dữ liệu',
+      exportXlsx:       'Xuất file Excel',
+
+      // Ledger
+      categoryToggle:   '📊 Thống kê chi tiết',
+      categoryTitle:    'HẠNG MỤC CHI TIÊU',
+      breakdownIncome:  '⬆ Thu Nhập',
+      breakdownExpense: 'Chi Phí',
+
+      // Table
+      thDate:           'Ngày',
+      thDesc:           'Mô tả',
+      thCat:            'Hạng mục',
+      thAmt:            'Số tiền',
+      noTransData:      'Không có dữ liệu hạng mục trong tháng này.',
+      noTransYet:       'Chưa có giao dịch nào.',
+      noTransHint:      'Nhấn <strong>Thêm Giao Dịch</strong> để bắt đầu theo dõi.',
+      txCount_zero:     '0 mục',
+      txCount_other:    'mục',
+
+      // Modal
+      modalTitle:       'Thêm Giao Dịch',
+      tabExpense:      'Chi Phí',
+      tabIncome:       'Thu Nhập',
+      labelAmount:      'Số tiền (VND)',
+      labelDate:        'Ngày',
+      labelDesc:        'Mô tả',
+      labelCategory:    'Hạng mục',
+      placeholderDesc:  'VD: Bún bò, Grab, Sách Clean Code...',
+      btnCancel:        'Hủy',
+      btnSave:          'Lưu',
+
+      // Import
+      importNoRows:     'Không tìm thấy dòng dữ liệu hợp lệ (tất cả',
+      importRowsInvalid: 'dòng không hợp lệ).',
+      importSuccess:    'Đã nhập',
+      importSuccess1:   'giao dịch (đã thay thế toàn bộ dữ liệu cũ).',
+      importSkipped:    'Bỏ qua',
+      importInvalidRows: 'dòng không hợp lệ.',
+      importSkippedSheets: 'Bỏ qua sheet:',
+      importFailed:     'Nhập thất bại — kiểm tra console để biết chi tiết.',
+      importNotLoaded:  'Thư viện XLSX chưa được tải.'
+    }
+  };
+
+  /**
+   * getCFLang() — Read the current language from global app state or
+   * localStorage. Falls back to 'vi'.
+   */
+  function _getCFLang() {
+    // Try global app state first
+    if (typeof app !== 'undefined' && app.getLanguage) {
+      return app.getLanguage();
+    }
+    // Try the canonical setting key (written by app.js backup modal)
+    var stored = null;
+    try { stored = localStorage.getItem('hub_system_language'); } catch (_) {}
+    if (stored === 'en' || stored === 'vi') return stored;
+    // Legacy fallback keys
+    try { stored = localStorage.getItem('hubos_lang'); } catch (_) {}
+    if (stored === 'en' || stored === 'vi') return stored;
+    try { stored = localStorage.getItem('hub_lang'); } catch (_) {}
+    if (stored === 'en' || stored === 'vi') return stored;
+    return 'vi';
+  }
+
+  /** Shortcut: get a translated string by key */
+  function _t(key) {
+    var lang = _getCFLang();
+    var dict = CASHFLOW_I18N[lang] || CASHFLOW_I18N['vi'];
+    return dict[key] || (CASHFLOW_I18N['vi'][key] || key);
+  }
+
   // ── Private state ──
   let _container     = null;
   let _data          = null;   // { transactions: [], balanceSnapshots: [], startingBalance: 0 }
+  let _netWorthOffset = 0;     // Cloud-synced manual override for net worth
+  let _savingsBalance = 0;     // Cloud-synced manual override for savings/investments
   let _isDataLoaded  = false;
   let _sessionLoaded = false;  // Prevent re-fetch on tab switch
   let _activeTab     = 'expense';  // 'expense' | 'income'
@@ -75,64 +241,73 @@ const cashflowModule = (function () {
   }
 
   // ============================================================
-  //   STORAGE (localStorage-based; Firebase-ready extension point)
+  //   STORAGE — Cloud-first via HubDB (no localStorage fallback)
   // ============================================================
 
+  /** Async load from HubDB (Firestore). Loads both data and meta in parallel.
+   *  Immediately calls updateDashboardTotals() after successful cloud load so
+   *  the 4 summary cards are populated before the rest of the UI renders. */
   async function _loadData() {
     if (_sessionLoaded && _data) return;
 
+    // ── 1. Load transaction data from cloud ──
     try {
-      // Try HubDB first (if future Firebase support is added)
       if (typeof HubDB !== 'undefined' && typeof HubDB.loadCashFlowData === 'function') {
         const cloudData = await HubDB.loadCashFlowData();
         if (cloudData && Array.isArray(cloudData.transactions)) {
           _data = cloudData;
-          _ensureDataDefaults();
-          _sessionLoaded = true;
+          _ensureDefault();
           _isDataLoaded = true;
-          return;
+          // ═══ Dashboard is now ready to render totals ═══
+          updateDashboardTotals();
         }
       }
-    } catch (_) { /* fallback to localStorage */ }
+    } catch (_) { /* fall through */ }
 
-    // localStorage fallback
+    // ── 2. Load meta offsets (netWorth & savings overrides) ──
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.transactions)) {
-          _data = parsed;
-          _ensureDataDefaults();
-          _sessionLoaded = true;
-          _isDataLoaded = true;
-          return;
+      if (typeof HubDB !== 'undefined' && typeof HubDB.loadCashFlowMeta === 'function') {
+        const meta = await HubDB.loadCashFlowMeta();
+        if (meta) {
+          _netWorthOffset = Number(meta.netWorthOffset) || 0;
+          _savingsBalance = Number(meta.savingsBalance) || 0;
         }
       }
-    } catch (_) { /* corrupted — use default */ }
+    } catch (_) { /* keep defaults */ }
 
-    _data = _defaultData();
-    _ensureDataDefaults();
+    // ── 3. If data never loaded from cloud, start fresh ──
+    if (!_data) {
+      _data = _defaultData();
+      _ensureDefault();
+      _isDataLoaded = true;
+    }
+
     _sessionLoaded = true;
-    _isDataLoaded = true;
+
+    // ═══ Final: re-render with meta values now set ═══
+    updateDashboardTotals();
   }
 
-  function _ensureDataDefaults() {
-    if (!_data) _data = _defaultData();
-    if (!Array.isArray(_data.transactions)) _data.transactions = [];
-    if (!Array.isArray(_data.balanceSnapshots)) _data.balanceSnapshots = [];
-    if (typeof _data.startingBalance !== 'number') _data.startingBalance = 0;
-  }
-
+  /** Persist the FULL data payload AND meta to Firestore (no localStorage). */
   async function _persist() {
     if (!_isDataLoaded) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(_data));
-    } catch (_) { /* quota exceeded */ }
 
-    // Async Firebase sync
+    // Firestore only — HubDB.saveCashFlowData handles cloud write
     try {
       if (typeof HubDB !== 'undefined' && typeof HubDB.saveCashFlowData === 'function') {
-        HubDB.saveCashFlowData(_data).catch(function () {});
+        await HubDB.saveCashFlowData(_data);
+      }
+    } catch (_) {}
+  }
+
+  /** Persist only the meta offsets (called from edit-btn handlers). */
+  async function _persistMeta() {
+    try {
+      if (typeof HubDB !== 'undefined' && typeof HubDB.saveCashFlowMeta === 'function') {
+        await HubDB.saveCashFlowMeta({
+          netWorthOffset: _netWorthOffset,
+          savingsBalance: _savingsBalance
+        });
       }
     } catch (_) {}
   }
@@ -141,8 +316,23 @@ const cashflowModule = (function () {
     if (typeof HubDebounce !== 'undefined') {
       HubDebounce.call('cashflow', _persist, SAVE_DELAY);
     } else {
-      setTimeout(_persist, SAVE_DELAY);
+      _persist();
     }
+  }
+
+  function _debouncedPersistMeta() {
+    if (typeof HubDebounce !== 'undefined') {
+      HubDebounce.call('cf-meta', _persistMeta, SAVE_DELAY);
+    } else {
+      _persistMeta();
+    }
+  }
+
+  function _ensureDefault() {
+    if (!_data) _data = _defaultData();
+    if (!Array.isArray(_data.transactions)) _data.transactions = [];
+    if (!Array.isArray(_data.balanceSnapshots)) _data.balanceSnapshots = [];
+    if (typeof _data.startingBalance !== 'number') _data.startingBalance = 0;
   }
 
   // ============================================================
@@ -172,6 +362,18 @@ const cashflowModule = (function () {
     if (el) el.innerHTML = html;
   }
 
+  /** Shortcut: set text by bare ID (auto-prefixes '#') */
+  function _setTextById(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  }
+
+  /** Shortcut: set innerHTML by bare ID (auto-prefixes '#') */
+  function _setHtmlById(id, html) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  }
+
   // ============================================================
   //   FORMATTING
   // ============================================================
@@ -188,6 +390,48 @@ const cashflowModule = (function () {
       formatted = abs.toLocaleString('vi-VN');
     }
     return n < 0 ? '-' + formatted + ' ₫' : formatted + ' ₫';
+  }
+
+  /** Full exact formatting for summary cards — no 'M'/'B' abbreviation */
+  function _formatVNFull(amount) {
+    var n = Number(amount) || 0;
+    var abs = Math.abs(n);
+    var sign = n < 0 ? '-' : '';
+    return sign + Math.round(abs).toLocaleString('vi-VN') + ' ₫';
+  }
+
+  /** Savings-specific formatting — same as _formatVNFull but re-used
+   *  atomically in the edit-btn toast so changes are clearly separate
+   *  from the net-worth flow. */
+  function _formatVNSavings(amount) {
+    return _formatVNFull(amount);
+  }
+
+  /**
+   * Show a temporary toast anchored at bottom-center.
+   * @param {string} msg - The message to display
+   */
+  function _showToast(msg) {
+    var existing = document.querySelector('.hub-cf-toast');
+    if (existing) existing.remove();
+
+    var toast = document.createElement('div');
+    toast.className = 'hub-cf-toast';
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+
+    // Trigger animation
+    requestAnimationFrame(function () {
+      toast.classList.add('hub-cf-toast--visible');
+    });
+
+    // Auto-dismiss after 2.5s
+    setTimeout(function () {
+      toast.classList.remove('hub-cf-toast--visible');
+      setTimeout(function () {
+        if (toast.parentNode) toast.remove();
+      }, 400);
+    }, 2500);
   }
 
   function _formatDate(day, month, year) {
@@ -335,48 +579,48 @@ const cashflowModule = (function () {
       container.innerHTML = `
 <div class="hub-cf-container">
 
-  <!-- ═══ DASHBOARD — Net Worth + Income/Expense Summary ═══ -->
-  <div class="hub-cf-dashboard">
-    <div class="hub-cf-hero glass-card">
-      <span class="hub-cf-hero-label">Tổng Tài Sản</span>
-      <span class="hub-cf-hero-value" id="hub-cf-net-worth">0 ₫</span>
-      <span class="hub-cf-hero-sub">Net Worth</span>
-    </div>
+  <!-- ═══ DASHBOARD — 2×2 Summary Grid ═══ -->
+  <div class="cashflow-summary-grid">
 
-    <div class="hub-cf-summary--income glass-card">
-      <div class="hub-cf-summary-icon">
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-          <path d="M10 4v12M5 10l5-5 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </div>
-      <div class="hub-cf-summary-text">
-        <span class="hub-cf-summary-label">Thu Nhập</span>
-        <span class="hub-cf-summary-value hub-cf-summary-value--income" id="hub-cf-total-income">0 ₫</span>
+    <!-- Card 1: Net Worth -->
+    <div class="hub-cf-card">
+      <span class="hub-cf-card-label" data-i18n="netWorthLabel">${_t('netWorthLabel')}</span>
+      <div class="hub-cf-card-value-row">
+        <span class="hub-cf-card-value hub-cf-card-value--networth" id="cf-networth">0 ₫</span>
+        <button class="hub-cf-card-edit-btn" data-target="net-worth" title="Edit Net Worth">✏️</button>
       </div>
     </div>
 
-    <div class="hub-cf-summary--expense glass-card">
-      <div class="hub-cf-summary-icon">
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-          <path d="M10 16V4M15 10l-5 5-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </div>
-      <div class="hub-cf-summary-text">
-        <span class="hub-cf-summary-label">Chi Phí</span>
-        <span class="hub-cf-summary-value hub-cf-summary-value--expense" id="hub-cf-total-expense">0 ₫</span>
+    <!-- Card 2: Savings & Investments -->
+    <div class="hub-cf-card">
+      <span class="hub-cf-card-label" data-i18n="savingsLabel">${_t('savingsLabel')}</span>
+      <div class="hub-cf-card-value-row">
+        <span class="hub-cf-card-value hub-cf-card-value--savings" id="cf-savings">0 ₫</span>
+        <button class="hub-cf-card-edit-btn" data-target="savings" title="Edit Savings &amp; Investments">✏️</button>
       </div>
     </div>
+
+    <!-- Card 3: Income -->
+    <div class="hub-cf-card">
+      <span class="hub-cf-card-label" data-i18n="incomeLabel">${_t('incomeLabel')}</span>
+      <span class="hub-cf-card-value hub-cf-card-value--income" id="cf-income">0 ₫</span>
+    </div>
+
+    <!-- Card 4: Expense -->
+    <div class="hub-cf-card">
+      <span class="hub-cf-card-label" data-i18n="expenseLabel">${_t('expenseLabel')}</span>
+      <span class="hub-cf-card-value hub-cf-card-value--expense" id="cf-expense">0 ₫</span>
+    </div>
+
   </div>
-
-  <!-- ═══ REAL-TIME CHART ═══ -->
+<!-- ═══ REAL-TIME CHART ═══ -->
     <div class="hub-cf-chart-section glass-card">
       <div class="hub-cf-chart-header">
-        <h4 class="hub-cf-chart-title">Income vs Expense</h4>
+        <h4 class="hub-cf-chart-title" data-i18n="chartTitle">${_t('chartTitle')}</h4>
         <select class="hub-cf-chart-filter" id="hub-cf-chart-filter">
-          <option value="day">Day</option>
-          <option value="picker" disabled>Picker</option>
-          <option value="month" selected>Month</option>
-          <option value="year">Year</option>
+          <option value="day" data-i18n="chartDay">${_t('chartDay')}</option>
+          <option value="month" selected data-i18n="chartMonth">${_t('chartMonth')}</option>
+          <option value="year" data-i18n="chartYear">${_t('chartYear')}</option>
         </select>
       </div>
       <div class="hub-cf-chart-canvas-wrap">
@@ -390,14 +634,22 @@ const cashflowModule = (function () {
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
         <path d="M9 4v10M4 9h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
       </svg>
-      <span>Thêm Giao Dịch</span>
+      <span data-i18n="addTx">${_t('addTx')}</span>
+    </button>
+    <button class="hub-cf-btn hub-cf-btn--import" id="hub-cf-btn-import">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+        <path d="M9 2v12M5 10l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M3 14v1a1 1 0 001 1h10a1 1 0 001-1v-1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+      <span data-i18n="importXlsx">${_t('importXlsx')}</span>
+      <input type="file" id="hub-cf-file-input" accept=".xlsx" style="display:none;" />
     </button>
     <button class="hub-cf-btn hub-cf-btn--export" id="hub-cf-btn-export">
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
         <path d="M9 2v10M5 8l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
         <path d="M3 13v2a1 1 0 001 1h10a1 1 0 001-1v-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
       </svg>
-      <span>Export to .xlsx</span>
+      <span data-i18n="exportXlsx">${_t('exportXlsx')}</span>
     </button>
   </div>
 
@@ -409,29 +661,35 @@ const cashflowModule = (function () {
         <span class="hub-cf-month-label" id="hub-cf-month-label"></span>
         <button class="hub-cf-month-nav" id="hub-cf-month-next" title="Next month" aria-label="Next month">▶</button>
       </div>
-      <span class="hub-cf-ledger-count" id="hub-cf-tx-count">0 entries</span>
+      <span class="hub-cf-ledger-count" id="hub-cf-tx-count">${_t('txCount_zero')}</span>
     </div>
 
     <div class="hub-cf-category-breakdown" id="hub-cf-breakdown-section">
-      <p class="hub-cf-breakdown-title">Category Breakdown</p>
-      <div id="hub-cf-breakdown-content"></div>
+      <button class="hub-cf-breakdown-toggle" id="hub-cf-breakdown-toggle">
+        <span data-i18n="categoryToggle">${_t('categoryToggle')}</span>
+        <span class="hub-cf-breakdown-arrow" id="hub-cf-breakdown-arrow">🔽</span>
+      </button>
+      <div class="hub-cf-breakdown-body collapsed" id="hub-cf-breakdown-body">
+        <p class="hub-cf-breakdown-title" data-i18n="categoryTitle">${_t('categoryTitle')}</p>
+        <div id="hub-cf-breakdown-content"></div>
+      </div>
     </div>
 
     <!-- Empty state -->
     <div class="hub-cf-empty" id="hub-cf-empty-state" style="display:none;">
       <span class="hub-cf-empty-icon">📋</span>
-      <p class="hub-cf-empty-text">No transactions yet.</p>
-      <p class="hub-cf-empty-hint">Tap <strong>[Thêm Giao Dịch]</strong> to start tracking.</p>
+      <p class="hub-cf-empty-text" data-i18n="noTxYet">${_t('noTxYet')}</p>
+      <p class="hub-cf-empty-hint" data-i18n="noTxHint">${_t('noTxHint')}</p>
     </div>
 
     <div class="hub-cf-table-wrap" id="hub-cf-table-wrap" style="display:none;">
       <table class="hub-cf-table">
         <thead>
           <tr>
-            <th class="hub-cf-col--date">Date</th>
-            <th class="hub-cf-col--desc">Description</th>
-            <th class="hub-cf-col--cat">Category</th>
-            <th class="hub-cf-col--amt">Amount</th>
+            <th class="hub-cf-col--date" data-i18n="thDate">${_t('thDate')}</th>
+            <th class="hub-cf-col--desc" data-i18n="thDesc">${_t('thDesc')}</th>
+            <th class="hub-cf-col--cat" data-i18n="thCat">${_t('thCat')}</th>
+            <th class="hub-cf-col--amt" data-i18n="thAmt">${_t('thAmt')}</th>
             <th class="hub-cf-col--act"></th>
           </tr>
         </thead>
@@ -442,17 +700,17 @@ const cashflowModule = (function () {
 </div>
 
 <!-- ═══ QUICK-ADD MODAL (injected into container) ═══ -->
-<div class="hub-cf-overlay" id="hub-cf-overlay" role="dialog" aria-modal="true" aria-label="Add Transaction" style="display:none;">
+<div class="hub-cf-overlay" id="hub-cf-overlay" role="dialog" aria-modal="true" aria-label="${_t('modalTitle')}" style="display:none;">
   <div class="hub-cf-modal glass">
     <div class="hub-cf-modal-header">
       <div class="hub-cf-tab-group">
         <button class="hub-cf-tab hub-cf-tab--active" data-tab="expense" id="hub-cf-tab-expense">
           <span class="hub-cf-tab-dot hub-cf-tab-dot--expense"></span>
-          Chi Phí
+          <span data-i18n="tabExpense">${_t('tabExpense')}</span>
         </button>
         <button class="hub-cf-tab" data-tab="income" id="hub-cf-tab-income">
           <span class="hub-cf-tab-dot hub-cf-tab-dot--income"></span>
-          Thu Nhập
+          <span data-i18n="addTx">${_t('tabIncome')}</span>
         </button>
       </div>
       <button class="hub-cf-modal-close" id="hub-cf-modal-close" aria-label="Close modal">✕</button>
@@ -461,26 +719,26 @@ const cashflowModule = (function () {
     <div class="hub-cf-modal-body">
       <form id="hub-cf-form" autocomplete="off">
         <div class="hub-cf-form-group">
-          <label class="hub-cf-form-label" for="hub-cf-amount">Số tiền (VND)</label>
+          <label class="hub-cf-form-label" for="hub-cf-amount" data-i18n="labelAmount">${_t('labelAmount')}</label>
           <input type="number" id="hub-cf-amount" class="hub-cf-form-input hub-cf-amount-input"
                  placeholder="0" min="0" step="1000" required inputmode="numeric" />
         </div>
         <div class="hub-cf-form-group">
-          <label class="hub-cf-form-label" for="hub-cf-date">Ngày</label>
+          <label class="hub-cf-form-label" for="hub-cf-date" data-i18n="labelDate">${_t('labelDate')}</label>
           <input type="date" id="hub-cf-date" class="hub-cf-form-input hub-cf-date-input" required />
         </div>
         <div class="hub-cf-form-group">
-          <label class="hub-cf-form-label" for="hub-cf-desc">Mô tả</label>
+          <label class="hub-cf-form-label" for="hub-cf-desc" data-i18n="labelDesc">${_t('labelDesc')}</label>
           <input type="text" id="hub-cf-desc" class="hub-cf-form-input"
-                 placeholder="VD: Bún bò, Grab, Sách Clean Code..." maxlength="120" />
+                 placeholder="${_t('placeholderDesc')}" maxlength="120" />
         </div>
         <div class="hub-cf-form-group">
-          <label class="hub-cf-form-label" for="hub-cf-category">Hạng mục</label>
+          <label class="hub-cf-form-label" for="hub-cf-category" data-i18n="labelCategory">${_t('labelCategory')}</label>
           <select id="hub-cf-category" class="hub-cf-form-input hub-cf-category-select" required></select>
         </div>
         <div class="hub-cf-form-actions">
-          <button type="button" class="hub-cf-modal-btn hub-cf-modal-btn--cancel" id="hub-cf-btn-cancel">Cancel</button>
-          <button type="submit" class="hub-cf-modal-btn hub-cf-modal-btn--save" id="hub-cf-btn-save">Save</button>
+          <button type="button" class="hub-cf-modal-btn hub-cf-modal-btn--cancel" id="hub-cf-btn-cancel" data-i18n="btnCancel">${_t('btnCancel')}</button>
+          <button type="submit" class="hub-cf-modal-btn hub-cf-modal-btn--save" id="hub-cf-btn-save" data-i18n="btnSave">${_t('btnSave')}</button>
         </div>
       </form>
     </div>
@@ -528,18 +786,190 @@ const cashflowModule = (function () {
   // ============================================================
 
   function _renderAllViews() {
-    _refreshDashboard();
+    updateDashboardTotals();
     _refreshLedger();
   }
 
-  function _refreshDashboard() {
-    const totalIncome = _getMonthlyIncome(_currentMonth.year, _currentMonth.month);
-    const totalExpense = _getMonthlyExpense(_currentMonth.year, _currentMonth.month);
-    const netWorth = _calcNetWorth();
+  /**
+   * updateCashFlowLanguage(lang)
+   *
+   * Re-scans all elements with [data-i18n] inside the CashFlow container
+   * and updates their textContent from the CASHFLOW_I18N dictionary.
+   * Also re-renders dynamic sections (transactions, breakdown, chart).
+   *
+   * @param {'en'|'vi'} lang — the new language code
+   */
+  function updateCashFlowLanguage(lang) {
+    if (!lang) lang = _getCFLang();
+    var dict = CASHFLOW_I18N[lang] || CASHFLOW_I18N['vi'];
 
-    _setText('hub-cf-net-worth', _formatVND(netWorth));
-    _setText('hub-cf-total-income', _formatVND(totalIncome));
-    _setText('hub-cf-total-expense', _formatVND(totalExpense));
+    // ── Static text nodes: [data-i18n] ──
+    if (_container) {
+      var els = _container.querySelectorAll('[data-i18n]');
+      Array.prototype.forEach.call(els, function (el) {
+        var key = el.getAttribute('data-i18n');
+        if (key && dict[key] !== undefined) {
+          el.textContent = dict[key];
+        }
+      });
+
+      // ── Chart filter <option> text ──
+      var filterEl = _qs('#hub-cf-chart-filter');
+      if (filterEl) {
+        var opts = filterEl.querySelectorAll('option');
+        opts.forEach(function (opt) {
+          var key = opt.getAttribute('data-i18n');
+          if (key && dict[key] !== undefined) {
+            opt.textContent = dict[key];
+          }
+        });
+      }
+    }
+
+    // ── Re-render dynamic sections that contain language-dependent strings ──
+    _refreshLedger();
+    _updateChart();
+  }
+
+  // Expose updateCashFlowLanguage as a public module method
+  module.updateLanguage = updateCashFlowLanguage;
+
+  // Also expose on window for legacy callers
+  window.cashFlowI18n = updateCashFlowLanguage;
+
+  /**
+   * ═══ GLOBAL EVENT BUS — hubLanguageChanged ═══
+   *
+   * app.js dispatches `new CustomEvent('hubLanguageChanged', { detail: lang })`
+   * whenever the user flips the EN ↔ VI toggle in Settings & Backup.
+   * This listener picks it up and re-renders the entire CashFlow UI.
+   */
+  window.addEventListener('hubLanguageChanged', function (e) {
+    if (e.detail === 'en' || e.detail === 'vi') {
+      // Mirror the language to hubos_lang for getCFLang() to read
+      try { localStorage.setItem('hubos_lang', e.detail); } catch (_) {}
+      updateCashFlowLanguage(e.detail);
+    }
+  });
+
+  /**
+   * _computeLiveNetWorth()
+   *
+   * Dynamic all-time Net Worth formula:
+   *   totalIncomeAllTime — totalExpenseAllTime + _netWorthOffset
+   *
+   * This is called both by the edit prompt (to show the current value)
+   * and by updateDashboardTotals() (to render the card). Keeping it in
+   * one place prevents the offset formula from drifting out of sync.
+   *
+   * @returns {number} Current live net worth
+   */
+  function _computeLiveNetWorth() {
+    if (!_data || !_data.transactions) return _netWorthOffset || 0;
+
+    var allIncome = 0;
+    var allExpense = 0;
+    _data.transactions.forEach(function (tx) {
+      if (tx.type === 'income') allIncome += (tx.amount || 0);
+      else allExpense += (tx.amount || 0);
+    });
+
+    return allIncome - allExpense + (_netWorthOffset || 0);
+  }
+
+  function updateDashboardTotals() {
+    // ═══ GUARD: no data yet ═══
+    if (!_data || !_data.transactions) {
+      _setTextById('cf-networth', '0 ₫');
+      _setTextById('cf-savings',  '0 ₫');
+      _setTextById('cf-income',   '0 ₫');
+      _setTextById('cf-expense',  '0 ₫');
+      return;
+    }
+
+    var txs = _data.transactions;
+
+    // ── 1. Determine the time window based on active chart filter ──
+    var filteredTxs = [];
+
+    if (_chartFilter === 'day') {
+      // Last 30 days
+      var now = new Date();
+      for (var i = 0; i < 30; i++) {
+        var d = new Date(now);
+        d.setDate(d.getDate() - i);
+        var y = d.getFullYear();
+        var m = d.getMonth() + 1;
+        var dy = d.getDate();
+        txs.forEach(function (tx) {
+          if (tx.year === y && tx.month === m && tx.day === dy) {
+            filteredTxs.push(tx);
+          }
+        });
+      }
+
+    } else if (_chartFilter === 'month') {
+      // Current viewing month
+      var ym = _currentMonth || _currentYearMonth();
+      filteredTxs = txs.filter(function (tx) {
+        return tx.year === ym.year && tx.month === ym.month;
+      });
+
+    } else if (_chartFilter === 'year') {
+      // Current viewing year
+      var year = _currentMonth ? _currentMonth.year : new Date().getFullYear();
+      filteredTxs = txs.filter(function (tx) {
+        return tx.year === year;
+      });
+
+    } else {
+      // Fallback: use the viewing month
+      var ymFallback = _currentMonth || _currentYearMonth();
+      filteredTxs = txs.filter(function (tx) {
+        return tx.year === ymFallback.year && tx.month === ymFallback.month;
+      });
+    }
+
+    // ── 2. Sum income & expense from filtered transactions (time-windowed) ──
+    var totalIncome = 0;
+    var totalExpense = 0;
+    filteredTxs.forEach(function (tx) {
+      if (tx.type === 'income') totalIncome += (tx.amount || 0);
+      else totalExpense += (tx.amount || 0);
+    });
+
+    // ── 3. Net Worth: DYNAMIC all-time formula ──
+    //    Net Worth = ALL-TIME income — ALL-TIME expense + (_netWorthOffset)
+    //
+    //    When the user edits via ✏️, the handler calculates a new offset
+    //    so that this formula resolves to their target for the current
+    //    transaction set. As transactions are added/deleted, the card
+    //    moves dynamically — it is NOT a frozen static number.
+    var netWorth = _computeLiveNetWorth();
+
+    // ── 4. Savings: manual value only (not tied to transaction stream) ──
+    var savings = _savingsBalance || 0;
+
+    // ═══ 5. WRITE to DOM — full exact numbers, no abbreviation ═══
+    _setTextById('cf-networth', _formatVNFull(netWorth));
+    _setTextById('cf-savings',  _formatVNFull(savings));
+    _setTextById('cf-income',   _formatVNFull(totalIncome));
+    _setTextById('cf-expense',  _formatVNFull(totalExpense));
+
+    // Belt + suspenders
+    _setText('#cf-networth', _formatVNFull(netWorth));
+    _setText('#cf-savings',  _formatVNFull(savings));
+    _setText('#cf-income',   _formatVNFull(totalIncome));
+    _setText('#cf-expense',  _formatVNFull(totalExpense));
+  }
+
+  /** Calculate savings & investments total */
+  function _calcSavings() {
+    // Sum nhà ở + tiết kiệm + đầu tư balance snapshots
+    if (!_data || !_data.balanceSnapshots) return 0;
+    return _data.balanceSnapshots
+      .filter(function (s) { return s.accountId === 'tiet-kiem' || s.accountId === 'dau-tu'; })
+      .reduce(function (sum, s) { return sum + (s.amount || 0); }, 0);
   }
 
   function _refreshLedger() {
@@ -552,39 +982,39 @@ const cashflowModule = (function () {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const label = months[_currentMonth.month - 1] + ' ' + _currentMonth.year;
-    _setText('hub-cf-month-label', label);
+    _setTextById('hub-cf-month-label', label);
   }
 
   function _refreshTransactions() {
-    const txs = _getMonthTransactions(_currentMonth.year, _currentMonth.month);
-    const emptyEl = _qs('#hub-cf-empty-state');
-    const tableEl = _qs('#hub-cf-table-wrap');
-    const tbody   = _qs('#hub-cf-tx-body');
-    const countEl = _qs('#hub-cf-tx-count');
+    var txs = _getMonthTransactions(_currentMonth.year, _currentMonth.month);
+    var emptyEl = _qs('#hub-cf-empty-state');
+    var tableEl = _qs('#hub-cf-table-wrap');
+    var tbody   = _qs('#hub-cf-tx-body');
+    var countEl = _qs('#hub-cf-tx-count');
 
     if (!emptyEl || !tableEl || !tbody) return;
 
     if (txs.length === 0) {
       emptyEl.style.display = 'flex';
       tableEl.style.display = 'none';
-      if (countEl) countEl.textContent = '0 entries';
+      if (countEl) countEl.textContent = _t('txCount_zero');
       return;
     }
 
     emptyEl.style.display = 'none';
     tableEl.style.display = '';
-    if (countEl) countEl.textContent = txs.length + ' entries';
+    if (countEl) countEl.textContent = txs.length + ' ' + _t('txCount_other');
 
     // Sort by day desc
     txs.sort(function (a, b) { return (b.day || 0) - (a.day || 0); });
 
     var html = '';
     txs.forEach(function (tx) {
-      const rowClass = tx.type === 'income' ? 'hub-cf-tx-income' : 'hub-cf-tx-expense';
-      const isExpense = tx.type === 'expense';
-      const prefix = isExpense ? '-' : '+';
-      const amountFormatted = prefix + _formatVND(tx.amount).replace(/^\+/, '+').replace(/^-/, '-');
-      const catName = _categoryDisplayName(tx.category, tx.type);
+      var rowClass = tx.type === 'income' ? 'hub-cf-tx-income' : 'hub-cf-tx-expense';
+      var isExpense = tx.type === 'expense';
+      var prefix = isExpense ? '-' : '+';
+      var amountFormatted = prefix + _formatVND(tx.amount).replace(/^\+/, '+').replace(/^-/, '-');
+      var catName = _categoryDisplayName(tx.category, tx.type);
 
       html += '<tr class="' + rowClass + '" data-tx-id="' + tx.id + '">';
       html += '<td>' + _formatDate(tx.day, tx.month, tx.year) + '</td>';
@@ -601,58 +1031,105 @@ const cashflowModule = (function () {
     tbody.querySelectorAll('.hub-cf-delete-btn').forEach(function (btn) {
       btn.addEventListener('click', function (e) {
         e.stopPropagation();
-        const txId = this.getAttribute('data-tx-id');
+        var txId = this.getAttribute('data-tx-id');
         if (txId) _deleteTransaction(txId);
       });
     });
   }
 
   function _renderCategoryBreakdown() {
-    const incomeMap = _getCategoryBreakdown(_currentMonth.year, _currentMonth.month, 'income');
-    const expenseMap = _getCategoryBreakdown(_currentMonth.year, _currentMonth.month, 'expense');
-    const totalIncome = Object.values(incomeMap).reduce(function (s, v) { return s + v; }, 0);
-    const totalExpense = Object.values(expenseMap).reduce(function (s, v) { return s + v; }, 0);
-
-    const container = _qs('hub-cf-breakdown-content');
+    var container = _qs('#hub-cf-breakdown-content');
     if (!container) return;
+
+    var txs = _getMonthTransactions(_currentMonth.year, _currentMonth.month);
+
+    // ── Partition by type ──
+    var incomeTxs = [];
+    var expenseTxs = [];
+    txs.forEach(function (tx) {
+      if (tx.type === 'income') incomeTxs.push(tx);
+      else expenseTxs.push(tx);
+    });
+
+    // ── Group & sum income by category ──
+    var incomeByCat = {};
+    var totalIncome = 0;
+    incomeTxs.forEach(function (tx) {
+      var cat = tx.category || 'unknown';
+      incomeByCat[cat] = (incomeByCat[cat] || 0) + (tx.amount || 0);
+      totalIncome += (tx.amount || 0);
+    });
+
+    // ── Group & sum expense by category ──
+    var expenseByCat = {};
+    var totalExpense = 0;
+    expenseTxs.forEach(function (tx) {
+      var cat = tx.category || 'unknown';
+      expenseByCat[cat] = (expenseByCat[cat] || 0) + (tx.amount || 0);
+      totalExpense += (tx.amount || 0);
+    });
+
+    // ── Helper: sort entries by amount desc ──
+    function sortEntries(obj) {
+      return Object.keys(obj)
+        .map(function (k) { return { id: k, amt: obj[k] }; })
+        .sort(function (a, b) { return b.amt - a.amt; });
+    }
+
+    var incomeSorted  = sortEntries(incomeByCat);
+    var expenseSorted = sortEntries(expenseByCat);
 
     var html = '';
 
-    // Income breakdown
-    const incomeCats = INCOME_CATEGORIES.filter(function (c) { return incomeMap[c.id] > 0; });
-    if (incomeCats.length > 0) {
-      incomeCats.forEach(function (cat) {
-        const amt = incomeMap[cat.id];
-        const pct = totalIncome > 0 ? Math.round((amt / totalIncome) * 100) : 0;
+    // ── INCOME SECTION ──
+    if (incomeSorted.length > 0) {
+      html += '<p class="hub-cf-breakdown-section-label">' + _t('breakdownIncome') + '</p>';
+      incomeSorted.forEach(function (entry) {
+        var cat = _lookupCategory(entry.id, 'income');
+        var name = cat ? cat.name : entry.id;
+        var amt  = entry.amt;
+        var pct  = totalIncome > 0 ? Math.round((amt / totalIncome) * 100) : 0;
+
         html += '<div class="hub-cf-breakdown-item">';
-        html += '<span class="hub-cf-breakdown-name">' + _escHtml(cat.name) + '</span>';
-        html += '<span class="hub-cf-breakdown-amt hub-cf-breakdown-amt--income">' + _formatVND(amt) + ' (' + pct + '%)</span>';
+        html += '<span class="hub-cf-breakdown-name">' + _escHtml(name) + '</span>';
+        html += '<span class="hub-cf-breakdown-amt hub-cf-breakdown-amt--income">' +
+                  _formatVND(amt) + ' (' + pct + '%)' +
+                '</span>';
         html += '</div>';
-        html += '<div class="hub-cf-breakdown-bar-track"><div class="hub-cf-breakdown-bar-fill hub-cf-breakdown-bar-fill--income" style="width:' + pct + '%"></div></div>';
+        html += '<div class="hub-cf-breakdown-bar-track">';
+        html += '<div class="hub-cf-breakdown-bar-fill hub-cf-breakdown-bar-fill--income" style="width:' + pct + '%"></div>';
+        html += '</div>';
       });
     }
 
-    // Expense breakdown
-    const expenseCats = Object.entries(expenseMap).filter(function (e) { return e[1] > 0; });
-    expenseCats.sort(function (a, b) { return b[1] - a[1]; });
-    if (expenseCats.length > 0) {
-      if (incomeCats.length > 0) {
-        html += '<div style="margin-top: var(--space-md);"></div>';
+    // ── EXPENSE SECTION ──
+    if (expenseSorted.length > 0) {
+      if (incomeSorted.length > 0) {
+        html += '<p class="hub-cf-breakdown-section-label" style="margin-top:2px;">' + _t('breakdownExpense') + '</p>';
+      } else {
+        html += '<p class="hub-cf-breakdown-section-label">' + _t('breakdownExpense') + '</p>';
       }
-      expenseCats.forEach(function (_ref) {
-        var catId = _ref[0], amt = _ref[1];
-        var cat = _lookupCategory(catId, 'expense');
-        var pct = totalExpense > 0 ? Math.round((amt / totalExpense) * 100) : 0;
+      expenseSorted.forEach(function (entry) {
+        var cat = _lookupCategory(entry.id, 'expense');
+        var name = cat ? cat.name : entry.id;
+        var amt  = entry.amt;
+        var pct  = totalExpense > 0 ? Math.round((amt / totalExpense) * 100) : 0;
+
         html += '<div class="hub-cf-breakdown-item">';
-        html += '<span class="hub-cf-breakdown-name">' + _escHtml(cat.name) + '</span>';
-        html += '<span class="hub-cf-breakdown-amt hub-cf-breakdown-amt--expense">' + _formatVND(amt) + ' (' + pct + '%)</span>';
+        html += '<span class="hub-cf-breakdown-name">' + _escHtml(name) + '</span>';
+        html += '<span class="hub-cf-breakdown-amt hub-cf-breakdown-amt--expense">' +
+                  _formatVND(amt) + ' (' + pct + '%)' +
+                '</span>';
         html += '</div>';
-        html += '<div class="hub-cf-breakdown-bar-track"><div class="hub-cf-breakdown-bar-fill hub-cf-breakdown-bar-fill--expense" style="width:' + pct + '%"></div></div>';
+        html += '<div class="hub-cf-breakdown-bar-track">';
+        html += '<div class="hub-cf-breakdown-bar-fill hub-cf-breakdown-bar-fill--expense" style="width:' + pct + '%"></div>';
+        html += '</div>';
       });
     }
 
+    // ── Empty state ──
     if (!html) {
-      html = '<p style="color:var(--text-muted);font-size:0.76rem;text-align:center;padding:var(--space-md) 0;">No category data for this month</p>';
+      html = '<p style="color:var(--text-muted);font-size:0.74rem;text-align:center;padding:8px 0;">' + _t('noCategoryData') + '</p>';
     }
 
     container.innerHTML = html;
@@ -673,6 +1150,95 @@ const cashflowModule = (function () {
     const exportBtn = _qs('#hub-cf-btn-export');
     if (exportBtn) {
       exportBtn.addEventListener('click', _exportToXlsx);
+    }
+
+    // ── Edit buttons (Net Worth + Savings) — delegate on dashboard grid ──
+    var summaryGrid = _qs('.cashflow-summary-grid');
+    if (summaryGrid) {
+      summaryGrid.addEventListener('click', function (e) {
+        var btn = e.target.closest('.hub-cf-card-edit-btn');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        var target = btn.getAttribute('data-target');
+
+        if (target === 'net-worth') {
+          // ── Vietnamese prompt for Net Worth ──
+          // Show the CURRENT live net worth (dynamic), not the raw offset
+          var liveNetWorth = _computeLiveNetWorth();
+          var currentVal = liveNetWorth ? liveNetWorth.toLocaleString('vi-VN') : '0';
+          var raw = prompt('Nhập số dư Tổng Tài Sản hiện tại (VND):', currentVal);
+          if (raw === null) return; // user cancelled — do nothing
+
+          // Strip spaces, commas, dots (thousand separators), then parse
+          var clean = String(raw).replace(/[\s,.]/g, '');
+          var userTarget = parseInt(clean, 10);
+          if (isNaN(userTarget)) return; // invalid input — bail silently
+
+          // Calculate the TRUE offset:
+          //   offset = userTarget — (allIncome — allExpense)
+          // This way the dynamic formula:
+          //   display = allIncome — allExpense + _netWorthOffset
+          // resolves to exactly userTarget at this moment.
+          var allIncome = 0;
+          var allExpense = 0;
+          if (_data && _data.transactions) {
+            _data.transactions.forEach(function (tx) {
+              if (tx.type === 'income') allIncome += (tx.amount || 0);
+              else allExpense += (tx.amount || 0);
+            });
+          }
+          _netWorthOffset = userTarget - (allIncome - allExpense);
+
+          // Push calculated offset to Firestore immediately
+          _persistMeta().catch(function (err) {
+            console.error('[CashFlow] Meta persist failed:', err);
+          });
+
+          updateDashboardTotals();
+          _showToast('✅ Đã cập nhật Tổng Tài Sản: ' + _formatVNFull(userTarget));
+
+        } else if (target === 'savings') {
+          // ── Vietnamese prompt for Savings ──
+          // Savings is purely manual (no transaction math applied).
+          // Show the current $avings value, replace with whatever the
+          // user enters. Balance snapshots are stored separately in
+          // $ata.balanceSnapshots and are not recomputed here.
+          var liveSavings = _savingsBalance || 0;
+          var currentVal = liveSavings ? liveSavings.toLocaleString('vi-VN') : '0';
+          var raw = prompt('Nhập số dư Tiết kiệm / Đầu tư hiện tại (VND):', currentVal);
+          if (raw === null) return; // user cancelled — do nothing
+
+          // Strip commas, dots, spaces
+          var cleaned = String(raw).replace(/[\s,.]/g, '');
+          var parsed = parseInt(cleaned, 10);
+
+          if (isNaN(parsed)) return;
+
+          _savingsBalance = parsed;
+          _persistMeta().catch(function (err) {
+            console.error('[CashFlow] Meta persist failed:', err);
+          });
+          updateDashboardTotals();
+          _showToast('✅ Đã cập nhật Tiết kiệm / Đầu tư: ' + _formatVNSavings(parsed));
+        }
+      });
+    }
+
+    // Import button — triggers hidden file input
+    const importBtn = _qs('#hub-cf-btn-import');
+    const fileInput = _qs('#hub-cf-file-input');
+    if (importBtn && fileInput) {
+      importBtn.addEventListener('click', function () {
+        fileInput.click();
+      });
+      fileInput.addEventListener('change', function (e) {
+        const file = e.target.files && e.target.files[0];
+        if (file) _handleImport(file);
+        // Reset so the same file can be reimported
+        fileInput.value = '';
+      });
     }
 
     // Month navigation
@@ -699,12 +1265,24 @@ const cashflowModule = (function () {
       });
     }
 
-    // Chart filter change
-    const filterEl = _qs('#hub-cf-chart-filter');
+    // Chart filter change — re-render dashboard totals + chart
+    var filterEl = _qs('#hub-cf-chart-filter');
     if (filterEl) {
       filterEl.addEventListener('change', function () {
         _chartFilter = this.value;
+        updateDashboardTotals();
         _updateChart();
+      });
+    }
+
+    // Category breakdown toggle — collapse / expand
+    var toggleBtn = _qs('#hub-cf-breakdown-toggle');
+    var breakdownBody = _qs('#hub-cf-breakdown-body');
+    var toggleArrow = _qs('#hub-cf-breakdown-arrow');
+    if (toggleBtn && breakdownBody && toggleArrow) {
+      toggleBtn.addEventListener('click', function () {
+        var collapsed = breakdownBody.classList.toggle('collapsed');
+        toggleArrow.textContent = collapsed ? '🔽' : '🔼';
       });
     }
 
@@ -890,6 +1468,156 @@ const cashflowModule = (function () {
   }
 
   // ============================================================
+  //   IMPORT FROM .XLSX (Strict Overwrite — no merge, no dedup)
+  // ============================================================
+
+  /**
+   * Read an Excel workbook from a File object. The Excel file is the
+   * ABSOLUTE source of truth — it REPLACES the entire transactions array
+   * and overwrites Firestore completely.
+   *
+   * NaN Guard: any row with a missing/invalid day, month, or amount is
+   * SKIPPED silently to prevent 'NaN/2026' labels on the chart.
+   *
+   * Expected column layout per row:
+   *   Ngày | Tháng | Mô tả | Hạng mục | Số tiền
+   *
+   * Sheet name determines type:
+   *   - Contains "Income" or "Thu"  → type 'income'
+   *   - Contains "Expense" or "Chi" → type 'expense'
+   *   - Otherwise → type 'expense'
+   *
+   * @param {File} file — XLSX file from <input type="file" />
+   */
+  async function _handleImport(file) {
+    if (typeof XLSX === 'undefined') {
+      _showStatusMsg(_t('importNotLoaded'));
+      return;
+    }
+
+    try {
+      // ── 1. Read workbook from file buffer ──
+      var buffer = await file.arrayBuffer();
+      var wb = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+
+      var sheetNames = wb.SheetNames;
+      var importedTxs = [];
+      var skippedSheets = [];
+      var skippedRows = 0;
+
+      // ── 2. Iterate sheets, skip "Summary" ──
+      sheetNames.forEach(function (name) {
+        var lower = String(name).toLowerCase().trim();
+        if (lower === 'summary' || lower === 'tóm tắt') {
+          skippedSheets.push(name);
+          return;
+        }
+
+        // Determine type from sheet name
+        var isIncome = lower.indexOf('income') !== -1 || lower.indexOf('thu') !== -1;
+        var type = isIncome ? 'income' : 'expense';
+
+        var sheet = wb.Sheets[name];
+        var rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+        if (rows.length < 2) return; // no data rows
+
+        // ── 3. Parse each data row with strict NaN guard & date string fix ──
+        for (var i = 1; i < rows.length; i++) {
+          var row = rows[i];
+          if (!row || !row.length) continue;
+
+          // Read raw cell values
+          var rawDay     = row[0];
+          var rawMonth   = row[1];
+          var rawDesc    = row[2];
+          var rawCat     = row[3];
+          var rawAmount  = row[4];
+          var rawYear    = row[5];  // optional explicit Year column
+
+          // ── Date fixing: detect DD/MM/YYYY string in column 0 ──
+          var dayVal, monthVal, year;
+          var rawDayStr = typeof rawDay === 'string' ? rawDay : String(rawDay || '');
+
+          if (rawDayStr.indexOf('/') !== -1) {
+            // Cell is a full date string like "31/03/2026" or "31/3/2026"
+            var parts = rawDayStr.split('/');
+            dayVal   = parseInt(parts[0], 10);
+            monthVal = parseInt(parts[1], 10);
+            year     = parseInt(parts[2], 10);
+          } else {
+            // Cell holds plain numeric day (or was parsed as date serial by SheetJS)
+            dayVal   = Number(rawDay);
+            monthVal = Number(rawMonth);
+            // Year from explicit Year column (col 5), or fallback to current view year
+            year = (typeof rawYear === 'number' && rawYear >= 2000 && rawYear <= 2100)
+              ? rawYear
+              : (_currentMonth ? _currentMonth.year : new Date().getFullYear());
+
+            // 🔥 SheetJS date serial fix: if rawDay is a large serial number
+            // (Excel stores dates as days since 1900-01-01), convert it
+            if (dayVal > 31 && dayVal < 150000) {
+              var jsDate = XLSX.SSF.parse_date_code(dayVal);
+              if (jsDate && jsDate.d > 0 && jsDate.m > 0 && jsDate.y > 2000) {
+                dayVal   = jsDate.d;
+                monthVal = jsDate.m;
+                year     = jsDate.y;
+              }
+            }
+          }
+
+          var amount = Number(rawAmount);
+
+          // ═══ STRICT GUARD: reject NaN, <=0, or missing day/month/amount ═══
+          if (isNaN(dayVal)     || dayVal <= 0  || dayVal > 31)     { skippedRows++; continue; }
+          if (isNaN(monthVal)   || monthVal <= 0 || monthVal > 12)  { skippedRows++; continue; }
+          if (isNaN(amount)     || amount <= 0)                     { skippedRows++; continue; }
+          if (isNaN(year)       || year < 2000 || year > 2100)      { skippedRows++; continue; }
+
+          var desc     = String(rawDesc || row['Mô tả'] || '').trim();
+          var category = String(rawCat  || row['Hạng mục'] || '').trim();
+
+          importedTxs.push({
+            id: _uid(),
+            type: type,
+            amount: Math.abs(amount),
+            year: year,
+            month: monthVal,
+            day: dayVal,
+            desc: desc || '',
+            category: category || '',
+            createdAt: Date.now()
+          });
+        }
+      });
+
+      if (importedTxs.length === 0) {
+        _showStatusMsg(_t('importNoRows') + ' ' + skippedRows + ' ' + _t('importRowsInvalid'));
+        return;
+      }
+
+      // ═══ 4. STRICT OVERWRITE: replace entire state & persist ═══
+      _data.transactions = importedTxs;
+      _isDataLoaded = true;
+      await _persist();
+
+      // ═══ 5. FULL UI REFRESH ═══
+      updateDashboardTotals();
+      _refreshLedger();
+      _updateChart();
+
+      var msg = _t('importSuccess') + ' ' + importedTxs.length + ' ' + _t('importSuccess1');
+      if (skippedRows > 0) msg += ' ' + _t('importSkipped') + ' ' + skippedRows + ' ' + _t('importInvalidRows');
+      if (skippedSheets.length > 0) msg += ' ' + _t('importSkippedSheets') + ' ' + skippedSheets.join(', ');
+      _showStatusMsg(msg);
+
+    } catch (e) {
+      console.error('[CashFlow] Import failed:', e);
+      _showStatusMsg(_t('importFailed'));
+    }
+  }
+
+  // ============================================================
   //   EXPORT TO .XLSX
   // ============================================================
 
@@ -1023,7 +1751,7 @@ const cashflowModule = (function () {
         labels: [],
         datasets: [
           {
-            label: 'Income',
+            label: _t('chartIncome'),
             data: [],
             backgroundColor: incomeColor + 'b3',
             borderColor: incomeColor,
@@ -1032,7 +1760,7 @@ const cashflowModule = (function () {
             borderSkipped: false
           },
           {
-            label: 'Expense',
+            label: _t('chartExpense'),
             data: [],
             backgroundColor: expenseColor + 'b3',
             borderColor: expenseColor,

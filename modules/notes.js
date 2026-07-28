@@ -399,8 +399,8 @@ const notesModule = (function () {
             '</svg>' +
           '</button>' +
           '<span class="hub-notes-tb-sep"></span>' +
-          '<input type="color" id="hn-color-picker" class="hub-notes-color-input" value="#00f0ff">' +
-          '<label for="hn-color-picker" class="hub-notes-tb-btn hub-notes-tb-highlight" title="Text Color" aria-label="Text color picker" tabindex="0">A</label>' +
+          '<input type="color" id="hn-color-picker" class="hub-notes-color-input" value="#00f0ff" style="position:absolute;width:0;height:0;opacity:0;pointer-events:none">' +
+          '<button class="hub-notes-tb-btn hub-notes-tb-highlight" id="hn-color-btn" title="Text Color" aria-label="Text color picker">A</button>' +
         '</div>' +
       '</div>';
 
@@ -1103,16 +1103,21 @@ const notesModule = (function () {
     document.addEventListener('keyup', _boundDocKeyup);
     document.addEventListener('keydown', _boundDocKeydown);
 
-    // Toolbar button clicks — use mousedown + preventDefault to avoid stealing focus
+    // ── Toolbar button clicks: mousedown + preventDefault to avoid
+    //     stealing focus / losing text selection from contenteditable ──
+    var savedRange = null; // selection checkpoint for color picker
+
     _el.toolbar.addEventListener('mousedown', function (e) {
       var btn = e.target.closest('.hub-notes-tb-btn');
       if (!btn) return;
 
-      var isColorLabel = btn.tagName === 'LABEL' && btn.getAttribute('for') === 'hn-color-picker';
-      if (!isColorLabel) {
-        e.preventDefault(); // prevent editor focus loss for command buttons
-      }
-      // For color label: let default label behavior click the hidden input
+      // ⚠ CRITICAL: ALWAYS preventDefault on toolbar button mousedown.
+      // Without it, clicking the "A" color button steals focus from
+      // the contenteditable editor and drops the text selection before
+      // the color picker's 'input' event can read & apply the color.
+      // For command buttons (bold, italic, ...) this is also correct —
+      // execCommand operates on the saved selection.
+      e.preventDefault();
 
       var cmd = btn.getAttribute('data-cmd');
       var val = btn.getAttribute('data-value');
@@ -1120,16 +1125,46 @@ const notesModule = (function () {
         document.execCommand(cmd, false, val || null);
       }
 
-      if (_el.editor && !isColorLabel) _el.editor.focus();
+      if (_el.editor) _el.editor.focus();
       setTimeout(_updateToolbarPosition, 10);
     });
 
-    // Color picker change → apply foreColor
+    // ── Text color button: save selection → open native picker ──
+    var colorBtn   = _el.toolbar.querySelector('#hn-color-btn');
     var colorPicker = _el.toolbar.querySelector('#hn-color-picker');
-    if (colorPicker) {
-      colorPicker.addEventListener('input', function (e) {
-        var color = e.target.value;
-        document.execCommand('foreColor', false, color);
+
+    if (colorBtn && colorPicker) {
+      // Save the live range before the native picker steals focus
+      colorBtn.addEventListener('click', function () {
+        var sel = window.getSelection();
+        if (sel && sel.rangeCount > 0 && sel.toString().trim().length > 0) {
+          savedRange = sel.getRangeAt(0).cloneRange();
+        }
+        colorPicker.click();
+      });
+
+      // Apply the chosen color to the saved range
+      colorPicker.addEventListener('input', function () {
+        if (savedRange) {
+          var sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(savedRange);
+          savedRange = null; // consumed
+        }
+        document.execCommand('foreColor', false, colorPicker.value);
+        if (_el.editor) _el.editor.focus();
+      });
+
+      // Safety net: some browser pickers fire 'input' only once on drag;
+      // 'change' fires on final commit. Apply regardless.
+      colorPicker.addEventListener('change', function () {
+        if (savedRange) {
+          var sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(savedRange);
+          savedRange = null;
+          document.execCommand('foreColor', false, colorPicker.value);
+        }
         if (_el.editor) _el.editor.focus();
       });
     }
@@ -1493,31 +1528,135 @@ const notesModule = (function () {
   }
 
   /**
-   * Execute the rolling backup workflow:
-   * 1. Capture current editor content
-   * 2. Query notes_backup_vault ordered by created_at ASC
-   * 3. If ≥10 docs exist, delete the oldest surplus
-   * 4. addDoc the new backup with note_content + serverTimestamp()
-   * 5. Show success toast
+   * Deep-clone the ENTIRE notes workspace tree (_data) into a plain object
+   * that can be safely stored and restored without maintaining any references
+   * to live objects. This prevents the "Vault History destruction" bug where
+   * a shallow copy of only the active note/folder would overwrite the full
+   * state on restore, deleting all other desks, folders, and notes.
    *
-   * IMPORTANT: This NEVER touches HubDB.saveNotesData / hub_notes localStorage key.
-   * It operates on a fully isolated collection: users/{uid}/notes_backup_vault
+   * @returns {Object} A complete, detached, JSON-safe snapshot of the
+   *                   full notes database: { folders: [...] }
    */
-  async function _executeRollingBackup() {
-    // ── 1. Capture current note content ──
-    // Flush live editor state into _activeNote so we snapshot what the user sees
+  function _saveVaultSnapshot() {
+    if (!_data || !_data.folders) {
+      return { folders: [] };
+    }
+
+    // Flush active editor state into _activeNote before cloning
     if (_activeNote && _el.titleInput && _el.editor) {
       _activeNote.title   = _el.titleInput.value || 'Untitled';
       _activeNote.content = _el.editor.innerHTML;
     }
 
-    var snapshot = {
-      title: _activeNote ? _activeNote.title : '(empty)',
-      content: _activeNote ? _activeNote.content : '',
-      noteId: _activeNote ? _activeNote.id : null,
-      folderName: _activeFolder ? _activeFolder.name : '(none)',
-      capturedAt: Date.now() // client-side timestamp as fallback
-    };
+    // Deep-clone via JSON round-trip for a guaranteed-independent copy.
+    // This is intentional — structuredClone() or manual recursion would
+    // also work, but JSON.parse(JSON.stringify()) is the safest way to
+    // guarantee zero dangling references to live objects in the module
+    // closure. Any Date values are stored as timestamps already.
+    try {
+      return JSON.parse(JSON.stringify(_data));
+    } catch (err) {
+      console.error('[Notes Vault] Failed to serialize workspace snapshot:', err);
+      return { folders: [] };
+    }
+  }
+
+  /**
+   * Replace the ENTIRE global notes state with a previously saved snapshot
+   * (from Vault History), persist it to Cloud / localStorage, and trigger
+   * a FULL re-render of the sidebar, folder list, and editor so the UI
+   * reflects every restored desk, folder, and note.
+   *
+   * @param {Object} snapshot - The complete workspace tree { folders: [...] }
+   *                            previously produced by _saveVaultSnapshot()
+   */
+  function _restoreVaultSnapshot(snapshot) {
+    if (!snapshot || !snapshot.folders || !Array.isArray(snapshot.folders)) {
+      _showBackupToast('❌ Snapshot is corrupt — missing folders array.', true);
+      return;
+    }
+
+    // ── 1. Validation: every folder must have id, name, and a notes array ──
+    var validFolders = snapshot.folders.filter(function (f) {
+      return f && f.id && typeof f.name === 'string' && Array.isArray(f.notes);
+    });
+    if (validFolders.length === 0) {
+      _showBackupToast('❌ Snapshot is corrupt — no valid folders found.', true);
+      return;
+    }
+
+    // Sanitize: strip null/undefined notes from every folder
+    validFolders.forEach(function (f) {
+      f.notes = f.notes.filter(function (n) { return n && n.id; });
+    });
+
+    // ── 2. Deep-clone into _data (JSON round-trip guarantees independence
+    //       from the Firestore doc snapshot, which may be internally frozen) ──
+    try {
+      _data = JSON.parse(JSON.stringify({ folders: validFolders }));
+    } catch (err) {
+      _showBackupToast('❌ Failed to parse snapshot data.', true);
+      return;
+    }
+
+    // ── 3. Restore active selection: first folder + first note ──
+    _isDataLoaded = true;
+    _activeFolder = _data.folders.length > 0 ? _data.folders[0] : null;
+    _activeNote = (_activeFolder && _activeFolder.notes && _activeFolder.notes.length > 0)
+                    ? _activeFolder.notes[0]
+                    : null;
+
+    // ── 4. Persist to Cloud + localStorage ──
+    //    Force=true bypasses the auto-save guard so the restored state
+    //    is written immediately, even if the user has auto-save off.
+    _persist(true).catch(function (err) {
+      console.error('[Notes Vault] Persist after restore failed:', err);
+    });
+
+    // ── 5. Full UI re-render: sidebar, folder list, note list, editor,
+    //       empty-state. This is critical — without this the user still
+    //       sees the pre-restore UI and thinks nothing changed. ──
+    try {
+      _renderFolders();
+      _renderNoteList();
+      _loadNoteIntoEditor();
+    } catch (e) {
+      console.error('[Notes Vault] UI re-render failed:', e);
+      // If a partial DOM state exists, re-inject the whole UI to recover
+      if (_container) {
+        _renderUI();
+      }
+    }
+
+    // ── 6. Close the history modal ──
+    _closeHistoryOverlay();
+
+    // ── 7. Feedback ──
+    _showBackupToast('✅ Full workspace restored from vault snapshot (' + validFolders.length + ' desk' + (validFolders.length > 1 ? 's' : '') + ')');
+  }
+
+  /**
+   * Execute the rolling backup workflow:
+   * 1. Capture the ENTIRE workspace snapshot via _saveVaultSnapshot()
+   * 2. Query notes_backup_vault ordered by created_at ASC
+   * 3. If ≥10 docs exist, delete the oldest surplus
+   * 4. addDoc the new backup with workspace_snapshot + serverTimestamp()
+   * 5. Show success toast
+   *
+   * IMPORTANT: There are TWO separate Firestore subcollection paths:
+   *  - notes_store     — the auto-saving live workspace (used by HubDB)
+   *  - notes_backup_vault  — immutable rolling snapshots (this function)
+   * NEVER touches HubDB.saveNotesData / hub_notes localStorage key directly.
+   */
+  async function _executeRollingBackup() {
+    // ── 1. Capture the ENTIRE workspace tree via deep-clone ──
+    var fullSnapshot = _saveVaultSnapshot();
+
+    // Quick sanity check: at least one folder must exist
+    if (!fullSnapshot.folders || fullSnapshot.folders.length === 0) {
+      _showBackupToast('⚠️ Workspace trống — không có gì để sao lưu.', true);
+      return;
+    }
 
     // ── 2. Check auth / online status ──
     var authStatus = HubDB.getAuthStatus();
@@ -1538,10 +1677,10 @@ const notesModule = (function () {
     var vaultRef = db.collection('users').doc(authStatus.uid).collection('notes_backup_vault');
 
     try {
-      // ── 4. Rolling window: query existing backups, prune if ≥10 ──
+      // ── 4. Rolling window: query existing backups, prune if ≥ 10 ──
       //    limit(11) is optimal: we only need to know if 10+ docs exist
-      //    and which are the oldest. Fetching all docs would freeze the
-      //    browser if the vault grows unbounded.
+      //    and which are the oldest snapshots. Fetching all docs would
+      //    freeze the browser if the vault grew unbounded.
       var existingSnap = await Promise.race([
         vaultRef.orderBy('created_at', 'asc').limit(11).get(),
         new Promise(function (_, reject) { setTimeout(function () { reject(new Error('timeout')); }, 3000); })
@@ -1550,7 +1689,7 @@ const notesModule = (function () {
       var existingDocs = existingSnap.docs; // array of QueryDocumentSnapshot
       var count = existingDocs.length;
 
-      // If 10 or more exist, delete the oldest so that 9 remain before adding
+      // If 10 or more exist, delete the oldest so 9 remain before adding the new one
       if (count >= 10) {
         var deleteCount = count - 9; // how many to prune
         var batch = db.batch();
@@ -1560,17 +1699,25 @@ const notesModule = (function () {
         await batch.commit();
       }
 
-      // ── 5. Insert new backup via addDoc (always creates a new doc) ──
+      // ── 5. Summary metadata for the history list preview ──
+      var folderCount = fullSnapshot.folders.length;
+      var noteCount = 0;
+      fullSnapshot.folders.forEach(function (f) { noteCount += (f.notes ? f.notes.length : 0); });
+
+      // ── 6. Insert new backup into the vault ──
       await Promise.race([
         vaultRef.add({
-          note_content: snapshot,
+          workspace_snapshot: fullSnapshot,    // the ENTIRE tree — NOT just one note
+          folder_count: folderCount,
+          note_count: noteCount,
+          capturedAt: Date.now(),             // client-side timestamp as fallback
           created_at: firebase.firestore.FieldValue.serverTimestamp()
         }),
         new Promise(function (_, reject) { setTimeout(function () { reject(new Error('timeout')); }, 3000); })
       ]);
 
-      // ── 6. Success toast ──
-      _showBackupToast('✅ Đã đẩy bản sao lưu lên Két sắt an toàn');
+      // ── 7. Success toast ──
+      _showBackupToast('✅ Đã sao lưu toàn bộ workspace (' + folderCount + ' desk' + (folderCount > 1 ? 's' : '') + ', ' + noteCount + ' note' + (noteCount > 1 ? 's' : '') + ') lên Két sắt.');
     } catch (err) {
       console.error('[Notes Vault] Backup failed:', err.message || err);
       _showBackupToast('❌ Sao lưu thất bại: ' + (err.message || 'unknown error'), true);
@@ -1733,6 +1880,10 @@ const notesModule = (function () {
   /**
    * Render history items from an onSnapshot result.
    * Uses requestAnimationFrame batching to prevent layout thrashing.
+   *
+   * Handles BOTH v1 (legacy: note_content single-note snapshot) and
+   * v2 (current: workspace_snapshot full-tree snapshot) backup formats.
+   *
    * @param {firebase.firestore.QuerySnapshot} snap
    */
   function _renderHistoryFromSnapshot(snap) {
@@ -1743,40 +1894,61 @@ const notesModule = (function () {
     }
 
     // ── 1. Batch all DOM reads BEFORE any writes (prevent layout thrash) ──
-    //    Read current display states first, then write them in one frame.
     var loadingEl = _el.historyLoading;
     var listEl    = _el.historyList;
     var emptyEl   = _el.historyEmpty;
 
-    // ── 2. Use requestAnimationFrame to defer DOM writes ──
-    //    Build the fragment off-screen first, then attach in one atomic operation.
+    // ── 2. Build the fragment off-screen ──
     var frag = document.createDocumentFragment();
 
     docs.forEach(function (docSnap) {
       var data = docSnap.data();
-      if (!data || !data.note_content) return; // skip malformed docs
+      if (!data) return;
 
-      var snapshotData = data.note_content;
+      // Detect backup format: v2 has workspace_snapshot, v1 has note_content
+      var hasWorkspace = !!(data.workspace_snapshot && data.workspace_snapshot.folders);
+      var hasLegacyContent = !!(data.note_content);
+
+      if (!hasWorkspace && !hasLegacyContent) return; // unrecognized format
 
       // ── Build timestamp string ──
       var dateStr = '';
       if (data.created_at && data.created_at.toDate) {
         var d = data.created_at.toDate();
         dateStr = _pad2(d.getDate()) + '/' + _pad2(d.getMonth() + 1) + '/' + d.getFullYear() + ' - ' + _pad2(d.getHours()) + ':' + _pad2(d.getMinutes());
-      } else if (snapshotData.capturedAt) {
-        var d = new Date(snapshotData.capturedAt);
+      } else if (data.capturedAt) {
+        var d = new Date(data.capturedAt);
         dateStr = _pad2(d.getDate()) + '/' + _pad2(d.getMonth() + 1) + '/' + d.getFullYear() + ' - ' + _pad2(d.getHours()) + ':' + _pad2(d.getMinutes());
       }
 
-      // ── Build text snippet (first 30 chars, strip HTML) ──
-      var rawContent = snapshotData.content || '';
-      var plain = rawContent.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
-      var snippet = plain.substring(0, 30);
-      if (plain.length > 30) snippet += '…';
+      // ── Build text snippet for the preview ──
+      var snippet = '';
+      var isFullWorkspace = false;
+      if (hasWorkspace) {
+        // v2: full workspace — show desk/note counts
+        isFullWorkspace = true;
+        var fc = data.folder_count || 0;
+        var nc = data.note_count || 0;
 
-      // ── Build item DOM (off-screen, no reflow triggered) ──
+        // Compute counts from the actual snapshot if metadata fields missing
+        if (!data.folder_count && !data.note_count) {
+          fc = data.workspace_snapshot.folders.length;
+          nc = 0;
+          data.workspace_snapshot.folders.forEach(function (f) { nc += (f.notes ? f.notes.length : 0); });
+        }
+        snippet = '📦 ' + fc + ' desk' + (fc > 1 ? 's' : '') + ' · ' + nc + ' note' + (nc > 1 ? 's' : '');
+      } else {
+        // v1 legacy: single-note snapshot
+        var rawContent = data.note_content.content || '';
+        var plain = rawContent.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
+        snippet = data.note_content.folderName ? '📁 ' + data.note_content.folderName + ' · ' : '';
+        snippet += plain.substring(0, 40);
+        if (plain.length > 40) snippet += '…';
+      }
+
+      // ── Build item DOM ──
       var item = document.createElement('div');
-      item.className = 'hub-notes-history-item';
+      item.className = 'hub-notes-history-item' + (isFullWorkspace ? ' hub-notes-history-item--full' : '');
       item.setAttribute('data-doc-id', docSnap.id);
 
       var infoDiv = document.createElement('div');
@@ -1796,17 +1968,35 @@ const notesModule = (function () {
       var restoreBtn = document.createElement('button');
       restoreBtn.className = 'hub-notes-history-restore-btn';
       restoreBtn.textContent = 'Restore';
-      // Capture docId + snapshotData in closure for restore
-      restoreBtn.addEventListener('click', (function (id, snapData) {
-        return function () { _restoreBackup(id, snapData); };
-      })(docSnap.id, snapshotData));
+
+      // Capture doc id + format-aware restore callback
+      if (isFullWorkspace) {
+        (function (id, snapData) {
+          restoreBtn.addEventListener('click', function () {
+            if (!confirm('⚠️ Restore the ENTIRE workspace from this snapshot? ALL current desks and notes will be replaced.')) {
+              return;
+            }
+            _restoreVaultSnapshot(snapData.workspace_snapshot);
+          });
+        })(docSnap.id, data);
+      } else {
+        // Legacy restore: single note only — show warning and offer partial restore
+        (function (id, snapData) {
+          restoreBtn.addEventListener('click', function () {
+            if (!confirm('[LEGACY SNAPSHOT] This is an older single-note backup. It will be restored into the current active note. Continue?')) {
+              return;
+            }
+            _restoreBackup(id, snapData.note_content);
+          });
+        })(docSnap.id, data);
+      }
 
       item.appendChild(infoDiv);
       item.appendChild(restoreBtn);
       frag.appendChild(item);
     });
 
-    // ── 3. Atomic DOM write: attach fragment + toggle visibility in one microtask ──
+    // ── 3. Atomic DOM write ──
     requestAnimationFrame(function () {
       if (loadingEl) loadingEl.style.display = 'none';
       if (emptyEl) emptyEl.style.display = 'none';
@@ -1837,22 +2027,22 @@ const notesModule = (function () {
   }
 
   /**
-   * Confirm → inject backup content into editor → close modal → toast.
+   * LEGACY restore: inject a single-note backup (v1 format) into the
+   * active note. Only called for old vault entries that predate the
+   * full-workspace v2 snapshot format. Does NOT touch other folders/notes.
+   *
+   * @param {string} docId - Firestore document ID (unused, kept for API consistency)
+   * @param {Object} snapshotData - The legacy note_content object
    */
   function _restoreBackup(docId, snapshotData) {
-    if (!confirm('Bạn có chắc chắn muốn ghi đè nội dung hiện tại bằng bản sao lưu này không?')) {
-      return;
-    }
-
     // ── Inject content into active note ──
     if (_activeNote) {
       _activeNote.title   = snapshotData.title || 'Untitled';
       _activeNote.content = snapshotData.content || '';
       _loadNoteIntoEditor();
     } else {
-      // If no active note, create one from the backup
+      // If no active note, create one from the backup into the active folder
       if (!_activeFolder) {
-        // Create a default folder if none exists
         var folder = {
           id: _uid(),
           name: 'Personal',
@@ -1870,14 +2060,10 @@ const notesModule = (function () {
       _loadNoteIntoEditor();
     }
 
-    // ── Persist the restored content ──
+    // ── Persist and close ──
     _scheduleSave();
-
-    // ── Close modal ──
     _closeHistoryOverlay();
-
-    // ── Success toast ──
-    _showBackupToast('✅ Đã khôi phục dữ liệu từ Két sắt');
+    _showBackupToast('✅ Đã khôi phục nội dung note từ Két sắt (legacy snapshot)');
   }
 
   /**

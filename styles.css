@@ -8531,6 +8531,49 @@ mark.cyber-hl-pink:hover {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 18px rgba(246, 190, 124, 0.12);
 }
 
+/* ── CashFlow Edit-Button Toast ── */
+.hub-cf-toast {
+  position: fixed;
+  bottom: var(--space-2xl);
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  z-index: 10001;
+  padding: 14px 28px;
+  border-radius: var(--radius-full);
+  background: rgba(18, 18, 30, 0.92);
+  border: 1px solid var(--accent-secondary);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 24px rgba(0, 240, 255, 0.15);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 350ms var(--ease-out-expo), transform 350ms var(--ease-out-expo);
+  pointer-events: none;
+}
+
+.hub-cf-toast--visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+[data-theme="solar-zen"] .hub-cf-toast {
+  background: rgba(250, 250, 245, 0.94);
+  border-color: #008080;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 0 18px rgba(0, 128, 128, 0.12);
+  color: #1a1a2e;
+}
+
+[data-theme="lofi-twilight"] .hub-cf-toast {
+  background: rgba(30, 28, 46, 0.94);
+  border-color: var(--accent-secondary);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 18px rgba(246, 190, 124, 0.12);
+}
+
 /* ── History Button ── */
 .hub-notes-history-btn {
   display: inline-flex;
@@ -13042,10 +13085,11 @@ body.theme-optimized [class*="glass"] {
 }
 
 /* ── Dashboard Cards ── */
-.hub-cf-dashboard {
+.cashflow-summary-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-md);
+  gap: 15px;
+  width: 100%;
 }
 
 /* ── Unified summary card (all 4 cells share this block) ── */
@@ -13820,10 +13864,45 @@ body.theme-optimized .hub-cf-chart-canvas-wrap canvas {
   text-align: center;
 }
 
+/* ═══ CATEGORY BREAKDOWN — Thin progress bars inside the ledger card ═══ */
 .hub-cf-category-breakdown {
-  margin-top: var(--space-md);
-  padding-top: var(--space-md);
-  border-top: 1px solid var(--glass-border);
+  position: relative;
+  display: block;
+  margin: 0 0 20px 0;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+/* ── Toggle button ── */
+.hub-cf-breakdown-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 0;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: color var(--duration-fast);
+}
+.hub-cf-breakdown-toggle:hover {
+  color: var(--accent-primary);
+}
+.hub-cf-breakdown-arrow {
+  font-size: 0.7rem;
+  transition: transform 0.2s ease;
+}
+
+/* ── Collapsible body ── */
+.hub-cf-breakdown-body {
+  overflow: hidden;
+  padding: var(--space-sm) 0 var(--space-xs) 0;
+}
+.hub-cf-breakdown-body.collapsed {
+  display: none;
 }
 
 .hub-cf-breakdown-title {
@@ -13833,20 +13912,29 @@ body.theme-optimized .hub-cf-chart-canvas-wrap canvas {
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--text-muted);
-  margin-bottom: var(--space-sm);
+  margin-bottom: 10px;
 }
 
-.hub-cf-breakdown-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+/* ── Income / Expense group labels ── */
+.hub-cf-breakdown-section-label {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  opacity: 0.7;
 }
 
+/* ── Single category row (name left, amount+% right) ── */
 .hub-cf-breakdown-item {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  font-size: 0.78rem;
+  align-items: baseline;
+  font-size: 0.85rem;
+  line-height: 1.3;
+  padding: 2px 0;
 }
 
 .hub-cf-breakdown-name {
@@ -13854,32 +13942,38 @@ body.theme-optimized .hub-cf-chart-canvas-wrap canvas {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 60%;
+  max-width: 55%;
+  font-weight: 500;
 }
 
 .hub-cf-breakdown-amt {
   font-family: var(--font-mono);
-  font-size: 0.74rem;
+  font-size: 0.76rem;
   font-weight: 600;
+  white-space: nowrap;
   color: var(--text-primary);
 }
 
 .hub-cf-breakdown-amt--income { color: var(--success); }
 .hub-cf-breakdown-amt--expense { color: var(--danger); }
 
+/* ── Thin progress bar ── */
 .hub-cf-breakdown-bar-track {
   width: 100%;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: var(--radius-full);
-  margin-bottom: var(--space-xs);
+  height: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 1px;
+  margin-top: 4px;
+  margin-bottom: 12px;
+  overflow: hidden;
 }
 
 .hub-cf-breakdown-bar-fill {
   height: 100%;
-  border-radius: var(--radius-full);
+  border-radius: 1px;
   background: var(--accent-primary);
   transition: width var(--duration-base) var(--ease-out-expo);
+  min-width: 0;
 }
 
 .hub-cf-breakdown-bar-fill--expense { background: var(--danger); }
@@ -14216,7 +14310,7 @@ body.theme-optimized .hub-cf-month-nav:hover {
   border-color: var(--accent-primary);
 }
 
-body.theme-optimized .hub-cf-breakdown-bar {
+body.theme-optimized .hub-cf-breakdown-bar-track {
   background: rgba(0, 255, 65, 0.08);
 }
 
@@ -14232,7 +14326,7 @@ body.theme-optimized .hub-cf-breakdown-bar-fill--income { background: var(--succ
    ============================================================ */
 
 @media (max-width: 640px) {
-  .hub-cf-dashboard {
+  .cashflow-summary-grid {
     grid-template-columns: 1fr;
     gap: var(--space-sm);
   }

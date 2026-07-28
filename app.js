@@ -523,6 +523,46 @@ function _importBackup(fileInput) {
       // Count keys before overwriting
       const importCount = Object.keys(data).length;
 
+      // --- Deep-validate and prepare hub_notes for Firestore push ---
+      // This ensures the ENTIRE Notes state tree (all desks, folders, notes)
+      // survives the import and is pushed to cloud, preventing data loss.
+      let notesData = null;
+      const rawNotes = data['hub_notes'];
+      if (typeof rawNotes === 'string' && rawNotes.trim().length > 0) {
+        try {
+          const parsed = JSON.parse(rawNotes);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            // Ensure folders array exists and each folder has valid shape
+            if (!Array.isArray(parsed.folders)) {
+              console.warn('[HubOS] Import: "hub_notes" has no folders array — treating as empty workspace');
+              parsed.folders = [];
+            }
+            // Deep-validate each folder and its notes
+            parsed.folders = parsed.folders.filter(function (f) {
+              return f && typeof f === 'object' && typeof f.id === 'string' && typeof f.name === 'string';
+            });
+            parsed.folders.forEach(function (f) {
+              if (!Array.isArray(f.notes)) f.notes = [];
+              f.notes = f.notes.filter(function (n) {
+                return n && typeof n === 'object' && typeof n.id === 'string' && typeof n.title === 'string';
+              });
+              // Ensure every note has a folderId back-reference
+              f.notes.forEach(function (n) {
+                if (!n.folderId) n.folderId = f.id;
+                if (typeof n.content !== 'string') n.content = '';
+                if (!n.createdAt) n.createdAt = Date.now();
+                if (!n.updatedAt) n.updatedAt = Date.now();
+              });
+            });
+            notesData = parsed;
+            // Re-stringify the sanitized notes so localStorage stores the clean version
+            data['hub_notes'] = JSON.stringify(parsed);
+          }
+        } catch (_) {
+          console.warn('[HubOS] Import: "hub_notes" is not valid JSON — skipping deep sync');
+        }
+      }
+
       // Safely overwrite localStorage with validated data
       Object.entries(data).forEach(([key, value]) => {
         // Only store values that look like they were legitimately stored as strings
@@ -533,16 +573,33 @@ function _importBackup(fileInput) {
         }
       });
 
-      _setBackupStatus(`✓ ${importCount} keys restored — reloading…`, 'success');
+      // --- Push Notes to Firestore before reload so cloud data is not lost ---
+      // If Notes data is fresh in localStorage but the user is logged in,
+      // Firestore would win on next load (database.js:loadNotesData checks Firestore first).
+      // So we must explicitly push the restored notes to the cloud.
+      var _syncReload = function () {
+        _setBackupStatus('✓ ' + importCount + ' keys restored — reloading…', 'success');
+        setTimeout(function () {
+          window.location.reload();
+        }, 800);
+      };
 
-      // Small delay so user sees the success message, then reload
-      setTimeout(() => {
-        window.location.reload();
-      }, 800);
+      if (notesData && typeof HubDB !== 'undefined' && HubDB.saveNotesData) {
+        _setBackupStatus('✓ ' + importCount + ' keys restored — syncing notes to cloud…', 'info');
+        HubDB.saveNotesData(notesData).then(function () {
+          _syncReload();
+        }).catch(function (err) {
+          console.error('[HubOS] Import: Firestore sync failed — localStorage still has the data:', err);
+          // Even if Firestore fails, proceed with reload — localStorage has the data
+          _syncReload();
+        });
+      } else {
+        _syncReload();
+      }
 
     } catch (err) {
       console.error('[HubOS] Import failed:', err);
-      _setBackupStatus(`Import failed: ${err.message}`, 'error');
+      _setBackupStatus('Import failed: ' + err.message, 'error');
     }
 
     // Reset file input so the same file can be re-selected
@@ -605,17 +662,21 @@ function _initSystemLanguageToggle() {
   }
 
   function _setLanguage(lang) {
-    // 1) Persist to localStorage immediately
+    // 1) Persist to localStorage immediately (both canonical + legacy keys)
     try { localStorage.setItem('hub_system_language', lang); } catch (_) {}
+    try { localStorage.setItem('hubos_lang', lang); } catch (_) {}
 
-    // 2) Persist via flashcardModule's central setter (saves to Firebase + applies DOM)
+    // 2) Persist via flashcardModule's centralized setter (saves to Firebase + applies DOM)
     if (typeof flashcardModule !== 'undefined' && flashcardModule.setSystemLanguage) {
       flashcardModule.setSystemLanguage(lang);
     } else if (typeof flashcardModule !== 'undefined' && flashcardModule.applyLanguage) {
       flashcardModule.applyLanguage(lang);
     }
 
-    // 3) Re-render dashboard if visible (it reads greeting from i18n)
+    // 3) ═══ GLOBAL EVENT BUS: notify ALL modules that language changed ═══
+    window.dispatchEvent(new CustomEvent('hubLanguageChanged', { detail: lang }));
+
+    // 4) Re-render dashboard if visible (it reads greeting from i18n)
     if (typeof dashboardModule !== 'undefined' && typeof app !== 'undefined') {
       var activeId = app._getActiveModuleId ? app._getActiveModuleId() : null;
       if (activeId === 'dashboard' && dashboardModule.render) {
@@ -627,7 +688,7 @@ function _initSystemLanguageToggle() {
       }
     }
 
-    // 4) Update the toggle button visuals
+    // 5) Update the toggle button visuals
     _syncSystemLanguageToggle();
   }
 

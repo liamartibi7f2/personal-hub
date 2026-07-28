@@ -156,6 +156,11 @@ const HubDB = (function () {
             }),
           _timeout(2500)
         ]);
+        // Also mirror to localStorage so Export All Data captures the latest notes.
+        // Without this, the backup file would miss notes saved exclusively to Firestore.
+        try {
+          localStorage.setItem(LOCAL_KEY, JSON.stringify(data));
+        } catch (_) {}
         return; // success — exit early
       } catch (err) {
         // Log detailed error so the user can see Firestore Security Rules issues
@@ -214,6 +219,11 @@ const HubDB = (function () {
               }
             } catch (_) {}
             try { localStorage.removeItem(LOCAL_KEY); } catch (_) {}
+            // Mirror to localStorage so "Export All Data" always captures the latest
+            // notes workspace, even immediately after a page reload.
+            try {
+              localStorage.setItem(LOCAL_KEY, JSON.stringify(cloudData));
+            } catch (_) {}
             return cloudData;
           }
           // Cloud doc exists but has no workspace yet — return null,
