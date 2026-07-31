@@ -1,3 +1,5 @@
+﻿
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,6 +10,7 @@
 
   <!-- Stylesheet (relative path for GitHub Pages) -->
   <link rel="stylesheet" href="./styles.css">
+	  <link rel="stylesheet" href="./modules/time-management.css">
 
   <!-- Preconnect for Google Fonts (JetBrains Mono for timer/code text) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -46,7 +49,7 @@
       <!-- Nav items are injected here by app.js -->
       <nav id="nav-list" class="sidebar-nav" aria-label="Tool navigation">
         <!-- Populated dynamically -->
-        <button class="sidebar-settings-btn nav-item" id="btn-backup-open" title="Settings &amp; Data Backup" aria-label="Open settings and backup">
+        	        <button class="sidebar-settings-btn nav-item" id="btn-backup-open" title="Settings &amp; Data Backup" aria-label="Open settings and backup">
           <svg width="16" height="16" viewBox="0 0 18 18" fill="none" class="sidebar-settings-icon">
             <circle cx="9" cy="9" r="2.5" stroke="currentColor" stroke-width="1.3"/>
             <path d="M9 1.5v2M9 14.5v2M1.5 9h2M14.5 9h2M3.6 3.6l1.4 1.4M13 13l1.4 1.4M3.6 14.4l1.4-1.4M13 5l1.4-1.4"
@@ -72,6 +75,13 @@
     <!-- Content for the active tab is injected here               -->
     <!-- -------------------------------------------------------- -->
     <main id="main-content" class="main-content" aria-live="polite">
+
+        <!-- #time-management module is rendered dynamically by modules/time-management.js -->
+
+    
+
+    
+
       <!-- Populated dynamically by app.js -->
     </main>
 
@@ -81,7 +91,8 @@
   <!-- GLOBAL BACKUP / SETTINGS MODAL OVERLAY                         -->
   <!-- Appears when user clicks the ⚙ icon in the sidebar footer     -->
   <!-- ============================================================ -->
-  <div class="backup-overlay" id="backup-overlay" role="dialog" aria-modal="true" aria-label="Settings &amp; Data Backup">
+
+<div class="backup-overlay" id="backup-overlay" role="dialog" aria-modal="true" aria-label="Settings &amp; Data Backup">
     <div class="backup-modal glass">
       <!-- Header -->
       <div class="backup-modal-header">
@@ -136,6 +147,21 @@
               <input type="checkbox" id="btn-auto-save-toggle" checked>
               <span class="toggle-slider"></span>
             </label>
+          </div>
+        </div>
+
+        <!-- Writing Timer Duration -->
+        <div class="backup-section backup-section--timer-duration">
+          <div class="backup-section-row">
+            <div>
+              <h4 class="backup-section-title">Writing Timer Duration</h4>
+              <p class="backup-section-desc">Default countdown length for focus writing (minutes)</p>
+            </div>
+            <div class="hub-timer-duration-input-wrap">
+              <input type="number" id="timer-duration-input" class="hub-timer-duration-input"
+                     value="30" min="5" max="120" step="5" />
+              <span class="hub-timer-duration-unit">min</span>
+            </div>
           </div>
         </div>
 
@@ -296,5 +322,6 @@
   <script src="./modules/auth-ui.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="./modules/time-management.js"></script>
 </body>
 </html>

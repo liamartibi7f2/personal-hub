@@ -3,6 +3,233 @@
    Notion-like rich text notes module with folder organization,
    auto-save, slash commands, and a floating formatting toolbar.
    ============================================================ */
+// ==========================================
+// TÍNH NĂNG: COPY/PASTE ẢNH LÊN CLOUD (IMGBB)
+// ==========================================
+
+function setupNoteImagePaste() {
+    // Thay '.note-editor' bằng class hoặc ID vùng viết Note của bạn
+    const noteEditor = document.querySelector('.note-editor'); 
+    if (!noteEditor) return;
+
+    noteEditor.addEventListener('paste', async (e) => {
+        // Lấy dữ liệu từ Clipboard
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        let imageFile = null;
+
+        // Quét xem trong thứ vừa Paste có chứa file Ảnh không
+        for (let item of items) {
+            if (item.type.indexOf('image') === 0) {
+                imageFile = item.getAsFile();
+                break;
+            }
+        }
+
+        // Nếu là ảnh -> Bắt đầu quy trình Cloud
+        if (imageFile) {
+            e.preventDefault(); // CHẶN NGAY việc trình duyệt tự dán mã Base64 nặng nề
+
+            // 1. Chèn hiệu ứng Loading tại vị trí con trỏ nhấp nháy
+            const loadingId = 'img-loading-' + Date.now();
+            const loadingHtml = `<span id="${loadingId}" style="color: var(--primary-color, #00e676); font-style: italic; font-weight: bold;">[⏳ Đang tải ảnh lên Cloud...]</span>`;
+            document.execCommand('insertHTML', false, loadingHtml);
+
+            // 2. Gửi ảnh lên Cloud
+            try {
+                const imageUrl = await uploadToImgBB(imageFile);
+
+                // 3. Nhận Link về -> Thay thế chữ Loading bằng tấm ảnh thật
+                const loadingSpan = document.getElementById(loadingId);
+                if (loadingSpan) {
+                    const imgTag = document.createElement('img');
+                    imgTag.src = imageUrl;
+                    imgTag.style.maxWidth = '100%';
+                    imgTag.style.borderRadius = '8px'; // Bo góc chuẩn UI Hub.OS
+                    imgTag.style.marginTop = '10px';
+                    imgTag.style.boxShadow = '0 4px 6px rgba(0,0,0,0.3)'; // Đổ bóng nhẹ
+                    
+                    // Tráo đổi span loading bằng thẻ img
+                    loadingSpan.parentNode.replaceChild(imgTag, loadingSpan);
+                }
+            } catch (error) {
+                console.error("Lỗi upload ảnh:", error);
+                const loadingSpan = document.getElementById(loadingId);
+                if (loadingSpan) loadingSpan.innerText = '[❌ Lỗi tải ảnh. Vui lòng thử lại!]';
+            }
+        }
+    });
+}
+
+// Hàm kết nối API (Xử lý ngầm)
+async function uploadToImgBB(file) {
+    // API Key của ImgBB (Miễn phí, thay khóa của bạn vào đây)
+    const API_KEY = '02bc2aa57ceb6ba1b2666abb41b6082d'; 
+    
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const response = await fetch(`https://api.imgbb.com/1/upload?key=${API_KEY}`, {
+        method: 'POST',
+        body: formData
+    });
+
+    const data = await response.json();
+    if (data.success) {
+        return data.data.url; // Trả về đường link ảnh trực tiếp (URL)
+    } else {
+        throw new Error('Upload Cloud thất bại');
+    }
+}
+// ── Focus Writing Timer (SVG Circle + Persistent State) ──
+function NotesTimer(displayEl, progressCircle, playBtn, resetBtn) {
+  var self = this;
+
+  self.displayEl       = displayEl;       // Text node inside SVG (e.g. <span>)
+  self.progressCircle  = progressCircle;  // SVG <circle> for dashoffset animation
+  self.playBtn         = playBtn;
+  self.resetBtn        = resetBtn;
+
+  self.remainingSeconds = 0;
+  self.totalDuration    = 0;              // total secs for this session
+  self.intervalId       = null;
+  self.isRunning        = false;
+  self._visChangeBound  = null;
+
+  // ── Config ──
+  function _readDuration() {
+    try {
+      var v = parseInt(localStorage.getItem('hub_os_notes_timer_duration'), 10);
+      return (v >= 5 && v <= 120) ? v : 30;
+    } catch (_) { return 30; }
+  }
+
+  function _format(sec) {
+    var m = Math.floor(sec / 60);
+    var s = sec % 60;
+    return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  // ── SVG Circle Animation ──
+  var CIRCLE_RADIUS = 36;
+  var CIRCUMFERENCE = 2 * Math.PI * CIRCLE_RADIUS; // ~226.19
+
+  function _updateCircle(ratio) {
+    if (!self.progressCircle) return;
+    // ratio: 0 → full, 1 → empty (dashoffset = 0 means fully drawn)
+    var offset = CIRCUMFERENCE * (1 - ratio);
+    self.progressCircle.style.strokeDashoffset = offset;
+  }
+
+  // ── Combined display update ──
+  function _updateDisplay() {
+    var sec = self.remainingSeconds;
+    var dur = self.totalDuration;
+    if (self.displayEl) {
+      self.displayEl.textContent = _format(sec);
+    }
+    if (dur > 0) {
+      _updateCircle(sec / dur);
+    }
+  }
+
+  // ── Tick ──
+  function _tick() {
+    if (self.remainingSeconds <= 0) {
+      self.pause();
+      if (self.displayEl) self.displayEl.textContent = '00:00';
+      _updateCircle(0); // empty ring
+      return;
+    }
+    self.remainingSeconds--;
+    _updateDisplay();
+    _saveState();
+  }
+
+  // ── Actions ──
+  self.reset = function () {
+    self.pause();
+    self.totalDuration = _readDuration() * 60;
+    self.remainingSeconds = self.totalDuration;
+    _updateDisplay();
+    _saveState();
+  };
+
+  self.start = function () {
+    if (self.isRunning) return;
+    if (self.remainingSeconds <= 0) {
+      self.totalDuration = _readDuration() * 60;
+      self.remainingSeconds = self.totalDuration;
+      _updateDisplay();
+    }
+    self.isRunning = true;
+    self.intervalId = setInterval(_tick, 1000);
+    _saveState();
+  };
+
+  self.pause = function () {
+    if (!self.isRunning) return;
+    self.isRunning = false;
+    if (self.intervalId) {
+      clearInterval(self.intervalId);
+      self.intervalId = null;
+    }
+    _saveState();
+  };
+
+  // ── State persistence (FREEZE across module switches) ──
+  function _saveState() {
+    if (typeof window !== 'undefined') {
+      window.HubOS_NotesTimerState = {
+        timeLeft:      self.remainingSeconds,
+        totalDuration: self.totalDuration,
+        isPaused:      !self.isRunning
+      };
+    }
+  }
+
+  function _restoreState() {
+    if (typeof window !== 'undefined' && window.HubOS_NotesTimerState) {
+      var s = window.HubOS_NotesTimerState;
+      if (typeof s.timeLeft === 'number' && s.timeLeft >= 0
+          && typeof s.totalDuration === 'number' && s.totalDuration > 0) {
+        self.totalDuration    = s.totalDuration;
+        self.remainingSeconds = s.timeLeft;
+        self.isRunning        = false; // always remain paused on restore
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // ── Destroy ──
+  self.destroy = function () {
+    _saveState(); // freeze current state
+    self.pause();
+    if (self._visChangeBound) {
+      document.removeEventListener('visibilitychange', self._visChangeBound);
+      self._visChangeBound = null;
+    }
+  };
+
+  // ── Init ──
+  if (_restoreState()) {
+    // Restored from frozen state — keep paused, show saved time
+    _updateDisplay();
+  } else {
+    self.totalDuration    = _readDuration() * 60;
+    self.remainingSeconds = self.totalDuration;
+    _updateDisplay();
+  }
+  _saveState();
+
+  // Visibility change: auto-pause when tab hidden
+  self._visChangeBound = function () {
+    if (document.hidden && self.isRunning) {
+      self.pause();
+    }
+  };
+  document.addEventListener('visibilitychange', self._visChangeBound);
+}
 
 const notesModule = (function () {
   'use strict';
@@ -29,6 +256,7 @@ const notesModule = (function () {
    */
   let _sessionInitialized = false;
   let _autoSaveEnabled = true;
+  let _timer = null; // Focus Writing Timer
   let _pageUnloading = false; // Prevents ghost saves during page reload
 
   // ── Vault / History listener management ──
@@ -66,7 +294,11 @@ const notesModule = (function () {
     historyLoading:  null,
     historyEmpty:    null,
     historyBody:     null,
-    spellcheckBtn:  null
+    spellcheckBtn:  null,
+    timerDisplay:   null,
+    timerCircle:    null,
+    timerPlayBtn:   null,
+    timerResetBtn:  null
   };
 
   // ── Ghost save guard ──
@@ -332,6 +564,17 @@ const notesModule = (function () {
               '<span class="hub-notes-save-label">Spell</span>' +
             '</button>' +
             '<span class="hub-notes-save-feedback" id="hn-save-feedback"></span>' +
+            '<div class="hub-notes-timer" id="hn-timer">' +
+              '<div class="hub-notes-timer-ring">' +
+                '<svg viewBox="0 0 80 80" class="hub-notes-timer-svg">' +
+                  '<circle class="hub-notes-timer-track" cx="40" cy="40" r="36" fill="none" />' +
+                  '<circle class="hub-notes-timer-progress" id="hn-timer-circle" cx="40" cy="40" r="36" fill="none" />' +
+                '</svg>' +
+                '<span class="hub-notes-timer-display" id="hn-timer-display">30:00</span>' +
+              '</div>' +
+              '<button class="hub-notes-timer-btn" id="hn-timer-play" title="Start / Pause Timer" aria-label="Start or pause timer">▶</button>' +
+              '<button class="hub-notes-timer-btn" id="hn-timer-reset" title="Reset Timer" aria-label="Reset timer">↺</button>' +
+            '</div>' +
           '</div>' +
           '<div class="hub-notes-editor-area">' +
             '<div class="hub-notes-date-container" id="hn-date-container">' +
@@ -439,6 +682,24 @@ const notesModule = (function () {
     _el.historyEmpty    = _qs('hn-history-empty');
     _el.historyBody     = null; // will be scoped from overlay
     _el.spellcheckBtn  = _qs('hn-btn-spellcheck');
+    _el.timerDisplay   = _qs('hn-timer-display');
+    _el.timerCircle    = _qs('hn-timer-circle');
+    _el.timerPlayBtn   = _qs('hn-timer-play');
+    _el.timerResetBtn  = _qs('hn-timer-reset');
+
+    // ── Focus Writing Timer ──
+    _timer = new NotesTimer(_el.timerDisplay, _el.timerCircle, _el.timerPlayBtn, _el.timerResetBtn);
+    if (_el.timerPlayBtn) {
+      _el.timerPlayBtn.addEventListener('click', function () {
+        if (_timer.isRunning) { _timer.pause(); }
+        else { _timer.start(); }
+      });
+    }
+    if (_el.timerResetBtn) {
+      _el.timerResetBtn.addEventListener('click', function () {
+        _timer.reset();
+      });
+    }
 
     // Render lists
     _renderFolders();
@@ -915,29 +1176,86 @@ const notesModule = (function () {
       });
     }
 
-    // Anti-Base64 Defense: block pasted images and embedded Base64 images
+    // Cloud Image Upload: Paste
     if (_el.editor) {
-      _el.editor.addEventListener('paste', function (e) {
-        var items = e.clipboardData && e.clipboardData.items;
-        if (items && [].some.call(items, function (it) { return it.type.indexOf('image') !== -1; })) {
-          e.preventDefault();
-          alert('⚠️ Hub.OS Protocol: Direct image pasting is disabled to protect the 5MB storage limit. Please use an Image URL instead.');
+      _el.editor.addEventListener('paste', async function (e) {
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        let imageFile = null;
+
+        for (let item of items) {
+          if (item.type.indexOf('image') === 0) {
+            imageFile = item.getAsFile();
+            break;
+          }
         }
-        var html = e.clipboardData && e.clipboardData.getData('text/html');
-        if (html && html.indexOf('src="data:image/') !== -1) {
-          e.preventDefault();
-          alert('⚠️ Hub.OS Protocol: Hidden Base64 image detected in pasted content. Please use an Image URL instead.');
+
+        if (!imageFile) return;
+
+        e.preventDefault();
+
+        const loadingId = 'hub-notes-img-loading-' + Date.now();
+        const loadingHtml = '<span id="' + loadingId + '" style="color: var(--primary-color, #00e676); font-style: italic; font-weight: bold;">[⏳ Uploading to Cloud...]</span>';
+        document.execCommand('insertHTML', false, loadingHtml);
+
+        try {
+          const imageUrl = await uploadToImgBB(imageFile);
+          const loadingSpan = document.getElementById(loadingId);
+          if (loadingSpan) {
+            var imgTag = document.createElement('img');
+            imgTag.src = imageUrl;
+            imgTag.style.maxWidth = '100%';
+            imgTag.style.borderRadius = '8px';
+            imgTag.style.marginTop = '10px';
+            imgTag.style.boxShadow = '0 4px 6px rgba(0,0,0,0.3)';
+            loadingSpan.parentNode.replaceChild(imgTag, loadingSpan);
+          }
+        } catch (err) {
+          console.error('Hub.OS: Image upload failed', err);
+          const loadingSpan = document.getElementById(loadingId);
+          if (loadingSpan) {
+            loadingSpan.style.color = '#ff5252';
+            loadingSpan.textContent = '[❌ Upload failed. Please try again.]';
+          }
         }
       });
     }
 
-    // Anti-Base64 Defense: block dropped images
+    // Cloud Image Upload: Drag & Drop
     if (_el.editor) {
-      _el.editor.addEventListener('drop', function (e) {
-        var files = e.dataTransfer && e.dataTransfer.files;
-        if (files && [].some.call(files, function (f) { return f.type.indexOf('image') !== -1; })) {
+      _el.editor.addEventListener('drop', async function (e) {
+        const files = e.dataTransfer && e.dataTransfer.files;
+        if (!files) return;
+
+        for (let file of files) {
+          if (file.type.indexOf('image') !== 0) continue;
           e.preventDefault();
-          alert('⚠️ Hub.OS Protocol: Drag & drop for images is not supported in the Offline version.');
+
+          _el.editor.focus();
+
+          const loadingId = 'hub-notes-img-loading-' + Date.now();
+          const loadingHtml = '<span id="' + loadingId + '" style="color: var(--primary-color, #00e676); font-style: italic; font-weight: bold;">[⏳ Uploading to Cloud...]</span>';
+          document.execCommand('insertHTML', false, loadingHtml);
+
+          try {
+            const imageUrl = await uploadToImgBB(file);
+            const loadingSpan = document.getElementById(loadingId);
+            if (loadingSpan) {
+              var imgTag = document.createElement('img');
+              imgTag.src = imageUrl;
+              imgTag.style.maxWidth = '100%';
+              imgTag.style.borderRadius = '8px';
+              imgTag.style.marginTop = '10px';
+              imgTag.style.boxShadow = '0 4px 6px rgba(0,0,0,0.3)';
+              loadingSpan.parentNode.replaceChild(imgTag, loadingSpan);
+            }
+          } catch (err) {
+            console.error('Hub.OS: Image upload failed', err);
+            const loadingSpan = document.getElementById(loadingId);
+            if (loadingSpan) {
+              loadingSpan.style.color = '#ff5252';
+              loadingSpan.textContent = '[❌ Upload failed. Please try again.]';
+            }
+          }
         }
       });
     }
@@ -1397,7 +1715,7 @@ const notesModule = (function () {
         toolbar: null, savingIndicator: null, emptyState: null, editorPane: null,
         addBtn: null, addFolderBtn: null, searchBtn: null, searchBar: null,
         searchInput: null, searchClear: null, manualSaveBtn: null, saveFeedback: null,
-        dateContainer: null, dateText: null, dateInput: null, backupBtn: null, historyBtn: null, historyOverlay: null, historyClose: null, historyList: null, historyLoading: null, historyEmpty: null, historyBody: null, spellcheckBtn: null
+        dateContainer: null, dateText: null, dateInput: null, backupBtn: null, historyBtn: null, historyOverlay: null, historyClose: null, historyList: null, historyLoading: null, historyEmpty: null, historyBody: null, spellcheckBtn: null, timerDisplay: null, timerCircle: null, timerPlayBtn: null, timerResetBtn: null
       };
     }
 
@@ -1447,6 +1765,9 @@ const notesModule = (function () {
     //    user switches tabs away from Notes.
     _unsubscribeVaultListeners();
 
+    // Destroy focus timer (OS-level pause when switching modules)
+    if (_timer) { _timer.destroy(); _timer = null; }
+
     // Remove document-level listeners
     if (_boundDocMouseup)   document.removeEventListener('mouseup', _boundDocMouseup);
     if (_boundDocMousedown) document.removeEventListener('mousedown', _boundDocMousedown);
@@ -1459,7 +1780,7 @@ const notesModule = (function () {
       toolbar: null, savingIndicator: null, emptyState: null, editorPane: null,
       addBtn: null, addFolderBtn: null, searchBtn: null, searchBar: null,
       searchInput: null, searchClear: null, manualSaveBtn: null, saveFeedback: null,
-      dateContainer: null, dateText: null, dateInput: null, backupBtn: null, historyBtn: null, historyOverlay: null, historyClose: null, historyList: null, historyLoading: null, historyEmpty: null, historyBody: null, spellcheckBtn: null
+      dateContainer: null, dateText: null, dateInput: null, backupBtn: null, historyBtn: null, historyOverlay: null, historyClose: null, historyList: null, historyLoading: null, historyEmpty: null, historyBody: null, spellcheckBtn: null, timerDisplay: null, timerCircle: null, timerPlayBtn: null, timerResetBtn: null
     };
     // ⚡ PRESERVE _data, _activeNote, _activeFolder, _sessionInitialized,
     //    and _isNotesDataLoaded across tab switches so the in-memory cache

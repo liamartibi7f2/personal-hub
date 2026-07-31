@@ -248,6 +248,111 @@ const HubDB = (function () {
   }
 
   // ──────────────────────────────────────────────
+  //  IndexedDB Wrapper — local failsafe cache for
+  //  high-value mutable data (CashFlow transactions).
+  //  Survives browser restores, tab crashes, and
+  //  localStorage eviction (5MB cap).
+  // ──────────────────────────────────────────────
+
+  const _idb = (function () {
+    const DB_NAME    = 'hubos_cache';
+    const DB_VERSION = 1;
+
+    /** Open (or create) the database and the "cashflow" store. */
+    function _open() {
+      return new Promise(function (resolve, reject) {
+        if (!window.indexedDB) {
+          return reject(new Error('IndexedDB not available'));
+        }
+        var req = window.indexedDB.open(DB_NAME, DB_VERSION);
+        req.onupgradeneeded = function (e) {
+          var db = e.target.result;
+          if (!db.objectStoreNames.contains('cashflow')) {
+            db.createObjectStore('cashflow');
+          }
+          if (!db.objectStoreNames.contains('cashflowMeta')) {
+            db.createObjectStore('cashflowMeta');
+          }
+        };
+        req.onsuccess  = function (e) { resolve(e.target.result); };
+        req.onerror    = function (e) { reject(e.target.error); };
+      });
+    }
+
+    var _dbPromise = null;
+    function _getDB() {
+      if (!_dbPromise) _dbPromise = _open();
+      return _dbPromise;
+    }
+
+    /**
+     * Store a value under the given key (read-write transaction).
+     * Returns a promise that resolves when the write commits.
+     */
+    async function _set(storeName, key, value) {
+      try {
+        var db = await _getDB();
+        return new Promise(function (resolve, reject) {
+          var tx = db.transaction(storeName, 'readwrite');
+          tx.objectStore(storeName).put(value, key);
+          tx.oncomplete = function () { resolve(); };
+          tx.onerror    = function (e) { reject(e.target.error); };
+          tx.onabort    = function (e) { reject(e.target.error); };
+        });
+      } catch (_) {}
+    }
+
+    /**
+     * Retrieve a value by key (read-only).
+     * Returns the stored value or undefined.
+     */
+    async function get(storeName, key) {
+      try {
+        var db = await _getDB();
+        return new Promise(function (resolve, reject) {
+          var tx = db.transaction(storeName, 'readonly');
+          var req = tx.objectStore(storeName).get(key);
+          req.onsuccess = function () { resolve(req.result); };
+          tx.onerror    = function (e) { reject(e.target.error); };
+        });
+      } catch (_) { return undefined; }
+    }
+
+    /**
+     * Delete a key (read-write).
+     */
+    async function del(storeName, key) {
+      try {
+        var db = await _getDB();
+        return new Promise(function (resolve, reject) {
+          var tx = db.transaction(storeName, 'readwrite');
+          tx.objectStore(storeName).delete(key);
+          tx.oncomplete = function () { resolve(); };
+          tx.onerror    = function (e) { reject(e.target.error); };
+        });
+      } catch (_) {}
+    }
+
+    return {
+      /** Cache CashFlow transaction data to IndexedDB. */
+      cacheCFData:     function (data) { return _set('cashflow',     'cf_data', data);  },
+      /** Load CashFlow transaction data from IndexedDB cache. */
+      loadCFData:      function ()      { return get('cashflow',      'cf_data');        },
+      /** Cache CashFlow meta (offset + savings) to IndexedDB. */
+      cacheCFMeta:     function (meta)  { return _set('cashflowMeta','cf_meta', meta);  },
+      /** Load CashFlow meta from IndexedDB cache. */
+      loadCFMeta:      function ()      { return get('cashflowMeta',  'cf_meta');        },
+      /** Clear CashFlow cache (used when cloud write succeeds and we want a clean slate). */
+      clearCFCache:    function ()      {
+        return Promise.all([
+          del('cashflow', 'cf_data'),
+          del('cashflowMeta', 'cf_meta')
+        ]).catch(function () {});
+      }
+    };
+  })();
+
+  // ──────────────────────────────────────────────
   //  CashFlow data (subcollection-based, same pattern as Notes)
   // ──────────────────────────────────────────────
 
@@ -266,13 +371,23 @@ const HubDB = (function () {
   }
 
   /**
-   * Save CashFlow data (transactions + balances) to Firestore subcollection.
-   * Cloud-first — same architecture as Notes.
+   * ═══ DUAL-WRITE: IndexedDB first, THEN Firestore (cloud) ═══
+   *
+   * Save CashFlow data (transactions + balances).
+   * ALWAYS caches to IndexedDB first — this is the write-once,
+   * survive-everything failsafe. Then attempts Firestore.
+   *
    * @param {Object} data — { transactions: [], balanceSnapshots: [], startingBalance: 0 }
    */
   async function saveCashFlowData(data) {
-    await _ensureReady();
+    // ── STEP 1: IndexedDB cache ALWAYS (survives browser restore, tab crash, offline) ──
+    try { await _idb.cacheCFData(data); } catch (_) {}
 
+    // ── STEP 2: localStorage mirror (same legacy key for quick access) ──
+    try { localStorage.setItem(CF_LOCAL_KEY, JSON.stringify(data)); } catch (_) {}
+
+    // ── STEP 3: Firestore (cloud sync) ──
+    await _ensureReady();
     if (_isOnline()) {
       try {
         await Promise.race([
@@ -282,31 +397,32 @@ const HubDB = (function () {
               console.error('[HubDB] CashFlow Firestore write failed:', err);
               throw err;
             }),
-          _timeout(2500)
+          _timeout(3000)
         ]);
-        // Cloud write succeeded — also cache locally for offline resilience
-        try { localStorage.setItem(CF_LOCAL_KEY, JSON.stringify(data)); } catch (_) {}
+        // Cloud write validated — IndexedDB is now just a mirror; we're done
         return;
       } catch (err) {
-        console.error('[HubDB] CashFlow save failed:', err.message || err);
-        // Fallback: save to localStorage so data isn't lost
-        try { localStorage.setItem(CF_LOCAL_KEY, JSON.stringify(data)); } catch (_) {}
+        console.error('[HubDB] CashFlow cloud save failed — data is safe in IndexedDB:', err.message || err);
         return;
       }
     }
-
-    // Offline → localStorage only
-    try { localStorage.setItem(CF_LOCAL_KEY, JSON.stringify(data)); } catch (_) {}
   }
 
   /**
-   * Save CashFlow meta settings (netWorthOffset + savingsBalance).
-   * Stored in a separate doc to avoid heavy rewrites on offset changes.
+   * ═══ DUAL-WRITE for metadata (netWorthOffset + savingsBalance) ═══
+   * Same pattern: IndexedDB first, then Firestore.
+   *
    * @param {Object} meta — { netWorthOffset: number, savingsBalance: number }
    */
   async function saveCashFlowMeta(meta) {
-    await _ensureReady();
+    // ── STEP 1: IndexedDB cache ──
+    try { await _idb.cacheCFMeta(meta); } catch (_) {}
 
+    // ── STEP 2: localStorage mirror ──
+    try { localStorage.setItem(CF_LOCAL_OFFSET, JSON.stringify(meta)); } catch (_) {}
+
+    // ── STEP 3: Firestore ──
+    await _ensureReady();
     if (_isOnline()) {
       try {
         await Promise.race([
@@ -316,88 +432,134 @@ const HubDB = (function () {
               console.error('[HubDB] CashFlow Meta write failed:', err);
               throw err;
             }),
-          _timeout(2500)
+          _timeout(3000)
         ]);
-        try { localStorage.setItem(CF_LOCAL_OFFSET, JSON.stringify(meta)); } catch (_) {}
         return;
-      } catch (err) {
-        try { localStorage.setItem(CF_LOCAL_OFFSET, JSON.stringify(meta)); } catch (_) {}
-        return;
-      }
+      } catch (_) { /* IndexedDB already has it */ }
     }
-
-    try { localStorage.setItem(CF_LOCAL_OFFSET, JSON.stringify(meta)); } catch (_) {}
   }
 
   /**
-   * Load CashFlow data (transactions) — cloud first, then localStorage fallback.
-   * @returns {Object|null}
+   * ═══ SAFE LOAD for CashFlow data ═══
+   *
+   * Priority ladder:
+   *   1. Firestore (cloud) — the truth, if reachable
+   *   2. IndexedDB — durable local cache (survives tab restore)
+   *   3. localStorage — fast fallback for key data
+   *
+   * CRITICAL RULE: If Firestore fails AND IndexedDB has NO data
+   * (first-time login, new device), we return `{ _noCloudData: true }`
+   * instead of an empty payload — the consumer (cashflow.js) uses
+   * this sentinel to set isOfflineMode and skip all auto-save.
+   *
+   * @returns {Object|null} — The payload, null if nothing found, or
+   *                          { _noCloudData: true } if cloud unreachable
+   *                          and no local cache exists.
    */
   async function loadCashFlowData() {
+    // STEP 1: Fast offline path — skip auth wait
     if (navigator.onLine === false) {
       try {
-        var rawLocal = localStorage.getItem(CF_LOCAL_KEY);
-        if (rawLocal) return JSON.parse(rawLocal);
+        var idbOffline = await _idb.loadCFData();
+        if (idbOffline && Array.isArray(idbOffline.transactions)) return idbOffline;
       } catch (_) {}
+      // Fall through to localStorage
+      try {
+        var rawLocalOff = localStorage.getItem(CF_LOCAL_KEY);
+        if (rawLocalOff) return JSON.parse(rawLocalOff);
+      } catch (_) {}
+      // Nothing anywhere — still offline. Let caller decide.
       return null;
     }
 
     await _ensureReady();
 
+    // STEP 2: Firestore — the source of truth
     if (_isOnline()) {
       try {
         var doc = await Promise.race([
           _cfDataDocRef().get(),
-          _timeout(2500)
+          _timeout(3000)
         ]);
         if (doc && doc.exists) {
           var cloudData = doc.data().payload;
           if (cloudData && Array.isArray(cloudData.transactions)) {
-            // Merge any offline-local changes into the cloud
+            // ═══ CLOUD LOAD SUCCESS: cache locally + merge any offline queue ═══
+            try { await _idb.cacheCFData(cloudData); } catch (_) {}
+            try { localStorage.setItem(CF_LOCAL_KEY, JSON.stringify(cloudData)); } catch (_) {}
+
+            // Merge any offline transactions that accumulated in IndexedDB
             try {
-              var localRaw = localStorage.getItem(CF_LOCAL_KEY);
-              if (localRaw) {
-                var localData = JSON.parse(localRaw);
-                if (localData && Array.isArray(localData.transactions) && localData.transactions.length > 0) {
-                  // Simple merge: union by id
-                  var existingIds = {};
-                  cloudData.transactions.forEach(function (t) { existingIds[t.id] = true; });
-                  var merged = false;
-                  localData.transactions.forEach(function (t) {
-                    if (!existingIds[t.id]) { cloudData.transactions.push(t); merged = true; }
-                  });
-                  if (merged) {
-                    _cfDataDocRef().set({ payload: cloudData }, { merge: true }).catch(function () {});
-                  }
+              var localPayload = await _idb.loadCFData();
+              if (localPayload && Array.isArray(localPayload.transactions) && localPayload.transactions.length > 0) {
+                var existingIds = {};
+                cloudData.transactions.forEach(function (t) { existingIds[t.id] = true; });
+                var merged = false;
+                localPayload.transactions.forEach(function (t) {
+                  if (!existingIds[t.id]) { cloudData.transactions.push(t); merged = true; }
+                });
+                if (merged) {
+                  await _idb.cacheCFData(cloudData);
+                  _cfDataDocRef().set({ payload: cloudData }, { merge: true }).catch(function () {});
                 }
               }
-              try { localStorage.removeItem(CF_LOCAL_KEY); } catch (_) {}
             } catch (_) {}
+
             return cloudData;
           }
+          // Cloud doc exists but has no valid payload — return null, NOT a fresh default
           return null;
         }
+        // Cloud doc doesn't exist → first login. Return null, NOT an auto-created default.
         return null;
       } catch (err) {
-        console.warn('[HubDB] CashFlow Cloud load failed, trying localStorage:', err.message);
+        console.warn('[HubDB] CashFlow Cloud load failed:', err.message || err);
+        // ═══ FALL THROUGH to IndexedDB ═══
       }
     }
 
+    // STEP 3: IndexedDB fallback (durable, survives tab restore)
     try {
-      var raw = localStorage.getItem(CF_LOCAL_KEY);
-      if (raw) return JSON.parse(raw);
+      var idbData = await _idb.loadCFData();
+      if (idbData && Array.isArray(idbData.transactions) && idbData.transactions.length > 0) {
+        console.log('[HubDB] CashFlow — loaded from IndexedDB cache');
+        return idbData;
+      }
     } catch (_) {}
+
+    // STEP 4: localStorage fallback
+    try {
+      var rawLocal = localStorage.getItem(CF_LOCAL_KEY);
+      if (rawLocal) {
+        var parsed = JSON.parse(rawLocal);
+        if (parsed && Array.isArray(parsed.transactions) && parsed.transactions.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (_) {}
+
+    // NO DATA FOUND ANYWHERE — return null explicitly.
+    // This is the SAFE path: the caller must NOT auto-save empty data.
     return null;
   }
 
   /**
-   * Load CashFlow meta (netWorthOffset + savingsBalance).
+   * ═══ SAFE LOAD for CashFlow metadata ═══
+   *
+   * Load netWorthOffset + savingsBalance with the same tiered approach:
+   * Cloud → IndexedDB → localStorage → defaults.
+   *
    * @returns {Object} — { netWorthOffset: 0, savingsBalance: 0 }
    */
   async function loadCashFlowMeta() {
     var defaults = { netWorthOffset: 0, savingsBalance: 0 };
 
+    // STEP 1: Offline fast path — check IndexedDB first
     if (navigator.onLine === false) {
+      try {
+        var idbOffMeta = await _idb.loadCFMeta();
+        if (idbOffMeta && typeof idbOffMeta.netWorthOffset !== 'undefined') return idbOffMeta;
+      } catch (_) {}
       try {
         var rawL = localStorage.getItem(CF_LOCAL_OFFSET);
         if (rawL) return JSON.parse(rawL);
@@ -407,15 +569,24 @@ const HubDB = (function () {
 
     await _ensureReady();
 
+    // STEP 2: Firestore
     if (_isOnline()) {
       try {
         var doc = await Promise.race([
           _cfMetaDocRef().get(),
-          _timeout(2500)
+          _timeout(3000)
         ]);
         if (doc && doc.exists) {
           var meta = doc.data();
-          try { localStorage.setItem(CF_LOCAL_OFFSET, JSON.stringify(meta)); } catch (_) {}
+          // Cache to IndexedDB + localStorage
+          try {
+            var resolved = {
+              netWorthOffset: Number(meta.netWorthOffset) || 0,
+              savingsBalance: Number(meta.savingsBalance) || 0
+            };
+            await _idb.cacheCFMeta(resolved);
+            localStorage.setItem(CF_LOCAL_OFFSET, JSON.stringify(resolved));
+          } catch (_) {}
           return {
             netWorthOffset: Number(meta.netWorthOffset) || 0,
             savingsBalance: Number(meta.savingsBalance) || 0
@@ -423,10 +594,17 @@ const HubDB = (function () {
         }
         return defaults;
       } catch (err) {
-        console.warn('[HubDB] CashFlow Meta load failed:', err.message);
+        console.warn('[HubDB] CashFlow Meta load failed:', err.message || err);
       }
     }
 
+    // STEP 3: IndexedDB fallback
+    try {
+      var idbMeta = await _idb.loadCFMeta();
+      if (idbMeta && typeof idbMeta.netWorthOffset !== 'undefined') return idbMeta;
+    } catch (_) {}
+
+    // STEP 4: localStorage
     try {
       var raw = localStorage.getItem(CF_LOCAL_OFFSET);
       if (raw) return JSON.parse(raw);
@@ -1296,6 +1474,89 @@ const HubDB = (function () {
     return { ...DEFAULT_FLASHCARD_SETTINGS, schema: DEFAULT_FLASHCARD_SETTINGS.schema.map(function (s) { return { ...s }; }) };
   }
 
+  // ── Time Management ──
+
+  const TM_LOCAL_KEY = 'hub_tm_data';
+
+  function _tmDocRef() {
+    if (!_isOnline()) return null;
+    return _db.collection('users').doc(_user.uid).collection('timeman_store').doc('data');
+  }
+
+  /**
+   * Save Time Management data (blocks + custom tags).
+   * Firestore-first, localStorage fallback.
+   * @param {Object} data — { blocks: [], customTags: [] }
+   */
+  async function saveTimeManagementData(data) {
+    await _ensureReady();
+
+    if (_isOnline()) {
+      try {
+        await Promise.race([
+          _tmDocRef()
+            .set({ payload: data }, { merge: true })
+            .catch(function (err) {
+              console.error('[HubDB] TimeManagement write failed:', err);
+              throw err;
+            }),
+          _timeout(2500)
+        ]);
+        try { localStorage.setItem(TM_LOCAL_KEY, JSON.stringify(data)); } catch (_) {}
+        return;
+      } catch (err) {
+        console.error('[HubDB] TimeManagement save failed:', err.message || err);
+        try { localStorage.setItem(TM_LOCAL_KEY, JSON.stringify(data)); } catch (_) {}
+        return;
+      }
+    }
+
+    try { localStorage.setItem(TM_LOCAL_KEY, JSON.stringify(data)); } catch (_) {}
+  }
+
+  /**
+   * Load Time Management data.
+   * Cloud first, localStorage fallback.
+   * @returns {Object|null} — { blocks: [], customTags: [] }
+   */
+  async function loadTimeManagementData() {
+    if (navigator.onLine === false) {
+      try {
+        var rawLocal = localStorage.getItem(TM_LOCAL_KEY);
+        if (rawLocal) return JSON.parse(rawLocal);
+      } catch (_) {}
+      return null;
+    }
+
+    await _ensureReady();
+
+    if (_isOnline()) {
+      try {
+        var doc = await Promise.race([
+          _tmDocRef().get(),
+          _timeout(2500)
+        ]);
+        if (doc && doc.exists) {
+          var cloudData = doc.data().payload;
+          if (cloudData && Array.isArray(cloudData.blocks)) {
+            try { localStorage.setItem(TM_LOCAL_KEY, JSON.stringify(cloudData)); } catch (_) {}
+            return cloudData;
+          }
+          return null;
+        }
+        return null;
+      } catch (err) {
+        console.warn('[HubDB] TimeManagement load failed, trying localStorage:', err.message);
+      }
+    }
+
+    try {
+      var raw = localStorage.getItem(TM_LOCAL_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return null;
+  }
+
   // ── Expose public API ──
 
   return {
@@ -1315,6 +1576,8 @@ const HubDB = (function () {
     loadPomodoroData: loadPomodoroData,
     saveFlashcardSettings: saveFlashcardSettings,
     loadFlashcardSettings: loadFlashcardSettings,
+    saveTimeManagementData: saveTimeManagementData,
+    loadTimeManagementData: loadTimeManagementData,
     loginWithGoogle: loginWithGoogle,
     getAuthStatus: getAuthStatus,
     waitForReady: _ensureReady,

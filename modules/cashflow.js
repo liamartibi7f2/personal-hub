@@ -218,6 +218,8 @@ const cashflowModule = (function () {
   let _savingsBalance = 0;     // Cloud-synced manual override for savings/investments
   let _isDataLoaded  = false;
   let _sessionLoaded = false;  // Prevent re-fetch on tab switch
+  let _isOfflineMode = false;  // CRITICAL: true when cloud unreachable + no local cache.
+                               // Prevents auto-save of empty data over cloud truth.
   let _activeTab     = 'expense';  // 'expense' | 'income'
   let _currentMonth  = null;  // { year: 2026, month: 3 }
   let _overlay       = null;
@@ -244,55 +246,117 @@ const cashflowModule = (function () {
   //   STORAGE — Cloud-first via HubDB (no localStorage fallback)
   // ============================================================
 
-  /** Async load from HubDB (Firestore). Loads both data and meta in parallel.
-   *  Immediately calls updateDashboardTotals() after successful cloud load so
-   *  the 4 summary cards are populated before the rest of the UI renders. */
+  /** Async load from HubDB.
+   *
+   *  ═══ SAFE INITIALIZATION LOGIC ═══
+   *
+   *  1. Firestore first (source of truth).
+   *  2. If Firestore fails → IndexedDB (durable cache).
+   *  3. If IndexedDB also empty/fails → localStorage.
+   *  4. If EVERYTHING fails → set _isOfflineMode = true
+   *     and DO NOT auto-save. An empty _defaultData()
+   *     is held in memory for the UI, but it will NEVER
+   *     be persisted automatically — only when the user
+   *     explicitly adds a transaction or imports data.
+   *
+   *  Previously: load failed → _defaultData() → debounced
+   *  persist wrote empty transactions array to cloud,
+   *  wiping the user's data. This CANNOT happen anymore.
+   */
   async function _loadData() {
     if (_sessionLoaded && _data) return;
 
-    // ── 1. Load transaction data from cloud ──
+    // ── 1. Try loading from HubDB (tiered: Firestore → IndexedDB → localStorage) ──
+    var loaded = null;
+    var cloudFailed = false;
+
     try {
       if (typeof HubDB !== 'undefined' && typeof HubDB.loadCashFlowData === 'function') {
-        const cloudData = await HubDB.loadCashFlowData();
-        if (cloudData && Array.isArray(cloudData.transactions)) {
-          _data = cloudData;
-          _ensureDefault();
-          _isDataLoaded = true;
-          // ═══ Dashboard is now ready to render totals ═══
-          updateDashboardTotals();
-        }
-      }
-    } catch (_) { /* fall through */ }
+        loaded = await HubDB.loadCashFlowData();
 
-    // ── 2. Load meta offsets (netWorth & savings overrides) ──
+        // Detect if the load came from a fallback (not Firestore)
+        // loadCashFlowData returns null only when ALL tiers are empty.
+        // If it returns data, we don't know the source — that's fine,
+        // we just need to know if data exists.
+      }
+    } catch (e) {
+      cloudFailed = true;
+      console.warn('[CashFlow] HubDB.loadCashFlowData threw:', e.message);
+    }
+
+    // ── 2. Initialize state based on load result ──
+    if (loaded && Array.isArray(loaded.transactions)) {
+      // Data found (from cloud, IndexedDB, or localStorage)
+      _data = loaded;
+      _ensureDefault();
+      _isDataLoaded = true;
+      _isOfflineMode = false;
+      updateDashboardTotals();
+    } else {
+      // ═══ NO DATA FOUND ANYWHERE ═══
+      // This is either:
+      //   a) First-ever login (genuinely empty) — OR —
+      //   b) Cloud unreachable AND no local cache (the data-loss bug)
+      //
+      // We CANNOT distinguish these two cases without a cloud round-trip.
+      // The safe move: enter offline mode, show an empty ledger, and
+      // NEVER auto-save. Only an explicit user action (Add Transaction,
+      // Import) will break the seal and persist data.
+
+      _isOfflineMode = true;
+      _data = _defaultData();
+      _ensureDefault();
+      _isDataLoaded = true;
+      _sessionLoaded = false; // allow one retry next time the tab activates
+
+      console.warn('[CashFlow] ⚠️ ENTERED OFFLINE MODE — cloud unreachable, no local cache.');
+      console.warn('[CashFlow]    Auto-save is DISABLED until user performs a write action.');
+    }
+
+    // ── 3. Load meta offsets (netWorth & savings) ──
     try {
       if (typeof HubDB !== 'undefined' && typeof HubDB.loadCashFlowMeta === 'function') {
-        const meta = await HubDB.loadCashFlowMeta();
+        var meta = await HubDB.loadCashFlowMeta();
         if (meta) {
           _netWorthOffset = Number(meta.netWorthOffset) || 0;
           _savingsBalance = Number(meta.savingsBalance) || 0;
         }
       }
-    } catch (_) { /* keep defaults */ }
-
-    // ── 3. If data never loaded from cloud, start fresh ──
-    if (!_data) {
-      _data = _defaultData();
-      _ensureDefault();
-      _isDataLoaded = true;
-    }
+    } catch (_) {}
 
     _sessionLoaded = true;
 
-    // ═══ Final: re-render with meta values now set ═══
-    updateDashboardTotals();
+    // ═══ Final render ═══
+    if (loaded && Array.isArray(loaded.transactions)) {
+      updateDashboardTotals();
+    }
   }
 
-  /** Persist the FULL data payload AND meta to Firestore (no localStorage). */
+  /** ═══ SAFE PERSIST: Never auto-save when in offline mode ═══
+   *
+   *  If _isOfflineMode is true and the data is empty (0 transactions),
+   *  we REFUSE to persist — we can't distinguish "new user" from
+   *  "browser restored tab before network came back." Persisting
+   *  now would overwrite cloud data with an empty array.
+   *
+   *  The seal is broken when the user explicitly writes (add transaction
+   *  or import). At that point _isOfflineMode flips off and persists
+   *  are allowed.
+   */
   async function _persist() {
     if (!_isDataLoaded) return;
 
-    // Firestore only — HubDB.saveCashFlowData handles cloud write
+    // ═══ GUARD: Offline-mode empty data = DO NOT SAVE ═══
+    if (_isOfflineMode && _data && Array.isArray(_data.transactions) && _data.transactions.length === 0) {
+      console.warn('[CashFlow] BLOCKED auto-save — offline mode, no transactions. Cloud data is protected.');
+      return;
+    }
+
+    // Once the user has data, they've broken the seal — allow future saves
+    if (_isOfflineMode && _data && Array.isArray(_data.transactions) && _data.transactions.length > 0) {
+      _isOfflineMode = false;
+    }
+
     try {
       if (typeof HubDB !== 'undefined' && typeof HubDB.saveCashFlowData === 'function') {
         await HubDB.saveCashFlowData(_data);
@@ -300,7 +364,8 @@ const cashflowModule = (function () {
     } catch (_) {}
   }
 
-  /** Persist only the meta offsets (called from edit-btn handlers). */
+  /** Persist meta offsets (netWorthOffset + savingsBalance).
+   *  Meta writes are lightweight — no offline guard needed. */
   async function _persistMeta() {
     try {
       if (typeof HubDB !== 'undefined' && typeof HubDB.saveCashFlowMeta === 'function') {
@@ -1429,6 +1494,10 @@ const cashflowModule = (function () {
     };
 
     _data.transactions.push(tx);
+
+    // ── BREAK THE OFFLINE SEAL: user explicitly added data ──
+    if (_isOfflineMode) { _isOfflineMode = false; }
+
     _debouncedPersist();
     _closeModal();
     _renderAllViews();
@@ -1599,6 +1668,10 @@ const cashflowModule = (function () {
       // ═══ 4. STRICT OVERWRITE: replace entire state & persist ═══
       _data.transactions = importedTxs;
       _isDataLoaded = true;
+
+      // ── BREAK THE OFFLINE SEAL: user explicitly imported data ──
+      if (_isOfflineMode) { _isOfflineMode = false; }
+
       await _persist();
 
       // ═══ 5. FULL UI REFRESH ═══

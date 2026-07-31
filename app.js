@@ -397,6 +397,9 @@ function _initBackupModal() {
   // --- Auto-save toggle ---
   _initAutoSaveToggle();
 
+  // --- Timer duration setting ---
+  _initTimerDurationSetting();
+
   // --- System Language toggle ---
   _initSystemLanguageToggle();
 
@@ -732,6 +735,34 @@ function _initAutoSaveToggle() {
     }
     try {
       localStorage.setItem('hub_notes_autosave', checked ? 'true' : 'false');
+    } catch (_) {}
+  });
+}
+
+/**
+ * Initialize the timer duration setting in the backup modal.
+ * Persists to localStorage key: hub_os_notes_timer_duration
+ */
+function _initTimerDurationSetting() {
+  const input = document.getElementById('timer-duration-input');
+  if (!input) return;
+
+  // Restore saved value
+  try {
+    const saved = localStorage.getItem('hub_os_notes_timer_duration');
+    if (saved !== null) {
+      var v = parseInt(saved, 10);
+      if (v >= 5 && v <= 120) input.value = v;
+    }
+  } catch (_) {}
+
+  input.addEventListener('change', function () {
+    var val = parseInt(input.value, 10);
+    if (isNaN(val) || val < 5) val = 5;
+    if (val > 120) val = 120;
+    input.value = val;
+    try {
+      localStorage.setItem('hub_os_notes_timer_duration', val.toString());
     } catch (_) {}
   });
 }
