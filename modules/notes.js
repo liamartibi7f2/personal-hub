@@ -706,6 +706,10 @@ const notesModule = (function () {
     _renderNoteList();
     _loadNoteIntoEditor();
 
+    // Bind drag-and-drop reordering
+    _bindDragAndDrop(_el.folderList, 'folders');
+    _bindDragAndDrop(_el.sidebarNotes, 'notes');
+
     // Apply persisted spellcheck preference
     var spellPref = _loadSpellcheckPreference();
     _applySpellcheck(spellPref);
@@ -725,6 +729,121 @@ const notesModule = (function () {
   }
 
   // ============================================================
+  //   DRAG & DROP — Reorder folders + notes
+  // ============================================================
+
+  /** @type {HTMLElement|null} Element currently being dragged */
+  var _dragEl = null;
+
+  /**
+   * Read the current DOM order for a given list type and sync it
+   * back to the underlying _data arrays, then persist.
+   * @param {'folders'|'notes'} type
+   */
+  function _saveNewOrder(type) {
+    if (type === 'folders') {
+      var items = _el.folderList ? _el.folderList.querySelectorAll('.hub-notes-folder-item') : [];
+      var newOrder = [];
+      [].forEach.call(items, function (item) {
+        var id = item.getAttribute('data-id');
+        var folder = _data.folders.find(function (f) { return f.id === id; });
+        if (folder) newOrder.push(folder);
+      });
+      if (newOrder.length === _data.folders.length) {
+        _data.folders = newOrder;
+      }
+    } else if (type === 'notes') {
+      if (!_activeFolder) return;
+      var items = _el.sidebarNotes ? _el.sidebarNotes.querySelectorAll('.hub-notes-note-item') : [];
+      var newOrder = [];
+      [].forEach.call(items, function (item) {
+        var id = item.getAttribute('data-id');
+        var note = _activeFolder.notes.find(function (n) { return n && n.id === id; });
+        if (note) newOrder.push(note);
+      });
+      if (newOrder.length === _activeFolder.notes.length) {
+        _activeFolder.notes = newOrder;
+      }
+    }
+    _persist();
+  }
+
+  /**
+   * Compute whether the mouse is in the top or bottom half of the
+   * hovered element to decide insert-before or insert-after.
+   */
+  function _getDropPosition(e, el) {
+    var rect = el.getBoundingClientRect();
+    var midY = rect.top + rect.height / 2;
+    return e.clientY < midY ? 'above' : 'below';
+  }
+
+  /** Remove all drop-target indicator classes from a container. */
+  function _clearDropTargets(container) {
+    if (!container) return;
+    var children = container.children;
+    [].forEach.call(children, function (child) {
+      child.classList.remove('drop-target-above', 'drop-target-below');
+    });
+  }
+
+  /** Bind DnD delegation on a list container for either 'folders' or 'notes'. */
+  function _bindDragAndDrop(container, type) {
+    if (!container) return;
+
+    container.addEventListener('dragstart', function (e) {
+      var item = e.target.closest('.hub-notes-folder-item, .hub-notes-note-item');
+      if (!item) { e.preventDefault(); return; }
+      _dragEl = item;
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', item.getAttribute('data-id'));
+    });
+
+    container.addEventListener('dragend', function (e) {
+      var item = e.target.closest('.hub-notes-folder-item, .hub-notes-note-item');
+      if (item) item.classList.remove('dragging');
+      _clearDropTargets(container);
+      _dragEl = null;
+    });
+
+    container.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      var item = e.target.closest('.hub-notes-folder-item, .hub-notes-note-item');
+      if (!item || item === _dragEl) {
+        _clearDropTargets(container);
+        return;
+      }
+      _clearDropTargets(container);
+      var pos = _getDropPosition(e, item);
+      item.classList.add('drop-target-' + pos);
+    });
+
+    container.addEventListener('dragleave', function (e) {
+      var item = e.target.closest('.hub-notes-folder-item, .hub-notes-note-item');
+      if (item) item.classList.remove('drop-target-above', 'drop-target-below');
+    });
+
+    container.addEventListener('drop', function (e) {
+      e.preventDefault();
+      var item = e.target.closest('.hub-notes-folder-item, .hub-notes-note-item');
+      if (!item || !_dragEl || item === _dragEl) return;
+      _clearDropTargets(container);
+      _dragEl.classList.remove('dragging');
+
+      var pos = _getDropPosition(e, item);
+      if (pos === 'above') {
+        container.insertBefore(_dragEl, item);
+      } else {
+        container.insertBefore(_dragEl, item.nextSibling);
+      }
+      _saveNewOrder(type);
+      _dragEl = null;
+    });
+  }
+
+  // ============================================================
   //   RENDER — Sidebar
   // ============================================================
 
@@ -737,6 +856,8 @@ const notesModule = (function () {
       var btn = document.createElement('button');
       btn.className = 'hub-notes-folder-item' + activeClass;
       btn.dataset.folderId = f.id;
+      btn.draggable = true;
+      btn.dataset.id = f.id;
       btn.innerHTML = '' +
         '<svg class="hub-notes-folder-icon" width="14" height="14" viewBox="0 0 20 20" fill="none">' +
           '<path d="M2 5a2 2 0 012-2h4l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V5z" fill="currentColor" opacity="0.3"/>' +
@@ -764,6 +885,8 @@ const notesModule = (function () {
       var btn = document.createElement('button');
       btn.className = 'hub-notes-note-item' + activeClass;
       btn.dataset.noteId = n.id;
+      btn.draggable = true;
+      btn.dataset.id = n.id;
       btn.innerHTML = '' +
         '<span class="hub-notes-note-title">' + _escHtml(n.title || 'Untitled') + '</span>' +
         '<span class="hub-notes-note-date">' + _formatDate(n.updatedAt) + '</span>';
