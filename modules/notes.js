@@ -798,18 +798,42 @@ const notesModule = (function () {
       item.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', item.getAttribute('data-id'));
+      // Attach drag type and context so folder drop targets can intercept notes
+      e.dataTransfer.setData('drag-type', type === 'folders' ? 'folder' : 'note');
+      if (type === 'notes') {
+        e.dataTransfer.setData('note-id', item.dataset.noteId || '');
+        e.dataTransfer.setData('source-folder-id', _activeFolder ? _activeFolder.id : '');
+      } else {
+        e.dataTransfer.setData('folder-id', item.dataset.folderId || '');
+      }
     });
 
     container.addEventListener('dragend', function (e) {
       var item = e.target.closest('.hub-notes-folder-item, .hub-notes-note-item');
       if (item) item.classList.remove('dragging');
       _clearDropTargets(container);
+      _clearFolderDropHighlight(container);
       _dragEl = null;
     });
 
     container.addEventListener('dragover', function (e) {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
+
+      // ---- Folder list: highlight entire folder when a note hovers it ----
+      if (type === 'folders') {
+        var dragType = e.dataTransfer.getData('drag-type');
+        if (dragType === 'note') {
+          _clearDropTargets(container);
+          _clearFolderDropHighlight(container);
+          var folderItem = e.target.closest('.hub-notes-folder-item');
+          if (folderItem) {
+            folderItem.classList.add('drop-target-folder');
+          }
+          return;
+        }
+      }
+
       var item = e.target.closest('.hub-notes-folder-item, .hub-notes-note-item');
       if (!item || item === _dragEl) {
         _clearDropTargets(container);
@@ -822,11 +846,49 @@ const notesModule = (function () {
 
     container.addEventListener('dragleave', function (e) {
       var item = e.target.closest('.hub-notes-folder-item, .hub-notes-note-item');
-      if (item) item.classList.remove('drop-target-above', 'drop-target-below');
+      if (item) {
+        item.classList.remove('drop-target-above', 'drop-target-below');
+        item.classList.remove('drop-target-folder');
+      }
     });
 
     container.addEventListener('drop', function (e) {
       e.preventDefault();
+
+      // ---- Cross-container: Note dropped onto a folder in the folder list ----
+      if (type === 'folders') {
+        var dragType = e.dataTransfer.getData('drag-type');
+        if (dragType === 'note') {
+          var folderItem = e.target.closest('.hub-notes-folder-item');
+          if (!folderItem) return;
+          folderItem.classList.remove('drop-target-folder');
+
+          var noteId = e.dataTransfer.getData('note-id');
+          var sourceFolderId = e.dataTransfer.getData('source-folder-id');
+          var targetFolderId = folderItem.dataset.folderId;
+          if (!noteId || !targetFolderId || sourceFolderId === targetFolderId) return;
+
+          var sourceFolder = _data.folders.find(function (f) { return f.id === sourceFolderId; });
+          var targetFolder = _data.folders.find(function (f) { return f.id === targetFolderId; });
+          if (!sourceFolder || !targetFolder) return;
+
+          var noteIndex = sourceFolder.notes.findIndex(function (n) { return n && n.id === noteId; });
+          if (noteIndex === -1) return;
+
+          var movedNote = sourceFolder.notes.splice(noteIndex, 1)[0];
+          targetFolder.notes.push(movedNote);
+
+          _clearDropTargets(container);
+          _clearFolderDropHighlight(container);
+          if (_dragEl) { _dragEl.classList.remove('dragging'); _dragEl = null; }
+
+          _persist();
+          _renderFolders();
+          _renderNoteList();
+          return;
+        }
+      }
+
       var item = e.target.closest('.hub-notes-folder-item, .hub-notes-note-item');
       if (!item || !_dragEl || item === _dragEl) return;
       _clearDropTargets(container);
@@ -840,6 +902,15 @@ const notesModule = (function () {
       }
       _saveNewOrder(type);
       _dragEl = null;
+    });
+  }
+
+  /** Remove drop-target-folder highlight from all children in a container. */
+  function _clearFolderDropHighlight(container) {
+    if (!container) return;
+    var children = container.children;
+    [].forEach.call(children, function (child) {
+      child.classList.remove('drop-target-folder');
     });
   }
 

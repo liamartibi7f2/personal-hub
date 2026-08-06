@@ -2527,6 +2527,29 @@ ul, ol { list-style: none; }
 }
 
 /* ==========================================================
+   GENERIC MODULE LOADING SPINNER
+   ========================================================== */
+.hub-module-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 300px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.hub-module-loading-dot {
+  display: inline-block;
+  color: var(--primary-color, #00f0ff);
+  animation: hub-loading-pulse 1.2s ease-in-out infinite;
+}
+@keyframes hub-loading-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+/* ==========================================================
    FLASHCARD — VOICE SPEED SLIDER (TTS Settings)
    ========================================================== */
 
@@ -8933,6 +8956,15 @@ mark.cyber-hl-pink:hover {
   bottom: -1px;
   background: var(--primary-color, #00f0ff);
   box-shadow: 0 0 8px 2px var(--primary-color, #00f0ff);
+}
+
+/* Full-folder highlight when dragging a note over a folder */
+.hub-notes-folder-item.drop-target-folder {
+  background: rgba(0, 240, 255, 0.12);
+  outline: 2px dashed rgba(0, 240, 255, 0.5);
+  outline-offset: -2px;
+  border-radius: 8px;
+  transition: outline 0.15s ease, background 0.15s ease;
 }
 
 /* ── EDITOR TOOLBAR & CYBERPUNK SAVE BUTTON ── */

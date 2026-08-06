@@ -477,6 +477,46 @@ const dashboardModule = (function () {
       }
     },
 
+    /* ──────────────────────────────────────────────
+       _startDeadlineTimer() — Real-time countdown & Gamification
+       ────────────────────────────────────────────── */
+    _startDeadlineTimer() {
+      if (_vizDeadlineInterval) clearInterval(_vizDeadlineInterval);
+      
+      _vizDeadlineInterval = setInterval(() => {
+        const badges = document.querySelectorAll('.hub-viz-deadline-badge:not(.hub-viz-deadline-badge--done)');
+        if (badges.length === 0) return; // Không còn gì để đếm
+
+        badges.forEach(badge => {
+          let dl = badge.getAttribute('data-deadline');
+          let idx = badge.getAttribute('data-idx');
+          if (dl) {
+            let text = this._formatCountdown(dl, false);
+            badge.textContent = text;
+            
+            // GAMIFICATION: Khi hết giờ!
+            if (text === 'Time!' && _vizHabitData[idx] && !_vizHabitData[idx].completed) {
+              _vizHabitData[idx].completed = true;
+              this._saveHabitData();
+              
+              // Kiểm tra xem có đang bật chế độ Tối ưu hiệu năng (Optimize theme) không
+              let currentTheme = localStorage.getItem('hub_theme') || 'dark';
+              if (currentTheme !== 'optimize') {
+                // Kích hoạt hiệu ứng (Pulse/Glow)
+                let board = document.getElementById('hub-viz-board');
+                if (board) {
+                  board.classList.add('hub-viz-success-pulse'); // Bạn nhớ viết class này trong CSS nhé
+                  setTimeout(() => board.classList.remove('hub-viz-success-pulse'), 3000);
+                }
+              }
+              // Render lại bảng để hiển thị trạng thái "Done"
+              this._renderVizBoard();
+            }
+          }
+        });
+      }, 1000);
+    },
+	
     /* ──────────────────────────────────────────────────
        _formatCountdown(deadline, completed) → display str
        ────────────────────────────────────────────────── */
@@ -550,117 +590,141 @@ const dashboardModule = (function () {
     },
 
     /* ──────────────────────────────────────────────
-       _bindVizSettingsHelper() — Additional Phase 2 bindings
-	       ────────────────────────────────────────────── */
-	    _bindVizSettingsHelper() {
-	      var self = this;
-	      var toolbar = document.getElementById('hub-viz-rich-toolbar');
-	      if (toolbar) {
-	        toolbar.addEventListener('click', function (e) {
-	          var btn = e.target.closest('.hub-viz-rich-btn'); if (!btn) return;
-	          e.preventDefault();
-	          var cmd = btn.getAttribute('data-cmd');
-	          if (cmd === 'indent') { document.execCommand('indent', false, null); } else if (cmd === 'outdent') { document.execCommand('outdent', false, null); } else { document.execCommand(cmd, false, null); }
-	          var ed = document.getElementById('hub-viz-desc-editor'); if (ed) ed.focus();
-	        });
-	      }
-	      var cp = document.getElementById('hub-viz-rich-color');
-	      if (cp) { cp.addEventListener('input', function () { document.execCommand('foreColor', false, this.value); var ed = document.getElementById('hub-viz-desc-editor'); if (ed) ed.focus(); }); }
-	      var sel = document.getElementById('hub-viz-habit-select');
-	      if (sel) { sel.addEventListener('change', function () { self._selectHabitForDesc(this.value); }); }
-	      var sb = document.getElementById('hub-viz-save-btn');
-	      if (sb) { sb.addEventListener('click', function () { self._saveHabitData(); self._renderVizBoard(); self._bindVizEvents(); }); }
-	    },
+       _bindVizSettingsHelper() — UI bindings for Modal
+       ────────────────────────────────────────────── */
+    _bindVizSettingsHelper() {
+      var self = this;
+      
+      // 1. Rich Text Toolbar
+      var toolbar = document.getElementById('hub-viz-rich-toolbar');
+      if (toolbar) {
+        toolbar.addEventListener('click', function (e) {
+          var btn = e.target.closest('.hub-viz-rich-btn'); if (!btn) return;
+          e.preventDefault();
+          var cmd = btn.getAttribute('data-cmd');
+          if (cmd === 'indent') { document.execCommand('indent', false, null); } 
+          else if (cmd === 'outdent') { document.execCommand('outdent', false, null); } 
+          else { document.execCommand(cmd, false, null); }
+          var ed = document.getElementById('hub-viz-desc-editor'); if (ed) ed.focus();
+        });
+      }
+      var cp = document.getElementById('hub-viz-rich-color');
+      if (cp) { cp.addEventListener('input', function () { document.execCommand('foreColor', false, this.value); var ed = document.getElementById('hub-viz-desc-editor'); if (ed) ed.focus(); }); }
+      
+      var sel = document.getElementById('hub-viz-habit-select');
+      if (sel) { sel.addEventListener('change', function () { self._selectHabitForDesc(this.value); }); }
 
-	    /* ──────────────────────────────────────────────
-	       _hydrateVizSettings() — Populate habit list + selector
-	       ────────────────────────────────────────────── */
-	    _hydrateVizSettings() {
-	      var list = document.getElementById('hub-viz-habit-list');
-	      if (!list) return;
-	      var html = '';
-	      for (var i = 0; i < _vizHabitData.length; i++) {
-	        html += '<div class="hub-viz-habit-row" data-index="' + i + '">'
-	          + '<input class="hub-viz-habit-input" type="text" value="' + _vizHabitData[i].title.replace(/"/g, '&quot;') + '" placeholder="New habit item">'
-	          + '<button class="hub-viz-habit-row-btn hub-viz-habit-row-btn--delete" title="Remove">&times;</button>'
-	          + '</div>';
-	      }
-	      html += '<div class="hub-viz-habit-row">'
-	        + '<input class="hub-viz-habit-input hub-viz-habit-input--new" type="text" placeholder="New habit item">'
-	        + '<button class="hub-viz-habit-row-btn hub-viz-habit-row-btn--add" title="Add">+</button>'
-	        + '</div>';
-	      list.innerHTML = html;
+      // 2. Save Custom Typography Styles & Deadlines
+      var sb = document.getElementById('hub-viz-save-btn');
+      if (sb) { 
+        sb.addEventListener('click', function () { 
+          // Save Typography
+          _vizStyleConfig.fontFamily = document.getElementById('hub-viz-font-select')?.value || 'inherit';
+          _vizStyleConfig.outlineColor = document.getElementById('hub-viz-outline-color')?.value || '#000000';
+          _vizStyleConfig.shadowColor = document.getElementById('hub-viz-shadow-color')?.value || '#000000';
+          _vizStyleConfig.glowColor = document.getElementById('hub-viz-glow-color')?.value || '#000000';
+          _vizStyleConfig.reflection = document.getElementById('hub-viz-reflection-toggle')?.checked || false;
+          try { localStorage.setItem('hub_viz_style', JSON.stringify(_vizStyleConfig)); } catch(_) {}
 
-	      var self = this;
+          // Save Deadlines & Rewards
+          document.querySelectorAll('.hub-viz-dl-input').forEach(inp => {
+            let idx = inp.getAttribute('data-idx');
+            if(_vizHabitData[idx]) _vizHabitData[idx].deadline = inp.value;
+          });
+          document.querySelectorAll('.hub-viz-rw-input').forEach(inp => {
+            let idx = inp.getAttribute('data-idx');
+            if(_vizHabitData[idx]) _vizHabitData[idx].reward = inp.value;
+          });
 
-	      // Add-button handler (click or Enter)
-	      (function bindAddRow() {
-	        var addBtn = list.querySelector('.hub-viz-habit-row-btn--add');
-	        var addInput = list.querySelector('.hub-viz-habit-input--new');
-	        if (!addInput) return;
-	        var addNew = function () {
-	          var val = addInput.value.trim();
-	          if (!val || _vizHabitData.length >= 5) return;
-	          _vizHabitData.push({ title: val, description: '' });
-	          self._saveHabitData();
-	          self._hydrateVizSettings();
-	          self._bindVizSettingsHelper();
-	          self._renderVizBoard();
-	          self._bindVizEvents();
-	        };
-	        addInput.addEventListener('keydown', function (e) {
-	          if (e.key === 'Enter') { e.preventDefault(); addNew(); }
-	        });
-	        if (addBtn) { addBtn.addEventListener('click', addNew); }
-	      })();
+          self._saveHabitData(); 
+          self._renderVizBoard(); 
+          self._startDeadlineTimer(); // Khởi động lại đếm ngược
+        }); 
+      }
+    },
 
-	      // Delete buttons
-	      list.querySelectorAll('.hub-viz-habit-row-btn--delete').forEach(function (btn) {
-	        btn.addEventListener('click', function () {
-	          var row = btn.closest('.hub-viz-habit-row');
-	          var idx = row ? parseInt(row.getAttribute('data-index')) : -1;
-	          if (idx >= 0 && idx < _vizHabitData.length) {
-	            _vizHabitData.splice(idx, 1);
-	            if (_selectedHabitForDesc === idx) _selectedHabitForDesc = null;
-	            self._saveHabitData();
-	            self._hydrateVizSettings();
-	            self._bindVizSettingsHelper();
-	            self._renderVizBoard();
-	            self._bindVizEvents();
-	          }
-	        });
-	      });
+    /* ──────────────────────────────────────────────
+       _hydrateVizSettings() — Populate habit list, selector, style & deadlines
+       ────────────────────────────────────────────── */
+    _hydrateVizSettings() {
+      var self = this;
+      
+      // 1. Populate Habit Title List
+      var list = document.getElementById('hub-viz-habit-list');
+      if (list) {
+        var html = '';
+        for (var i = 0; i < _vizHabitData.length; i++) {
+          html += '<div class="hub-viz-habit-row" data-index="' + i + '">'
+            + '<input class="hub-viz-habit-input" type="text" value="' + _vizHabitData[i].title.replace(/"/g, '&quot;') + '" placeholder="New habit item">'
+            + '<button class="hub-viz-habit-row-btn hub-viz-habit-row-btn--delete" title="Remove">&times;</button>'
+            + '</div>';
+        }
+        html += '<div class="hub-viz-habit-row">'
+          + '<input class="hub-viz-habit-input hub-viz-habit-input--new" type="text" placeholder="New habit item">'
+          + '<button class="hub-viz-habit-row-btn hub-viz-habit-row-btn--add" title="Add">+</button>'
+          + '</div>';
+        list.innerHTML = html;
 
-	      // Input change
-	      list.querySelectorAll('.hub-viz-habit-input').forEach(function (inp, i) {
-	        inp.addEventListener('blur', function () {
-	          if (i >= _vizHabitData.length) return;
-	          var v = this.value.trim();
-	          if (v) { _vizHabitData[i].title = v; self._saveHabitData(); }
-	          self._hydrateVizSettings();
-	          self._bindVizSettingsHelper();
-	          self._renderVizBoard();
-	          self._bindVizEvents();
-	        });
-	      });
+        // Add Button Logic
+        var addInput = list.querySelector('.hub-viz-habit-input--new');
+        var addBtn = list.querySelector('.hub-viz-habit-row-btn--add');
+        var addNew = function () {
+          var val = addInput.value.trim();
+          if (!val || _vizHabitData.length >= 5) return;
+          _vizHabitData.push({ title: val, description: '', deadline: '', reward: '', completed: false });
+          self._saveHabitData(); self._hydrateVizSettings(); self._renderVizBoard();
+        };
+        if(addInput) addInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addNew(); } });
+        if(addBtn) addBtn.addEventListener('click', addNew);
 
-	      // Populate selector
-	      var sel = document.getElementById('hub-viz-habit-select');
-	      if (sel) {
-	        sel.innerHTML = '<option value="">-- Select a habit --</option>';
-	        for (var j = 0; j < _vizHabitData.length; j++) {
-	          sel.innerHTML += '<option value="' + _vizHabitData[j].title.replace(/"/g, '&quot;') + '"' + (_selectedHabitForDesc === j ? ' selected' : '') + '>' + _vizHabitData[j].title + '</option>';
-	        }
-	      }
+        // Delete & Edit Logic
+        list.querySelectorAll('.hub-viz-habit-row-btn--delete').forEach(btn => {
+          btn.addEventListener('click', function () {
+            var idx = parseInt(btn.closest('.hub-viz-habit-row').getAttribute('data-index'));
+            if (idx >= 0) { _vizHabitData.splice(idx, 1); if(_selectedHabitForDesc === idx) _selectedHabitForDesc = null; self._saveHabitData(); self._hydrateVizSettings(); self._renderVizBoard(); }
+          });
+        });
+        list.querySelectorAll('.hub-viz-habit-input:not(.hub-viz-habit-input--new)').forEach((inp, i) => {
+          inp.addEventListener('blur', function () {
+            if (this.value.trim()) { _vizHabitData[i].title = this.value.trim(); self._saveHabitData(); self._hydrateVizSettings(); self._renderVizBoard(); }
+          });
+        });
+      }
 
-	      // Restore description for selected habit
-	      var editor = document.getElementById('hub-viz-desc-editor');
-	      if (editor && _selectedHabitForDesc !== null && _selectedHabitForDesc < _vizHabitData.length) {
-	        editor.innerHTML = _vizHabitData[_selectedHabitForDesc].description || '';
-	      } else if (editor) {
-	        editor.innerHTML = '';
-	      }
-	    },
+      // 2. Populate Typography Styles
+      var savedStyle = safeParse('hub_viz_style', null);
+      if (savedStyle) _vizStyleConfig = savedStyle;
+      
+      const setVal = (id, val, isCheck) => { let el = document.getElementById(id); if (el) { isCheck ? el.checked = val : el.value = val; } };
+      setVal('hub-viz-font-select', _vizStyleConfig.fontFamily || 'inherit', false);
+      setVal('hub-viz-outline-color', _vizStyleConfig.outlineColor || '#000000', false);
+      setVal('hub-viz-shadow-color', _vizStyleConfig.shadowColor || '#000000', false);
+      setVal('hub-viz-glow-color', _vizStyleConfig.glowColor || '#000000', false);
+      setVal('hub-viz-reflection-toggle', _vizStyleConfig.reflection || false, true);
+
+      // 3. Populate Deadline & Reward Inputs
+      var deadlineList = document.getElementById('hub-viz-deadline-list');
+      if (deadlineList) {
+        var dlHtml = '';
+        _vizHabitData.forEach((h, i) => {
+          dlHtml += '<div class="hub-viz-dl-row" style="margin-bottom:8px;">'
+            + '<div style="font-size:0.75rem; color:var(--text-color); margin-bottom:4px;">' + h.title + '</div>'
+            + '<input type="datetime-local" class="hub-viz-dl-input" data-idx="' + i + '" value="' + (h.deadline || '') + '" style="background:var(--bg-color); color:var(--text-color); border:1px solid var(--border-color); padding:4px; border-radius:4px; margin-right:4px;">'
+            + '<input type="text" class="hub-viz-rw-input" data-idx="' + i + '" value="' + (h.reward || '') + '" placeholder="Reward (e.g., Watch a movie)" style="background:var(--bg-color); color:var(--text-color); border:1px solid var(--border-color); padding:4px; border-radius:4px;">'
+            + '</div>';
+        });
+        deadlineList.innerHTML = dlHtml;
+      }
+
+      // 4. Update Selectors for Description
+      var sel = document.getElementById('hub-viz-habit-select');
+      var editor = document.getElementById('hub-viz-desc-editor');
+      if (sel) {
+        sel.innerHTML = '<option value="">-- Select a habit --</option>';
+        _vizHabitData.forEach((h, j) => { sel.innerHTML += '<option value="' + h.title.replace(/"/g, '&quot;') + '"' + (_selectedHabitForDesc === j ? ' selected' : '') + '>' + h.title + '</option>'; });
+      }
+      if (editor) editor.innerHTML = (_selectedHabitForDesc !== null && _vizHabitData[_selectedHabitForDesc]) ? (_vizHabitData[_selectedHabitForDesc].description || '') : '';
+    },
 
 	    /* ──────────────────────────────────────────────
 	       _selectHabitForDesc(val) — Switch editor context

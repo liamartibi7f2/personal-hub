@@ -70,6 +70,9 @@ const flashcardModule = (function () {
   let _voiceSpeed     = 0.9;
   let _isFlashcardSettingsLoaded = false;
 
+  // --- Session cache guard: prevents re-fetch + re-render race on tab switches ---
+  let _sessionInitialized = false;
+
   // --- UI State ---
   let _activeVault    = 'en';        // Which vault panel is visible: 'en' | 'zh'
   let _systemLanguage = 'en';        // Global UI language: 'en' | 'vi'
@@ -358,19 +361,37 @@ const flashcardModule = (function () {
   async function render(container) {
     _container = container;
 
+    // ⚡ FAST PATH: If already initialized in this session, skip async
+    //    fetches entirely. Just re-render the UI from memory. This prevents
+    //    the race condition where rapid tab switches trigger multiple
+    //    _loadData() calls that overwrite each other and cause decks to
+    //    momentarily show an empty state before the async query returns.
+    if (_sessionInitialized && _decks) {
+      _isFlashcardSettingsLoaded = true;
+      _currentIndex = 0;
+      _mode = 'library';
+      _activeDeckId = null;
+      _studyQueue = [];
+      _sessionStats = null;
+      _cardFlipped = false;
+      _isProcessing = false;
+      _studyLocked = false;
+      applyLanguage(_systemLanguage);
+      _renderApp();
+      return;
+    }
+
     // 1) Show loading state immediately
     container.innerHTML =
-      '<div class="tab-content flashcard-app" style="display:flex;align-items:center;justify-content:center;min-height:300px">' +
-        '<div class="hub-notes-loading" style="font-family:var(--font-mono);color:var(--text-muted);font-size:0.85rem">' +
-          '<span class="hub-notes-loading-dot">●</span> Loading flashcards...' +
+      '<div class="tab-content flashcard-app">' +
+        '<div class="hub-module-loading">' +
+          '<span class="hub-module-loading-dot">●</span> Loading flashcards...' +
         '</div>' +
       '</div>';
 
-    console.log("[Flashcard] render() — checking auth & loading decks");
+    console.log("[Flashcard] render() — first load, fetching data...");
 
-    // 2) Wait for Firebase auth to settle before attempting to fetch
-    //    This prevents a race condition where the decks firestore query
-    //    fires before onAuthStateChanged has populated the user.
+    // 2) Wait for Firebase Auth to settle before attempting to fetch
     if (typeof HubDB !== 'undefined' && HubDB.waitForReady) {
       console.log("[Flashcard] Waiting for HubDB auth ready...");
       await HubDB.waitForReady();
@@ -378,15 +399,15 @@ const flashcardModule = (function () {
       console.log("[Flashcard] Auth ready — loggedIn:", authStatus.loggedIn, "uid:", authStatus.uid);
     }
 
-    // 3) Await data (async — may hit Firestore)
-    await _loadDecksAsync();
+    // 3) Await all data resolution (decks + settings) in one shot
+    await _loadData();
 
-    // 4) Load AI settings from Firebase (async — uses load guard, loads systemLanguage)
-    await _loadAISettingsAsync();
+    // 4) UNLOCK: Data is loaded, mark session as initialized
+    _isFlashcardSettingsLoaded = true;
+    _sessionInitialized = true;
 
-    // 5) Apply the loaded system language to the entire UI
+    // 5) Apply language and prepare UI state
     applyLanguage(_systemLanguage);
-
     _currentIndex = 0;
     _mode = 'library';
     _activeDeckId = null;
@@ -473,6 +494,16 @@ const flashcardModule = (function () {
   /* ==========================================================
      LOAD / SAVE DECKS (with automatic migration)
      ========================================================== */
+
+  /**
+   * Unified data loader — resolves ALL async data (decks + AI settings)
+   * before the render function proceeds past the loading spinner.
+   * Called ONLY on first render per session (guarded by _sessionInitialized).
+   */
+  async function _loadData() {
+    await _loadDecksAsync();
+    await _loadAISettingsAsync();
+  }
 
   /**
    * Load decks from HubDB (Firestore when online + authenticated,
