@@ -586,7 +586,7 @@ const pomodoroModule = (function () {
       var heightPct = Math.max(4, (d.minutes / maxValue) * 100);
       return '' +
         '<div class="chart-bar-wrapper">' +
-          '<span class="chart-bar-value">' + displayValStr + '</span>' +
+          '<span class="chart-bar-value' + (d.minutes > 0 ? ' has-value' : '') + '">' + displayValStr + '</span>' +
           '<div class="chart-bar' + (d.isCurrent ? ' chart-bar--today' : '') + '"' +
                ' style="height:' + heightPct + '%"' +
                ' title="' + d.label + ': ' + displayValStr + '">' +
@@ -898,7 +898,7 @@ const pomodoroModule = (function () {
               const heightPct = Math.max(4, (d.minutes / maxValue) * 100);
               return `
                 <div class="chart-bar-wrapper">
-                  <span class="chart-bar-value">${displayValStr}</span>
+                  <span class="chart-bar-value${d.minutes > 0 ? ' has-value' : ''}">${displayValStr}</span>
                   <div class="chart-bar${d.isCurrent ? ' chart-bar--today' : ''}"
                        style="height:${heightPct}%"
                        title="${d.label}: ${displayValStr}">

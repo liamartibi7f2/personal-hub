@@ -3726,12 +3726,30 @@ ul, ol { list-style: none; }
   width: 100%;
   max-width: 32px;
   min-height: 4px;
-  border-radius: 4px 4px 0 0;
-  background: linear-gradient(to top, var(--accent-primary), var(--accent-secondary));
-  box-shadow: 0 0 8px rgba(0, 240, 255, 0.2);
-  transition: height 0.5s var(--ease-out-expo),
-              box-shadow 0.5s var(--ease-out-expo);
+  border-radius: 4px 4px 2px 2px;
+  background: linear-gradient(to top, var(--accent-primary), rgba(0, 240, 255, 0.3));
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  transition: height 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.25s var(--ease-out-expo),
+              filter 0.25s var(--ease-out-expo);
   position: relative;
+  cursor: pointer;
+}
+
+.chart-bar:hover {
+  filter: brightness(1.35);
+  box-shadow: 0 0 18px rgba(0, 240, 255, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* Show the value label above bar on hover (if hidden by default) */
+.chart-bar-wrapper .chart-bar-value {
+  opacity: 0.45;
+  transition: opacity 0.2s ease;
+}
+
+.chart-bar-wrapper:hover .chart-bar-value,
+.chart-bar-wrapper .chart-bar-value.has-value {
+  opacity: 1;
 }
 
 /* Today's bar gets an extra glow */
@@ -3740,6 +3758,11 @@ ul, ol { list-style: none; }
   background: linear-gradient(to top, #00f0ff, #b347ea, #00f0ff);
   background-size: 100% 200%;
   animation: todayBarShimmer 3s ease-in-out infinite;
+}
+
+.chart-bar--today:hover {
+  box-shadow: 0 0 24px rgba(0, 240, 255, 0.6), 0 0 44px rgba(179, 71, 234, 0.35);
+  filter: brightness(1.45);
 }
 
 @keyframes todayBarShimmer {
@@ -8684,8 +8707,9 @@ mark.cyber-hl-pink:hover {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  border-radius: var(--radius-lg);
+  height: 100%;
   overflow: hidden;
+  border-radius: var(--radius-lg);
 }
 
 .hub-notes-sidebar-header {
@@ -8794,8 +8818,32 @@ mark.cyber-hl-pink:hover {
 
 /* ── Folder List ── */
 .hub-notes-folder-list {
+  flex: 0 1 45%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: var(--space-sm);
+  padding-right: 2px;
   border-bottom: 1px solid var(--glass-border);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+.hub-notes-folder-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.hub-notes-folder-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.hub-notes-folder-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.hub-notes-folder-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .hub-notes-folder-item {
@@ -8842,12 +8890,34 @@ mark.cyber-hl-pink:hover {
 
 /* ── Note List ── */
 .hub-notes-note-list {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: var(--space-sm);
+  padding-right: 2px;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+.hub-notes-note-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.hub-notes-note-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.hub-notes-note-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.hub-notes-note-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .hub-notes-note-item {
