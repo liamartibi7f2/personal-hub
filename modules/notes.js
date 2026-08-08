@@ -257,6 +257,7 @@ const notesModule = (function () {
   let _sessionInitialized = false;
   let _autoSaveEnabled = true;
   let _timer = null; // Focus Writing Timer
+  let isToolbarFixed = false; // Track if toolbar is in fixed/static mode
   let _pageUnloading = false; // Prevents ghost saves during page reload
 
   // ── Vault / History listener management ──
@@ -496,6 +497,25 @@ const notesModule = (function () {
   function _renderUI() {
     _container.innerHTML =
       '<div class="tab-content hub-notes-app">' +
+        '<style>' +
+          '.fixed-toolbar-mode .hub-notes-float-toolbar {' +
+            'position: static !important;' +
+            'display: flex !important;' +
+            'width: 100%;' +
+            'overflow-x: auto;' +
+            'flex-wrap: wrap;' +
+            'gap: 0.5rem;' +
+            'padding: 0.5rem;' +
+            'background: rgba(0, 0, 0, 0.3);' +
+            'backdrop-filter: blur(10px);' +
+            'border-radius: 8px;' +
+            'border: 1px solid rgba(0, 255, 255, 0.2);' +
+            'box-shadow: 0 0 15px rgba(0, 255, 255, 0.1);' +
+          '}' +
+          '.fixed-toolbar-mode .hub-notes-float-toolbar > * {' +
+            'flex: 0 0 auto;' +
+          '}' +
+        '</style>' +
         '<aside class="hub-notes-sidebar glass" id="hn-sidebar">' +
           '<div class="hub-notes-sidebar-header">' +
             '<span class="hub-notes-sidebar-title">Notes</span>' +
@@ -562,6 +582,10 @@ const notesModule = (function () {
                 '<line x1="3" y1="3" x2="17" y2="17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>' +
               '</svg>' +
               '<span class="hub-notes-save-label">Spell</span>' +
+            '</button>' +
+            '<button class="hub-notes-toolbar-toggle" title="Toggle Fixed Toolbar">Toolbar</button>' +
+            '<button class="hub-notes-highlight-btn" title="Highlight Text">' +
+              '<input type="color" class="hub-notes-highlight-color" value="#ffff00" style="display:none;">' +
             '</button>' +
             '<span class="hub-notes-save-feedback" id="hn-save-feedback"></span>' +
             '<div class="hub-notes-timer" id="hn-timer">' +
@@ -1680,9 +1704,41 @@ const notesModule = (function () {
         if (_el.editor) _el.editor.focus();
       });
     }
+
+    // ── Toolbar toggle button: switch between floating and fixed modes ──
+    var toolbarToggleBtn = _el.toolbar.querySelector('.hub-notes-toolbar-toggle');
+    if (toolbarToggleBtn) {
+      toolbarToggleBtn.addEventListener('click', function () {
+        isToolbarFixed = !isToolbarFixed;
+        // Toggle class on editor pane to switch toolbar positioning
+        if (_el.editorPane) {
+          _el.editorPane.classList.toggle('fixed-toolbar-mode', isToolbarFixed);
+        }
+        // Update button appearance
+        toolbarToggleBtn.classList.toggle('active', isToolbarFixed);
+      });
+    }
+
+    // ── Highlight button: open color picker and apply background color ──
+    var highlightBtn = _el.toolbar.querySelector('.hub-notes-highlight-btn');
+    var highlightColorInput = _el.toolbar.querySelector('.hub-notes-highlight-color');
+    if (highlightBtn && highlightColorInput) {
+      highlightBtn.addEventListener('click', function (e) {
+        e.stopPropagation(); // Prevent toolbar from closing
+        highlightColorInput.click();
+      });
+
+      highlightColorInput.addEventListener('change', function () {
+        var color = highlightColorInput.value;
+        document.execCommand('hiliteColor', false, color);
+      });
+    }
   }
 
   function _updateToolbarPosition() {
+    // Return early if toolbar is in fixed mode
+    if (isToolbarFixed) return;
+
     var sel = window.getSelection();
     var text = sel ? sel.toString().trim() : '';
     if (text.length === 0 || !sel || !sel.rangeCount || !_el.editor || !_el.toolbar) {
@@ -1732,6 +1788,9 @@ const notesModule = (function () {
   }
 
   function _hideToolbar() {
+    // Return early if toolbar is in fixed mode
+    if (isToolbarFixed) return;
+
     var tb = _el.toolbar;
     if (tb) {
       tb.style.display = 'none';
