@@ -15366,3 +15366,26 @@ body.theme-optimized .hub-cf-breakdown-bar-fill--income { background: var(--succ
     justify-content: center;
   }
 }
+/* ==========================================================
+   CHẾ ĐỘ GHIM TOOLBAR (PIN MODE) - NOTES MODULE
+   ========================================================== */
+.hub-notes-editor-pane.fixed-toolbar-mode .hub-notes-float-toolbar {
+    position: static !important; 
+    order: -1 !important; /* Xếp lên trên cùng */
+    transform: none !important;
+    width: 100% !important;
+    display: flex !important;
+    justify-content: flex-start; /* Căn trái cho thẳng hàng nút Save */
+    border-radius: var(--radius-md);
+    margin: 0 0 var(--space-sm) 0; /* Khoảng cách với hàng nút Save */
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    padding: 8px 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.hub-notes-editor-pane.fixed-toolbar-mode .hub-notes-editor-area {
+    padding-top: var(--space-lg) !important; 
+}

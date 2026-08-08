@@ -497,25 +497,6 @@ const notesModule = (function () {
   function _renderUI() {
     _container.innerHTML =
       '<div class="tab-content hub-notes-app">' +
-        '<style>' +
-          '.fixed-toolbar-mode .hub-notes-float-toolbar {' +
-            'position: static !important;' +
-            'display: flex !important;' +
-            'width: 100%;' +
-            'overflow-x: auto;' +
-            'flex-wrap: wrap;' +
-            'gap: 0.5rem;' +
-            'padding: 0.5rem;' +
-            'background: rgba(0, 0, 0, 0.3);' +
-            'backdrop-filter: blur(10px);' +
-            'border-radius: 8px;' +
-            'border: 1px solid rgba(0, 255, 255, 0.2);' +
-            'box-shadow: 0 0 15px rgba(0, 255, 255, 0.1);' +
-          '}' +
-          '.fixed-toolbar-mode .hub-notes-float-toolbar > * {' +
-            'flex: 0 0 auto;' +
-          '}' +
-        '</style>' +
         '<aside class="hub-notes-sidebar glass" id="hn-sidebar">' +
           '<div class="hub-notes-sidebar-header">' +
             '<span class="hub-notes-sidebar-title">Notes</span>' +
@@ -583,9 +564,11 @@ const notesModule = (function () {
               '</svg>' +
               '<span class="hub-notes-save-label">Spell</span>' +
             '</button>' +
-            '<button class="hub-notes-toolbar-toggle" title="Toggle Fixed Toolbar">Toolbar</button>' +
-            '<button class="hub-notes-highlight-btn" title="Highlight Text">' +
-              '<input type="color" class="hub-notes-highlight-color" value="#ffff00" style="display:none;">' +
+            '<button class="hub-notes-spellcheck-btn" id="hn-btn-pin" title="Toolbar" aria-label="Pin toolbar">' +
+              '<svg class="hub-notes-spellcheck-btn-svg" width="14" height="14" viewBox="0 0 24 24" fill="none">' +
+                '<path d="M12 17v5m-4.5-5h9M9 2h6v5l1 2v4H8V9l1-2V2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
+              '</svg>' +
+              '<span class="hub-notes-save-label">Pin</span>' +
             '</button>' +
             '<span class="hub-notes-save-feedback" id="hn-save-feedback"></span>' +
             '<div class="hub-notes-timer" id="hn-timer">' +
@@ -668,6 +651,14 @@ const notesModule = (function () {
           '<span class="hub-notes-tb-sep"></span>' +
           '<input type="color" id="hn-color-picker" class="hub-notes-color-input" value="#00f0ff" style="position:absolute;width:0;height:0;opacity:0;pointer-events:none">' +
           '<button class="hub-notes-tb-btn hub-notes-tb-highlight" id="hn-color-btn" title="Text Color" aria-label="Text color picker">A</button>' +
+                '<span class="hub-notes-tb-sep"></span>' +
+          '<input type="color" id="hn-highlight-picker" class="hub-notes-color-input" value="#fff000" style="position:absolute;width:0;height:0;opacity:0;pointer-events:none">' +
+          '<button class="hub-notes-tb-btn" id="hn-highlight-btn" title="Highlight (Bôi màu nền)" aria-label="Highlight text">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none">' +
+              '<path d="M15.5 3.5l5 5L7 22H2v-5L15.5 3.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
+              '<line x1="2" y1="22" x2="22" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
+            '</svg>' +
+          '</button>' +
         '</div>' +
       '</div>';
 
@@ -710,6 +701,11 @@ const notesModule = (function () {
     _el.timerCircle    = _qs('hn-timer-circle');
     _el.timerPlayBtn   = _qs('hn-timer-play');
     _el.timerResetBtn  = _qs('hn-timer-reset');
+	
+	// Bế Toolbar vào đúng bên trong khung Editor để ghim chuẩn xác
+    if (_el.editorPane && _el.toolbar) {
+        _el.editorPane.insertBefore(_el.toolbar, _el.editorPane.firstChild);
+    }
 
     // ── Focus Writing Timer ──
     _timer = new NotesTimer(_el.timerDisplay, _el.timerCircle, _el.timerPlayBtn, _el.timerResetBtn);
@@ -1705,35 +1701,55 @@ const notesModule = (function () {
       });
     }
 
-    // ── Toolbar toggle button: switch between floating and fixed modes ──
-    var toolbarToggleBtn = _el.toolbar.querySelector('.hub-notes-toolbar-toggle');
-    if (toolbarToggleBtn) {
-      toolbarToggleBtn.addEventListener('click', function () {
+    // ── Nút Pin (Ghim Toolbar) ──
+    // Trong HTML hiện tại của bạn, nút Pin có id là "hn-btn-pin"
+    var pinBtn = document.getElementById('hn-btn-pin');
+    if (pinBtn) {
+      pinBtn.addEventListener('click', function () {
         isToolbarFixed = !isToolbarFixed;
-        // Toggle class on editor pane to switch toolbar positioning
         if (_el.editorPane) {
           _el.editorPane.classList.toggle('fixed-toolbar-mode', isToolbarFixed);
         }
-        // Update button appearance
-        toolbarToggleBtn.classList.toggle('active', isToolbarFixed);
+        // Tái sử dụng class active của nút Spell để tạo hiệu ứng phát sáng khi bật
+        pinBtn.classList.toggle('hub-notes-spellcheck-btn--active', isToolbarFixed);
+        
+        if (isToolbarFixed && _el.toolbar) {
+          _el.toolbar.style.position = 'static'; // Ghi đè thành static luôn ở JS
+          _el.toolbar.style.left = 'auto';       // Xóa tọa độ lơ lửng cũ
+          _el.toolbar.style.top = 'auto';        // Xóa tọa độ lơ lửng cũ
+          _el.toolbar.style.display = 'flex';
+          _el.toolbar.classList.add('hub-notes-toolbar--visible');
+        } else if (_el.toolbar) {
+          _hideToolbar();
+        }
       });
     }
 
-    // ── Highlight button: open color picker and apply background color ──
-    var highlightBtn = _el.toolbar.querySelector('.hub-notes-highlight-btn');
-    var highlightColorInput = _el.toolbar.querySelector('.hub-notes-highlight-color');
-    if (highlightBtn && highlightColorInput) {
-      highlightBtn.addEventListener('click', function (e) {
-        e.stopPropagation(); // Prevent toolbar from closing
-        highlightColorInput.click();
+    // ── Nút Bút Dạ Quang (Highlight) ──
+    var hlBtn = document.getElementById('hn-highlight-btn');
+    var hlPicker = document.getElementById('hn-highlight-picker');
+
+    if (hlBtn && hlPicker) {
+      hlBtn.addEventListener('mousedown', function(e) { e.preventDefault(); }); // Bắt buộc để không mất bôi đen chữ
+      hlBtn.addEventListener('click', function () {
+        var sel = window.getSelection();
+        if (sel && sel.rangeCount > 0 && sel.toString().trim().length > 0) {
+          savedRange = sel.getRangeAt(0).cloneRange(); // Tái sử dụng biến savedRange ở trên
+        }
+        hlPicker.click();
       });
 
-      highlightColorInput.addEventListener('change', function () {
-        var color = highlightColorInput.value;
-        document.execCommand('hiliteColor', false, color);
+hlPicker.addEventListener('input', function () {
+        if (savedRange) {
+          var sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(savedRange);
+        }
+        document.execCommand('hiliteColor', false, hlPicker.value);
+        if (_el.editor) _el.editor.focus();
       });
     }
-  }
+  } // <--- THÊM ĐÚNG 1 DẤU NGOẶC NÀY VÀO ĐÂY ĐỂ ĐÓNG HÀM LẠI!
 
   function _updateToolbarPosition() {
     // Return early if toolbar is in fixed mode
@@ -1786,6 +1802,7 @@ const notesModule = (function () {
     _el.toolbar.style.left = left + 'px';
     _el.toolbar.classList.add('hub-notes-toolbar--visible');
   }
+  
 
   function _hideToolbar() {
     // Return early if toolbar is in fixed mode
