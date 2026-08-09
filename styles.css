@@ -10368,6 +10368,65 @@ mark.cyber-hl-pink:hover {
   flex-shrink: 0;
 }
 
+/* ── Custom Font Size Tool (floating toolbar) ── */
+.hub-notes-tb-size {
+  position: relative;
+  font-weight: 700;
+  color: var(--accent-primary);
+}
+.hub-notes-tb-size:hover {
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.45);
+}
+
+.hub-notes-size-input {
+  display: none;                       /* hidden by default; toggled to block on left-click */
+  width: 56px;
+  height: 30px;
+  margin: 0 2px;
+  padding: 0 8px;
+  align-self: center;
+  flex-shrink: 0;
+
+  /* Cyberpunk glassmorphism */
+  background: rgba(10, 20, 35, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  border-radius: var(--radius-sm);
+  color: var(--accent-primary, #00f0ff);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: center;
+  letter-spacing: 0.5px;
+  box-shadow:
+    0 0 0 1px rgba(0, 240, 255, 0.08) inset,
+    0 2px 8px rgba(0, 240, 255, 0.15);
+
+  transition: border-color var(--duration-fast) var(--ease-out-expo),
+              box-shadow var(--duration-fast) var(--ease-out-expo);
+  outline: none;
+  -moz-appearance: textfield;
+}
+/* Hide native number spinners so it stays compact + cyberpunk */
+.hub-notes-size-input::-webkit-outer-spin-button,
+.hub-notes-size-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.hub-notes-size-input.hub-notes-size-input--open,
+.hub-notes-size-input:focus {
+  display: block;
+  border-color: var(--accent-primary, #00f0ff);
+  box-shadow:
+    0 0 0 1px rgba(0, 240, 255, 0.25) inset,
+    0 0 12px rgba(0, 240, 255, 0.5);
+}
+.hub-notes-size-input::placeholder {
+  color: rgba(0, 240, 255, 0.4);
+  font-weight: 400;
+}
+
 /* ── Bullet Lists inside editor ── */
 #hn-editor ul {
   padding-left: 20px;

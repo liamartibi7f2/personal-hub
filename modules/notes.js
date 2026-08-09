@@ -775,6 +775,15 @@ const notesModule = (function () {
               '</div>' +
               '<div class="hub-notes-float-toolbar" id="hn-float-toolbar" style="display:none">' +
           '<button class="hub-notes-tb-btn" data-cmd="bold" title="Bold" aria-label="Bold"><b>B</b></button>' +
+          // Custom Font Size Tool: Left-click opens input, Right-click instantly applies saved size
+          '<button class="hub-notes-tb-btn hub-notes-tb-size" id="hn-size-btn" title="Font Size (Click: set · Right-Click: apply saved)" aria-label="Custom Font Size">' +
+            '<svg width="14" height="14" viewBox="0 0 16 16" fill="none">' +
+              '<text x="2" y="12.5" font-family="monospace" font-size="10" font-weight="bold" fill="currentColor">T</text>' +
+              '<path d="M9.5 9v4.5m-2-2.5h4M10.5 5.5l1.5 1.5 1.5-1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.7"/>' +
+            '</svg>' +
+          '</button>' +
+          '<input type="number" id="hn-size-input" class="hub-notes-size-input" min="8" max="96" step="1" placeholder="px" aria-label="Custom font size in pixels" />' +
+          '<span class="hub-notes-tb-sep"></span>' +
           '<button class="hub-notes-tb-btn" data-cmd="italic" title="Italic" aria-label="Italic"><i>I</i></button>' +
           '<button class="hub-notes-tb-btn" data-cmd="underline" title="Underline" aria-label="Underline"><u>U</u></button>' +
           '<span class="hub-notes-tb-sep"></span>' +
@@ -2001,6 +2010,138 @@ hlPicker.addEventListener('input', function () {
         document.execCommand('hiliteColor', false, hlPicker.value);
         if (_el.editor) _el.editor.focus();
       });
+    }
+
+    // ──────────────────────────────────────────────────────────
+    //   CUSTOM FONT SIZE TOOL
+    //   Left-click  → toggle a small px input (Enter to apply)
+    //   Right-click → instantly apply the previously saved size
+    // ──────────────────────────────────────────────────────────
+    var _customFontSize = '18';         // persisted across renders via localStorage
+    var _savedSizeRange = null;         // text-selection checkpoint for the apply path
+
+    try {
+      var stored = localStorage.getItem('hub_os_notes_custom_font_size');
+      if (stored && /^\d{1,3}$/.test(stored)) _customFontSize = stored;
+    } catch (_) { /* localStorage may be blocked — keep default */ }
+
+    var sizeBtn   = _el.toolbar.querySelector('#hn-size-btn');
+    var sizeInput = _el.toolbar.querySelector('#hn-size-input');
+
+    function applyCustomSize(size) {
+      // Validate + clamp to a sane range (8–96px)
+      var n = parseInt(size, 10);
+      if (!n || isNaN(n)) return;
+      if (n < 8)  n = 8;
+      if (n > 96) n = 96;
+
+      _customFontSize = String(n);
+      try { localStorage.setItem('hub_os_notes_custom_font_size', _customFontSize); } catch (_) {}
+
+      // Restore the original text selection so execCommand operates on the right range
+      if (_savedSizeRange && _el.editor) {
+        var selCheck = window.getSelection();
+        if (selCheck) {
+          selCheck.removeAllRanges();
+          selCheck.addRange(_savedSizeRange);
+        }
+      }
+
+      // Native browser hack: apply <font size="7"> (largest preset),
+      // then swap those tags for <span> with our exact px value.
+      document.execCommand('fontSize', false, '7');
+
+      if (_el.editor) {
+        var fonts = _el.editor.querySelectorAll('font[size="7"]');
+        [].forEach.call(fonts, function (fontEl) {
+          var span = document.createElement('span');
+          span.style.fontSize = _customFontSize + 'px';
+          span.style.lineHeight = '1.5';
+          // Preserve face/color attributes if present
+          if (fontEl.face)  span.style.fontFamily  = fontEl.face;
+          if (fontEl.color) span.style.color       = fontEl.color;
+          while (fontEl.firstChild) span.appendChild(fontEl.firstChild);
+          if (fontEl.parentNode) fontEl.parentNode.replaceChild(span, fontEl);
+        });
+      }
+
+      if (_el.editor) _el.editor.focus();
+      _savedSizeRange = null;
+      _scheduleSave();
+    }
+
+    if (sizeBtn && sizeInput) {
+      // Keep selection checkpoint fresh BEFORE any focus-stealing mousedown
+      sizeBtn.addEventListener('mousedown', function (e) {
+        e.preventDefault();              // critical: keeps text selection alive
+        e.stopPropagation();             // ← bypass the generic toolbar execCommand dispatch
+        var sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+          _savedSizeRange = sel.getRangeAt(0).cloneRange();
+        }
+      });
+
+      // LEFT CLICK → toggle the input field
+      sizeBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var isOpen = sizeInput.style.display === 'block' || sizeInput.classList.contains('hub-notes-size-input--open');
+        if (isOpen) {
+          sizeInput.style.display = 'none';
+          sizeInput.classList.remove('hub-notes-size-input--open');
+          if (_el.editor) _el.editor.focus();
+        } else {
+          sizeInput.style.display = 'block';
+          sizeInput.classList.add('hub-notes-size-input--open');
+          sizeInput.value = _customFontSize;
+          sizeInput.placeholder = _customFontSize + 'px';
+          setTimeout(function () { sizeInput.focus(); sizeInput.select(); }, 10);
+        }
+      });
+
+      // RIGHT CLICK → instantly apply saved size (no input UI)
+      sizeBtn.addEventListener('contextmenu', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        // Refresh selection in case the user just right-clicked without a prior left-click
+        var sel = window.getSelection();
+        if (sel && sel.rangeCount > 0 && sel.toString().trim().length > 0) {
+          _savedSizeRange = sel.getRangeAt(0).cloneRange();
+        }
+        applyCustomSize(_customFontSize);
+        // Flash a tiny visual confirmation on the button
+        sizeBtn.classList.add('hub-notes-tb-btn--active');
+        setTimeout(function () { sizeBtn.classList.remove('hub-notes-tb-btn--active'); }, 220);
+      });
+
+      // ENTER inside the input → commit + apply
+      sizeInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          e.stopPropagation();
+          var v = sizeInput.value.trim() || _customFontSize;
+          applyCustomSize(v);
+          sizeInput.style.display = 'none';
+          sizeInput.classList.remove('hub-notes-size-input--open');
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          sizeInput.style.display = 'none';
+          sizeInput.classList.remove('hub-notes-size-input--open');
+          if (_el.editor) _el.editor.focus();
+        }
+      });
+
+      // Blur → close input (with grace period so Enter's focus-restore doesn't close it early)
+      sizeInput.addEventListener('blur', function () {
+        setTimeout(function () {
+          if (document.activeElement !== sizeInput) {
+            sizeInput.style.display = 'none';
+            sizeInput.classList.remove('hub-notes-size-input--open');
+          }
+        }, 120);
+      });
+
+      // Prevent the input itself from re-triggering the generic toolbar mousedown
+      sizeInput.addEventListener('mousedown', function (e) { e.stopPropagation(); });
     }
   } // <--- THÊM ĐÚNG 1 DẤU NGOẶC NÀY VÀO ĐÂY ĐỂ ĐÓNG HÀM LẠI!
 
