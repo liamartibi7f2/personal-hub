@@ -80,22 +80,32 @@ async function uploadToImgBB(file) {
         throw new Error('Upload Cloud thất bại');
     }
 }
-// ── Focus Writing Timer (SVG Circle + Persistent State) ──
+// ── Focus Writing Timer (SVG Circle + Persistent State + Beep-Beep Alarm) ──
 function NotesTimer(displayEl, progressCircle, playBtn, resetBtn) {
   var self = this;
 
-  self.displayEl       = displayEl;       // Text node inside SVG (e.g. <span>)
-  self.progressCircle  = progressCircle;  // SVG <circle> for dashoffset animation
-  self.playBtn         = playBtn;
-  self.resetBtn        = resetBtn;
+  self.displayEl        = displayEl;       // Text node inside SVG (e.g. <span>)
+  self.progressCircle   = progressCircle;  // SVG <circle> for dashoffset animation
+  self.playBtn          = playBtn;
+  self.resetBtn         = resetBtn;
 
   self.remainingSeconds = 0;
   self.totalDuration    = 0;              // total secs for this session
   self.intervalId       = null;
   self.isRunning        = false;
+  self.isRinging        = false;          // alarm-active flag
+  self.alarmInterval    = null;           // setInterval handle for the beep loop
+  self._audioCtx        = null;           // lazy-created AudioContext (resumed on user gesture)
+  self.allowBackground  = false;          // when true, do NOT auto-pause on tab switch
   self._visChangeBound  = null;
 
   // ── Config ──
+  var ALARM_COLOR    = '#ff4466';         // cyberpunk red used while ringing
+  var BEEP_INTERVAL  = 1200;              // ms between double-beeps
+  var BEEP_FREQ      = 880;               // Hz — classic digital alarm tone
+  var BEEP_BURST_MS  = 120;               // duration of each "beep" burst
+  var BEEP_GAP_MS    = 120;               // silence between the two bursts in a pair
+
   function _readDuration() {
     try {
       var v = parseInt(localStorage.getItem('hub_os_notes_timer_duration'), 10);
@@ -109,9 +119,60 @@ function NotesTimer(displayEl, progressCircle, playBtn, resetBtn) {
     return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
   }
 
+  // ── Lazy AudioContext (Safari/iOS requires creation inside a user gesture) ──
+  function _getAudioCtx() {
+    if (self._audioCtx) {
+      try {
+        if (self._audioCtx.state === 'suspended') self._audioCtx.resume();
+      } catch (_) { /* ignore */ }
+      return self._audioCtx;
+    }
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return null;
+      self._audioCtx = new Ctx();
+      return self._audioCtx;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ── Synthesize "beep beep" — two short square-wave bursts at 880Hz ──
+  function _playBeep() {
+    var ctx = _getAudioCtx();
+    if (!ctx) return;          // no Web Audio support → silent no-op
+    if (ctx.state === 'suspended') ctx.resume();
+
+    var now = ctx.currentTime;
+    var dur = BEEP_BURST_MS / 1000;
+
+    for (var i = 0; i < 2; i++) {
+      var startOffset = i * (BEEP_BURST_MS + BEEP_GAP_MS) / 1000;
+
+      var osc  = ctx.createOscillator();
+      var gain = ctx.createGain();
+
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(BEEP_FREQ, now + startOffset);
+
+      // Envelope: quick attack so the square wave doesn't click,
+      // exponential release to silence at the end of each burst.
+      gain.gain.setValueAtTime(0.0001, now + startOffset);
+      gain.gain.exponentialRampToValueAtTime(0.25, now + startOffset + 0.01);
+      gain.gain.setValueAtTime(0.25, now + startOffset + dur - 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + startOffset + dur);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now + startOffset);
+      osc.stop(now + startOffset + dur + 0.02);
+    }
+  }
+
   // ── SVG Circle Animation ──
-  var CIRCLE_RADIUS = 36;
-  var CIRCUMFERENCE = 2 * Math.PI * CIRCLE_RADIUS; // ~226.19
+  var CIRCLE_RADIUS  = 36;
+  var CIRCUMFERENCE  = 2 * Math.PI * CIRCLE_RADIUS; // ~226.19
 
   function _updateCircle(ratio) {
     if (!self.progressCircle) return;
@@ -138,6 +199,7 @@ function NotesTimer(displayEl, progressCircle, playBtn, resetBtn) {
       self.pause();
       if (self.displayEl) self.displayEl.textContent = '00:00';
       _updateCircle(0); // empty ring
+      self.startAlarm(); // fire the looped beep-beep alarm
       return;
     }
     self.remainingSeconds--;
@@ -145,30 +207,76 @@ function NotesTimer(displayEl, progressCircle, playBtn, resetBtn) {
     _saveState();
   }
 
+  // ── Alarm ──
+  self.startAlarm = function () {
+    if (self.isRinging) return;             // already ringing → no-op
+    self.isRinging = true;
+
+    // Immediate first beep, then loop every 1.2s
+    _playBeep();
+    self.alarmInterval = setInterval(_playBeep, BEEP_INTERVAL);
+
+    // Visual alert — flip display + ring stroke to red
+    if (self.displayEl)      self.displayEl.style.color = ALARM_COLOR;
+    if (self.progressCircle) self.progressCircle.style.stroke = ALARM_COLOR;
+
+    _saveState();
+  };
+
+  self.stopAlarm = function () {
+    if (!self.isRinging && !self.alarmInterval) return; // already silent
+    if (self.alarmInterval) {
+      clearInterval(self.alarmInterval);
+      self.alarmInterval = null;
+    }
+    self.isRinging = false;
+
+    // Clear the inline red styles so the display returns to its CSS color
+    if (self.displayEl)      self.displayEl.style.color = '';
+    if (self.progressCircle) self.progressCircle.style.stroke = '';
+
+    _saveState();
+  };
+
   // ── Actions ──
   self.reset = function () {
+    self.stopAlarm();                       // never let the alarm outlive reset
     self.pause();
-    self.totalDuration = _readDuration() * 60;
+    self.totalDuration    = _readDuration() * 60;
     self.remainingSeconds = self.totalDuration;
     _updateDisplay();
     _saveState();
   };
 
   self.start = function () {
+    // ▶ BUTTON ACTS AS "STOP ALARM" WHILE RINGING ──
+    // The Play button doubles as the alarm-stop control. When the alarm
+    // is going off, pressing ▶ silences the looped beeps AND resets
+    // the timer back to a full session. The user then presses ▶ again
+    // to start the next countdown.
+    if (self.isRinging) {
+      self.stopAlarm();
+      self.totalDuration    = _readDuration() * 60;
+      self.remainingSeconds = self.totalDuration;
+      _updateDisplay();
+      _saveState();
+      return;                                // ← do NOT start the countdown
+    }
+
     if (self.isRunning) return;
     if (self.remainingSeconds <= 0) {
-      self.totalDuration = _readDuration() * 60;
+      self.totalDuration    = _readDuration() * 60;
       self.remainingSeconds = self.totalDuration;
       _updateDisplay();
     }
-    self.isRunning = true;
+    self.isRunning  = true;
     self.intervalId = setInterval(_tick, 1000);
     _saveState();
   };
 
   self.pause = function () {
     if (!self.isRunning) return;
-    self.isRunning = false;
+    self.isRunning  = false;
     if (self.intervalId) {
       clearInterval(self.intervalId);
       self.intervalId = null;
@@ -180,9 +288,11 @@ function NotesTimer(displayEl, progressCircle, playBtn, resetBtn) {
   function _saveState() {
     if (typeof window !== 'undefined') {
       window.HubOS_NotesTimerState = {
-        timeLeft:      self.remainingSeconds,
-        totalDuration: self.totalDuration,
-        isPaused:      !self.isRunning
+        timeLeft:          self.remainingSeconds,
+        totalDuration:     self.totalDuration,
+        isPaused:          !self.isRunning,
+        isRinging:         self.isRinging,
+        allowBackground:   self.allowBackground
       };
     }
   }
@@ -194,7 +304,16 @@ function NotesTimer(displayEl, progressCircle, playBtn, resetBtn) {
           && typeof s.totalDuration === 'number' && s.totalDuration > 0) {
         self.totalDuration    = s.totalDuration;
         self.remainingSeconds = s.timeLeft;
-        self.isRunning        = false; // always remain paused on restore
+        self.isRunning        = false;       // always remain paused on restore
+        self.allowBackground  = s.allowBackground === true; // default OFF
+        // If the alarm was firing when the user last switched away,
+        // re-arm it on reload so the beeps resume — the user didn't
+        // explicitly stop them. (Requires a fresh user gesture to
+        // actually emit sound on some browsers, which is fine.)
+        if (s.isRinging) {
+          self.isRinging = true;
+          self.startAlarm();
+        }
         return true;
       }
     }
@@ -203,7 +322,8 @@ function NotesTimer(displayEl, progressCircle, playBtn, resetBtn) {
 
   // ── Destroy ──
   self.destroy = function () {
-    _saveState(); // freeze current state
+    self.stopAlarm();                       // kill any looping beep loop first
+    _saveState();                           // freeze current state
     self.pause();
     if (self._visChangeBound) {
       document.removeEventListener('visibilitychange', self._visChangeBound);
@@ -222,9 +342,26 @@ function NotesTimer(displayEl, progressCircle, playBtn, resetBtn) {
   }
   _saveState();
 
-  // Visibility change: auto-pause when tab hidden
+  // ── Background-run toggle ──
+  /**
+   * Toggle whether this timer should keep running when the tab is hidden.
+   * Reflects state on the supplied button DOM element (🔒 / 🔓 + class).
+   * Safe to call with no element — just flips the flag and persists.
+   */
+  self.toggleBackgroundMode = function (btnEl) {
+    self.allowBackground = !self.allowBackground;
+    if (btnEl) {
+      // Icon swapping is now handled entirely by CSS via SVG visibility,
+      // so we only flip the state class + ARIA flag here.
+      btnEl.classList.toggle('hub-notes-timer-btn--unlocked', self.allowBackground);
+      btnEl.setAttribute('aria-pressed', self.allowBackground ? 'true' : 'false');
+    }
+    _saveState();
+  };
+
+  // Visibility change: auto-pause when tab hidden (unless background-run is on)
   self._visChangeBound = function () {
-    if (document.hidden && self.isRunning) {
+    if (document.hidden && self.isRunning && !self.allowBackground) {
       self.pause();
     }
   };
@@ -259,6 +396,10 @@ const notesModule = (function () {
   let _timer = null; // Focus Writing Timer
   let isToolbarFixed = false; // Track if toolbar is in fixed/static mode
   let _pageUnloading = false; // Prevents ghost saves during page reload
+
+  // ── Image selection state ──
+  /** @type {HTMLElement|null} Currently selected <img> inside #hn-editor (for float toolbar) */
+  let _selectedImage = null;
 
   // ── Vault / History listener management ──
   /** @type {function|null} Firestore onSnapshot unsubscribe for vault history */
@@ -299,7 +440,8 @@ const notesModule = (function () {
     timerDisplay:   null,
     timerCircle:    null,
     timerPlayBtn:   null,
-    timerResetBtn:  null
+    timerResetBtn:  null,
+    timerBgBtn:     null
   };
 
   // ── Ghost save guard ──
@@ -581,6 +723,18 @@ const notesModule = (function () {
               '</div>' +
               '<button class="hub-notes-timer-btn" id="hn-timer-play" title="Start / Pause Timer" aria-label="Start or pause timer">▶</button>' +
               '<button class="hub-notes-timer-btn" id="hn-timer-reset" title="Reset Timer" aria-label="Reset timer">↺</button>' +
+              '<button class="hub-notes-timer-btn" id="hn-timer-bg-toggle" title="Allow Background Run (Do not pause on tab switch)" aria-label="Toggle background run" aria-pressed="false">' +
+                '<svg class="hn-timer-icon-locked" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
+                  '<rect x="3" y="7" width="10" height="7" rx="1.5" stroke="currentColor" stroke-width="1.4"/>' +
+                  '<path d="M5 7V5a3 3 0 0 1 6 0v2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>' +
+                  '<circle cx="8" cy="10.5" r="1.1" fill="currentColor"/>' +
+                '</svg>' +
+                '<svg class="hn-timer-icon-unlocked" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
+                  '<rect x="3" y="7" width="10" height="7" rx="1.5" stroke="currentColor" stroke-width="1.4"/>' +
+                  '<path d="M5 7V5a3 3 0 0 1 5.5-1.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="1.6 1.4"/>' +
+                  '<circle cx="8" cy="10.5" r="1.1" fill="currentColor"/>' +
+                '</svg>' +
+              '</button>' +
             '</div>' +
           '</div>' +
           '<div class="hub-notes-editor-area">' +
@@ -701,6 +855,7 @@ const notesModule = (function () {
     _el.timerCircle    = _qs('hn-timer-circle');
     _el.timerPlayBtn   = _qs('hn-timer-play');
     _el.timerResetBtn  = _qs('hn-timer-reset');
+    _el.timerBgBtn     = _qs('hn-timer-bg-toggle');
 	
 	// Bế Toolbar vào đúng bên trong khung Editor để ghim chuẩn xác
     if (_el.editorPane && _el.toolbar) {
@@ -719,6 +874,17 @@ const notesModule = (function () {
       _el.timerResetBtn.addEventListener('click', function () {
         _timer.reset();
       });
+    }
+    // ── Background-run toggle: 🔒 ↔ 🔓, prevents tab-switch auto-pause ──
+    if (_el.timerBgBtn) {
+      _el.timerBgBtn.addEventListener('click', function () {
+        var btn = this;
+        _timer.toggleBackgroundMode(btn);
+      });
+      // Reflect restored state (button was freshly injected by _renderUI).
+      // CSS performs the icon swap; we only mirror the class + ARIA flag.
+      _el.timerBgBtn.classList.toggle('hub-notes-timer-btn--unlocked', _timer.allowBackground);
+      _el.timerBgBtn.setAttribute('aria-pressed', _timer.allowBackground ? 'true' : 'false');
     }
 
     // Render lists
@@ -746,6 +912,7 @@ const notesModule = (function () {
     _bindBackupVault();
     _bindHistoryVault();
     _bindSpellcheckToggle();
+    _bindImageSelection();
   }
 
   // ============================================================
@@ -1367,6 +1534,74 @@ const notesModule = (function () {
     });
   }
 
+  // ============================================================
+  //   IMAGE TEXT-WRAPPING — Selection + Float helpers
+  // ============================================================
+
+  /** Strip every image-position class from an <img> element. */
+  function _stripFloatClasses(img) {
+    if (!img) return;
+    img.classList.remove('img-float-left', 'img-float-right', 'img-center', 'img-selected');
+  }
+
+  /** Apply a single float class; previous classes are cleared first. */
+  function _applyFloatClass(img, cls) {
+    if (!img) return;
+    _stripFloatClasses(img);
+    img.classList.add(cls);
+    img.classList.add('img-selected');
+    _selectedImage = img;
+    _syncAlignButtonState();
+  }
+
+  /**
+   * Toggle the visual "active" state on the three align buttons
+   * according to the current image's float class. When no image is
+   * selected, all three go back to their default look.
+   */
+  function _syncAlignButtonState() {
+    if (!_el.toolbar) return;
+    var left   = _el.toolbar.querySelector('[data-cmd="justifyLeft"]');
+    var center = _el.toolbar.querySelector('[data-cmd="justifyCenter"]');
+    var right  = _el.toolbar.querySelector('[data-cmd="justifyRight"]');
+    [left, center, right].forEach(function (b) {
+      if (b) b.classList.remove('hub-notes-tb-btn--active');
+    });
+    if (!_selectedImage) return;
+    if (_selectedImage.classList.contains('img-float-left')   && left)   left.classList.add('hub-notes-tb-btn--active');
+    if (_selectedImage.classList.contains('img-center')       && center) center.classList.add('hub-notes-tb-btn--active');
+    if (_selectedImage.classList.contains('img-float-right')  && right)  right.classList.add('hub-notes-tb-btn--active');
+  }
+
+  /**
+   * Click inside the editor: select <img> targets, clear selection when
+   * the user clicks anywhere else (text node, blank lines, etc).
+   */
+  function _bindImageSelection() {
+    if (!_el.editor) return;
+
+    _el.editor.addEventListener('click', function (e) {
+      var t = e.target;
+      // Clicked directly on an image — select it.
+      if (t && t.tagName === 'IMG') {
+        // Clear ring from previous selection (if different image)
+        if (_selectedImage && _selectedImage !== t) {
+          _selectedImage.classList.remove('img-selected');
+        }
+        t.classList.add('img-selected');
+        _selectedImage = t;
+        _syncAlignButtonState();      // visually highlight align buttons
+        return;
+      }
+      // Clicked on text / block element — deselect any previous image.
+      if (_selectedImage) {
+        _selectedImage.classList.remove('img-selected');
+        _selectedImage = null;
+        _syncAlignButtonState();      // clear button highlights
+      }
+    });
+  }
+
   function _bindEditorEvents() {
     // Title input changes
     if (_el.titleInput) {
@@ -1653,6 +1888,24 @@ const notesModule = (function () {
 
       var cmd = btn.getAttribute('data-cmd');
       var val = btn.getAttribute('data-value');
+
+      // ── IMAGE FLOAT INTERCEPT ──
+      // Re-purpose the three alignment buttons when an image is selected:
+      // instead of justifing the current text selection, apply Word-style
+      // float wrapping to _selectedImage and bypass execCommand entirely.
+      if (_selectedImage &&
+          (cmd === 'justifyLeft' || cmd === 'justifyCenter' || cmd === 'justifyRight')) {
+        var floatClass = (cmd === 'justifyLeft')   ? 'img-float-left'
+                       : (cmd === 'justifyCenter') ? 'img-center'
+                       :                              'img-float-right';
+        _applyFloatClass(_selectedImage, floatClass);
+        _scheduleSave();   // persist the new float class to cloud/local
+        if (_el.editor) _el.editor.focus();
+        setTimeout(_updateToolbarPosition, 10);
+        return;            // ← bypass document.execCommand for image floats
+      }
+
+      // ── Normal path: legacy execCommand on text selection ──
       if (cmd) {
         document.execCommand(cmd, false, val || null);
       }
@@ -1985,7 +2238,7 @@ hlPicker.addEventListener('input', function () {
         toolbar: null, savingIndicator: null, emptyState: null, editorPane: null,
         addBtn: null, addFolderBtn: null, searchBtn: null, searchBar: null,
         searchInput: null, searchClear: null, manualSaveBtn: null, saveFeedback: null,
-        dateContainer: null, dateText: null, dateInput: null, backupBtn: null, historyBtn: null, historyOverlay: null, historyClose: null, historyList: null, historyLoading: null, historyEmpty: null, historyBody: null, spellcheckBtn: null, timerDisplay: null, timerCircle: null, timerPlayBtn: null, timerResetBtn: null
+        dateContainer: null, dateText: null, dateInput: null, backupBtn: null, historyBtn: null, historyOverlay: null, historyClose: null, historyList: null, historyLoading: null, historyEmpty: null, historyBody: null, spellcheckBtn: null, timerDisplay: null, timerCircle: null, timerPlayBtn: null, timerResetBtn: null, timerBgBtn: null
       };
     }
 
@@ -2050,7 +2303,7 @@ hlPicker.addEventListener('input', function () {
       toolbar: null, savingIndicator: null, emptyState: null, editorPane: null,
       addBtn: null, addFolderBtn: null, searchBtn: null, searchBar: null,
       searchInput: null, searchClear: null, manualSaveBtn: null, saveFeedback: null,
-      dateContainer: null, dateText: null, dateInput: null, backupBtn: null, historyBtn: null, historyOverlay: null, historyClose: null, historyList: null, historyLoading: null, historyEmpty: null, historyBody: null, spellcheckBtn: null, timerDisplay: null, timerCircle: null, timerPlayBtn: null, timerResetBtn: null
+      dateContainer: null, dateText: null, dateInput: null, backupBtn: null, historyBtn: null, historyOverlay: null, historyClose: null, historyList: null, historyLoading: null, historyEmpty: null, historyBody: null, spellcheckBtn: null, timerDisplay: null, timerCircle: null, timerPlayBtn: null, timerResetBtn: null, timerBgBtn: null
     };
     // ⚡ PRESERVE _data, _activeNote, _activeFolder, _sessionInitialized,
     //    and _isNotesDataLoaded across tab switches so the in-memory cache

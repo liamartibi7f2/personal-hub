@@ -15387,5 +15387,155 @@ body.theme-optimized .hub-cf-breakdown-bar-fill--income { background: var(--succ
 }
 
 .hub-notes-editor-pane.fixed-toolbar-mode .hub-notes-editor-area {
-    padding-top: var(--space-lg) !important; 
+    padding-top: var(--space-lg) !important;
+}
+
+/* ============================================================
+   HUB.OS — Image Text-Wrapping (Float) for Notes Editor
+   Scoped under #hn-editor to prevent style bleed.
+   ============================================================ */
+
+/* ── Floating images: Word-style text wrapping ── */
+#hn-editor img.img-float-left,
+#hn-editor img.img-float-right,
+#hn-editor img.img-center {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  transition: outline 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
+}
+
+#hn-editor img.img-float-left {
+  float: left;
+  margin: 0 18px 14px 0;
+  max-width: 55%;
+}
+
+#hn-editor img.img-float-right {
+  float: right;
+  margin: 0 0 14px 18px;
+  max-width: 55%;
+}
+
+#hn-editor img.img-center {
+  display: block;
+  margin: 14px auto 14px auto;
+  float: none;
+  max-width: 100%;
+}
+
+/* ── Selection visual feedback (cyberpunk neon ring) ── */
+#hn-editor img.img-selected {
+  outline: 2px solid var(--primary-color, #00e676);
+  outline-offset: 3px;
+  box-shadow: 0 0 18px rgba(0, 230, 118, 0.45),
+              0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+/* ── Mobile fallback: collapse floats so text doesn't squish ── */
+@media (max-width: 768px) {
+  #hn-editor img.img-float-left,
+  #hn-editor img.img-float-right,
+  #hn-editor img.img-center {
+    float: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 12px 0 !important;
+    display: block !important;
+  }
+}
+
+/* ==========================================================
+   FIX LỖI WRAP ẢNH BỊ CHẶN BỞI DISPLAY: BLOCK
+   ========================================================== */
+#hn-editor img.img-float-left,
+#hn-editor img.img-float-right,
+#hn-editor img.img-center {
+    display: inline-block !important; /* Ghi đè lệnh display: block mặc định */
+}
+
+/* Đảm bảo căn trái thì float trái, có margin để chữ không sát vào ảnh */
+#hn-editor img.img-float-left {
+    float: left !important;
+    margin: 0 16px 16px 0 !important;
+}
+
+/* Đảm bảo căn phải thì float phải */
+#hn-editor img.img-float-right {
+    float: right !important;
+    margin: 0 0 16px 16px !important;
+}
+
+/* Căn giữa thì hủy float, đứng một mình một dòng */
+#hn-editor img.img-center {
+    display: block !important;
+    float: none !important;
+    margin: 0 auto 16px auto !important;
+}
+
+/* ==========================================================
+   LIGHT-UP ALIGN BUTTONS WHEN AN IMAGE IS SELECTED
+   (Set by _syncAlignButtonState() in modules/notes.js)
+   ========================================================== */
+.hub-notes-tb-btn--active {
+    background: var(--primary-color, #00e676) !important;
+    color: #0a0a0a !important;
+    border-color: var(--primary-color, #00e676) !important;
+    box-shadow: 0 0 10px rgba(0, 230, 118, 0.45) !important;
+}
+
+/* ==========================================================
+   TIMER BACKGROUND-RUN BUTTON — Cyber SVG icon swap
+   Active state driven entirely by CSS so the 4 themes can
+   restyle it independently. Default = Cyberpunk (Electric Cyan).
+   Triggered by NotesTimer.toggleBackgroundMode() in notes.js.
+   ========================================================== */
+
+/* ─── Icon visibility: default = LOCKED shown, UNLOCKED hidden ─── */
+.hn-timer-icon-locked   { display: block; }
+.hn-timer-icon-unlocked { display: none; }
+
+/* ─── Active state: hide locked icon, show unlocked icon ─── */
+.hub-notes-timer-btn--unlocked .hn-timer-icon-locked   { display: none; }
+.hub-notes-timer-btn--unlocked .hn-timer-icon-unlocked { display: block; }
+
+/* ─── Active-state styling (Cyberpunk default) ─── */
+.hub-notes-timer-btn--unlocked {
+    color: var(--accent-primary, #00f0ff);
+    border-color: var(--accent-primary, #00f0ff);
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.25);
+    background: rgba(0, 240, 255, 0.12);
+    transition: color 0.15s ease, border-color 0.15s ease,
+                box-shadow 0.15s ease, background 0.15s ease;
+}
+
+/* ───────── Theme overrides ───────── */
+
+/* ── Solar Zen: indigo accent, no neon glow ── */
+[data-theme="solar-zen"] .hub-notes-timer-btn--unlocked {
+    color: #4f46e5;
+    border-color: #4f46e5;
+    background: rgba(79, 70, 229, 0.10);
+    box-shadow: 0 0 6px rgba(79, 70, 229, 0.20);
+}
+
+/* ── Lo-Fi Twilight: pastel purple accent, soft glow ── */
+[data-theme="lofi-twilight"] .hub-notes-timer-btn--unlocked {
+    color: #bb9af7;
+    border-color: #bb9af7;
+    background: rgba(187, 154, 247, 0.12);
+    box-shadow: 0 0 8px rgba(187, 154, 247, 0.30);
+}
+
+/* ── Theme Optimized (matrix mode): flat neon green, NO shadows ──
+   The global body.theme-optimized * rule kills box-shadow with
+   !important, so this override must also use !important to win.    */
+body.theme-optimized .hub-notes-timer-btn--unlocked {
+    color: #00FF41;
+    border-color: #00FF41;
+    background: rgba(0, 255, 65, 0.08);
+    box-shadow: none !important;
 }
