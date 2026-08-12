@@ -397,6 +397,11 @@ const notesModule = (function () {
   let isToolbarFixed = false; // Track if toolbar is in fixed/static mode
   let _pageUnloading = false; // Prevents ghost saves during page reload
 
+  // ── Time Capsule (note lock) state ──
+  let _lockInterval = null;       // ticks #hn-locked-countdown each second
+  let _penaltyInterval = null;    // ticks 60s bypass cooldown
+  let _unlockEarlyBound = false;  // one-shot guard for delegated unlock-early handler
+
   // ── Image selection state ──
   /** @type {HTMLElement|null} Currently selected <img> inside #hn-editor (for float toolbar) */
   let _selectedImage = null;
@@ -712,6 +717,15 @@ const notesModule = (function () {
               '</svg>' +
               '<span class="hub-notes-save-label">Pin</span>' +
             '</button>' +
+            '<button class="hub-notes-spellcheck-btn hub-notes-lock-btn" id="hn-btn-lock" title="Time Capsule — lock this note until a future date" aria-label="Lock note with Time Capsule">' +
+              '<svg class="hub-notes-spellcheck-btn-svg" width="14" height="14" viewBox="0 0 24 24" fill="none">' +
+                '<rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" stroke-width="1.5"/>' +
+                '<path d="M8 11V7a4 4 0 0 1 8 0v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
+                '<circle cx="12" cy="15.5" r="1.2" fill="currentColor"/>' +
+              '</svg>' +
+              '<span class="hub-notes-save-label">Lock</span>' +
+            '</button>' +
+            '<input type="datetime-local" id="hn-lock-datetime" class="hub-notes-lock-datetime" aria-hidden="true" tabindex="-1">' +
             '<span class="hub-notes-save-feedback" id="hn-save-feedback"></span>' +
             '<div class="hub-notes-timer" id="hn-timer">' +
               '<div class="hub-notes-timer-ring">' +
@@ -753,6 +767,26 @@ const notesModule = (function () {
             '</div>' +
             '<p class="hub-notes-empty-title">No note selected</p>' +
             '<p class="hub-notes-empty-sub">Create a new note to get started</p>' +
+          '</div>' +
+          '<div class="hub-notes-locked-overlay" id="hn-locked-overlay" style="display:none" role="dialog" aria-modal="true" aria-labelledby="hn-locked-title">' +
+            '<div class="hub-notes-locked-card">' +
+              '<div class="hub-notes-locked-icon" aria-hidden="true">' +
+                '<svg viewBox="0 0 24 24" width="56" height="56" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
+                  '<rect x="4" y="11" width="16" height="10" rx="2"></rect>' +
+                  '<path d="M8 11V7a4 4 0 1 1 8 0v4"></path>' +
+                  '<circle cx="12" cy="16" r="1.4" fill="currentColor"></circle>' +
+                '</svg>' +
+              '</div>' +
+              '<h2 class="hub-notes-locked-title" id="hn-locked-title">TIME CAPSULE</h2>' +
+              '<p class="hub-notes-locked-desc">This note is locked until the timer reaches zero. Discipline builds mastery — no peeking.</p>' +
+              '<div class="hub-notes-locked-countdown" id="hn-locked-countdown">--d --h --m --s</div>' +
+              '<button class="hub-notes-unlock-early-btn" id="hn-btn-unlock-early" type="button">Unlock Early</button>' +
+              '<div class="hub-notes-locked-penalty" id="hn-locked-penalty" style="display:none" role="alert" aria-live="polite">' +
+                '<span class="hub-notes-penalty-label">COOLDOWN IN PROGRESS</span>' +
+                '<span class="hub-notes-penalty-timer" id="hn-penalty-timer">60</span>' +
+                '<span class="hub-notes-penalty-hint">Switch notes to abort this reckless override.</span>' +
+              '</div>' +
+            '</div>' +
           '</div>' +
         '</main>' +
         '<div class="hub-notes-history-overlay" id="hn-history-overlay" role="dialog" aria-modal="true" aria-label="Vault History">' +
@@ -922,6 +956,7 @@ const notesModule = (function () {
     _bindHistoryVault();
     _bindSpellcheckToggle();
     _bindImageSelection();
+    _bindTimeCapsule();
   }
 
   // ============================================================
@@ -1218,14 +1253,65 @@ const notesModule = (function () {
   // ============================================================
 
   function _loadNoteIntoEditor() {
+    // HARD STOP: cancel timers so they never leak between notes / renders
+    _clearTimeCapsuleTimers();
+
+    var lockedOverlay = document.getElementById('hn-locked-overlay');
+    var penaltyBox    = document.getElementById('hn-locked-penalty');
+    var unlockBtn     = document.getElementById('hn-btn-unlock-early');
+    var countdownEl   = document.getElementById('hn-locked-countdown');
+
     if (!_activeNote) {
       if (_el.titleInput) _el.titleInput.style.display = 'none';
       if (_el.editor) _el.editor.style.display = 'none';
       if (_el.emptyState) _el.emptyState.style.display = '';
       if (_el.editorPane) _el.editorPane.classList.add('hub-notes-editor--empty');
       if (_el.dateContainer) _el.dateContainer.style.display = 'none';
+      if (lockedOverlay) lockedOverlay.style.display = 'none';
       return;
     }
+
+    // Compute lock state once
+    var unlockAt = (_activeNote && typeof _activeNote.unlockAt === 'number')
+      ? _activeNote.unlockAt
+      : null;
+    var isLocked = unlockAt && unlockAt > Date.now();
+
+    if (isLocked) {
+      // ---- LOCKED: hide editor surfaces, show the glass overlay ----
+      if (_el.titleInput) _el.titleInput.style.display = 'none';
+      if (_el.editor) _el.editor.style.display = 'none';
+      if (_el.emptyState) _el.emptyState.style.display = 'none';
+      if (_el.editorPane) _el.editorPane.classList.remove('hub-notes-editor--empty');
+      if (_el.dateContainer) _el.dateContainer.style.display = 'none';
+      if (lockedOverlay) lockedOverlay.style.display = '';
+      if (unlockBtn) unlockBtn.style.display = '';
+      if (penaltyBox) penaltyBox.style.display = 'none';
+
+      var tick = function () {
+        if (!_activeNote || !_activeNote.unlockAt) {
+          if (_lockInterval) { clearInterval(_lockInterval); _lockInterval = null; }
+          return;
+        }
+        var remaining = _activeNote.unlockAt - Date.now();
+        if (remaining <= 0) {
+          // Time capsule has expired → unlock permanently.
+          if (_lockInterval) { clearInterval(_lockInterval); _lockInterval = null; }
+          _activeNote.unlockAt = null;
+          if (countdownEl) countdownEl.textContent = '0d 0h 0m 0s';
+          try { _persist(true); } catch (e) { /* best-effort save */ }
+          _loadNoteIntoEditor();
+          return;
+        }
+        if (countdownEl) countdownEl.textContent = _formatCountdown(remaining);
+      };
+      tick();
+      _lockInterval = setInterval(tick, 1000);
+      return;
+    }
+
+    // ---- UNLOCKED: standard editor view ----
+    if (lockedOverlay) lockedOverlay.style.display = 'none';
     if (_el.emptyState) _el.emptyState.style.display = 'none';
     if (_el.editorPane) _el.editorPane.classList.remove('hub-notes-editor--empty');
     if (_el.titleInput) { _el.titleInput.style.display = ''; _el.titleInput.value = _activeNote.title; }
@@ -1234,6 +1320,162 @@ const notesModule = (function () {
 
     _updateDateDisplay();
     _updateNoteListDate();
+  }
+
+  /**
+   * Centralised timer cleanup. Safe to call repeatedly; clears both
+   * the countdown ticker and the 60s penalty ticker in a single place,
+   * which every caller needs anyway (note-switch, render, destroy).
+   */
+  function _clearTimeCapsuleTimers() {
+    if (_lockInterval)    { clearInterval(_lockInterval);    _lockInterval = null; }
+    if (_penaltyInterval) { clearInterval(_penaltyInterval); _penaltyInterval = null; }
+  }
+
+  /**
+   * Format a millisecond duration as "Xd Xh Xm Xs". Used by the
+   * overlaid countdown display; clamped at 0 to avoid negative drift.
+   * @param {number} ms
+   * @returns {string}
+   */
+  function _formatCountdown(ms) {
+    var total = Math.max(0, Math.floor(ms / 1000));
+    var d = Math.floor(total / 86400);
+    var h = Math.floor((total % 86400) / 3600);
+    var m = Math.floor((total % 3600) / 60);
+    var s = total % 60;
+    return d + 'd ' + h + 'h ' + m + 'm ' + s + 's';
+  }
+
+  /**
+   * Bind all Time Capsule UI controls: toolbar lock button, the
+   * hidden datetime-local picker, and the overlay's early-unlock
+   * button. The early-unlock handler uses document-level delegation
+   * (guarded by `_unlockEarlyBound`) so it survives render() cycles
+   * that wipe #hn-locked-overlay out of the DOM.
+   *
+   * Called at end of _renderUI() — must run AFTER innerHTML has been
+   * injected so all referenced nodes exist.
+   */
+  function _bindTimeCapsule() {
+    var btn     = document.getElementById('hn-btn-lock');
+    var picker  = document.getElementById('hn-lock-datetime');
+    if (!btn || !picker) return;
+
+    // ── Toolbar lock button: open picker (or disarm if already locked) ──
+    btn.addEventListener('click', function () {
+      if (!_activeNote) {
+        if (typeof window.HubToast === 'function') HubToast.show('Select a note first', 'warn');
+        return;
+      }
+
+      // If the note is currently locked, offer a direct disarm path here too
+      // (the overlay has its own "Unlock Early" with the 60s penalty; this is
+      // a clean, immediate unlock from the toolbar).
+      if (_activeNote.unlockAt && _activeNote.unlockAt > Date.now()) {
+        var okToolbar = window.confirm(
+          'This note is currently locked.\n\n' +
+          'Disarm the Time Capsule now without penalty?'
+        );
+        if (!okToolbar) return;
+        _activeNote.unlockAt = null;
+        try { _persist(true); } catch (e) { /* ignore */ }
+        _loadNoteIntoEditor();
+        return;
+      }
+
+      // Prefill picker: +1 hour default, or the existing unlock time
+      var defaultTs = _activeNote.unlockAt || (Date.now() + 60 * 60 * 1000);
+      picker.value = _formatDateTimeLocalValue(defaultTs);
+
+      // showPicker requires a user gesture, which we have from the click.
+      if (typeof picker.showPicker === 'function') {
+        try { picker.showPicker(); } catch (e) { picker.click(); picker.focus(); }
+      } else {
+        picker.click();
+        picker.focus();
+      }
+    });
+
+    // ── Picker change: commit the lock to the note + save + reload ──
+    picker.addEventListener('change', function () {
+      if (!_activeNote || !picker.value) return;
+      // The picker emits local time strings — parse defensively.
+      var ts = new Date(picker.value).getTime();
+      if (isNaN(ts) || ts <= Date.now()) {
+        if (typeof window.HubToast === 'function') HubToast.show('Pick a future date & time', 'warn');
+        picker.value = '';
+        return;
+      }
+      _activeNote.unlockAt = ts;
+      try { _persist(true); } catch (e) { /* ignore */ }
+      _loadNoteIntoEditor();
+    });
+
+    // ── Early-unlock button (delegated on document) ──
+    if (!_unlockEarlyBound) {
+      _unlockEarlyBound = true;
+      document.addEventListener('click', function (e) {
+        var target = e.target && e.target.closest
+          ? e.target.closest('#hn-btn-unlock-early')
+          : null;
+        if (!target) return;
+        // Only act when there's an active note still locked
+        if (!_activeNote || !_activeNote.unlockAt || _activeNote.unlockAt <= Date.now()) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        var ok = window.confirm(
+          '⚠ PENALTY 60-SECOND COOLDOWN\n\n' +
+          'Bypassing the Time Capsule will lock you out for 60 seconds.\n' +
+          'Switch to another note to abort the bypass prematurely.\n\n' +
+          'Proceed?'
+        );
+        if (!ok) return;
+
+        target.style.display = 'none';
+        var penaltyBox  = document.getElementById('hn-locked-penalty');
+        var penaltyText = document.getElementById('hn-penalty-timer');
+        if (penaltyBox) penaltyBox.style.display = '';
+        if (penaltyText) penaltyText.textContent = '60';
+
+        if (_penaltyInterval) clearInterval(_penaltyInterval);
+        var remaining = 60;
+        _penaltyInterval = setInterval(function () {
+          remaining -= 1;
+          if (penaltyText) penaltyText.textContent = String(Math.max(0, remaining));
+          if (remaining <= 0) {
+            clearInterval(_penaltyInterval);
+            _penaltyInterval = null;
+            if (_activeNote) _activeNote.unlockAt = null;
+            try { _persist(true); } catch (e) { /* ignore */ }
+            _loadNoteIntoEditor();
+          }
+        }, 1000);
+      });
+    }
+  }
+
+  /**
+   * Helper: format a timestamp as the `value` attribute of an
+   * <input type="datetime-local">. Differs from `_formatDateInputValue`
+   * (which is YYYY-MM-DD only) by emitting `YYYY-MM-DDTHH:MM` so the
+   * browser's native picker stays in sync with the note's unlockAt.
+   * @param {number} ts
+   * @returns {string}
+   */
+  function _formatDateTimeLocalValue(ts) {
+    if (!ts) return '';
+    var d = new Date(ts);
+    if (isNaN(d.getTime())) return '';
+    var pad = function (n) { return String(n).padStart(2, '0'); };
+    var yyyy = d.getFullYear();
+    var mm   = pad(d.getMonth() + 1);
+    var dd   = pad(d.getDate());
+    var hh   = pad(d.getHours());
+    var mi   = pad(d.getMinutes());
+    return yyyy + '-' + mm + '-' + dd + 'T' + hh + ':' + mi;
   }
 
   function _formatCreatedDate(ts) {
@@ -2663,20 +2905,16 @@ hlPicker.addEventListener('input', function () {
 
     try {
       // ── 4. Rolling window: query existing backups, prune if ≥ 10 ──
-      //    limit(11) is optimal: we only need to know if 10+ docs exist
-      //    and which are the oldest snapshots. Fetching all docs would
-      //    freeze the browser if the vault grew unbounded.
       var existingSnap = await Promise.race([
         vaultRef.orderBy('created_at', 'asc').limit(11).get(),
-        new Promise(function (_, reject) { setTimeout(function () { reject(new Error('timeout')); }, 3000); })
+        new Promise(function (_, reject) { setTimeout(function () { reject(new Error('timeout')); }, 15000); }) // Đã tăng từ 3000 lên 15000
       ]);
 
-      var existingDocs = existingSnap.docs; // array of QueryDocumentSnapshot
+      var existingDocs = existingSnap.docs; 
       var count = existingDocs.length;
 
-      // If 10 or more exist, delete the oldest so 9 remain before adding the new one
       if (count >= 10) {
-        var deleteCount = count - 9; // how many to prune
+        var deleteCount = count - 9; 
         var batch = db.batch();
         for (var i = 0; i < deleteCount; i++) {
           batch.delete(existingDocs[i].ref);
@@ -2692,13 +2930,13 @@ hlPicker.addEventListener('input', function () {
       // ── 6. Insert new backup into the vault ──
       await Promise.race([
         vaultRef.add({
-          workspace_snapshot: fullSnapshot,    // the ENTIRE tree — NOT just one note
+          workspace_snapshot: fullSnapshot,    
           folder_count: folderCount,
           note_count: noteCount,
-          capturedAt: Date.now(),             // client-side timestamp as fallback
+          capturedAt: Date.now(),             
           created_at: firebase.firestore.FieldValue.serverTimestamp()
         }),
-        new Promise(function (_, reject) { setTimeout(function () { reject(new Error('timeout')); }, 3000); })
+        new Promise(function (_, reject) { setTimeout(function () { reject(new Error('timeout')); }, 15000); }) // Đã tăng từ 3000 lên 15000
       ]);
 
       // ── 7. Success toast ──

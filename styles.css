@@ -15598,3 +15598,345 @@ body.theme-optimized .hub-notes-timer-btn--unlocked {
     background: rgba(0, 255, 65, 0.08);
     box-shadow: none !important;
 }
+
+/* =========================================================
+   HUB.NOTES — TIME CAPSULE (NOTE LOCK)
+   Base: Cyberpunk Glassmorphism
+   ========================================================= */
+
+/* Hidden datetime-local input — repositioned offscreen but still focusable */
+.hub-notes-lock-datetime {
+    position: absolute;
+    left: -9999px;
+    top: -9999px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.hub-notes-locked-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 10, 15, 0.85);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    padding: 24px;
+    animation: hnLockFadeIn 320ms ease;
+}
+
+.hub-notes-locked-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 16px;
+    max-width: 460px;
+    width: 100%;
+    padding: 36px 28px;
+    border: 1px solid var(--accent-primary);
+    border-radius: 18px;
+    background: linear-gradient(
+        160deg,
+        rgba(0, 255, 255, 0.06) 0%,
+        rgba(255, 0, 255, 0.04) 100%
+    );
+    box-shadow:
+        0 0 24px var(--accent-glow),
+        inset 0 0 24px rgba(0, 255, 255, 0.05);
+}
+
+.hub-notes-locked-icon {
+    color: var(--accent-primary);
+    filter: drop-shadow(0 0 8px var(--accent-glow));
+    animation: hnLockPulse 2.4s ease-in-out infinite;
+}
+
+.hub-notes-locked-title {
+    margin: 0;
+    font-size: 1.8rem;
+    font-weight: 800;
+    letter-spacing: 0.34em;
+    color: var(--accent-primary);
+    text-shadow:
+        0 0 8px var(--accent-glow),
+        0 0 18px var(--accent-glow);
+}
+
+.hub-notes-locked-desc {
+    margin: 0;
+    font-size: 0.92rem;
+    line-height: 1.55;
+    color: var(--text-secondary, #a9b0c6);
+    max-width: 360px;
+}
+
+.hub-notes-locked-countdown {
+    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    color: var(--accent-primary);
+    text-shadow:
+        0 0 6px var(--accent-glow),
+        0 0 14px var(--accent-glow);
+    padding: 12px 20px;
+    border: 1px solid rgba(0, 255, 255, 0.35);
+    border-radius: 12px;
+    background: rgba(0, 255, 255, 0.04);
+}
+
+.hub-notes-unlock-early-btn {
+    margin-top: 4px;
+    padding: 12px 28px;
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #fff;
+    background: linear-gradient(135deg, var(--accent-secondary) 0%, #8b00ff 100%);
+    border: 1px solid var(--accent-secondary);
+    border-radius: 999px;
+    cursor: pointer;
+    box-shadow: 0 0 18px rgba(157, 78, 221, 0.55);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.hub-notes-unlock-early-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 24px rgba(157, 78, 221, 0.8);
+}
+.hub-notes-unlock-early-btn:active {
+    transform: translateY(0);
+}
+
+.hub-notes-locked-penalty {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 18px;
+    border: 1px solid var(--danger);
+    border-radius: 12px;
+    background: rgba(255, 59, 48, 0.06);
+    color: var(--danger);
+    text-shadow: 0 0 6px rgba(255, 59, 48, 0.55);
+    animation: hnLockFadeIn 220ms ease;
+}
+.hub-notes-penalty-label {
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.26em;
+}
+.hub-notes-penalty-timer {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 2.4rem;
+    font-weight: 800;
+    line-height: 1;
+}
+.hub-notes-penalty-hint {
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    opacity: 0.85;
+}
+
+.hub-notes-toolbar-btn.hub-notes-lock-btn,
+.hub-notes-spellcheck-btn.hub-notes-lock-btn {
+    color: var(--accent-primary);
+}
+.hub-notes-toolbar-btn.hub-notes-lock-btn:hover,
+.hub-notes-spellcheck-btn.hub-notes-lock-btn:hover {
+    background: rgba(0, 255, 255, 0.08);
+    box-shadow: 0 0 10px var(--accent-glow);
+}
+
+@keyframes hnLockFadeIn {
+    from { opacity: 0; transform: scale(0.98); }
+    to   { opacity: 1; transform: scale(1); }
+}
+@keyframes hnLockPulse {
+    0%, 100% { filter: drop-shadow(0 0 6px var(--accent-glow)); }
+    50%      { filter: drop-shadow(0 0 16px var(--accent-glow)); }
+}
+
+/* =========================================================
+   THEME 2 — Solar Zen (light, indigo + amber)
+   ========================================================= */
+[data-theme="solar-zen"] .hub-notes-locked-overlay {
+    background: rgba(245, 245, 250, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
+[data-theme="solar-zen"] .hub-notes-locked-card {
+    border-color: #4f46e5;
+    background: linear-gradient(160deg, rgba(79, 70, 229, 0.06), rgba(245, 158, 11, 0.05));
+    box-shadow: 0 8px 24px rgba(79, 70, 229, 0.18);
+}
+[data-theme="solar-zen"] .hub-notes-locked-icon,
+[data-theme="solar-zen"] .hub-notes-locked-title,
+[data-theme="solar-zen"] .hub-notes-locked-countdown {
+    color: #4f46e5;
+    text-shadow: none;
+    filter: none;
+}
+[data-theme="solar-zen"] .hub-notes-locked-countdown {
+    border-color: rgba(79, 70, 229, 0.4);
+    background: rgba(79, 70, 229, 0.06);
+}
+[data-theme="solar-zen"] .hub-notes-unlock-early-btn {
+    color: #1f2937;
+    background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+    border-color: #f59e0b;
+    box-shadow: 0 6px 16px rgba(245, 158, 11, 0.35);
+    text-shadow: none;
+}
+[data-theme="solar-zen"] .hub-notes-unlock-early-btn:hover {
+    box-shadow: 0 8px 20px rgba(245, 158, 11, 0.55);
+}
+[data-theme="solar-zen"] .hub-notes-locked-penalty {
+    color: #b91c1c;
+    border-color: #b91c1c;
+    background: rgba(185, 28, 28, 0.06);
+    text-shadow: none;
+}
+[data-theme="solar-zen"] .hub-notes-spellcheck-btn.hub-notes-lock-btn {
+    color: #4f46e5;
+}
+[data-theme="solar-zen"] .hub-notes-spellcheck-btn.hub-notes-lock-btn:hover {
+    background: rgba(79, 70, 229, 0.08);
+    box-shadow: none;
+}
+
+/* =========================================================
+   THEME 3 — LoFi Twilight (soft dark, lavender + peach)
+   ========================================================= */
+[data-theme="lofi-twilight"] .hub-notes-locked-overlay {
+    background: rgba(36, 40, 59, 0.85);
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
+}
+[data-theme="lofi-twilight"] .hub-notes-locked-card {
+    border-color: #bb9af7;
+    background: linear-gradient(160deg, rgba(187, 154, 247, 0.08), rgba(255, 158, 100, 0.05));
+    box-shadow: 0 0 24px rgba(187, 154, 247, 0.35);
+}
+[data-theme="lofi-twilight"] .hub-notes-locked-icon,
+[data-theme="lofi-twilight"] .hub-notes-locked-title,
+[data-theme="lofi-twilight"] .hub-notes-locked-countdown {
+    color: #bb9af7;
+    text-shadow: 0 0 8px rgba(187, 154, 247, 0.5);
+}
+[data-theme="lofi-twilight"] .hub-notes-locked-countdown {
+    border-color: rgba(187, 154, 247, 0.4);
+    background: rgba(187, 154, 247, 0.06);
+}
+[data-theme="lofi-twilight"] .hub-notes-unlock-early-btn {
+    color: #1a1b26;
+    background: #ff9e64;
+    border-color: #ff9e64;
+    box-shadow: 0 6px 16px rgba(255, 158, 100, 0.4);
+}
+[data-theme="lofi-twilight"] .hub-notes-unlock-early-btn:hover {
+    filter: brightness(1.05);
+}
+[data-theme="lofi-twilight"] .hub-notes-locked-penalty {
+    color: #f7768e;
+    border-color: #f7768e;
+    background: rgba(247, 118, 142, 0.07);
+    text-shadow: 0 0 6px rgba(247, 118, 142, 0.45);
+}
+[data-theme="lofi-twilight"] .hub-notes-spellcheck-btn.hub-notes-lock-btn {
+    color: #bb9af7;
+}
+[data-theme="lofi-twilight"] .hub-notes-spellcheck-btn.hub-notes-lock-btn:hover {
+    background: rgba(187, 154, 247, 0.10);
+    box-shadow: 0 0 8px rgba(187, 154, 247, 0.35);
+}
+
+/* =========================================================
+   THEME 4 — Terminal Optimized (pure flat black + green)
+   ========================================================= */
+body.theme-optimized .hub-notes-locked-overlay {
+    background: #000;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+body.theme-optimized .hub-notes-locked-card {
+    border: 2px solid #00FF41;
+    border-radius: 0;
+    background: #000;
+    box-shadow: none !important;
+    padding: 32px 24px;
+    gap: 12px;
+}
+body.theme-optimized .hub-notes-locked-icon {
+    color: #00FF41;
+    filter: none !important;
+    animation: none !important;
+}
+body.theme-optimized .hub-notes-locked-title,
+body.theme-optimized .hub-notes-locked-countdown {
+    color: #00FF41;
+    text-shadow: none !important;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 0.18em;
+}
+body.theme-optimized .hub-notes-locked-countdown {
+    border: 1px solid #00FF41;
+    border-radius: 0;
+    background: #000;
+    padding: 10px 16px;
+    font-size: 1.4rem;
+}
+body.theme-optimized .hub-notes-locked-desc {
+    color: #00FF41;
+    opacity: 0.85;
+    font-family: 'Courier New', monospace;
+}
+body.theme-optimized .hub-notes-unlock-early-btn {
+    border: 2px solid #00FF41;
+    border-radius: 0;
+    background: #000;
+    color: #00FF41;
+    font-family: 'Courier New', monospace;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    transition: none !important;
+}
+body.theme-optimized .hub-notes-unlock-early-btn:hover {
+    background: #003300;
+    transform: none;
+    box-shadow: none !important;
+}
+body.theme-optimized .hub-notes-locked-penalty {
+    border: 2px solid #00FF41;
+    border-radius: 0;
+    background: #000;
+    color: #00FF41;
+    text-shadow: none !important;
+    animation: none !important;
+}
+body.theme-optimized .hub-notes-penalty-label,
+body.theme-optimized .hub-notes-penalty-timer,
+body.theme-optimized .hub-notes-penalty-hint {
+    color: #00FF41;
+    font-family: 'Courier New', monospace;
+    text-shadow: none !important;
+}
+body.theme-optimized .hub-notes-spellcheck-btn.hub-notes-lock-btn {
+    color: #00FF41;
+}
+body.theme-optimized .hub-notes-spellcheck-btn.hub-notes-lock-btn:hover {
+    background: #003300;
+    box-shadow: none !important;
+}
+
+/* Respect reduced motion for the pulsing icon */
+@media (prefers-reduced-motion: reduce) {
+    .hub-notes-locked-icon { animation: none !important; }
+    .hub-notes-locked-overlay,
+    .hub-notes-locked-penalty { animation: none !important; }
+}
