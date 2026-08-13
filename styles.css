@@ -10259,12 +10259,21 @@ mark.cyber-hl-pink:hover {
 }
 
 #hn-editor blockquote {
+  font-family: var(--font-mono) !important;
+  font-style: normal !important;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.6;
   border-left: 3px solid var(--accent-primary);
-  padding-left: var(--space-md);
-  color: var(--text-secondary);
-  font-style: italic;
-  margin: 0.6em 0;
-  opacity: 0.85;
+  padding: 10px 16px;
+  margin: 12px 0;
+  background: rgba(0, 240, 255, 0.05);
+  border-radius: 0 6px 6px 0;
+}
+
+#hn-editor blockquote::before,
+#hn-editor blockquote::after {
+  content: none !important;
 }
 
 /* ── Floating Formatting Toolbar ── */

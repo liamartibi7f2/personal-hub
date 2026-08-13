@@ -836,6 +836,12 @@ const notesModule = (function () {
               '<path d="M2 8h12M6 6.5h8M4 10h10M7 13.5h7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>' +
             '</svg>' +
           '</button>' +
+          '<button class="hub-notes-tb-btn" id="hn-quote-btn" title="Toggle Quote" aria-label="Quote">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+              '<path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"></path>' +
+              '<path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"></path>' +
+            '</svg>' +
+          '</button>' +
           '<span class="hub-notes-tb-sep"></span>' +
           '<button class="hub-notes-tb-btn" data-cmd="insertUnorderedList" title="Bullet List" aria-label="Bullet List">' +
             '<svg width="14" height="14" viewBox="0 0 16 16" fill="none">' +
@@ -856,6 +862,7 @@ const notesModule = (function () {
               '<line x1="2" y1="22" x2="22" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
             '</svg>' +
           '</button>' +
+          '<span class="hub-notes-tb-sep"></span>' +
         '</div>' +
       '</div>';
 
@@ -2251,6 +2258,54 @@ hlPicker.addEventListener('input', function () {
         }
         document.execCommand('hiliteColor', false, hlPicker.value);
         if (_el.editor) _el.editor.focus();
+      });
+    }
+
+    // ── Toggle Quote (monospace blockquote) ──
+    // Standard data-cmd="formatBlock" with data-value="blockquote" will not
+    // toggle off when clicked a second time, so this button has its own
+    // handler that detects whether the caret is currently inside a
+    // <blockquote> and switches it back to a normal paragraph if so.
+    var quoteBtn = document.getElementById('hn-quote-btn');
+    if (quoteBtn) {
+      quoteBtn.addEventListener('mousedown', function (e) {
+        // CRITICAL: keep the editor's text selection alive while we toggle.
+        e.preventDefault();
+        e.stopPropagation();
+      });
+
+      quoteBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        var editor = _el.editor;
+        if (!editor) return;
+
+        var sel = window.getSelection();
+        var node = sel ? sel.anchorNode : null;
+        var isInsideBlockquote = false;
+
+        if (node) {
+          var cur = (node.nodeType === 3) ? node.parentNode : node;
+          while (cur && cur !== editor) {
+            if (cur.tagName && cur.tagName === 'BLOCKQUOTE') {
+              isInsideBlockquote = true;
+              break;
+            }
+            cur = cur.parentNode;
+          }
+        }
+
+        document.execCommand(
+          'formatBlock',
+          false,
+          isInsideBlockquote ? 'p' : 'blockquote'
+        );
+
+        if (editor && typeof editor.focus === 'function') {
+          editor.focus();
+        }
+        _scheduleSave();
       });
     }
 
