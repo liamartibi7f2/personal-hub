@@ -1,0 +1,274 @@
+<!-- TIME MANAGEMENT MODULE — PHASE 1: HTML STRUCTURE -->
+<section id="time-management" class="module-section hub-tm-hidden">
+  <!-- ================================================================ -->
+  <!-- HEADER & CONTROL PANEL                                           -->
+  <!-- ================================================================ -->
+  <header class="hub-tm-header">
+    <div class="hub-tm-header-left">
+      <h2 class="hub-tm-title">
+        <svg class="hub-tm-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="12,6 12,12 16,14"/>
+        </svg>
+        Time Management
+      </h2>
+      <div class="hub-tm-date-selector">
+        <button class="hub-tm-date-nav" aria-label="Previous day" title="Previous day">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15,18 9,12 15,6"/></svg>
+        </button>
+        <input type="date" class="hub-tm-date-input" id="tm-date-picker" title="Select date">
+        <button class="hub-tm-date-nav" aria-label="Next day" title="Next day">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+        </button>
+        <button class="hub-tm-btn hub-tm-btn-today" id="tm-btn-today">Today</button>
+      </div>
+    </div>
+
+    <div class="hub-tm-header-right">
+      <!-- Template buttons -->
+      <button class="hub-tm-btn hub-tm-btn-outline" id="tm-btn-load-template">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Load Template
+      </button>
+      <button class="hub-tm-btn hub-tm-btn-outline" id="tm-btn-save-template">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>
+        Save as Template
+      </button>
+      <button class="hub-tm-btn hub-tm-btn-focus" id="tm-btn-focus-mode" title="Toggle Focus Mode">
+        <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M4.93 4.93l2.12 2.12m9.9 9.9l2.12 2.12M4.93 19.07l2.12-2.12m9.9-9.9l2.12-2.12"/></svg>
+        Focus Mode
+      </button>
+    </div>
+  </header>
+
+  <!-- ================================================================ -->
+  <!-- TAG MANAGER                                                      -->
+  <!-- ================================================================ -->
+  <div class="hub-tm-tag-manager" id="hub-tm-tag-manager">
+    <span class="hub-tm-tag-manager-label">Tags:</span>
+    <!-- Default tags -->
+    <span class="hub-tm-tag hub-tm-tag--work" data-tag-id="work" data-color="#00bfff" role="button" tabindex="0">
+      <span class="hub-tm-tag-dot"></span>Work
+    </span>
+    <span class="hub-tm-tag hub-tm-tag--study" data-tag-id="study" data-color="#7c4dff" role="button" tabindex="0">
+      <span class="hub-tm-tag-dot"></span>Study
+    </span>
+    <span class="hub-tm-tag hub-tm-tag--skill" data-tag-id="skill" data-color="#00e676" role="button" tabindex="0">
+      <span class="hub-tm-tag-dot"></span>Skill
+    </span>
+    <span class="hub-tm-tag hub-tm-tag--personal" data-tag-id="personal" data-color="#ff6e40" role="button" tabindex="0">
+      <span class="hub-tm-tag-dot"></span>Personal
+    </span>
+    <!-- Tag separator -->
+    <span class="hub-tm-tag-separator"></span>
+    <!-- Custom tag containers will be injected here via JS -->
+    <span class="hub-tm-tag-container" id="hub-tm-custom-tags"></span>
+    <!-- Add custom tag form -->
+    <form class="hub-tm-add-tag-form" id="hub-tm-add-tag-form" autocomplete="off">
+      <input type="text" class="hub-tm-add-tag-name" id="hub-tm-add-tag-name" placeholder="Tag name…" maxlength="20" aria-label="New tag name">
+      <input type="color" class="hub-tm-add-tag-color" id="hub-tm-add-tag-color" value="#00bcd" aria-label="Tag color">
+      <input type="number" class="hub-tm-add-tag-opacity" id="hub-tm-add-tag-opacity" value="85" min="20" max="100" step="5" aria-label="Tag opacity %" title="Block opacity %">
+      <button type="submit" class="hub-tm-btn hub-tm-btn-add-tag" id="hub-tm-btn-add-tag" title="Add custom tag">+</button>
+    </form>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- MAIN GRID CONTAINER                                              -->
+  <!-- ================================================================ -->
+  <div class="hub-tm-grid-wrapper">
+    <!-- FIXED HEADER ROW (day labels / all-day row) -->
+    <div class="hub-tm-grid-header">
+      <div class="hub-tm-time-gutter-header"></div>
+      <div class="hub-tm-col-header">
+        <span class="hub-tm-col-day-name" id="hub-tm-col-day-name">Wednesday</span>
+        <span class="hub-tm-col-date-num" id="hub-tm-col-date-num">Jul 29</span>
+      </div>
+    </div>
+
+    <!-- SCROLLABLE GRID BODY -->
+    <div class="hub-tm-grid-scroll" id="hub-tm-grid-scroll">
+      <div class="hub-tm-grid-body" id="hub-tm-grid-body">
+        <!-- Time gutter (left axis) -->
+        <div class="hub-tm-time-gutter" aria-hidden="true">
+          <!-- Populated dynamically; static structure for Phase 1 -->
+          <div class="hub-tm-hour-slot">
+            <span class="hub-tm-hour-label">00:00</span>
+          </div>
+          <div class="hub-tm-hour-slot">
+            <span class="hub-tm-hour-label">01:00</span>
+          </div>
+          <div class="hub-tm-hour-slot">
+            <span class="hub-tm-hour-label">02:00</span>
+          </div>
+          <div class="hub-tm-hour-slot">
+            <span class="hub-tm-hour-label">03:00</span>
+          </div>
+          <div class="hub-tm-hour-slot">
+            <span class="hub-tm-hour-label">04:00</span>
+          </div>
+          <div class="hub-tm-hour-slot">
+            <span class="hub-tm-hour-label">05:00</span>
+          </div>
+          <div class="hub-tm-hour-slot">
+            <span class="hub-tm-hour-label">06:00</span>
+          </div>
+          <div class="hub-tm-hour-slot">
+            <span class="hub-tm-hour-label">07:00</span>
+          </div>
+          <div class="hub-tm-hour-slot">
+            <span class="hub-tm-hour-label">08:00</span>
+          </div>
+          <div class="hub-tm-hour-slot">
+            <span class="hub-tm-hour-label">09:00</span>
+          </div>
+          <div class="hub-tm-hour-slot">
+            <span class="hub-tm-hour-label">10:00</span>
+          </div>
+          <div class="hub-tm-hour-slot">
+            <span class="hub-tm-hour-label">11:00</span>
+          </div>
+          <div class="hub-tm-hour-slot">
+            <span class="hub-tm-hour-label">12:00</span>
+          </div>
+          <div class="hub-tm-hour-slot">
+            <span class="hub-tm-hour-label">13:00</span>
+          </div>
+          <div class="hub-tm-hour-slot">
+            <span class="hub-tm-hour-label">14:00</span>
+          </div>
+          <div class="hub-tm-hour-slot">
+            <span class="hub-tm-hour-label">15:00</span>
+          </div>
+          <div class="hub-tm-hour-slot">
+            <span class="hub-tm-hour-label">16:00</span>
+          </div>
+          <div class="hub-tm-hour-slot">
+            <span class="hub-tm-hour-label">17:00</span>
+          </div>
+          <div class="hub-tm-hour-slot">
+            <span class="hub-tm-hour-label">18:00</span>
+          </div>
+          <div class="hub-tm-hour-slot">
+            <span class="hub-tm-hour-label">19:00</span>
+          </div>
+          <div class="hub-tm-hour-slot">
+            <span class="hub-tm-hour-label">20:00</span>
+          </div>
+          <div class="hub-tm-hour-slot">
+            <span class="hub-tm-hour-label">21:00</span>
+          </div>
+          <div class="hub-tm-hour-slot">
+            <span class="hub-tm-hour-label">22:00</span>
+          </div>
+          <div class="hub-tm-hour-slot">
+            <span class="hub-tm-hour-label">23:00</span>
+          </div>
+        </div>
+
+        <!-- Main column (drop / draw zone) -->
+        <div class="hub-tm-main-col" id="hub-tm-main-col">
+          <!-- 48 half-hour slot rows (one per 30 min) -->
+          <div class="hub-tm-slot" data-time="00:00"></div>
+          <div class="hub-tm-slot" data-time="00:30"></div>
+          <div class="hub-tm-slot" data-time="01:00"></div>
+          <div class="hub-tm-slot" data-time="01:30"></div>
+          <div class="hub-tm-slot" data-time="02:00"></div>
+          <div class="hub-tm-slot" data-time="02:30"></div>
+          <div class="hub-tm-slot" data-time="03:00"></div>
+          <div class="hub-tm-slot" data-time="03:30"></div>
+          <div class="hub-tm-slot" data-time="04:00"></div>
+          <div class="hub-tm-slot" data-time="04:30"></div>
+          <div class="hub-tm-slot" data-time="05:00"></div>
+          <div class="hub-tm-slot" data-time="05:30"></div>
+          <div class="hub-tm-slot" data-time="06:00"></div>
+          <div class="hub-tm-slot" data-time="06:30"></div>
+          <div class="hub-tm-slot" data-time="07:00"></div>
+          <div class="hub-tm-slot" data-time="07:30"></div>
+          <div class="hub-tm-slot" data-time="08:00"></div>
+          <div class="hub-tm-slot" data-time="08:30"></div>
+          <div class="hub-tm-slot" data-time="09:00"></div>
+          <div class="hub-tm-slot" data-time="09:30"></div>
+          <div class="hub-tm-slot" data-time="10:00"></div>
+          <div class="hub-tm-slot" data-time="10:30"></div>
+          <div class="hub-tm-slot" data-time="11:00"></div>
+          <div class="hub-tm-slot" data-time="11:30"></div>
+          <div class="hub-tm-slot" data-time="12:00"></div>
+          <div class="hub-tm-slot" data-time="12:30"></div>
+          <div class="hub-tm-slot" data-time="13:00"></div>
+          <div class="hub-tm-slot" data-time="13:30"></div>
+          <div class="hub-tm-slot" data-time="14:00"></div>
+          <div class="hub-tm-slot" data-time="14:30"></div>
+          <div class="hub-tm-slot" data-time="15:00"></div>
+          <div class="hub-tm-slot" data-time="15:30"></div>
+          <div class="hub-tm-slot" data-time="16:00"></div>
+          <div class="hub-tm-slot" data-time="16:30"></div>
+          <div class="hub-tm-slot" data-time="17:00"></div>
+          <div class="hub-tm-slot" data-time="17:30"></div>
+          <div class="hub-tm-slot" data-time="18:00"></div>
+          <div class="hub-tm-slot" data-time="18:30"></div>
+          <div class="hub-tm-slot" data-time="19:00"></div>
+          <div class="hub-tm-slot" data-time="19:30"></div>
+          <div class="hub-tm-slot" data-time="20:00"></div>
+          <div class="hub-tm-slot" data-time="20:30"></div>
+          <div class="hub-tm-slot" data-time="21:00"></div>
+          <div class="hub-tm-slot" data-time="21:30"></div>
+          <div class="hub-tm-slot" data-time="22:00"></div>
+          <div class="hub-tm-slot" data-time="22:30"></div>
+          <div class="hub-tm-slot" data-time="23:00"></div>
+          <div class="hub-tm-slot" data-time="23:30"></div>
+
+          <!-- TIME BLOCKS (positioned absolutely inside main-col) -->
+          <!-- Example placeholder block — these are generated by JS -->
+          <div class="hub-tm-block hub-tm-block--work" style="top: 540px; height: 240px;" data-block-id="demo-1" data-tag="work">
+            <div class="hub-tm-block-grip"></div>
+            <div class="hub-tm-block-content">
+              <span class="hub-tm-block-time">09:00 – 12:00</span>
+              <span class="hub-tm-block-title">Deep Work Session</span>
+              <span class="hub-tm-block-subtitle">Q3 planning review</span>
+            </div>
+            <button class="hub-tm-block-delete" aria-label="Delete block" title="Delete block">&times;</button>
+          </div>
+
+          <!-- NOW INDICATOR (current-time line) -->
+          <div class="hub-tm-now-indicator" id="hub-tm-now-indicator" style="display: none;">
+            <div class="hub-tm-now-dot"></div>
+            <div class="hub-tm-now-line"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- FOCUS MODE PANEL (overlay, hidden by default)                    -->
+  <!-- ================================================================ -->
+  <aside class="hub-tm-focus-panel" id="hub-tm-focus-panel" aria-hidden="true">
+    <div class="hub-tm-focus-backdrop"></div>
+    <div class="hub-tm-focus-card">
+      <div class="hub-tm-focus-now-badge">
+        <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="10"/></svg>
+        NOW
+      </div>
+      <div class="hub-tm-focus-block-info">
+        <span class="hub-tm-focus-time">09:00 – 12:00</span>
+        <h3 class="hub-tm-focus-title">Deep Work Session</h3>
+        <span class="hub-tm-focus-tag hub-tm-tag--work">Work</span>
+        <p class="hub-tm-focus-subtitle">Q3 planning review</p>
+      </div>
+      <div class="hub-tm-focus-progress">
+        <div class="hub-tm-focus-progress-bar">
+          <div class="hub-tm-focus-progress-fill" style="width: 45%;"></div>
+        </div>
+        <span class="hub-tm-focus-progress-label">45% complete &middot; 1h 39m remaining</span>
+      </div>
+      <button class="hub-tm-btn hub-tm-btn-focus-exit" id="tm-btn-focus-exit">Exit Focus</button>
+    </div>
+  </aside>
+
+  <!-- ================================================================ -->
+  <!-- TEACHING TOOLTIP (first-time overlay)                            -->
+  <!-- ================================================================ -->
+  <div class="hub-tm-tooltip" id="hub-tm-tooltip" style="display: none;">
+    <p class="hub-tm-tooltip-text">Click any time slot or drag to create a block. Right-click blocks for options.</p>
+  </div>
+</section>

@@ -1,0 +1,29 @@
+{
+  "name": "hubos-telegram-bot",
+  "version": "1.0.0",
+  "description": "Hub.OS Telegram Bot — DuckMail automation backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "firebase-admin": "^12.0.0",
+    "node-telegram-bot-api": "^0.66.0",
+    "playwright": "^1.61.1"
+  },
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/liamartibi7f2/personal-hub.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/liamartibi7f2/personal-hub/issues"
+  },
+  "homepage": "https://github.com/liamartibi7f2/personal-hub#readme"
+}

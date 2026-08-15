@@ -1,0 +1,329 @@
+﻿
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="Personal Hub OS — A modular command center for productivity and learning.">
+  <title>Hub OS</title>
+
+  <!-- Stylesheet (relative path for GitHub Pages) -->
+  <link rel="stylesheet" href="./styles.css">
+	  <link rel="stylesheet" href="./modules/time-management.css">
+  <link rel="stylesheet" href="./modules/collaboration.css">
+
+  <!-- Preconnect for Google Fonts (JetBrains Mono for timer/code text) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Theme flash prevention: apply data-theme before first paint -->
+  <script>
+    (function(){try{var t=localStorage.getItem('hub_theme')||'cyberpunk';if(t==='light')t='solar-zen';if(t==='dark')t='cyberpunk';document.documentElement.setAttribute('data-theme',t);}catch(_){}})();
+  </script>
+</head>
+<body>
+
+  <!-- ============================================================ -->
+  <!-- APP SHELL LAYOUT                                              -->
+  <!-- ============================================================ -->
+  <div id="app" class="app-layout">
+
+    <!-- -------------------------------------------------------- -->
+    <!-- SIDEBAR NAVIGATION                                        -->
+    <!-- Fixed left on desktop; floating bottom dock on mobile     -->
+    <!-- -------------------------------------------------------- -->
+    <aside id="sidebar" class="sidebar glass" role="navigation" aria-label="Main navigation">
+      <!-- Brand / Logo -->
+      <div class="sidebar-brand">
+        <div class="brand-icon">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+            <rect x="2" y="2" width="24" height="24" rx="6" stroke="var(--accent-primary)" stroke-width="2"/>
+            <circle cx="14" cy="14" r="5" fill="var(--accent-primary)" opacity="0.6"/>
+            <circle cx="14" cy="14" r="2" fill="var(--accent-primary)"/>
+          </svg>
+        </div>
+        <span class="brand-text">HUB<span class="accent-dot">.</span>OS</span>
+      </div>
+
+      <!-- Nav items are injected here by app.js -->
+      <nav id="nav-list" class="sidebar-nav" aria-label="Tool navigation">
+        <!-- Populated dynamically -->
+        	        <button class="sidebar-settings-btn nav-item" id="btn-backup-open" title="Settings &amp; Data Backup" aria-label="Open settings and backup">
+          <svg width="16" height="16" viewBox="0 0 18 18" fill="none" class="sidebar-settings-icon">
+            <circle cx="9" cy="9" r="2.5" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M9 1.5v2M9 14.5v2M1.5 9h2M14.5 9h2M3.6 3.6l1.4 1.4M13 13l1.4 1.4M3.6 14.4l1.4-1.4M13 5l1.4-1.4"
+                  stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </nav>
+
+      <!-- Sidebar footer — desktop only (hidden on mobile) -->
+      <div class="sidebar-footer">
+        <div class="status-indicator" title="System offline">
+          <span class="status-dot status-dot--offline"></span>
+          <span class="status-label">Offline</span>
+        </div>
+        <button class="theme-toggle-btn" id="btn-theme-toggle" title="Toggle light/dark theme" aria-label="Toggle theme">
+          <span class="theme-toggle-icon">☀️</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- -------------------------------------------------------- -->
+    <!-- MAIN CONTENT AREA                                         -->
+    <!-- Content for the active tab is injected here               -->
+    <!-- -------------------------------------------------------- -->
+    <main id="main-content" class="main-content" aria-live="polite">
+
+        <!-- #time-management module is rendered dynamically by modules/time-management.js -->
+
+    
+
+    
+
+      <!-- Populated dynamically by app.js -->
+    </main>
+
+  </div><!-- /#app -->
+
+  <!-- ============================================================ -->
+  <!-- GLOBAL BACKUP / SETTINGS MODAL OVERLAY                         -->
+  <!-- Appears when user clicks the ⚙ icon in the sidebar footer     -->
+  <!-- ============================================================ -->
+
+<div class="backup-overlay" id="backup-overlay" role="dialog" aria-modal="true" aria-label="Settings &amp; Data Backup">
+    <div class="backup-modal glass">
+      <!-- Header -->
+      <div class="backup-modal-header">
+        <div class="backup-modal-title-group">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" class="backup-modal-icon-svg">
+            <circle cx="9" cy="9" r="2.5" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M9 1.5v2M9 14.5v2M1.5 9h2M14.5 9h2M3.6 3.6l1.4 1.4M13 13l1.4 1.4M3.6 14.4l1.4-1.4M13 5l1.4-1.4"
+                  stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          <h3>Settings &amp; Backup</h3>
+        </div>
+        <button class="backup-close-btn" id="btn-backup-close" aria-label="Close settings">✕</button>
+      </div>
+
+      <!-- Body -->
+      <div class="backup-modal-body">
+        <!-- About section -->
+        <div class="backup-section">
+          <h4 class="backup-section-title">Hub OS Data</h4>
+          <p class="backup-section-desc">Save or restore all your app data: flashcards, quiz decks, Pomodoro stats, and settings — everything stored in your browser.</p>
+        </div>
+
+        <!-- Actions -->
+        <div class="backup-actions">
+          <button class="backup-action-btn backup-action-export" id="btn-backup-export">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <path d="M9 2v10M5 7l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M3 12v3a1 1 0 001 1h10a1 1 0 001-1v-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <span>Export All Data</span>
+          </button>
+          <button class="backup-action-btn backup-action-import" id="btn-backup-import-trigger">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <path d="M9 14V4M5 9l4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M3 4v3a1 1 0 001 1h10a1 1 0 001-1V4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <span>Import Backup</span>
+          </button>
+        </div>
+
+        <!-- Hidden file input for import -->
+        <input type="file" id="backup-file-input" accept=".json" class="backup-file-hidden" aria-label="Select backup file">
+
+        <!-- Auto-save toggle -->
+        <div class="backup-section backup-section--auto-save">
+          <div class="backup-section-row">
+            <div>
+              <h4 class="backup-section-title">Auto-Save Notes</h4>
+              <p class="backup-section-desc">Automatically save notes changes to cloud / local storage</p>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="btn-auto-save-toggle" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Writing Timer Duration -->
+        <div class="backup-section backup-section--timer-duration">
+          <div class="backup-section-row">
+            <div>
+              <h4 class="backup-section-title">Writing Timer Duration</h4>
+              <p class="backup-section-desc">Default countdown length for focus writing (minutes)</p>
+            </div>
+            <div class="hub-timer-duration-input-wrap">
+              <input type="number" id="timer-duration-input" class="hub-timer-duration-input"
+                     value="30" min="5" max="120" step="5" />
+              <span class="hub-timer-duration-unit">min</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- System Language toggle -->
+        <div class="backup-section backup-section--sys-lang" id="backup-sys-lang-section">
+          <div class="backup-section-row">
+            <div>
+              <h4 class="backup-section-title">SYSTEM LANGUAGE</h4>
+              <p class="backup-section-desc" id="backup-sys-lang-desc">Choose the interface language for Hub.OS</p>
+            </div>
+            <div class="hub-syslang-toggle-group" id="backup-syslang-toggle-group">
+              <button class="hub-syslang-toggle-btn hub-syslang-toggle-btn--en hub-syslang-toggle-btn--active" id="backup-syslang-en" data-lang="en">
+                <span class="hub-syslang-toggle-flag">🇬🇧</span>
+                <span class="hub-syslang-toggle-label">EN</span>
+              </button>
+              <button class="hub-syslang-toggle-btn hub-syslang-toggle-btn--vi" id="backup-syslang-vi" data-lang="vi">
+                <span class="hub-syslang-toggle-flag">🇻🇳</span>
+                <span class="hub-syslang-toggle-label">VI</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Workspace Theme picker -->
+        <div class="backup-section backup-section--sys-theme" id="backup-sys-theme-section">
+          <div class="backup-section-row">
+            <div>
+              <h4 class="backup-section-title">WORKSPACE THEME</h4>
+              <p class="backup-section-desc" id="backup-sys-theme-desc">Choose your visual workspace environment</p>
+            </div>
+            <div class="hub-theme-swatch-group" id="backup-theme-swatch-group">
+              <!-- Cyberpunk (default dark neon) -->
+              <button class="hub-theme-swatch hub-theme-swatch--cyberpunk hub-theme-swatch--active" id="swatch-cyberpunk" data-theme="cyberpunk" title="Cyberpunk — Dark Neon">
+                <span class="hub-theme-swatch-circle hub-theme-swatch-circle--cyberpunk"></span>
+                <span class="hub-theme-swatch-label">Cyberpunk</span>
+              </button>
+              <!-- Solar Zen (clean light) -->
+              <button class="hub-theme-swatch hub-theme-swatch--solar-zen" id="swatch-solar-zen" data-theme="solar-zen" title="Solar Zen — Clean Light">
+                <span class="hub-theme-swatch-circle hub-theme-swatch-circle--solar-zen"></span>
+                <span class="hub-theme-swatch-label">Solar Zen</span>
+              </button>
+              <!-- Lo-Fi Twilight (soft dark) -->
+              <button class="hub-theme-swatch hub-theme-swatch--lofi-twilight" id="swatch-lofi-twilight" data-theme="lofi-twilight" title="Lo-Fi Twilight — Soft Dark">
+                <span class="hub-theme-swatch-circle hub-theme-swatch-circle--lofi-twilight"></span>
+                <span class="hub-theme-swatch-label">Lo-Fi Twilight</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Optimize Performance Mode -->
+        <div class="backup-section backup-section--optimize-mode">
+          <div class="backup-section-row">
+            <div>
+              <h4 class="backup-section-title">OPTIMIZE MODE — MAX PERFORMANCE &amp; FOCUS</h4>
+              <p class="backup-section-desc" id="backup-optimize-desc">Black &amp; Green Terminal — disables all animations, blurs &amp; shadows for zero GPU latency</p>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="btn-optimize-toggle">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Status message area -->
+        <div class="backup-status" id="backup-status"></div>
+      </div>
+
+      <!-- Footer -->
+      <div class="backup-modal-footer">
+        <span class="backup-footer-hint">Data never leaves your browser</span>
+        <button class="btn btn-ghost" id="btn-backup-cancel">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- FOCUS VIBE — Floating Music Player Widget                    -->
+  <!-- Persistent across SPA tab switches; YouTube iframe is hidden -->
+  <!-- ============================================================ -->
+  <div id="focus-vibe-widget" class="focus-vibe-widget">
+    <!-- Hidden YouTube player render target -->
+    <div id="focus-vibe-player"></div>
+
+    <!-- Collapsed trigger (shown when minimized) -->
+    <button id="focus-vibe-trigger" class="focus-vibe-trigger" title="Open Focus Vibe" aria-label="Open Focus Vibe player">
+      <span class="trigger-icon">🎵</span>
+    </button>
+
+    <!-- Expanded glass panel -->
+    <div class="focus-vibe-panel glass">
+      <div class="focus-vibe-header">
+        <div class="focus-vibe-header-left">
+          <span class="focus-vibe-icon">🎧</span>
+          <span class="focus-vibe-title">Focus Vibe</span>
+        </div>
+        <div class="focus-vibe-header-actions">
+          <button id="focus-vibe-minimize" class="focus-vibe-header-btn" title="Minimize" aria-label="Minimize player">—</button>
+        </div>
+      </div>
+
+      <div class="focus-vibe-body">
+        <div class="focus-vibe-now-playing">
+          <span class="now-label">Now Playing</span>
+          <span id="focus-vibe-label" class="now-value">Lofi Beats</span>
+        </div>
+
+        <!-- Neon Audio Visualizer (simulated, no Web Audio API needed) -->
+        <div class="focus-vibe-visualizer" id="focus-vibe-visualizer">
+          <div class="vibe-bar vibe-bar-c"></div>
+          <div class="vibe-bar vibe-bar-p"></div>
+          <div class="vibe-bar vibe-bar-c"></div>
+          <div class="vibe-bar vibe-bar-p"></div>
+          <div class="vibe-bar vibe-bar-c"></div>
+          <div class="vibe-bar vibe-bar-p"></div>
+        </div>
+
+        <div class="focus-vibe-controls-row">
+          <button id="focus-vibe-play" class="focus-vibe-play-btn" aria-label="Toggle play">▶</button>
+          <button id="focus-vibe-next" class="cyber-control-btn" aria-label="Next track">⏭️</button>
+          <div class="focus-vibe-volume-wrap">
+            <span class="vol-icon">🔊</span>
+            <input type="range" id="focus-vibe-volume" class="focus-vibe-volume" min="0" max="1" step="0.01" value="0.5">
+          </div>
+        </div>
+
+        <div class="focus-vibe-vibes" id="focus-vibe-vibes">
+          <!-- Injected by JS -->
+        </div>
+
+        <div class="focus-vibe-custom-row">
+          <input type="text" id="focus-vibe-url" class="focus-vibe-url-input" placeholder="Paste YouTube link..." spellcheck="false">
+          <button id="focus-vibe-load" class="focus-vibe-load-btn">Load</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SCRIPTS (order matters)                                      -->
+  <!-- 1) Firebase v10 compat (app, firestore, auth)                -->
+  <!-- 2) database.js (HubDB adapter)                               -->
+  <!-- 3) app.js (router & module registry)                         -->
+  <!-- 4) Module scripts                                            -->
+  <!-- ============================================================ -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="./database.js"></script>
+  <script src="./app.js"></script>
+  <script src="./modules/dashboard.js"></script>
+  <script src="./modules/flashcard.js"></script>
+  <script src="./modules/pomodoro.js"></script>
+  <script src="./modules/quiz.js"></script>
+  <script src="./modules/focus-vibe.js"></script>
+  <script src="./modules/notes.js"></script>
+  <script src="./modules/cashflow.js"></script>
+  <script src="./modules/auth-ui.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="./modules/collaboration.js"></script>
+  <script src="./modules/time-management.js"></script>
+</body>
+</html>
