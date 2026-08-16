@@ -68,6 +68,7 @@ const flashcardModule = (function () {
   // --- AI Settings state ---
   let _aiSchema       = [];
   let _voiceSpeed     = 0.9;
+  let _autoplayAudio  = true;      // default ON
   let _isFlashcardSettingsLoaded = false;
 
   // --- Session cache guard: prevents re-fetch + re-render race on tab switches ---
@@ -602,6 +603,12 @@ const flashcardModule = (function () {
         } else {
           _voiceSpeed = 0.9;
         }
+        // Load autoplayAudio setting (default true)
+        if (typeof settings.autoplayAudio === 'boolean') {
+          _autoplayAudio = settings.autoplayAudio;
+        } else {
+          _autoplayAudio = true;
+        }
         // Load system language from cloud settings
         if (settings.systemLanguage === 'en' || settings.systemLanguage === 'vi') {
           _systemLanguage = settings.systemLanguage;
@@ -617,11 +624,13 @@ const flashcardModule = (function () {
       } else {
         _aiSchema = DEFAULT_AI_SCHEMA.map(function (s) { return { ...s }; });
         _voiceSpeed = 0.9;
+        _autoplayAudio = true;
         _loadSystemLanguage();
         _srsConfig = { ...DEFAULT_SRS_CONFIG };
         await HubDB.saveFlashcardSettings({
           schema: _aiSchema,
           voiceSpeed: _voiceSpeed,
+          autoplayAudio: _autoplayAudio,
           systemLanguage: _systemLanguage,
           srs: _srsConfig
         });
@@ -629,6 +638,7 @@ const flashcardModule = (function () {
     } catch (_) {
       _aiSchema = DEFAULT_AI_SCHEMA.map(function (s) { return { ...s }; });
       _voiceSpeed = 0.9;
+      _autoplayAudio = true;
       _loadSystemLanguage();
       _srsConfig = { ...DEFAULT_SRS_CONFIG };
     }
@@ -750,6 +760,7 @@ const flashcardModule = (function () {
     HubDB.saveFlashcardSettings({
       schema: _aiSchema,
       voiceSpeed: _voiceSpeed,
+      autoplayAudio: _autoplayAudio,
       systemLanguage: _systemLanguage,
       srs: _srsConfig
     }).catch(function () {});
@@ -840,116 +851,108 @@ const flashcardModule = (function () {
 
         '<div class="hub-flashcard-ai-body">' +
 
-          '<div class="hub-flashcard-ai-section">' +
-            '<h4 class="hub-flashcard-ai-section-title">' + _('fc', 'promptFields') + '</h4>' +
-            '<div class="hub-flashcard-ai-field-list">' +
-              fieldsHtml +
-            '</div>' +
-          '</div>' +
+          '<!-- 1. SIMPLE: Audio Playback -->'
+        + '<div class="hn-settings-section">'
+        +   '<h3 class="hn-settings-title">AUDIO PLAYBACK</h3>'
+        +   '<div class="hn-setting-item">'
+        +     '<div class="hn-setting-info">'
+        +       '<span class="hn-setting-label">Autoplay Audio</span>'
+        +       '<span class="hn-setting-desc">Automatically play pronunciation after solving a cloze.</span>'
+        +     '</div>'
+        +     '<label class="hub-switch">'
+        +       '<input type="checkbox" id="fc-setting-autoplay"' + (_autoplayAudio ? ' checked' : '') + '>'
+        +       '<span class="hub-slider round"></span>'
+        +     '</label>'
+        +   '</div>'
+        + '</div>'
+        + '<hr class="hn-settings-divider">'
 
-          '<div class="hub-flashcard-ai-section">' +
-            '<h4 class="hub-flashcard-ai-section-title">' + _('fc', 'voiceSpeed') + '</h4>' +
-            '<div class="hub-flashcard-voice-speed-row">' +
-              '<span class="hub-flashcard-voice-speed-label">0.5x</span>' +
-              '<div class="hub-flashcard-voice-speed-track">' +
-                '<input type="range" id="hub-voice-speed-range" ' +
-                  'min="0.5" max="1.5" step="0.1" value="' + _voiceSpeed + '" ' +
-                  'class="hub-flashcard-voice-speed-slider">' +
-                '<span class="hub-flashcard-voice-speed-value" id="hub-voice-speed-display">' + _voiceSpeed.toFixed(1) + 'x</span>' +
-              '</div>' +
-              '<span class="hub-flashcard-voice-speed-label">1.5x</span>' +
-            '</div>' +
-            '<p class="hub-flashcard-voice-speed-hint">' + _('fc', 'adjustTTS') + '</p>' +
-          '</div>' +
+          '<!-- 2. INTERMEDIATE: Voice Speed -->'
+        + '<div class="hn-settings-section">'
+        +   '<h3 class="hn-settings-title">VOICE SPEED</h3>'
+        +   '<div class="hub-flashcard-voice-speed-row">'
+        +     '<span class="hub-flashcard-voice-speed-label">0.5x</span>'
+        +     '<div class="hub-flashcard-voice-speed-track">'
+        +       '<input type="range" id="hub-voice-speed-range" '
+        +         'min="0.5" max="1.5" step="0.1" value="' + _voiceSpeed + '" '
+        +         'class="hub-flashcard-voice-speed-slider">'
+        +       '<span class="hub-flashcard-voice-speed-value" id="hub-voice-speed-display">' + _voiceSpeed.toFixed(1) + 'x</span>'
+        +     '</div>'
+        +     '<span class="hub-flashcard-voice-speed-label">1.5x</span>'
+        +   '</div>'
+        +   '<p class="hub-flashcard-voice-speed-hint">' + _('fc', 'adjustTTS') + '</p>'
+        + '</div>'
+        + '<hr class="hn-settings-divider">'
 
-          '<div class="hub-flashcard-ai-section">' +
-            '<h4 class="hub-flashcard-ai-section-title">' + _('fc', 'addCustomField') + '</h4>' +
-            '<div class="hub-flashcard-ai-form">' +
-              '<div class="hub-flashcard-ai-form-row">' +
-                '<div class="hub-flashcard-ai-form-group" style="flex:1;">' +
-                  '<label class="hub-flashcard-ai-label">' + _('fc', 'fieldId') + '</label>' +
-                  '<input type="text" id="hub-ai-new-id" class="hub-flashcard-ai-input" placeholder="e.g. phrasal_verb" autocomplete="off">' +
-                '</div>' +
-                '<div class="hub-flashcard-ai-form-group" style="flex:1;">' +
-                  '<label class="hub-flashcard-ai-label">' + _('fc', 'fieldName') + '</label>' +
-                  '<input type="text" id="hub-ai-new-name" class="hub-flashcard-ai-input" placeholder="e.g. Phrasal Verb" autocomplete="off">' +
-                '</div>' +
-              '</div>' +
-              '<div class="hub-flashcard-ai-form-row">' +
-                '<div class="hub-flashcard-ai-form-group">' +
-                  '<label class="hub-flashcard-ai-label">' + _('fc', 'aiInstruction') + '</label>' +
-                  '<textarea id="hub-ai-new-prompt" class="hub-flashcard-ai-textarea" placeholder="e.g. Provide a common phrasal verb using this word" rows="2"></textarea>' +
-                '</div>' +
-              '</div>' +
-              '<div class="hub-flashcard-ai-form-row">' +
-                '<div class="hub-flashcard-ai-form-group" style="flex:0 0 240px;">' +
-                  '<label class="hub-flashcard-ai-label">Display Position</label>' +
-                  '<select id="hub-ai-new-position" class="hub-flashcard-ai-input hub-flashcard-ai-select">' +
-                    CUSTOM_FIELD_POSITIONS.map(function (p) {
-                      return '<option value="' + _esc(p.value) + '"' + (p.value === 'bottom' ? ' selected' : '') + '>' + _esc(p.label) + '</option>';
-                    }).join('') +
-                  '</select>' +
-                '</div>' +
-              '</div>' +
-              '<button class="btn btn-primary" id="hub-ai-add-field-btn">' + _('fc', 'addFieldBtn') + '</button>' +
-            '</div>' +
-          '</div>' +
+          '<!-- 3. ADVANCED: AI Prompt Fields -->'
+        + '<div class="hn-settings-section">'
+        +   '<h3 class="hn-settings-title">PROMPT FIELDS</h3>'
+        +   '<div class="hub-flashcard-ai-section">'
+        +     '<h4 class="hub-flashcard-ai-section-title">' + _('fc', 'promptFields') + '</h4>'
+        +     '<div class="hub-flashcard-ai-field-list">'
+        +       fieldsHtml +
+        +     '</div>'
+        +   '</div>'
+        +   '<div class="hub-flashcard-ai-section">'
+        +     '<h4 class="hub-flashcard-ai-section-title">' + _('fc', 'addCustomField') + '</h4>'
+        +     '<div class="hub-flashcard-ai-form">'
+        +       '<div class="hub-flashcard-ai-form-row">'
+        +         '<div class="hub-flashcard-ai-form-group" style="flex:1;">'
+        +           '<label class="hub-flashcard-ai-label">' + _('fc', 'fieldId') + '</label>'
+        +           '<input type="text" id="hub-ai-new-id" class="hub-flashcard-ai-input" placeholder="e.g. phrasal_verb" autocomplete="off">'
+        +         '</div>'
+        +         '<div class="hub-flashcard-ai-form-group" style="flex:1;">'
+        +           '<label class="hub-flashcard-ai-label">' + _('fc', 'fieldName') + '</label>'
+        +           '<input type="text" id="hub-ai-new-name" class="hub-flashcard-ai-input" placeholder="e.g. Phrasal Verb" autocomplete="off">'
+        +         '</div>'
+        +       '</div>'
+        +       '<div class="hub-flashcard-ai-form-row">'
+        +         '<div class="hub-flashcard-ai-form-group">'
+        +           '<label class="hub-flashcard-ai-label">' + _('fc', 'aiInstruction') + '</label>'
+        +           '<textarea id="hub-ai-new-prompt" class="hub-flashcard-ai-textarea" placeholder="e.g. Provide a common phrasal verb using this word" rows="2"></textarea>'
+        +         '</div>'
+        +       '</div>'
+        +       '<div class="hub-flashcard-ai-form-row">'
+        +         '<div class="hub-flashcard-ai-form-group" style="flex:0 0 240px;">'
+        +           '<label class="hub-flashcard-ai-label">Display Position</label>'
+        +           '<select id="hub-ai-new-position" class="hub-flashcard-ai-input hub-flashcard-ai-select">'
+        + CUSTOM_FIELD_POSITIONS.map(function (p) {
+return '<option value="' + _esc(p.value) + '"' + (p.value === 'bottom' ? ' selected' : '') + '>' + _esc(p.label) + '</option>';
+}).join('') +
+        +           '</select>'
+        +         '</div>'
+        +       '</div>'
+        +       '<button class="btn btn-primary" id="hub-ai-add-field-btn">' + _('fc', 'addFieldBtn') + '</button>'
+        +     '</div>'
+        +   '</div>'
+        + '</div>'
+        + '<hr class="hn-settings-divider">'
 
-          '<div class="hub-flashcard-ai-section hub-flashcard-ai-section--srs">' +
-            '<h4 class="hub-flashcard-ai-section-title" data-i18n="fc.srsSectionTitle">' + _('fc', 'srsSectionTitle') + '</h4>' +
-            '<p class="hub-flashcard-ai-section-desc" data-i18n="fc.srsSectionDesc">' + _('fc', 'srsSectionDesc') + '</p>' +
+          '<!-- 4. ADVANCED: SRS Configuration -->'
+        + '<div class="hn-settings-section">'
+        +   '<h3 class="hn-settings-title">SPACED REPETITION (SRS)</h3>'
+        +   '<div class="hub-flashcard-ai-section hub-flashcard-ai-section--srs">'
+        +     '<h4 class="hub-flashcard-ai-section-title" data-i18n="fc.srsSectionTitle">' + _('fc', 'srsSectionTitle') + '</h4>'
+        +     '<p class="hub-flashcard-ai-section-desc" data-i18n="fc.srsSectionDesc">' + _('fc', 'srsSectionDesc') + '</p>'
+        +     _renderSRSConfigFields(_srsConfig, 'srs-') +
+        +     '<details class="hub-srs-accordion" id="hub-srs-accordion">'
+        +       '<summary class="hub-srs-accordion-summary" id="hub-srs-accordion-summary">'
+        +         '<span class="hub-srs-accordion-icon">💡</span>'
+        +         '<span class="hub-srs-accordion-title" data-i18n="fc.srsGuideTitle">' + _('fc', 'srsGuideTitle') + '</span>'
+        +         '<span class="hub-srs-accordion-chevron">▼</span>'
+        +       '</summary>'
+        +       '<div class="hub-srs-accordion-content">'
+        +         '<div class="hub-srs-guide-item"><span class="hub-srs-guide-bullet"></span><span class="hub-srs-guide-text" data-i18n="fc.srsGuideLearningSteps">' + _('fc', 'srsGuideLearningSteps') + '</span></div>'
+        +         '<div class="hub-srs-guide-item"><span class="hub-srs-guide-bullet"></span><span class="hub-srs-guide-text" data-i18n="fc.srsGuideEasyInterval">' + _('fc', 'srsGuideEasyInterval') + '</span></div>'
+        +         '<div class="hub-srs-guide-item"><span class="hub-srs-guide-bullet"></span><span class="hub-srs-guide-text" data-i18n="fc.srsGuideGraduating">' + _('fc', 'srsGuideGraduating') + '</span></div>'
+        +         '<div class="hub-srs-guide-item"><span class="hub-srs-guide-bullet"></span><span class="hub-srs-guide-text" data-i18n="fc.srsGuideMultiplier">' + _('fc', 'srsGuideMultiplier') + '</span></div>'
+        +         '<div class="hub-srs-guide-item"><span class="hub-srs-guide-bullet"></span><span class="hub-srs-guide-text" data-i18n="fc.srsGuideMaxInterval">' + _('fc', 'srsGuideMaxInterval') + '</span></div>'
+        +       '</div>'
+        +     '</details>'
+        +   '</div>'
+        + '</div>'
 
-            '<div class="hub-srs-config-grid">' +
-              // a. Learning Steps
-              '<div class="hub-srs-field">' +
-                '<label class="hub-srs-label" for="srs-learning-steps" data-i18n="fc.srsLearningStepsLabel">' + _('fc', 'srsLearningStepsLabel') + '</label>' +
-                '<input type="text" id="srs-learning-steps" class="hub-srs-input" value="' + _esc(_srsConfig.learningSteps.join(', ')) + '" placeholder="e.g. 1, 10, 30" autocomplete="off">' +
-                '<span class="hub-srs-hint" data-i18n="fc.srsLearningStepsHint">' + _('fc', 'srsLearningStepsHint') + '</span>' +
-              '</div>' +
-              // b. Easy Interval
-              '<div class="hub-srs-field">' +
-                '<label class="hub-srs-label" for="srs-easy-interval" data-i18n="fc.srsEasyIntervalLabel">' + _('fc', 'srsEasyIntervalLabel') + '</label>' +
-                '<input type="number" id="srs-easy-interval" class="hub-srs-input" value="' + _srsConfig.easyInterval + '" min="1" max="365" step="1">' +
-                '<span class="hub-srs-hint" data-i18n="fc.srsEasyIntervalHint">' + _('fc', 'srsEasyIntervalHint') + '</span>' +
-              '</div>' +
-              // c. Graduating Interval
-              '<div class="hub-srs-field">' +
-                '<label class="hub-srs-label" for="srs-graduating-interval" data-i18n="fc.srsGraduatingLabel">' + _('fc', 'srsGraduatingLabel') + '</label>' +
-                '<input type="number" id="srs-graduating-interval" class="hub-srs-input" value="' + _srsConfig.graduatingInterval + '" min="1" max="365" step="1">' +
-                '<span class="hub-srs-hint" data-i18n="fc.srsGraduatingHint">' + _('fc', 'srsGraduatingHint') + '</span>' +
-              '</div>' +
-              // d. Multiplier
-              '<div class="hub-srs-field">' +
-                '<label class="hub-srs-label" for="srs-multiplier" data-i18n="fc.srsMultiplierLabel">' + _('fc', 'srsMultiplierLabel') + '</label>' +
-                '<input type="number" id="srs-multiplier" class="hub-srs-input" value="' + _srsConfig.multiplier + '" min="1.1" max="10" step="0.1">' +
-                '<span class="hub-srs-hint" data-i18n="fc.srsMultiplierHint">' + _('fc', 'srsMultiplierHint') + '</span>' +
-              '</div>' +
-              // e. Max Interval
-              '<div class="hub-srs-field">' +
-                '<label class="hub-srs-label" for="srs-max-interval" data-i18n="fc.srsMaxIntervalLabel">' + _('fc', 'srsMaxIntervalLabel') + '</label>' +
-                '<input type="number" id="srs-max-interval" class="hub-srs-input" value="' + _srsConfig.maxInterval + '" min="1" max="3650" step="1">' +
-                '<span class="hub-srs-hint" data-i18n="fc.srsMaxIntervalHint">' + _('fc', 'srsMaxIntervalHint') + '</span>' +
-              '</div>' +
-            '</div>' +
-
-            // Accordion
-            '<details class="hub-srs-accordion" id="hub-srs-accordion">' +
-              '<summary class="hub-srs-accordion-summary" id="hub-srs-accordion-summary">' +
-                '<span class="hub-srs-accordion-icon">💡</span>' +
-                '<span class="hub-srs-accordion-title" data-i18n="fc.srsGuideTitle">' + _('fc', 'srsGuideTitle') + '</span>' +
-                '<span class="hub-srs-accordion-chevron">▼</span>' +
-              '</summary>' +
-              '<div class="hub-srs-accordion-content">' +
-                '<div class="hub-srs-guide-item"><span class="hub-srs-guide-bullet"></span><span class="hub-srs-guide-text" data-i18n="fc.srsGuideLearningSteps">' + _('fc', 'srsGuideLearningSteps') + '</span></div>' +
-                '<div class="hub-srs-guide-item"><span class="hub-srs-guide-bullet"></span><span class="hub-srs-guide-text" data-i18n="fc.srsGuideEasyInterval">' + _('fc', 'srsGuideEasyInterval') + '</span></div>' +
-                '<div class="hub-srs-guide-item"><span class="hub-srs-guide-bullet"></span><span class="hub-srs-guide-text" data-i18n="fc.srsGuideGraduating">' + _('fc', 'srsGuideGraduating') + '</span></div>' +
-                '<div class="hub-srs-guide-item"><span class="hub-srs-guide-bullet"></span><span class="hub-srs-guide-text" data-i18n="fc.srsGuideMultiplier">' + _('fc', 'srsGuideMultiplier') + '</span></div>' +
-                '<div class="hub-srs-guide-item"><span class="hub-srs-guide-bullet"></span><span class="hub-srs-guide-text" data-i18n="fc.srsGuideMaxInterval">' + _('fc', 'srsGuideMaxInterval') + '</span></div>' +
-              '</div>' +
-            '</details>' +
-          '</div>' +
-
-          '<div class="hub-flashcard-ai-status" id="hub-ai-status"></div>' +
+        + '<div class="hub-flashcard-ai-status" id="hub-ai-status"></div>' +
         '</div>' +
 
         '<div class="generate-modal-footer">' +
@@ -1009,6 +1012,16 @@ const flashcardModule = (function () {
         var val = parseFloat(voiceRange.value);
         voiceDisplay.textContent = val.toFixed(1) + 'x';
         _voiceSpeed = val;
+        _saveAISettings();
+      });
+    }
+
+    // --- Autoplay Audio toggle ---
+    var autoplayToggle = overlay.querySelector('#fc-setting-autoplay');
+    if (autoplayToggle) {
+      autoplayToggle.checked = _autoplayAudio;
+      autoplayToggle.addEventListener('change', function () {
+        _autoplayAudio = autoplayToggle.checked;
         _saveAISettings();
       });
     }
@@ -3333,6 +3346,11 @@ const prompt = buildAIPrompt(word, _aiSchema);
           }
           clozeInput.classList.add('cloze-input-correct-pulse');
           setTimeout(() => { _doFlip(); }, 500);
+
+          // Autoplay audio if enabled
+          if (_autoplayAudio && card && card.term) {
+            playPronunciation(card.term);
+          }
         } else {
           // ⚡ PARTIAL OR INCORRECT — show diff mask
           var maskHTML = _buildDiffMask(userAnswer, card.term);
