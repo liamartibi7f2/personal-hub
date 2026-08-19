@@ -369,6 +369,8 @@ const BACKUP_KEYS = [
   'hub_flashcards',
   'hub_flashcard_reviewed',
   'hub_gemini_api_key',
+  'gemini_api_key',
+  'nvidia_api_key',
   'hub_notes',
   'quiz_decks',
   'hub_quiz_scores',

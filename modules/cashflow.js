@@ -764,6 +764,48 @@ const cashflowModule = (function () {
   </div>
 </div>
 
+<!-- ═══ AI FINANCIAL ADVISOR ═══ -->
+<div class="hub-cf-ai-advisor glass-card">
+  <div class="hub-cf-ai-header">
+    <h4 class="hub-cf-ai-title">🤖 AI Financial Advisor</h4>
+    <select id="cf-ai-provider" class="hub-cf-ai-select">
+      <option value="gemini">Gemini 3.7 Flash</option>
+      <option value="nvidia">Nvidia Nemotron 3 Ultra</option>
+    </select>
+    <button id="cf-ai-settings-btn" class="hub-cf-ai-settings-btn" title="Cài đặt API Key" aria-label="Cài đặt API Key">⚙️</button>
+  </div>
+  <div id="cf-ai-response" class="cf-ai-response-box">AI Advisor is ready. Ask me about your spending...</div>
+  <div class="hub-cf-ai-input-row">
+    <input type="text" id="cf-ai-prompt" class="hub-cf-ai-input" placeholder="Hỏi về chi tiêu tháng này (VD: Tiền ăn hết bao nhiêu?)...">
+    <button id="cf-ai-ask-btn" class="hub-cf-ai-btn">Hỏi</button>
+  </div>
+</div>
+
+<!-- ═══ AI KEY MANAGEMENT MODAL ═══ -->
+<div id="cf-ai-key-modal" class="hub-cf-ai-key-modal" role="dialog" aria-modal="true" aria-label="AI API Key Management" style="display:none;">
+  <div class="hub-cf-ai-key-modal-content glass">
+    <div class="hub-cf-ai-key-modal-header">
+      <h4>🔑 AI API Key Management</h4>
+      <button id="cf-key-close" class="hub-cf-ai-key-modal-close" aria-label="Close">✕</button>
+    </div>
+    <div class="hub-cf-ai-key-modal-body">
+      <div class="hub-cf-ai-key-group">
+        <label for="cf-key-gemini">Gemini API Key</label>
+        <input type="password" id="cf-key-gemini" class="hub-cf-ai-key-input" placeholder="Nhập Gemini API Key..." autocomplete="off">
+      </div>
+      <div class="hub-cf-ai-key-group">
+        <label for="cf-key-nvidia">Nvidia NIM API Key</label>
+        <input type="password" id="cf-key-nvidia" class="hub-cf-ai-key-input" placeholder="Nhập Nvidia NIM API Key..." autocomplete="off">
+      </div>
+      <div class="hub-cf-ai-key-actions">
+        <button id="cf-key-save" class="hub-cf-ai-key-btn hub-cf-ai-key-btn--save">Lưu Keys</button>
+        <button id="cf-key-clear" class="hub-cf-ai-key-btn hub-cf-ai-key-btn--clear">Xóa Keys</button>
+        <button id="cf-key-close-bottom" class="hub-cf-ai-key-btn hub-cf-ai-key-btn--close">Đóng</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ QUICK-ADD MODAL (injected into container) ═══ -->
 <div class="hub-cf-overlay" id="hub-cf-overlay" role="dialog" aria-modal="true" aria-label="${_t('modalTitle')}" style="display:none;">
   <div class="hub-cf-modal glass">
@@ -1358,6 +1400,9 @@ const cashflowModule = (function () {
       }
     };
     document.addEventListener('keydown', _boundKeydown);
+
+    // AI Financial Advisor events
+    _bindAIAdvisorEvents();
   }
 
   // ============================================================
@@ -2016,6 +2061,353 @@ const cashflowModule = (function () {
       _chart.destroy();
       _chart = null;
     }
+  }
+
+  // ============================================================
+  //   AI FINANCIAL ADVISOR
+  // ============================================================
+
+  /**
+   * Get API key for a provider from localStorage
+   * @param {string} provider - 'gemini' or 'nvidia'
+   * @returns {string|null} API key or null if not found
+   */
+  function _getAIKey(provider) {
+    const storageKey = provider === 'gemini' ? 'gemini_api_key' : 'nvidia_api_key';
+    return localStorage.getItem(storageKey);
+  }
+
+  /**
+   * Get financial context from current month's transactions
+   * Returns compressed JSON string with Date, Category, Amount, Note
+   * @returns {string} JSON string of transaction data
+   */
+  function _getFinancialContext() {
+    if (!_data || !_data.transactions || _data.transactions.length === 0) {
+      return JSON.stringify({ transactions: [], message: 'Chưa có dữ liệu giao dịch.' });
+    }
+
+    // Get transactions for current viewing month
+    const ym = _currentMonth || _currentYearMonth();
+    const monthTxs = _getMonthTransactions(ym.year, ym.month);
+
+    // If no transactions in current month, use all transactions (capped at 100)
+    const txs = monthTxs.length > 0 ? monthTxs : _getAllTransactionsSorted().slice(0, 100);
+
+    // Compress data to essential fields only
+    const compressed = txs.map(tx => ({
+      d: _formatDate(tx.day, tx.month, tx.year),  // Date
+      c: _categoryDisplayName(tx.category, tx.type), // Category
+      a: tx.amount,                                // Amount
+      t: tx.type === 'expense' ? '-' : '+',        // Type indicator
+      n: tx.desc || ''                             // Note
+    }));
+
+    return JSON.stringify({
+      month: `${ym.month}/${ym.year}`,
+      transactions: compressed,
+      summary: {
+        income: _getMonthlyIncome(ym.year, ym.month),
+        expense: _getMonthlyExpense(ym.year, ym.month)
+      }
+    });
+  }
+
+  /**
+   * Render markdown-like text to the response box
+   * @param {string} text - Text content to render
+   */
+  function _renderAIResponse(text) {
+    const el = document.getElementById('cf-ai-response');
+    if (!el) return;
+
+    // Simple markdown-ish rendering: **bold**, *italic*, `code`, line breaks
+    let html = _escHtml(text)
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/`(.+?)`/g, '<code style="background:rgba(0,240,255,0.1);padding:1px 4px;border-radius:3px;font-family:var(--font-mono);">$1</code>')
+      .replace(/\n/g, '<br>');
+
+    el.innerHTML = html;
+    el.classList.remove('loading');
+    el.scrollTop = el.scrollHeight;
+  }
+
+  /**
+   * Show loading state in response box
+   * @param {string} message - Optional loading message
+   */
+  function _showAILoading(message = 'Đang phân tích...') {
+    const el = document.getElementById('cf-ai-response');
+    if (!el) return;
+    el.classList.add('loading');
+    el.textContent = message;
+  }
+
+  /**
+   * Show error in response box
+   * @param {string} message - Error message
+   */
+  function _showAIError(message) {
+    const el = document.getElementById('cf-ai-response');
+    if (!el) return;
+    el.classList.remove('loading');
+    el.innerHTML = `<span style="color:var(--danger);">⚠️ ${_escHtml(message)}</span>`;
+  }
+
+  /**
+   * Call Nvidia NIM API (Nemotron 3 Ultra) via Vercel serverless function
+   * @param {string} systemPrompt - Complete prompt with context
+   * @param {string} apiKey - Nvidia API key
+   * @returns {Promise<string>} AI response text
+   */
+  async function _callNvidiaAPI(systemPrompt, apiKey) {
+    // Use Vercel serverless function to bypass CORS restrictions
+    const response = await fetch('https://YOUR-VERCEL-APP-NAME.vercel.app/api/ask-nvidia', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ apiKey, systemPrompt })
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(`Nvidia API error: ${response.status} - ${error.error || response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.response || 'Không có phản hồi từ AI.';
+  }
+
+  /**
+   * Call Gemini API (Gemini 3.7 Flash)
+   * @param {string} systemPrompt - Complete prompt with context
+   * @param {string} apiKey - Gemini API key
+   * @returns {Promise<string>} AI response text
+   */
+  async function _callGeminiAPI(systemPrompt, apiKey) {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: systemPrompt }]
+          }],
+          generationConfig: {
+            maxOutputTokens: 1000,
+            temperature: 0.7
+          }
+        })
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(`Gemini API error: ${response.status} - ${error.error?.message || response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || 'Không có phản hồi từ AI.';
+  }
+
+  /**
+   * Open AI Key Management Modal
+   */
+  function _openAIKeyModal() {
+    const modal = document.getElementById('cf-ai-key-modal');
+    if (!modal) return;
+
+    // Load existing keys from localStorage
+    const geminiKey = localStorage.getItem('gemini_api_key') || '';
+    const nvidiaKey = localStorage.getItem('nvidia_api_key') || '';
+
+    document.getElementById('cf-key-gemini').value = geminiKey;
+    document.getElementById('cf-key-nvidia').value = nvidiaKey;
+
+    modal.style.display = 'flex';
+    // Trigger animation
+    requestAnimationFrame(() => {
+      modal.classList.add('hub-cf-ai-key-modal--visible');
+    });
+
+    // Focus first input
+    setTimeout(() => {
+      document.getElementById('cf-key-gemini').focus();
+    }, 150);
+  }
+
+  /**
+   * Close AI Key Management Modal
+   */
+  function _closeAIKeyModal() {
+    const modal = document.getElementById('cf-ai-key-modal');
+    if (!modal) return;
+
+    modal.classList.remove('hub-cf-ai-key-modal--visible');
+    setTimeout(() => {
+      modal.style.display = 'none';
+    }, 300);
+  }
+
+  /**
+   * Save API Keys to localStorage
+   */
+  function _saveAIKeys() {
+    const geminiKey = document.getElementById('cf-key-gemini').value.trim();
+    const nvidiaKey = document.getElementById('cf-key-nvidia').value.trim();
+
+    if (geminiKey) {
+      localStorage.setItem('gemini_api_key', geminiKey);
+    }
+    if (nvidiaKey) {
+      localStorage.setItem('nvidia_api_key', nvidiaKey);
+    }
+
+    _closeAIKeyModal();
+    _showToast('✅ Đã lưu API Keys thành công!');
+  }
+
+  /**
+   * Clear API Keys from localStorage
+   */
+  function _clearAIKeys() {
+    localStorage.removeItem('gemini_api_key');
+    localStorage.removeItem('nvidia_api_key');
+
+    document.getElementById('cf-key-gemini').value = '';
+    document.getElementById('cf-key-nvidia').value = '';
+
+    _showToast('✅ Đã xóa API Keys!');
+  }
+
+  /**
+   * Main AI Ask Handler - bound to #cf-ai-ask-btn click
+   */
+  async function _handleAIAdvisorQuery() {
+    const promptInput = document.getElementById('cf-ai-prompt');
+    const providerSelect = document.getElementById('cf-ai-provider');
+    const askBtn = document.getElementById('cf-ai-ask-btn');
+
+    if (!promptInput || !providerSelect || !askBtn) return;
+
+    const userQuery = promptInput.value.trim();
+    if (!userQuery) {
+      _showAIError('Vui lòng nhập câu hỏi.');
+      return;
+    }
+
+    const provider = providerSelect.value; // 'gemini' or 'nvidia'
+
+    // Check if API key exists
+    const apiKey = _getAIKey(provider);
+    if (!apiKey) {
+      _showAIError('Vui lòng cấu hình API Key trong mục Cài đặt (⚙️) trước khi hỏi.');
+      return;
+    }
+
+    // Disable UI during request
+    askBtn.disabled = true;
+    promptInput.disabled = true;
+    _showAILoading();
+
+    try {
+      // Build system prompt with financial context
+      const context = _getFinancialContext();
+      const systemPrompt = "Bạn là một Quân sư tài chính xuất chúng. Bạn BẮT BUỘC phải luôn xưng hô và gọi tôi là 'Thiếu gia'. Nhiệm vụ của bạn là dựa vào dữ liệu giao dịch dưới đây để: Phân tích thói quen tiêu dùng, đưa ra chiến lược quản lý vốn nghiêm ngặt, và tư vấn cách phân bổ dòng tiền tối ưu nhất để gia tăng tài sản. Dữ liệu dòng tiền: " + context;
+
+      // Call appropriate API
+      let responseText;
+      if (provider === 'nvidia') {
+        responseText = await _callNvidiaAPI(systemPrompt, apiKey);
+      } else {
+        responseText = await _callGeminiAPI(systemPrompt, apiKey);
+      }
+
+      _renderAIResponse(responseText);
+      promptInput.value = ''; // Clear input on success
+
+    } catch (error) {
+      console.error('[CashFlow AI] Error:', error);
+      _showAIError(`Lỗi: ${error.message}`);
+    } finally {
+      askBtn.disabled = false;
+      promptInput.disabled = false;
+      promptInput.focus();
+    }
+  }
+
+  /**
+   * Bind AI Advisor events - called from _bindEvents()
+   */
+  function _bindAIAdvisorEvents() {
+    const askBtn = document.getElementById('cf-ai-ask-btn');
+    const promptInput = document.getElementById('cf-ai-prompt');
+    const settingsBtn = document.getElementById('cf-ai-settings-btn');
+    const modalCloseBtn = document.getElementById('cf-key-close');
+    const modalCloseBtnBottom = document.getElementById('cf-key-close-bottom');
+    const saveBtn = document.getElementById('cf-key-save');
+    const clearBtn = document.getElementById('cf-key-clear');
+    const modal = document.getElementById('cf-ai-key-modal');
+
+    if (askBtn) {
+      askBtn.addEventListener('click', _handleAIAdvisorQuery);
+    }
+
+    if (promptInput) {
+      promptInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          _handleAIAdvisorQuery();
+        }
+      });
+    }
+
+    // Settings button opens modal
+    if (settingsBtn) {
+      settingsBtn.addEventListener('click', _openAIKeyModal);
+    }
+
+    // Modal close buttons
+    if (modalCloseBtn) {
+      modalCloseBtn.addEventListener('click', _closeAIKeyModal);
+    }
+    if (modalCloseBtnBottom) {
+      modalCloseBtnBottom.addEventListener('click', _closeAIKeyModal);
+    }
+
+    // Save keys
+    if (saveBtn) {
+      saveBtn.addEventListener('click', _saveAIKeys);
+    }
+
+    // Clear keys
+    if (clearBtn) {
+      clearBtn.addEventListener('click', _clearAIKeys);
+    }
+
+    // Close modal on overlay click
+    if (modal) {
+      modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+          _closeAIKeyModal();
+        }
+      });
+    }
+
+    // Escape key to close modal
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        const modal = document.getElementById('cf-ai-key-modal');
+        if (modal && modal.style.display === 'flex') {
+          _closeAIKeyModal();
+        }
+      }
+    });
   }
 
   // ============================================================
