@@ -776,7 +776,7 @@ const cashflowModule = (function () {
   </div>
   <div id="cf-ai-response" class="cf-ai-response-box">AI Advisor is ready. Ask me about your spending...</div>
   <div class="hub-cf-ai-input-row">
-    <input type="text" id="cf-ai-prompt" class="hub-cf-ai-input" placeholder="Hỏi về chi tiêu tháng này (VD: Tiền ăn hết bao nhiêu?)...">
+    <input type="text" id="cf-ai-prompt" class="hub-cf-ai-input" placeholder="Hỏi về chi tiêu tháng này (VD: Tiền ăn hết bao nhiêu?)..." autocomplete="off" data-lpignore="true" data-form-type="other">
     <button id="cf-ai-ask-btn" class="hub-cf-ai-btn">Hỏi</button>
   </div>
 </div>
@@ -791,11 +791,11 @@ const cashflowModule = (function () {
     <div class="hub-cf-ai-key-modal-body">
       <div class="hub-cf-ai-key-group">
         <label for="cf-key-gemini">Gemini API Key</label>
-        <input type="password" id="cf-key-gemini" class="hub-cf-ai-key-input" placeholder="Nhập Gemini API Key..." autocomplete="off">
+        <input type="password" id="cf-key-gemini" class="hub-cf-ai-key-input" placeholder="Nhập Gemini API Key..." autocomplete="new-password" spellcheck="false">
       </div>
       <div class="hub-cf-ai-key-group">
         <label for="cf-key-nvidia">Nvidia NIM API Key</label>
-        <input type="password" id="cf-key-nvidia" class="hub-cf-ai-key-input" placeholder="Nhập Nvidia NIM API Key..." autocomplete="off">
+        <input type="password" id="cf-key-nvidia" class="hub-cf-ai-key-input" placeholder="Nhập Nvidia NIM API Key..." autocomplete="new-password" spellcheck="false">
       </div>
       <div class="hub-cf-ai-key-actions">
         <button id="cf-key-save" class="hub-cf-ai-key-btn hub-cf-ai-key-btn--save">Lưu Keys</button>

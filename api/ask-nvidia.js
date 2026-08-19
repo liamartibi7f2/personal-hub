@@ -29,7 +29,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: 'nvidia/nemotron-3-ultra-550b-a55b',
         messages: [{ role: 'user', content: systemPrompt }],
-        max_tokens: 1500
+        max_tokens: 4096
       })
     });
 
