@@ -16585,6 +16585,166 @@ body.theme-optimized .hub-notes-spellcheck-btn.hub-notes-lock-btn:hover {
   transform: scale(0.97);
 }
 
+/* ── Mobile Responsive (≤768px) ── */
+@media (max-width: 768px) {
+  /* Summary Cards: Stack vertically */
+  .cashflow-summary-grid {
+    grid-template-columns: 1fr !important;
+    gap: var(--space-md);
+  }
+
+  .hub-cf-card {
+    padding: var(--space-md);
+  }
+
+  .hub-cf-card-value {
+    font-size: 1.4rem;
+  }
+
+  /* Chart Container: Prevent overflow */
+  .hub-cf-chart-section {
+    width: 100%;
+    overflow-x: auto;
+    padding: var(--space-md);
+  }
+
+  .hub-cf-chart-canvas-wrap {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .hub-cf-chart-header {
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+  }
+
+  /* Action Toolbar: Wrap buttons */
+  .hub-cf-action-bar {
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+  }
+
+  .hub-cf-btn {
+    flex: 1 1 calc(50% - var(--space-sm));
+    min-width: 120px;
+    justify-content: center;
+    padding: 0.75rem 1rem;
+    font-size: 0.8rem;
+  }
+
+  .hub-cf-btn span {
+    display: none;
+  }
+
+  .hub-cf-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Transaction Table: Responsive stacking */
+  .hub-cf-table {
+    font-size: 0.75rem;
+  }
+
+  .hub-cf-table thead th {
+    padding: 0.5rem 0.4rem;
+    font-size: 0.65rem;
+  }
+
+  .hub-cf-table tbody td {
+    padding: 0.5rem 0.4rem;
+  }
+
+  .hub-cf-col--desc {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .hub-cf-cat-chip {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+  }
+
+  /* AI Financial Advisor */
+  .hub-cf-ai-advisor {
+    width: 100%;
+    padding: var(--space-md);
+  }
+
+  .hub-cf-ai-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-sm);
+  }
+
+  .hub-cf-ai-select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .hub-cf-ai-input-row {
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .hub-cf-ai-input {
+    flex: 1;
+    width: 100%;
+  }
+
+  .hub-cf-ai-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 1rem;
+  }
+
+  /* AI Settings Modal */
+  .hub-cf-ai-key-modal-content {
+    width: 90%;
+    max-width: 360px;
+    padding: var(--space-md);
+    margin: auto;
+  }
+
+  .hub-cf-ai-key-group {
+    gap: var(--space-sm);
+  }
+
+  .hub-cf-ai-key-input {
+    padding: 12px 14px;
+    font-size: 0.85rem;
+  }
+
+  .hub-cf-ai-key-actions {
+    flex-direction: column;
+  }
+
+  .hub-cf-ai-key-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 0.85rem;
+  }
+
+  /* Ledger Section */
+  .hub-cf-month-bar {
+    gap: var(--space-sm);
+  }
+
+  .hub-cf-breakdown-body {
+    padding: var(--space-sm);
+  }
+
+  .hub-cf-breakdown-item {
+    gap: var(--space-xs);
+  }
+
+  .hub-cf-breakdown-bar-track {
+    height: 4px;
+  }
+}
+
 /* Solar-zen theme adjustments for key modal */
 [data-theme="solar-zen"] .hub-cf-ai-key-modal {
   background: rgba(0, 0, 0, 0.5);
