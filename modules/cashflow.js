@@ -2163,7 +2163,7 @@ const cashflowModule = (function () {
    */
   async function _callNvidiaAPI(systemPrompt, apiKey) {
     // Use Vercel serverless function to bypass CORS restrictions
-    const response = await fetch('https://YOUR-VERCEL-APP-NAME.vercel.app/api/ask-nvidia', {
+    const response = await fetch('https://personal-hub-rose-xi.vercel.app/api/ask-nvidia', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
