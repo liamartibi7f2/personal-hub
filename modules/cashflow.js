@@ -231,6 +231,45 @@ const cashflowModule = (function () {
   let _boundKeydown = null;
 
   // ============================================================
+  //   AI ADVISOR PERSISTENT STATE
+  //   Survives destroy()/render() cycles, enables background execution
+  // ============================================================
+
+  let _aiState = {
+    provider: 'gemini',              // Persisted in localStorage
+    isLoading: false,                // Programmatic flag
+    currentResponse: '',             // Last complete response (markdown)
+    conversationHistory: [],         // [{ role, content, timestamp }]
+    lastPrompt: '',                  // Last user query
+    abortController: null,           // Active request AbortController
+    lastError: null,                 // Last error for retry UI
+    requestId: 0                     // For deduplication
+  };
+
+  function _loadAIState() {
+    try {
+      const saved = localStorage.getItem('hub_cf_ai_state');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        _aiState.provider = parsed.provider || 'gemini';
+        _aiState.conversationHistory = parsed.conversationHistory || [];
+        _aiState.currentResponse = parsed.currentResponse || '';
+        // Don't restore isLoading from disk — check in-flight request instead
+      }
+    } catch (_) {}
+  }
+
+  function _saveAIState() {
+    try {
+      localStorage.setItem('hub_cf_ai_state', JSON.stringify({
+        provider: _aiState.provider,
+        conversationHistory: _aiState.conversationHistory,
+        currentResponse: _aiState.currentResponse
+      }));
+    } catch (_) {}
+  }
+
+  // ============================================================
   //   DEFAULT DATA
   // ============================================================
 
@@ -615,6 +654,67 @@ const cashflowModule = (function () {
   }
 
   // ============================================================
+//   AI STATE RESTORATION (called from render after HTML injection)
+// ============================================================
+
+function _restoreAIState() {
+  const responseEl = _qs('#cf-ai-response');
+  const providerSelect = _qs('#cf-ai-provider');
+  const promptInput = _qs('#cf-ai-prompt');
+  const askBtn = _qs('#cf-ai-ask-btn');
+
+  // Restore provider selection
+  if (providerSelect) {
+    providerSelect.value = _aiState.provider;
+    // Don't add listener here — _bindEvents will handle it
+  }
+
+  if (_aiState.isLoading && _aiState.abortController) {
+    // Request still in flight — restore loading UI
+    if (responseEl) {
+      responseEl.classList.add('loading');
+      responseEl.textContent = 'Đang phân tích... (tiếp tục ở nền)';
+    }
+    if (promptInput) promptInput.disabled = true;
+    if (askBtn) {
+      askBtn.disabled = true;
+      askBtn.textContent = 'Đang hỏi...';
+    }
+  } else if (_aiState.currentResponse) {
+    // Has cached response — restore it
+    if (responseEl) {
+      _renderAIResponse(_aiState.currentResponse);
+    }
+    // Re-enable input
+    if (promptInput) promptInput.disabled = false;
+    if (askBtn) {
+      askBtn.disabled = false;
+      askBtn.textContent = 'Hỏi';
+    }
+  } else if (_aiState.lastError) {
+    // Has cached error — restore error UI
+    if (responseEl) {
+      _showAIError(_aiState.lastError);
+    }
+    if (promptInput) promptInput.disabled = false;
+    if (askBtn) {
+      askBtn.disabled = false;
+      askBtn.textContent = 'Hỏi';
+    }
+  } else {
+    // Default state
+    if (responseEl) {
+      responseEl.textContent = 'AI Advisor is ready. Ask me about your spending...';
+    }
+    if (promptInput) promptInput.disabled = false;
+    if (askBtn) {
+      askBtn.disabled = false;
+      askBtn.textContent = 'Hỏi';
+    }
+  }
+}
+
+  // ============================================================
   //   MODULE API — Standard Hub.OS interface
   // ============================================================
 
@@ -851,6 +951,18 @@ const cashflowModule = (function () {
     </div>
   </div>
 </div>`;
+
+      // ══════════════════════════════════════════
+      // RESTORE AI ADVISOR STATE (persistent across tab switches)
+      // ══════════════════════════════════════════
+      // Load persisted AI state on first render
+      if (!_aiState._initialized) {
+        _loadAIState();
+        _aiState._initialized = true;
+      }
+
+      // Restore AI Advisor UI from persistent state
+      _restoreAIState();
 
       // ══════════════════════════════════════════
       // RENDER DATA INTO THE UI
@@ -2179,20 +2291,78 @@ const cashflowModule = (function () {
   }
 
   /**
+   * Resilient fetch with timeout, retry, and abort support
+   * @param {string} url
+   * @param {RequestInit} options
+   * @param {Object} config { timeout, maxRetries, retryDelay, keepalive, signal }
+   * @returns {Promise<Response>}
+   */
+  async function _resilientFetch(url, options = {}, config = {}) {
+    const {
+      timeout = 120000,        // 2 min client timeout ( > Vercel 60s )
+      maxRetries = 2,
+      retryDelay = 1000,
+      keepalive = true,
+      signal: externalSignal = null
+    } = config;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    // Merge external signal (from caller) with internal timeout signal
+    let mergedSignal = controller.signal;
+    if (externalSignal) {
+      // Create a combined signal that aborts if EITHER aborts
+      const signalAny = AbortSignal.any([controller.signal, externalSignal]);
+      mergedSignal = signalAny;
+    }
+
+    // Merge signal
+    const fetchOptions = {
+      ...options,
+      signal: mergedSignal,
+      keepalive
+    };
+
+    let lastError;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await fetch(url, fetchOptions);
+        clearTimeout(timeoutId);
+        return response;
+      } catch (err) {
+        clearTimeout(timeoutId);
+        lastError = err;
+
+        // Don't retry on abort or non-network errors
+        if (err.name === 'AbortError' || err.name === 'TypeError') {
+          throw err;
+        }
+
+        if (attempt < maxRetries) {
+          await new Promise(r => setTimeout(r, retryDelay * (attempt + 1)));
+        }
+      }
+    }
+    throw lastError;
+  }
+
+  /**
    * Call Nvidia NIM API (Nemotron 3 Ultra) via Vercel serverless function
    * @param {string} systemPrompt - Complete prompt with context
    * @param {string} apiKey - Nvidia API key
+   * @param {AbortSignal} [signal] - Optional abort signal for cancellation
    * @returns {Promise<string>} AI response text
    */
-  async function _callNvidiaAPI(systemPrompt, apiKey) {
+  async function _callNvidiaAPI(systemPrompt, apiKey, signal) {
     // Use Vercel serverless function to bypass CORS restrictions
-    const response = await fetch('https://personal-hub-rose-xi.vercel.app/api/ask-nvidia', {
+    const response = await _resilientFetch('https://personal-hub-rose-xi.vercel.app/api/ask-nvidia', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ apiKey, systemPrompt })
-    });
+    }, { timeout: 120000, maxRetries: 2, keepalive: true, signal }); // 2 min timeout > Vercel 60s
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
@@ -2207,10 +2377,11 @@ const cashflowModule = (function () {
    * Call Gemini API (Gemini 3.7 Flash)
    * @param {string} systemPrompt - Complete prompt with context
    * @param {string} apiKey - Gemini API key
+   * @param {AbortSignal} [signal] - Optional abort signal for cancellation
    * @returns {Promise<string>} AI response text
    */
-  async function _callGeminiAPI(systemPrompt, apiKey) {
-    const response = await fetch(
+  async function _callGeminiAPI(systemPrompt, apiKey, signal) {
+    const response = await _resilientFetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
@@ -2226,7 +2397,7 @@ const cashflowModule = (function () {
             temperature: 0.7
           }
         })
-      }
+      }, { timeout: 60000, maxRetries: 2, keepalive: true, signal } // 60s timeout for Gemini
     );
 
     if (!response.ok) {
@@ -2310,6 +2481,7 @@ const cashflowModule = (function () {
 
   /**
    * Main AI Ask Handler - bound to #cf-ai-ask-btn click
+   * Supports background execution: continues even if user navigates away
    */
   async function _handleAIAdvisorQuery() {
     const promptInput = document.getElementById('cf-ai-prompt');
@@ -2325,6 +2497,7 @@ const cashflowModule = (function () {
     }
 
     const provider = providerSelect.value; // 'gemini' or 'nvidia'
+    _aiState.provider = provider; // Persist provider choice
 
     // Check if API key exists
     const apiKey = _getAIKey(provider);
@@ -2333,10 +2506,36 @@ const cashflowModule = (function () {
       return;
     }
 
-    // Disable UI during request
+    // Abort any previous in-flight request
+    if (_aiState.abortController) {
+      _aiState.abortController.abort();
+    }
+
+    // Create new abort controller for this request
+    _aiState.abortController = new AbortController();
+    const signal = _aiState.abortController.signal;
+    const currentRequestId = ++_aiState.requestId; // Deduplication
+
+    // Update state BEFORE starting background fetch
+    _aiState.isLoading = true;
+    _aiState.lastPrompt = userQuery;
+    _aiState.lastError = null;
+    _aiState.currentResponse = ''; // Clear previous response while loading
+
+    // Disable UI during request (will be restored on re-render if user navigates away)
     askBtn.disabled = true;
     promptInput.disabled = true;
     _showAILoading();
+
+    // Add user message to conversation history
+    _aiState.conversationHistory.push({
+      role: 'user',
+      content: userQuery,
+      timestamp: Date.now()
+    });
+
+    // Save state immediately for persistence across tab switches
+    _saveAIState();
 
     try {
       // Build system prompt with financial context
@@ -2349,24 +2548,82 @@ const cashflowModule = (function () {
         "Dựa vào dữ liệu tài chính dưới đây để: Phân tích thói quen tiêu dùng, đưa ra chiến lược quản lý vốn nghiêm ngặt, và tư vấn cách phân bổ dòng tiền tối ưu nhất để gia tăng tài sản. " +
         "Dữ liệu dòng tiền: " + context;
 
-      // Call appropriate API
+      // Call appropriate API with abort signal
       let responseText;
       if (provider === 'nvidia') {
-        responseText = await _callNvidiaAPI(systemPrompt, apiKey);
+        responseText = await _callNvidiaAPI(systemPrompt, apiKey, signal);
       } else {
-        responseText = await _callGeminiAPI(systemPrompt, apiKey);
+        responseText = await _callGeminiAPI(systemPrompt, apiKey, signal);
       }
 
-      _renderAIResponse(responseText);
-      promptInput.value = ''; // Clear input on success
+      // DEDUPLICATION: ignore stale responses from superseded requests
+      if (currentRequestId !== _aiState.requestId) {
+        console.log('[CashFlow AI] Ignoring stale response (superseded by newer request)');
+        return;
+      }
+
+      // Update state with successful response
+      _aiState.isLoading = false;
+      _aiState.currentResponse = responseText;
+      _aiState.lastError = null;
+
+      // Add assistant response to conversation history
+      _aiState.conversationHistory.push({
+        role: 'assistant',
+        content: responseText,
+        timestamp: Date.now()
+      });
+
+      // Persist state
+      _saveAIState();
+
+      // Render response if UI still available
+      const responseEl = document.getElementById('cf-ai-response');
+      if (responseEl) {
+        _renderAIResponse(responseText);
+      }
+
+      // Clear input on success
+      promptInput.value = '';
 
     } catch (error) {
+      // DEDUPLICATION: ignore stale errors from superseded requests
+      if (currentRequestId !== _aiState.requestId) {
+        console.log('[CashFlow AI] Ignoring stale error (superseded by newer request)');
+        return;
+      }
+
+      // Don't treat abort as error
+      if (error.name === 'AbortError') {
+        _aiState.isLoading = false;
+        _aiState.currentResponse = 'Yêu cầu đã bị hủy.';
+        _saveAIState();
+        return;
+      }
+
       console.error('[CashFlow AI] Error:', error);
-      _showAIError(`Lỗi: ${error.message}`);
+      _aiState.isLoading = false;
+      _aiState.lastError = error.message;
+      _saveAIState();
+
+      // Show error with retry option if UI available
+      const responseEl = document.getElementById('cf-ai-response');
+      if (responseEl) {
+        _showAIError(`Lỗi: ${error.message}`);
+      }
+
     } finally {
-      askBtn.disabled = false;
-      promptInput.disabled = false;
-      promptInput.focus();
+      // Only re-enable UI if this is still the current request
+      if (currentRequestId === _aiState.requestId) {
+        _aiState.abortController = null;
+
+        // Re-enable UI if elements still exist (user hasn't navigated away)
+        if (askBtn) askBtn.disabled = false;
+        if (promptInput) {
+          promptInput.disabled = false;
+          promptInput.focus();
+        }
+      }
     }
   }
 
@@ -2376,6 +2633,7 @@ const cashflowModule = (function () {
   function _bindAIAdvisorEvents() {
     const askBtn = document.getElementById('cf-ai-ask-btn');
     const promptInput = document.getElementById('cf-ai-prompt');
+    const providerSelect = document.getElementById('cf-ai-provider');
     const settingsBtn = document.getElementById('cf-ai-settings-btn');
     const modalCloseBtn = document.getElementById('cf-key-close');
     const modalCloseBtnBottom = document.getElementById('cf-key-close-bottom');
@@ -2393,6 +2651,14 @@ const cashflowModule = (function () {
           e.preventDefault();
           _handleAIAdvisorQuery();
         }
+      });
+    }
+
+    // Provider change — persist selection
+    if (providerSelect) {
+      providerSelect.addEventListener('change', function() {
+        _aiState.provider = this.value;
+        _saveAIState();
       });
     }
 
