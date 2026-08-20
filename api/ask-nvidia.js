@@ -1,11 +1,9 @@
 // api/ask-nvidia.js
 
-// 1. Tận dụng tối đa 60 giây của Vercel Hobby
 export const config = {
   maxDuration: 60,
 };
 
-// 2. CORS headers cơ bản nhất
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS, POST',
@@ -13,12 +11,10 @@ const CORS_HEADERS = {
 };
 
 export default async function handler(req, res) {
-  // Gắn CORS cho mọi phản hồi
   Object.entries(CORS_HEADERS).forEach(([key, value]) => {
     res.setHeader(key, value);
   });
 
-  // Chặn cửa OPTIONS (Preflight) - rất quan trọng để không bị lỗi Failed to fetch
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -33,7 +29,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Gọi API của Nvidia, để nó tự chạy tới khi xong (hoặc tới khi Vercel chém ở giây 60)
     const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -41,24 +36,39 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'nvidia/nemotron-3-ultra-550b-a55b',
+        model: 'meta/llama-3.1-70b-instruct',
         messages: [{ role: 'user', content: systemPrompt }],
         max_tokens: 4096,
         stream: false,
       }),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      return res.status(response.status).json({ error: errorData.error || 'Nvidia API error' });
+    const rawText = await response.text();
+
+    let errorDetail;
+    try {
+      const parsed = JSON.parse(rawText);
+      errorDetail = parsed.error || parsed.message || 'Nvidia API error';
+    } catch {
+      errorDetail = rawText.slice(0, 500) || 'Nvidia API error (non-JSON response)';
     }
 
-    const data = await response.json();
+    if (!response.ok) {
+      return res.status(response.status).json({ error: errorDetail });
+    }
+
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      return res.status(502).json({ error: 'Invalid JSON from Nvidia API', raw: rawText.slice(0, 500) });
+    }
+
     const aiText = data.choices?.[0]?.message?.content || 'Không có phản hồi từ AI.';
-    res.status(200).json({ response: aiText });
-    
+    return res.status(200).json({ response: aiText });
+
   } catch (err) {
     console.error('Backend proxy error:', err);
-    res.status(500).json({ error: 'Proxy server error' });
+    return res.status(500).json({ error: 'Proxy server error', detail: err?.message || String(err) });
   }
 }
