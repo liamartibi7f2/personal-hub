@@ -2354,24 +2354,24 @@ function _restoreAIState() {
    * @param {AbortSignal} [signal] - Optional abort signal for cancellation
    * @returns {Promise<string>} AI response text
    */
-  async function _callNvidiaAPI(systemPrompt, apiKey, signal) {
-    // Use Vercel serverless function to bypass CORS restrictions
-    const response = await _resilientFetch('https://personal-hub-rose-xi.vercel.app/api/ask-nvidia', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ apiKey, systemPrompt })
-    }, { timeout: 120000, maxRetries: 2, keepalive: true, signal }); // 2 min timeout > Vercel 60s
+ async function _callNvidiaAPI(systemPrompt, apiKey) {
+   // GỌI THẲNG fetch nguyên thủy của trình duyệt, không đếm giờ, không ép retry
+   const response = await fetch('https://personal-hub-rose-xi.vercel.app/api/ask-nvidia', {
+    method: 'POST',
+     headers: {
+       'Content-Type': 'application/json'
+     },
+     body: JSON.stringify({ apiKey, systemPrompt })
+   });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(`Nvidia API error: ${response.status} - ${error.error || response.statusText}`);
-    }
+   if (!response.ok) {
+     const error = await response.json().catch(() => ({}));
+     throw new Error(`Nvidia API error: ${response.status} - ${error.error || response.statusText}`);
+   }
 
-    const data = await response.json();
-    return data.response || 'Không có phản hồi từ AI.';
-  }
+   const data = await response.json();
+   return data.response || 'Không có phản hồi từ AI.';
+ }
 
   /**
    * Call Gemini API (Gemini 3.7 Flash)
