@@ -2080,11 +2080,21 @@ const cashflowModule = (function () {
   /**
    * Get financial context from current month's transactions
    * Returns compressed JSON string with Date, Category, Amount, Note
-   * @returns {string} JSON string of transaction data
+   * Includes pre-calculated categoryTotals to prevent AI math hallucinations
+   * Includes manual balances: netWorth (computed live) and savings (manual override)
+   * @returns {string} JSON string of transaction data and balances
    */
   function _getFinancialContext() {
     if (!_data || !_data.transactions || _data.transactions.length === 0) {
-      return JSON.stringify({ transactions: [], message: 'Chưa có dữ liệu giao dịch.' });
+      return JSON.stringify({
+        transactions: [],
+        message: 'Chưa có dữ liệu giao dịch.',
+        categoryTotals: { income: {}, expense: {} },
+        balances: {
+          netWorth: _computeLiveNetWorth() || 0,
+          savings: _savingsBalance || 0
+        }
+      });
     }
 
     // Get transactions for current viewing month
@@ -2093,6 +2103,14 @@ const cashflowModule = (function () {
 
     // If no transactions in current month, use all transactions (capped at 100)
     const txs = monthTxs.length > 0 ? monthTxs : _getAllTransactionsSorted().slice(0, 100);
+
+    // Pre-calculate category totals on the client side (EXACT math)
+    const categoryTotals = { income: {}, expense: {} };
+    txs.forEach(tx => {
+      const type = tx.type === 'income' ? 'income' : 'expense';
+      const catName = _categoryDisplayName(tx.category, tx.type);
+      categoryTotals[type][catName] = (categoryTotals[type][catName] || 0) + (tx.amount || 0);
+    });
 
     // Compress data to essential fields only
     const compressed = txs.map(tx => ({
@@ -2109,6 +2127,11 @@ const cashflowModule = (function () {
       summary: {
         income: _getMonthlyIncome(ym.year, ym.month),
         expense: _getMonthlyExpense(ym.year, ym.month)
+      },
+      categoryTotals: categoryTotals,
+      balances: {
+        netWorth: _computeLiveNetWorth(),
+        savings: _savingsBalance || 0
       }
     });
   }
@@ -2318,7 +2341,13 @@ const cashflowModule = (function () {
     try {
       // Build system prompt with financial context
       const context = _getFinancialContext();
-      const systemPrompt = "Bạn là một Quân sư tài chính xuất chúng. Bạn BẮT BUỘC phải luôn xưng hô và gọi tôi là 'Thiếu gia'. Nhiệm vụ của bạn là dựa vào dữ liệu giao dịch dưới đây để: Phân tích thói quen tiêu dùng, đưa ra chiến lược quản lý vốn nghiêm ngặt, và tư vấn cách phân bổ dòng tiền tối ưu nhất để gia tăng tài sản. Dữ liệu dòng tiền: " + context;
+      const systemPrompt = "Bạn là một Quân sư tài chính xuất chúng. Bạn BẮT BUỘC phải luôn xưng hô và gọi tôi là 'Thiếu gia'. " +
+        "NHIỀM VỤ TUYỆT ĐỐI: KHÔNG TỰ TÍNH TOÁN TỔNG HỢP THEO HÀNG MỤC (category totals). " +
+        "BẮT BUỘC PHẢI SỬ DỤNG CHÍNH XÁC CÁC CON SỐ ĐÃ TÍNH SẴN TRONG ĐỐI TƯỢNG 'categoryTotals' (income/expense) ĐỂ TỔNG HỢP TÀI CHÍNH. " +
+        "CHỈ SỬ DỤNG MẢNG 'transactions' ĐỂ PHÂN TÍCH MẪU THÓI QUEN, TẦN SUẤT GIAO DỊCH, VÀ MÔ TẢ CHI TIẾT. " +
+        "NẾU BẠN TỰ TÍNH TOÁN, CON SỐ SẼ SAI (HALLUCINATION). TUÂN THỦ NGHIÊM NGẶT QUY TẮC NÀY. " +
+        "Dựa vào dữ liệu tài chính dưới đây để: Phân tích thói quen tiêu dùng, đưa ra chiến lược quản lý vốn nghiêm ngặt, và tư vấn cách phân bổ dòng tiền tối ưu nhất để gia tăng tài sản. " +
+        "Dữ liệu dòng tiền: " + context;
 
       // Call appropriate API
       let responseText;

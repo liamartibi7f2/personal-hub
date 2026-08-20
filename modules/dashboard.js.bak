@@ -432,30 +432,29 @@ const dashboardModule = (function () {
       var titleStyle = buildTitleStyle();
       var titleReflectClass = _vizStyleConfig.reflection ? ' hub-viz-habit-title-reflect' : '';
 
-      // Build one item markup WITH CHECKBOX
+      // Build one item markup
       var buildItemHtml = function (h, idx) {
-        var isCompleted = h.completed === true;
-        var checkboxHtml = '<div class="habit-checkbox " + (isCompleted ? "completed" : "") + "\" data-habit-idx=\"" + idx + "\"></div>';
-        var titleStyled = '<span class="hub-viz-habit-title-styled' + titleReflectClass + (isCompleted ? ' hub-viz-habit-title--done' : '') + '" style="' + titleStyle + '">' + (h.title || 'Untitled') + '</span>';
+        var titleStyled = '<span class="hub-viz-habit-title-styled' + titleReflectClass + '" style="' + titleStyle + '">' + (h.title || 'Untitled') + '</span>';
 
         var rewardHtml = '';
         if (h.reward && h.reward.trim()) {
-          rewardHtml = '<span class="hub-viz-reward-chip">🏆 ' + (h.reward.replace(/"/g, '"').replace(/</g, '<')) + '</span>';
+          rewardHtml = '<span class="hub-viz-reward-chip">🏆 ' + (h.reward.replace(/"/g, '&quot;').replace(/</g, '&lt;')) + '</span>';
         }
 
         var deadlineHtml = '';
         if (h.deadline) {
           var deadlineClass = 'hub-viz-deadline-badge';
-          if (isCompleted) {
+          if (h.completed) {
             deadlineClass += ' hub-viz-deadline-badge--done';
           }
-          deadlineHtml = '<span class="' + deadlineClass + '" data-deadline="' + h.deadline + '" data-idx="' + idx + '">' + self._formatCountdown(h.deadline, isCompleted) + '</span>';
+          deadlineHtml = '<span class="' + deadlineClass + '" data-deadline="' + h.deadline + '" data-idx="' + idx + '">' + self._formatCountdown(h.deadline, h.completed) + '</span>';
         }
 
-        var doneClass = isCompleted ? ' hub-viz-board-item--done' : '';
-        var completeAttr = isCompleted ? '' : 'data-complete-idx="' + idx + '"';
-        return '<div class="hub-viz-board-item' + doneClass + '" ' + completeAttr + '>' + checkboxHtml + titleStyled + rewardHtml + deadlineHtml + '</div>';
+        var doneClass = h.completed ? ' hub-viz-board-item--done' : '';
+        var completeAttr = h.completed ? '' : 'data-complete-idx="' + idx + '"';
+        return '<div class="hub-viz-board-item' + doneClass + '" ' + completeAttr + '>' + titleStyled + rewardHtml + deadlineHtml + '</div>';
       };
+
       if (_vizMode === 'showAll') {
         var itemsHtml = '';
         for (var i = 0; i < _vizHabitData.length; i++) {
@@ -476,20 +475,6 @@ const dashboardModule = (function () {
           + '</div>'
           + gearHtml;
       }
-
-      // Bind checkbox click events AFTER render
-      board.querySelectorAll('.habit-checkbox').forEach(function (checkbox) {
-        checkbox.addEventListener('click', function (e) {
-          e.stopPropagation();
-          var idx = parseInt(this.getAttribute('data-habit-idx'), 10);
-          if (idx >= 0 && idx < _vizHabitData.length) {
-            _vizHabitData[idx].completed = !_vizHabitData[idx].completed;
-            self._saveHabitData();
-            self._renderVizBoard();
-            self._startDeadlineTimer();
-          }
-        });
-      });
     },
 
     /* ──────────────────────────────────────────────
@@ -568,23 +553,23 @@ const dashboardModule = (function () {
         });
       }
 
-      // Modal close - FIXED
+      // Modal close
       var overlay = document.getElementById('hub-viz-settings-overlay');
       var closeBtn = document.getElementById('hub-viz-settings-close');
       var toggle = document.getElementById('hub-viz-mode-toggle');
 
       if (closeBtn && overlay) {
         closeBtn.addEventListener('click', function () {
-          overlay.classList.remove('active');
+          overlay.classList.remove('hub-viz-settings-overlay--visible');
         });
         overlay.addEventListener('click', function (e) {
           if (e.target === overlay) {
-            overlay.classList.remove('active');
+            overlay.classList.remove('hub-viz-settings-overlay--visible');
           }
         });
         document.addEventListener('keydown', function (e) {
-          if (e.key === 'Escape' && overlay.classList.contains('active')) {
-            overlay.classList.remove('active');
+          if (e.key === 'Escape' && overlay.classList.contains('hub-viz-settings-overlay--visible')) {
+            overlay.classList.remove('hub-viz-settings-overlay--visible');
           }
         });
       }
@@ -792,7 +777,7 @@ const dashboardModule = (function () {
           ? 'Show All (each habit visible)'
           : 'Priority (One) following one habit at a time';
       }
-      overlay.classList.add('active');
+      overlay.classList.add('hub-viz-settings-overlay--visible');
 	      this._hydrateVizSettings();
 	      this._bindVizSettingsHelper();
     },

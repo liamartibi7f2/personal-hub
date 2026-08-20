@@ -1,0 +1,11 @@
+// Build one item markup
+      var buildItemHtml = function (h, idx) {
+        var titleStyled = '<span class="hub-viz-habit-title-styled' + titleReflectClass + '" style="' + titleStyle + '">' + (h.title || 'Untitled') + '</span>';
+
+        var rewardHtml = '';
+        if (h.reward && h.reward.trim()) {
+          rewardHtml = '<span class="hub-viz-reward-chip">🏆 ' + (h.reward.replace(/"/g, '&quot;').replace(/</g, '&lt;')) + '</span>';
+        }
+
+        var deadlineHtml = '';
+        if (h.de
