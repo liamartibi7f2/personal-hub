@@ -2,11 +2,11 @@ export const config = {
   maxDuration: 60,
 };
 
-const keepAliveAgent = new fetchAgent({ keepAlive: true, timeout: 55000 });
-
-async function fetchAgent(options = {}) {
-  return globalThis.fetch.bind(globalThis);
-}
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS, PATCH, DELETE, POST, PUT',
+  'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version',
+};
 
 function createOptimizedFetch() {
   const controller = new AbortController();
@@ -29,18 +29,18 @@ function createOptimizedFetch() {
 const optimizedFetch = createOptimizedFetch();
 
 export default async function handler(req, res) {
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  // Set CORS headers on every response
+  Object.entries(CORS_HEADERS).forEach(([key, value]) => {
+    res.setHeader(key, value);
+  });
 
-  // Handle preflight
+  // Handle OPTIONS preflight
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({ error: 'Method not allowed', allowedMethods: ['POST', 'OPTIONS'] });
   }
 
   const { apiKey, systemPrompt } = req.body;
