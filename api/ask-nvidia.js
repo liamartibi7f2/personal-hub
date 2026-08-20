@@ -8,26 +8,6 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version',
 };
 
-function createOptimizedFetch() {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 55000);
-
-  return async (url, options = {}) => {
-    try {
-      const response = await globalThis.fetch(url, {
-        ...options,
-        signal: controller.signal,
-        keepalive: true,
-      });
-      return response;
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  };
-}
-
-const optimizedFetch = createOptimizedFetch();
-
 export default async function handler(req, res) {
   // Set CORS headers on every response
   Object.entries(CORS_HEADERS).forEach(([key, value]) => {
@@ -50,7 +30,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const response = await optimizedFetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+    const response = await globalThis.fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -75,9 +55,6 @@ export default async function handler(req, res) {
     res.status(200).json({ response: aiText });
   } catch (err) {
     console.error('Proxy error:', err);
-    if (err.name === 'AbortError') {
-      return res.status(504).json({ error: 'Request timeout - Nvidia API took too long to respond' });
-    }
     res.status(500).json({ error: 'Proxy server error' });
   }
 }
