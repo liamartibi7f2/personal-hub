@@ -78,6 +78,8 @@ const cashflowModule = (function () {
       // Ledger
       categoryToggle:   '📊 Detailed Stats',
       categoryTitle:    'CATEGORY BREAKDOWN',
+      tabLedger:        'Transaction List',
+      tabStats:         'Category Breakdown',
       breakdownIncome:  '⬆ Income',
       breakdownExpense: 'Expense',
 
@@ -144,6 +146,8 @@ const cashflowModule = (function () {
       // Ledger
       categoryToggle:   '📊 Thống kê chi tiết',
       categoryTitle:    'HẠNG MỤC CHI TIÊU',
+      tabLedger:        'Lịch sử',
+      tabStats:         'Thống kê',
       breakdownIncome:  '⬆ Thu Nhập',
       breakdownExpense: 'Chi Phí',
 
@@ -182,6 +186,103 @@ const cashflowModule = (function () {
       importNotLoaded:  'Thư viện XLSX chưa được tải.'
     }
   };
+
+  // ══════════════════════════════════════════════════════════════
+  // POCKET DEBT I18N DICTIONARY
+  // ══════════════════════════════════════════════════════════════
+
+  var POCKET_DEBT_I18N = {
+    vi: {
+      debtSummaryTitle:    'SỔ NỢ BỎ TÚI',
+      debtSummarySub:      'Tổng tiền đang cho mượn',
+      totalPendingDebt:    'Tổng nợ đang chờ thu',
+      ledgerTitle:         'DANH SÁCH NỢ',
+      colDebtor:           'Người mượn',
+      colAmount:           'Số tiền',
+      colDateBorrowed:     'Ngày mượn',
+      colExpectedReturn:   'Ngày hẹn trả',
+      colStatus:           'Trạng thái',
+      colActions:          'Thao tác',
+      statusPending:       'Đang chờ',
+      statusPaid:          'Đã trả',
+      statusOverdue:       'Quá hạn',
+      btnMarkPaid:         'Đã trả',
+      btnAddDebt:          'Thêm nợ mới',
+      btnDelete:           'Xóa',
+      modalTitle:          'Thêm khoản nợ mới',
+      labelDebtorName:     'Tên người mượn',
+      labelAmount:         'Số tiền (VND)',
+      labelDateBorrowed:   'Ngày mượn',
+      labelExpectedReturn: 'Ngày hẹn trả',
+      labelNote:           'Ghi chú',
+      placeholderDebtor:   'VD: Anh Minh, Chị Lan...',
+      placeholderAmount:   '0',
+      placeholderNote:     'VD: Mượn tiền ăn trưa, Mượn cấp bách...',
+      btnCancel:           'Hủy',
+      btnSave:             'Lưu',
+      confirmMarkPaid:     'Đánh dấu "{name}" đã trả nợ {amount}?',
+      confirmAddToIncome:  'Bạn có muốn thêm khoản nợ này vào Thu nhập CashFlow dưới danh mục "Thu nợ"?',
+      confirmDelete:       'Xóa khoản nợ của "{name}" ({amount})?',
+      toastDebtAdded:      '✅ Đã thêm khoản nợ: {name} - {amount}',
+      toastDebtPaid:       '✅ Đã đánh dấu đã trả: {name} - {amount}',
+      toastDebtDeleted:    '✅ Đã xóa khoản nợ: {name}',
+      toastIncomeAdded:    '✅ Đã thêm vào Thu nhập: Thu nợ từ {name}',
+      noDebtsYet:          'Chưa có khoản nợ nào.',
+      noDebtsHint:         'Nhấn <strong>Thêm nợ mới</strong> để bắt đầu theo dõi.',
+      historyTitle:        'LỊCH SỬ ĐÃ TRẢ',
+      toggleHistory:       'Xem lịch sử',
+      emptyHistory:        'Chưa có khoản nợ nào được trả.',
+      btnClose:            'Đóng'
+    },
+    en: {
+      debtSummaryTitle:    'POCKET DEBT',
+      debtSummarySub:      'Total Money Lent Out',
+      totalPendingDebt:    'Total Pending Debt',
+      ledgerTitle:         'DEBT LEDGER',
+      colDebtor:           'Debtor',
+      colAmount:           'Amount',
+      colDateBorrowed:     'Borrowed Date',
+      colExpectedReturn:   'Expected Return',
+      colStatus:           'Status',
+      colActions:          'Actions',
+      statusPending:       'Pending',
+      statusPaid:          'Paid',
+      statusOverdue:       'Overdue',
+      btnMarkPaid:         'Mark Paid',
+      btnAddDebt:          'Add New Debt',
+      btnDelete:           'Delete',
+      modalTitle:          'Add New Debt',
+      labelDebtorName:     'Debtor Name',
+      labelAmount:         'Amount (VND)',
+      labelDateBorrowed:   'Date Borrowed',
+      labelExpectedReturn: 'Expected Return',
+      labelNote:           'Note',
+      placeholderDebtor:   'e.g. John, Sarah...',
+      placeholderAmount:   '0',
+      placeholderNote:     'e.g. Lunch money, Emergency loan...',
+      btnCancel:           'Cancel',
+      btnSave:             'Save',
+      confirmMarkPaid:     'Mark "{name}" as paid ({amount})?',
+      confirmAddToIncome:  'Add this debt to CashFlow Income as "Debt Collection"?',
+      confirmDelete:       'Delete debt from "{name}" ({amount})?',
+      toastDebtAdded:      '✅ Added debt: {name} - {amount}',
+      toastDebtPaid:       '✅ Marked paid: {name} - {amount}',
+      toastDebtDeleted:    '✅ Deleted debt: {name}',
+      toastIncomeAdded:    '✅ Added to Income: Debt collection from {name}',
+      noDebtsYet:          'No debts yet.',
+      noDebtsHint:         'Click <strong>Add New Debt</strong> to start tracking.',
+      historyTitle:        'PAID HISTORY',
+      toggleHistory:       'View History',
+      emptyHistory:        'No paid debts yet.',
+      btnClose:            'Close'
+    }
+  };
+
+  function _pd_t(key) {
+    var lang = _getCFLang();
+    var dict = POCKET_DEBT_I18N[lang] || POCKET_DEBT_I18N['vi'];
+    return dict[key] || (POCKET_DEBT_I18N['vi'][key] || key);
+  }
 
   /**
    * getCFLang() — Read the current language from global app state or
@@ -277,7 +378,8 @@ const cashflowModule = (function () {
     return {
       startingBalance: 0,
       balanceSnapshots: [],  // { year, month, accountId, amount }
-      transactions: []       // { id, type, amount, day, month, year, desc, category, createdAt }
+      transactions: [],       // { id, type, amount, day, month, year, desc, category, createdAt }
+      debts: []               // { id, debtorName, amount, dateBorrowed, expectedReturnDate, status, note, paidAt, createdAt }
     };
   }
 
@@ -436,7 +538,46 @@ const cashflowModule = (function () {
     if (!_data) _data = _defaultData();
     if (!Array.isArray(_data.transactions)) _data.transactions = [];
     if (!Array.isArray(_data.balanceSnapshots)) _data.balanceSnapshots = [];
+    if (!Array.isArray(_data.debts)) _data.debts = [];
     if (typeof _data.startingBalance !== 'number') _data.startingBalance = 0;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // DEBT UTILITIES
+  // ══════════════════════════════════════════════════════════════
+
+  function _generateDebtId() {
+    return 'debt_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+  }
+
+  function _formatDateISOtoVN(isoDate) {
+    if (!isoDate) return '—';
+    var parts = isoDate.split('-');
+    if (parts.length !== 3) return isoDate;
+    return String(parts[2]).padStart(2, '0') + '/' + String(parts[1]).padStart(2, '0') + '/' + parts[0];
+  }
+
+  function _getDebtStatus(debt) {
+    if (debt.status === 'paid') return 'paid';
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    var expected = new Date(debt.expectedReturnDate + 'T00:00:00');
+    if (expected < today) return 'overdue';
+    return 'pending';
+  }
+
+  function _getStatusClass(status) {
+    return 'hub-cf-debt-status--' + status;
+  }
+
+  function _getStatusLabel(status) {
+    var map = { pending: 'statusPending', paid: 'statusPaid', overdue: 'statusOverdue' };
+    return _pd_t(map[status] || 'statusPending');
+  }
+
+  function _ensureDebtData() {
+    if (!_data) _data = _defaultData();
+    if (!Array.isArray(_data.debts)) _data.debts = [];
   }
 
   // ============================================================
@@ -744,7 +885,7 @@ function _restoreAIState() {
       container.innerHTML = `
 <div class="hub-cf-container">
 
-  <!-- ═══ DASHBOARD — 2×2 Summary Grid ═══ -->
+  <!-- ═══ DASHBOARD — 3×2 Summary Grid ═══ -->
   <div class="cashflow-summary-grid">
 
     <!-- Card 1: Net Worth -->
@@ -775,6 +916,15 @@ function _restoreAIState() {
     <div class="hub-cf-card">
       <span class="hub-cf-card-label" data-i18n="expenseLabel">${_t('expenseLabel')}</span>
       <span class="hub-cf-card-value hub-cf-card-value--expense" id="cf-expense">0 ₫</span>
+    </div>
+
+  <!-- Card 5: Pocket Debt (Sổ nợ bỏ túi) — Full Width -->
+    <div class="hub-cf-card hub-cf-debt-summary-card hub-cf-debt-summary-card--fullwidth">
+      <span class="hub-cf-card-label" data-i18n="debtSummaryTitle">${_pd_t('debtSummaryTitle')}</span>
+      <div class="hub-cf-card-value-row">
+        <span class="hub-cf-card-value hub-cf-card-value--debt" id="cf-debt-pending">${_formatVNFull(_getTotalPendingDebt())}</span>
+        <span class="hub-cf-card-sub" data-i18n="totalPendingDebt">${_pd_t('totalPendingDebt')}</span>
+      </div>
     </div>
 
   </div>
@@ -829,38 +979,91 @@ function _restoreAIState() {
       <span class="hub-cf-ledger-count" id="hub-cf-tx-count">${_t('txCount_zero')}</span>
     </div>
 
-    <div class="hub-cf-category-breakdown" id="hub-cf-breakdown-section">
-      <button class="hub-cf-breakdown-toggle" id="hub-cf-breakdown-toggle">
-        <span data-i18n="categoryToggle">${_t('categoryToggle')}</span>
-        <span class="hub-cf-breakdown-arrow" id="hub-cf-breakdown-arrow">🔽</span>
+    <!-- Segmented Tab Switcher -->
+    <div class="hub-cf-tab-switcher" role="tablist" aria-label="${_escHtml('View mode')}">
+      <button class="hub-cf-tab-switcher-btn" role="tab" data-view="ledger" aria-selected="true" id="hub-cf-tab-ledger">
+        <span class="hub-cf-tab-switcher-icon">📋</span>
+        <span class="hub-cf-tab-switcher-label" data-i18n="tabLedger">Lịch sử</span>
       </button>
-      <div class="hub-cf-breakdown-body collapsed" id="hub-cf-breakdown-body">
+      <button class="hub-cf-tab-switcher-btn" role="tab" data-view="stats" aria-selected="false" id="hub-cf-tab-stats">
+        <span class="hub-cf-tab-switcher-icon">📊</span>
+        <span class="hub-cf-tab-switcher-label" data-i18n="tabStats">Thống kê</span>
+      </button>
+    </div>
+
+    <!-- HISTORY VIEW: Empty state + Transaction Table -->
+    <div class="hub-cf-view-wrapper" id="hub-cf-history-view">
+      <!-- Empty state -->
+      <div class="hub-cf-empty" id="hub-cf-empty-state" style="display:none;">
+        <span class="hub-cf-empty-icon">📋</span>
+        <p class="hub-cf-empty-text" data-i18n="noTxYet">${_t('noTxYet')}</p>
+        <p class="hub-cf-empty-hint" data-i18n="noTxHint">${_t('noTxHint')}</p>
+      </div>
+
+      <!-- Transaction Table -->
+      <div class="hub-cf-table-wrap" id="hub-cf-table-wrap" style="display:none;">
+        <table class="hub-cf-table">
+          <thead>
+            <tr>
+              <th class="hub-cf-col--date" data-i18n="thDate">${_t('thDate')}</th>
+              <th class="hub-cf-col--desc" data-i18n="thDesc">${_t('thDesc')}</th>
+              <th class="hub-cf-col--cat" data-i18n="thCat">${_t('thCat')}</th>
+              <th class="hub-cf-col--amt" data-i18n="thAmt">${_t('thAmt')}</th>
+              <th class="hub-cf-col--act"></th>
+            </tr>
+          </thead>
+          <tbody id="hub-cf-tx-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- STATS VIEW: Category Breakdown -->
+    <div class="hub-cf-view-wrapper" id="hub-cf-stats-view" style="display:none;">
+      <div class="hub-cf-category-breakdown" id="hub-cf-breakdown-section">
         <p class="hub-cf-breakdown-title" data-i18n="categoryTitle">${_t('categoryTitle')}</p>
         <div id="hub-cf-breakdown-content"></div>
       </div>
     </div>
+  </div>
+</div>
 
-    <!-- Empty state -->
-    <div class="hub-cf-empty" id="hub-cf-empty-state" style="display:none;">
-      <span class="hub-cf-empty-icon">📋</span>
-      <p class="hub-cf-empty-text" data-i18n="noTxYet">${_t('noTxYet')}</p>
-      <p class="hub-cf-empty-hint" data-i18n="noTxHint">${_t('noTxHint')}</p>
+<!-- ═══ POCKET DEBT LEDGER ═══ -->
+<div class="hub-cf-debt-ledger glass-card">
+  <div class="hub-cf-debt-header">
+    <h4 class="hub-cf-debt-title" data-i18n="ledgerTitle">${_pd_t('ledgerTitle')}</h4>
+    <div class="hub-cf-debt-actions">
+      <button class="hub-cf-btn hub-cf-btn--add-debt" id="hub-cf-btn-add-debt">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span data-i18n="btnAddDebt">${_pd_t('btnAddDebt')}</span>
+      </button>
+      <button class="hub-cf-btn hub-cf-btn--ghost hub-cf-debt-history-toggle" id="hub-cf-debt-history-toggle" data-i18n="toggleHistory" aria-label="${_pd_t('toggleHistory')}">${_pd_t('toggleHistory')}</button>
     </div>
+  </div>
 
-    <div class="hub-cf-table-wrap" id="hub-cf-table-wrap" style="display:none;">
-      <table class="hub-cf-table">
-        <thead>
-          <tr>
-            <th class="hub-cf-col--date" data-i18n="thDate">${_t('thDate')}</th>
-            <th class="hub-cf-col--desc" data-i18n="thDesc">${_t('thDesc')}</th>
-            <th class="hub-cf-col--cat" data-i18n="thCat">${_t('thCat')}</th>
-            <th class="hub-cf-col--amt" data-i18n="thAmt">${_t('thAmt')}</th>
-            <th class="hub-cf-col--act"></th>
-          </tr>
-        </thead>
-        <tbody id="hub-cf-tx-body"></tbody>
-      </table>
-    </div>
+  <!-- Empty state -->
+  <div class="hub-cf-debt-empty" id="hub-cf-debt-empty-state" style="display:none;">
+    <span class="hub-cf-debt-empty-icon">📓</span>
+    <p class="hub-cf-debt-empty-text" data-i18n="noDebtsYet">${_pd_t('noDebtsYet')}</p>
+    <p class="hub-cf-debt-empty-hint" data-i18n="noDebtsHint">${_pd_t('noDebtsHint')}</p>
+  </div>
+
+  <!-- Active Debts Table -->
+  <div class="hub-cf-debt-table-wrap" id="hub-cf-debt-table-wrap" style="display:none;">
+    <table class="hub-cf-debt-table">
+      <thead>
+        <tr>
+          <th class="hub-cf-debt-col--debtor" data-i18n="colDebtor">${_pd_t('colDebtor')}</th>
+          <th class="hub-cf-debt-col--amount" data-i18n="colAmount">${_pd_t('colAmount')}</th>
+          <th class="hub-cf-debt-col--date" data-i18n="colDateBorrowed">${_pd_t('colDateBorrowed')}</th>
+          <th class="hub-cf-debt-col--expected" data-i18n="colExpectedReturn">${_pd_t('colExpectedReturn')}</th>
+          <th class="hub-cf-debt-col--status" data-i18n="colStatus">${_pd_t('colStatus')}</th>
+          <th class="hub-cf-debt-col--actions" data-i18n="colActions">${_pd_t('colActions')}</th>
+        </tr>
+      </thead>
+      <tbody id="hub-cf-debt-body"></tbody>
+    </table>
   </div>
 </div>
 
@@ -950,6 +1153,67 @@ function _restoreAIState() {
       </form>
     </div>
   </div>
+</div>
+
+<!-- ═══ ADD DEBT MODAL ═══ -->
+<div class="hub-cf-overlay" id="hub-cf-debt-overlay" role="dialog" aria-modal="true" aria-label="${_pd_t('modalTitle')}" style="display:none;">
+  <div class="hub-cf-modal hub-cf-debt-modal glass">
+    <div class="hub-cf-modal-header">
+      <h3 class="hub-cf-modal-title" data-i18n="modalTitle">${_pd_t('modalTitle')}</h3>
+      <button class="hub-cf-modal-close" id="hub-cf-debt-modal-close" aria-label="Close modal">✕</button>
+    </div>
+
+    <div class="hub-cf-modal-body">
+      <form id="hub-cf-debt-form" autocomplete="off">
+        <div class="hub-cf-form-group">
+          <label class="hub-cf-form-label" for="hub-cf-debt-debtor" data-i18n="labelDebtorName">${_pd_t('labelDebtorName')}</label>
+          <input type="text" id="hub-cf-debt-debtor" class="hub-cf-form-input"
+                 placeholder="${_pd_t('placeholderDebtor')}" maxlength="80" required />
+        </div>
+        <div class="hub-cf-form-group">
+          <label class="hub-cf-form-label" for="hub-cf-debt-amount" data-i18n="labelAmount">${_pd_t('labelAmount')}</label>
+          <input type="number" id="hub-cf-debt-amount" class="hub-cf-form-input hub-cf-amount-input"
+                 placeholder="${_pd_t('placeholderAmount')}" min="0" step="1000" required inputmode="numeric" />
+        </div>
+        <div class="hub-cf-form-grid">
+          <div class="hub-cf-form-group">
+            <label class="hub-cf-form-label" for="hub-cf-debt-date-borrowed" data-i18n="labelDateBorrowed">${_pd_t('labelDateBorrowed')}</label>
+            <input type="date" id="hub-cf-debt-date-borrowed" class="hub-cf-form-input hub-cf-date-input" required />
+          </div>
+          <div class="hub-cf-form-group">
+            <label class="hub-cf-form-label" for="hub-cf-debt-expected-return" data-i18n="labelExpectedReturn">${_pd_t('labelExpectedReturn')}</label>
+            <input type="date" id="hub-cf-debt-expected-return" class="hub-cf-form-input hub-cf-date-input" required />
+          </div>
+        </div>
+        <div class="hub-cf-form-group">
+          <label class="hub-cf-form-label" for="hub-cf-debt-note" data-i18n="labelNote">${_pd_t('labelNote')}</label>
+          <textarea id="hub-cf-debt-note" class="hub-cf-form-input hub-cf-textarea"
+                    placeholder="${_pd_t('placeholderNote')}" maxlength="200" rows="2"></textarea>
+        </div>
+        <div class="hub-cf-form-actions">
+          <button type="button" class="hub-cf-modal-btn hub-cf-modal-btn--cancel" id="hub-cf-debt-btn-cancel" data-i18n="btnCancel">${_pd_t('btnCancel')}</button>
+          <button type="submit" class="hub-cf-modal-btn hub-cf-modal-btn--save" id="hub-cf-debt-btn-save" data-i18n="btnSave">${_pd_t('btnSave')}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PAID HISTORY MODAL ═══ -->
+<div class="hub-cf-overlay" id="hub-cf-debt-history-overlay" role="dialog" aria-modal="true" aria-label="${_pd_t('historyTitle')}" style="display:none;">
+  <div class="hub-cf-modal hub-cf-debt-history-modal glass">
+    <div class="hub-cf-modal-header">
+      <h3 class="hub-cf-modal-title" data-i18n="historyTitle">${_pd_t('historyTitle')}</h3>
+      <button class="hub-cf-modal-close" id="hub-cf-debt-history-modal-close" aria-label="${_pd_t('btnClose')}">✕</button>
+    </div>
+    <div class="hub-cf-modal-body">
+      <div class="hub-cf-debt-history-modal-empty" id="hub-cf-debt-history-modal-empty" style="display:none;">
+        <span class="hub-cf-debt-empty-icon">📓</span>
+        <p class="hub-cf-debt-empty-text" data-i18n="emptyHistory">${_pd_t('emptyHistory')}</p>
+      </div>
+      <div class="hub-cf-debt-history-modal-list" id="hub-cf-debt-history-modal-list"></div>
+    </div>
+  </div>
 </div>`;
 
       // ══════════════════════════════════════════
@@ -1007,6 +1271,8 @@ function _restoreAIState() {
   function _renderAllViews() {
     updateDashboardTotals();
     _refreshLedger();
+    _refreshDebtSummary();
+    _refreshDebtLedger();
   }
 
   /**
@@ -1048,6 +1314,7 @@ function _restoreAIState() {
     // ── Re-render dynamic sections that contain language-dependent strings ──
     _refreshLedger();
     _updateChart();
+    _updateDebtLanguage();
   }
 
   // Expose updateCashFlowLanguage as a public module method
@@ -1191,10 +1458,45 @@ function _restoreAIState() {
       .reduce(function (sum, s) { return sum + (s.amount || 0); }, 0);
   }
 
+  // ══════════════════════════════════════════════════════════════
+  // DEBT COMPUTATION
+  // ══════════════════════════════════════════════════════════════
+
+  function _getTotalPendingDebt() {
+    _ensureDebtData();
+    return _data.debts
+      .filter(function (d) { return _getDebtStatus(d) !== 'paid'; })
+      .reduce(function (sum, d) { return sum + (Number(d.amount) || 0); }, 0);
+  }
+
+  function _getActiveDebts() {
+    _ensureDebtData();
+    return _data.debts
+      .filter(function (d) { return _getDebtStatus(d) !== 'paid'; })
+      .sort(function (a, b) {
+        var statusA = _getDebtStatus(a);
+        var statusB = _getDebtStatus(b);
+        if (statusA === 'overdue' && statusB !== 'overdue') return -1;
+        if (statusB === 'overdue' && statusA !== 'overdue') return 1;
+        return new Date(a.expectedReturnDate) - new Date(b.expectedReturnDate);
+      });
+  }
+
+  function _getPaidDebts() {
+    _ensureDebtData();
+    return _data.debts
+      .filter(function (d) { return _getDebtStatus(d) === 'paid'; })
+      .sort(function (a, b) { return (b.paidAt || 0) - (a.paidAt || 0); });
+  }
+
   function _refreshLedger() {
     _updateMonthLabel();
     _refreshTransactions();
     _renderCategoryBreakdown();
+    // Ensure correct view visibility on data refresh
+    if (typeof _switchLedgerView === 'function') {
+      _switchLedgerView(_ledgerView || 'ledger');
+    }
   }
 
   function _updateMonthLabel() {
@@ -1354,6 +1656,268 @@ function _restoreAIState() {
     container.innerHTML = html;
   }
 
+  // ══════════════════════════════════════════════════════════════
+  // DEBT RENDER FUNCTIONS
+  // ══════════════════════════════════════════════════════════════
+
+  function _renderDebtSummaryCard() {
+    var totalPending = _getTotalPendingDebt();
+    return '<div class="hub-cf-card hub-cf-debt-summary-card">' +
+      '<span class="hub-cf-card-label" data-i18n="debtSummaryTitle">' + _pd_t('debtSummaryTitle') + '</span>' +
+      '<div class="hub-cf-card-value-row">' +
+        '<span class="hub-cf-card-value hub-cf-card-value--debt" id="cf-debt-pending">' + _formatVNFull(totalPending) + '</span>' +
+        '<span class="hub-cf-card-sub" data-i18n="totalPendingDebt">' + _pd_t('totalPendingDebt') + '</span>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function _renderDebtLedgerHTML() {
+    return '<!-- POCKET DEBT LEDGER -->' +
+    '<div class="hub-cf-debt-ledger glass-card">' +
+      '<div class="hub-cf-debt-header">' +
+        '<h4 class="hub-cf-debt-title" data-i18n="ledgerTitle">' + _pd_t('ledgerTitle') + '</h4>' +
+        '<div class="hub-cf-debt-actions">' +
+          '<button class="hub-cf-btn hub-cf-btn--add-debt" id="hub-cf-btn-add-debt">' +
+            '<svg width="16" height="16" viewBox="0 0 16 16" fill="none">' +
+              '<path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
+            '</svg>' +
+            '<span data-i18n="btnAddDebt">' + _pd_t('btnAddDebt') + '</span>' +
+          '</button>' +
+          '<button class="hub-cf-btn hub-cf-btn--ghost hub-cf-debt-history-toggle" id="hub-cf-debt-history-toggle">' +
+            '<span data-i18n="toggleHistory">' + _pd_t('toggleHistory') + '</span>' +
+          '</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="hub-cf-debt-empty" id="hub-cf-debt-empty-state" style="display:none;">' +
+        '<span class="hub-cf-debt-empty-icon">📓</span>' +
+        '<p class="hub-cf-debt-empty-text" data-i18n="noDebtsYet">' + _pd_t('noDebtsYet') + '</p>' +
+        '<p class="hub-cf-debt-empty-hint" data-i18n="noDebtsHint">' + _pd_t('noDebtsHint') + '</p>' +
+      '</div>' +
+      '<div class="hub-cf-debt-table-wrap" id="hub-cf-debt-table-wrap" style="display:none;">' +
+        '<table class="hub-cf-debt-table">' +
+          '<thead>' +
+            '<tr>' +
+              '<th class="hub-cf-debt-col--debtor" data-i18n="colDebtor">' + _pd_t('colDebtor') + '</th>' +
+              '<th class="hub-cf-debt-col--amount" data-i18n="colAmount">' + _pd_t('colAmount') + '</th>' +
+              '<th class="hub-cf-debt-col--date" data-i18n="colDateBorrowed">' + _pd_t('colDateBorrowed') + '</th>' +
+              '<th class="hub-cf-debt-col--expected" data-i18n="colExpectedReturn">' + _pd_t('colExpectedReturn') + '</th>' +
+              '<th class="hub-cf-debt-col--status" data-i18n="colStatus">' + _pd_t('colStatus') + '</th>' +
+              '<th class="hub-cf-debt-col--actions" data-i18n="colActions">' + _pd_t('colActions') + '</th>' +
+            '</tr>' +
+          '</thead>' +
+          '<tbody id="hub-cf-debt-body"></tbody>' +
+        '</table>' +
+      '</div>' +
+      '<div class="hub-cf-debt-history collapsed" id="hub-cf-debt-history">' +
+        '<h5 class="hub-cf-debt-history-title" data-i18n="historyTitle">' + _pd_t('historyTitle') + '</h5>' +
+        '<div class="hub-cf-debt-history-empty" id="hub-cf-debt-history-empty" style="display:none;">' +
+          '<p style="color:var(--text-muted);font-size:0.74rem;text-align:center;padding:16px 0;" data-i18n="emptyHistory">' + _pd_t('emptyHistory') + '</p>' +
+        '</div>' +
+        '<div class="hub-cf-debt-history-list" id="hub-cf-debt-history-list"></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function _renderDebtRow(debt) {
+    var status = _getDebtStatus(debt);
+    var statusClass = _getStatusClass(status);
+    var statusLabel = _getStatusLabel(status);
+    var isOverdue = status === 'overdue';
+    var amountFormatted = _formatVND(debt.amount);
+    var dateBorrowed = _formatDateISOtoVN(debt.dateBorrowed);
+    var expectedReturn = _formatDateISOtoVN(debt.expectedReturnDate);
+
+    return '<tr class="hub-cf-debt-row' + (isOverdue ? ' hub-cf-debt-row--overdue' : '') + '" data-debt-id="' + debt.id + '">' +
+      '<td title="' + _escHtml(debt.debtorName) + '">' + _escHtml(debt.debtorName) + '</td>' +
+      '<td class="hub-cf-debt-amount">' + amountFormatted + '</td>' +
+      '<td>' + dateBorrowed + '</td>' +
+      '<td>' + expectedReturn + '</td>' +
+      '<td><span class="hub-cf-debt-status ' + statusClass + '">' + statusLabel + '</span></td>' +
+      '<td>' +
+        '<div class="hub-cf-debt-actions">' +
+          (status !== 'paid' ?
+            '<button class="hub-cf-debt-btn hub-cf-debt-btn--paid" data-debt-id="' + debt.id + '" data-i18n="btnMarkPaid" title="' + _pd_t('btnMarkPaid') + '">' + _pd_t('btnMarkPaid') + '</button>' : '') +
+          '<button class="hub-cf-debt-btn hub-cf-debt-btn--delete" data-debt-id="' + debt.id + '" title="' + _pd_t('btnDelete') + '">✕</button>' +
+        '</div>' +
+      '</td>' +
+    '</tr>';
+  }
+
+  function _renderDebtHistoryItem(debt) {
+    var amountFormatted = _formatVND(debt.amount);
+    var dateBorrowed = _formatDateISOtoVN(debt.dateBorrowed);
+    var paidAt = debt.paidAt ? new Date(debt.paidAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
+
+    return '<div class="hub-cf-debt-history-item" data-debt-id="' + debt.id + '">' +
+      '<div class="hub-cf-debt-history-main">' +
+        '<span class="hub-cf-debt-history-debtor">' + _escHtml(debt.debtorName) + '</span>' +
+        '<span class="hub-cf-debt-history-amount hub-cf-debt-history-amount--paid">' + amountFormatted + '</span>' +
+      '</div>' +
+      '<div class="hub-cf-debt-history-meta">' +
+        '<span>Mượn: ' + dateBorrowed + '</span>' +
+        '<span>Trả: ' + paidAt + '</span>' +
+        (debt.note ? '<span class="hub-cf-debt-history-note">' + _escHtml(debt.note) + '</span>' : '') +
+      '</div>' +
+    '</div>';
+  }
+
+  // ── NEW: Render item for paid history modal
+  function _renderDebtHistoryModalItem(debt) {
+    var amountFormatted = _formatVND(debt.amount);
+    var dateBorrowed = _formatDateISOtoVN(debt.dateBorrowed);
+    var paidAt = debt.paidAt ? new Date(debt.paidAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
+
+    return '<div class="hub-cf-debt-history-modal-item" data-debt-id="' + debt.id + '">' +
+      '<div class="hub-cf-debt-history-modal-main">' +
+        '<div class="hub-cf-debt-history-modal-debtor">' + _escHtml(debt.debtorName) + '</div>' +
+        '<div class="hub-cf-debt-history-modal-meta">' +
+          '<span>Mượn: ' + dateBorrowed + '</span>' +
+          '<span>Trả: ' + paidAt + '</span>' +
+          (debt.note ? '<span class="hub-cf-debt-history-note">' + _escHtml(debt.note) + '</span>' : '') +
+        '</div>' +
+      '</div>' +
+      '<span class="hub-cf-debt-history-modal-amount">' + amountFormatted + '</span>' +
+      '<button class="hub-cf-debt-btn hub-cf-debt-btn--delete" data-debt-id="' + debt.id + '" title="' + _pd_t('btnDelete') + '">✕</button>' +
+    '</div>';
+  }
+
+  // ── NEW: Refresh paid history modal content (uses event delegation on static parent)
+  function _refreshDebtHistoryModal() {
+    var paidDebts = _getPaidDebts();
+    var listEl = document.getElementById('hub-cf-debt-history-modal-list');
+    var emptyEl = document.getElementById('hub-cf-debt-history-modal-empty');
+
+    if (!listEl || !emptyEl) {
+      console.warn('[CashFlow] Modal elements not found during refresh');
+      return;
+    }
+
+    if (paidDebts.length === 0) {
+      listEl.innerHTML = '';
+      emptyEl.style.display = 'flex';
+    } else {
+      emptyEl.style.display = 'none';
+      var html = '';
+      paidDebts.forEach(function (debt) { html += _renderDebtHistoryModalItem(debt); });
+      listEl.innerHTML = html;
+    }
+  }
+
+  // ── Event delegation for Paid History Modal (bound ONCE in _bindDebtEvents)
+  // Handles delete buttons that are dynamically rendered via innerHTML
+  function _bindDebtHistoryModalDelegation() {
+    var listEl = document.getElementById('hub-cf-debt-history-modal-list');
+    if (!listEl) {
+      console.warn('[CashFlow] Paid history modal list element not found for delegation binding');
+      return;
+    }
+    if (listEl.dataset.delegationBound === 'true') return;
+
+    listEl.dataset.delegationBound = 'true';
+
+    listEl.addEventListener('click', function (e) {
+      var deleteBtn = e.target.closest('.hub-cf-debt-btn--delete');
+      if (!deleteBtn) return;
+
+      e.stopPropagation();
+      var debtId = deleteBtn.getAttribute('data-debt-id');
+      if (debtId) _deleteDebtFromHistory(debtId);
+    });
+
+    console.log('[CashFlow] Paid history modal delegation bound successfully');
+  }
+
+  // ── NEW: Open paid history modal
+  function _openDebtHistoryModal() {
+    var overlay = _qs('#hub-cf-debt-history-overlay');
+    if (!overlay) return;
+    _refreshDebtHistoryModal();
+    overlay.style.display = 'flex';
+  }
+
+  // ── NEW: Close paid history modal
+  function _closeDebtHistoryModal() {
+    var overlay = _qs('#hub-cf-debt-history-overlay');
+    if (overlay) overlay.style.display = 'none';
+  }
+
+  // ── NEW: Delete debt from paid history (permanently remove)
+  function _deleteDebtFromHistory(debtId) {
+    _ensureDebtData();
+    var debts = _data.debts;
+    var debtIndex = debts.findIndex(function (d) { return d.id === debtId; });
+    if (debtIndex === -1) return;
+
+    var debt = debts[debtIndex];
+    if (!confirm(_pd_t('confirmDelete').replace('{name}', debt.debtorName).replace('{amount}', _formatVND(debt.amount)))) {
+      return;
+    }
+
+    debts.splice(debtIndex, 1);
+    _debouncedPersist();
+    _refreshDebtSummary();
+    _refreshDebtLedger();
+    _refreshDebtHistoryModal();
+    _showToast(_pd_t('toastDebtDeleted').replace('{name}', debt.debtorName));
+  }
+
+  function _refreshDebtSummary() {
+    var totalPending = _getTotalPendingDebt();
+    _setTextById('cf-debt-pending', _formatVNFull(totalPending));
+  }
+
+  function _refreshDebtLedger() {
+    var activeDebts = _getActiveDebts();
+    var tbody = _qs('#hub-cf-debt-body');
+    var emptyEl = _qs('#hub-cf-debt-empty-state');
+    var tableEl = _qs('#hub-cf-debt-table-wrap');
+
+    if (!tbody || !emptyEl || !tableEl) return;
+
+    // Active debts
+    if (activeDebts.length === 0) {
+      emptyEl.style.display = 'flex';
+      tableEl.style.display = 'none';
+    } else {
+      emptyEl.style.display = 'none';
+      tableEl.style.display = '';
+      var html = '';
+      activeDebts.forEach(function (debt) { html += _renderDebtRow(debt); });
+      tbody.innerHTML = html;
+
+      tbody.querySelectorAll('.hub-cf-debt-btn--paid').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var debtId = this.getAttribute('data-debt-id');
+          if (debtId) _markDebtPaid(debtId);
+        });
+      });
+      tbody.querySelectorAll('.hub-cf-debt-btn--delete').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var debtId = this.getAttribute('data-debt-id');
+          if (debtId) _deleteDebt(debtId);
+        });
+      });
+    }
+  }
+
+  function _updateDebtLanguage() {
+    if (!_container) return;
+    var dict = POCKET_DEBT_I18N[_getCFLang()] || POCKET_DEBT_I18N['vi'];
+    var els = _container.querySelectorAll('[data-i18n]');
+    Array.prototype.forEach.call(els, function (el) {
+      var key = el.getAttribute('data-i18n');
+      if (key && dict[key] !== undefined) { el.textContent = dict[key]; }
+    });
+    _refreshDebtLedger();
+    // Refresh history modal if visible
+    var historyOverlay = _qs('#hub-cf-debt-history-overlay');
+    if (historyOverlay && historyOverlay.style.display === 'flex') {
+      _refreshDebtHistoryModal();
+    }
+  }
+
   // ============================================================
   //   EVENT BINDING
   // ============================================================
@@ -1494,15 +2058,34 @@ function _restoreAIState() {
       });
     }
 
-    // Category breakdown toggle — collapse / expand
-    var toggleBtn = _qs('#hub-cf-breakdown-toggle');
-    var breakdownBody = _qs('#hub-cf-breakdown-body');
-    var toggleArrow = _qs('#hub-cf-breakdown-arrow');
-    if (toggleBtn && breakdownBody && toggleArrow) {
-      toggleBtn.addEventListener('click', function () {
-        var collapsed = breakdownBody.classList.toggle('collapsed');
-        toggleArrow.textContent = collapsed ? '🔽' : '🔼';
-      });
+    // ── Segmented Tab Switcher: Ledger ↔ Stats ──
+    var ledgerTab = _qs('#hub-cf-tab-ledger');
+    var statsTab  = _qs('#hub-cf-tab-stats');
+    var historyView = _qs('#hub-cf-history-view');
+    var statsView   = _qs('#hub-cf-stats-view');
+
+    var _ledgerView = 'ledger'; // 'ledger' | 'stats'
+
+    function _switchLedgerView(view) {
+      _ledgerView = view;
+      if (ledgerTab) ledgerTab.setAttribute('aria-selected', view === 'ledger');
+      if (statsTab)  statsTab.setAttribute('aria-selected',  view === 'stats');
+
+      var switcher = _qs('.hub-cf-tab-switcher');
+      if (switcher) switcher.setAttribute('data-active-view', view);
+
+      // ONLY toggle the VIEW WRAPPERS — never touch emptyState/tableWrap directly
+      // _refreshTransactions() owns the empty-vs-table logic inside historyView
+      var showHistory = view === 'ledger';
+      var showStats   = view === 'stats';
+
+      if (historyView) historyView.style.display = showHistory ? '' : 'none';
+      if (statsView)   statsView.style.display   = showStats   ? '' : 'none';
+    }
+
+    if (ledgerTab && statsTab) {
+      ledgerTab.addEventListener('click', function () { _switchLedgerView('ledger'); });
+      statsTab.addEventListener('click',  function () { _switchLedgerView('stats');  });
     }
 
     // Escape key to close modal
@@ -1515,6 +2098,9 @@ function _restoreAIState() {
 
     // AI Financial Advisor events
     _bindAIAdvisorEvents();
+
+    // Pocket Debt events
+    _bindDebtEvents();
   }
 
   // ============================================================
@@ -1681,6 +2267,101 @@ function _restoreAIState() {
     _debouncedPersist();
     _renderAllViews();
     _updateChart();
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // DEBT OPERATIONS
+  // ══════════════════════════════════════════════════════════════
+
+  function _addDebt(debtorName, amount, dateBorrowed, expectedReturnDate, note) {
+    _ensureDebtData();
+
+    var debt = {
+      id: _generateDebtId(),
+      debtorName: debtorName.trim(),
+      amount: Number(amount),
+      dateBorrowed: dateBorrowed,
+      expectedReturnDate: expectedReturnDate,
+      status: 'pending',
+      note: note ? note.trim() : '',
+      createdAt: Date.now()
+    };
+
+    _data.debts.push(debt);
+    _debouncedPersist();
+    _refreshDebtSummary();
+    _refreshDebtLedger();
+
+    _showToast(_pd_t('toastDebtAdded')
+      .replace('{name}', debt.debtorName)
+      .replace('{amount}', _formatVND(debt.amount)));
+  }
+
+  function _markDebtPaid(debtId) {
+    var debt = _data.debts.find(function (d) { return d.id === debtId; });
+    if (!debt) return;
+
+    var confirmMsg = _pd_t('confirmMarkPaid')
+      .replace('{name}', debt.debtorName)
+      .replace('{amount}', _formatVND(debt.amount));
+    if (!confirm(confirmMsg)) return;
+
+    debt.status = 'paid';
+    debt.paidAt = Date.now();
+    _debouncedPersist();
+    _refreshDebtSummary();
+    _refreshDebtLedger();
+
+    _showToast(_pd_t('toastDebtPaid')
+      .replace('{name}', debt.debtorName)
+      .replace('{amount}', _formatVND(debt.amount)));
+
+    // Prompt to add to CashFlow income
+    var addToIncomeMsg = _pd_t('confirmAddToIncome');
+    if (confirm(addToIncomeMsg)) {
+      _addDebtCollectionToIncome(debt);
+    }
+  }
+
+  function _addDebtCollectionToIncome(debt) {
+    var tx = {
+      id: _uid(),
+      type: 'income',
+      amount: Number(debt.amount),
+      year: new Date().getFullYear(),
+      month: new Date().getMonth() + 1,
+      day: new Date().getDate(),
+      desc: 'Thu nợ từ ' + debt.debtorName + (debt.note ? ' - ' + debt.note : ''),
+      category: 'thu-nhap-khac',
+      createdAt: Date.now()
+    };
+
+    _data.transactions.push(tx);
+    _debouncedPersist();
+    _renderAllViews();
+    _updateChart();
+
+    _showToast(_pd_t('toastIncomeAdded').replace('{name}', debt.debtorName));
+  }
+
+  function _deleteDebt(debtId) {
+    var debt = _data.debts.find(function (d) { return d.id === debtId; });
+    if (!debt) return;
+
+    var confirmMsg = _pd_t('confirmDelete')
+      .replace('{name}', debt.debtorName)
+      .replace('{amount}', _formatVND(debt.amount));
+    if (!confirm(confirmMsg)) return;
+
+    var idx = _data.debts.findIndex(function (d) { return d.id === debtId; });
+    if (idx === -1) return;
+
+    _data.debts.splice(idx, 1);
+    _debouncedPersist();
+    _refreshDebtSummary();
+    _refreshDebtLedger();
+
+    _showToast(_pd_t('toastDebtDeleted').replace('{name}', debt.debtorName));
   }
 
   function _showInput(sel) {
@@ -2347,31 +3028,6 @@ function _restoreAIState() {
     throw lastError;
   }
 
-  /**
-   * Call Nvidia NIM API (Nemotron 3 Ultra) via Vercel serverless function
-   * @param {string} systemPrompt - Complete prompt with context
-   * @param {string} apiKey - Nvidia API key
-   * @param {AbortSignal} [signal] - Optional abort signal for cancellation
-   * @returns {Promise<string>} AI response text
-   */
- async function _callNvidiaAPI(systemPrompt, apiKey) {
-   // GỌI THẲNG fetch nguyên thủy của trình duyệt, không đếm giờ, không ép retry
-   const response = await fetch('https://personal-hub-rose-xi.vercel.app/api/ask-nvidia', {
-    method: 'POST',
-     headers: {
-       'Content-Type': 'application/json'
-     },
-     body: JSON.stringify({ apiKey, systemPrompt })
-   });
-
-   if (!response.ok) {
-     const error = await response.json().catch(() => ({}));
-     throw new Error(`Nvidia API error: ${response.status} - ${error.error || response.statusText}`);
-   }
-
-   const data = await response.json();
-   return data.response || 'Không có phản hồi từ AI.';
- }
 
   /**
    * Call Gemini API (Gemini 3.7 Flash)
@@ -2703,6 +3359,111 @@ function _restoreAIState() {
         }
       }
     });
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // DEBT EVENT BINDING & MODAL HANDLERS
+  // ══════════════════════════════════════════════════════════════
+
+  function _bindDebtEvents() {
+    // Add Debt button
+    var addBtn = _qs('#hub-cf-btn-add-debt');
+    if (addBtn) {
+      addBtn.addEventListener('click', _openDebtModal);
+    }
+
+    // History toggle - now opens modal
+    var historyToggle = _qs('#hub-cf-debt-history-toggle');
+    if (historyToggle) {
+      historyToggle.addEventListener('click', _openDebtHistoryModal);
+    }
+
+    // Modal close (Add Debt modal)
+    var closeBtn = _qs('#hub-cf-debt-modal-close');
+    if (closeBtn) closeBtn.addEventListener('click', _closeDebtModal);
+
+    // Modal cancel (Add Debt modal)
+    var cancelBtn = _qs('#hub-cf-debt-btn-cancel');
+    if (cancelBtn) cancelBtn.addEventListener('click', _closeDebtModal);
+
+    // Overlay backdrop (Add Debt modal)
+    var overlay = _qs('#hub-cf-debt-overlay');
+    if (overlay) {
+      overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) _closeDebtModal();
+      });
+    }
+
+    // Form submit (Add Debt modal)
+    var form = _qs('#hub-cf-debt-form');
+    if (form) {
+      form.addEventListener('submit', _handleDebtFormSubmit);
+    }
+
+    // History modal close
+    var historyCloseBtn = _qs('#hub-cf-debt-history-modal-close');
+    if (historyCloseBtn) historyCloseBtn.addEventListener('click', _closeDebtHistoryModal);
+
+    // History modal overlay backdrop
+    var historyOverlay = _qs('#hub-cf-debt-history-overlay');
+    if (historyOverlay) {
+      historyOverlay.addEventListener('click', function (e) {
+        if (e.target === historyOverlay) _closeDebtHistoryModal();
+      });
+    }
+
+    // Event delegation for Paid History Modal delete buttons (static parent, bound once)
+    _bindDebtHistoryModalDelegation();
+  }
+
+  function _openDebtModal() {
+    var overlay = _qs('#hub-cf-debt-overlay');
+    if (!overlay) return;
+    var form = _qs('#hub-cf-debt-form');
+    if (form) form.reset();
+    var today = _todayISO();
+    var dateBorrowed = _qs('#hub-cf-debt-date-borrowed');
+    var expectedReturn = _qs('#hub-cf-debt-expected-return');
+    if (dateBorrowed) dateBorrowed.value = today;
+    if (expectedReturn) expectedReturn.value = today;
+    overlay.style.display = 'flex';
+    setTimeout(function () {
+      var debtorInput = _qs('#hub-cf-debt-debtor');
+      if (debtorInput) debtorInput.focus();
+    }, 150);
+  }
+
+  function _closeDebtModal() {
+    var overlay = _qs('#hub-cf-debt-overlay');
+    if (overlay) overlay.style.display = 'none';
+  }
+
+  function _handleDebtFormSubmit(e) {
+    e.preventDefault();
+    var debtorName = _qs('#hub-cf-debt-debtor');
+    var amount = _qs('#hub-cf-debt-amount');
+    var dateBorrowed = _qs('#hub-cf-debt-date-borrowed');
+    var expectedReturn = _qs('#hub-cf-debt-expected-return');
+    var note = _qs('#hub-cf-debt-note');
+
+    if (!debtorName || !debtorName.value.trim()) { _showInput('#hub-cf-debt-debtor'); return; }
+    if (!amount || !amount.value || Number(amount.value) <= 0) { _showInput('#hub-cf-debt-amount'); return; }
+    if (!dateBorrowed || !dateBorrowed.value) { _showInput('#hub-cf-debt-date-borrowed'); return; }
+    if (!expectedReturn || !expectedReturn.value) { _showInput('#hub-cf-debt-expected-return'); return; }
+    if (new Date(expectedReturn.value) < new Date(dateBorrowed.value)) {
+      alert(_pd_t('labelExpectedReturn') + ' không thể nhỏ hơn ' + _pd_t('labelDateBorrowed') + '.');
+      _showInput('#hub-cf-debt-expected-return');
+      return;
+    }
+
+    _addDebt(
+      debtorName.value.trim(),
+      Number(amount.value),
+      dateBorrowed.value,
+      expectedReturn.value,
+      note ? note.value.trim() : ''
+    );
+    _closeDebtModal();
   }
 
   // ============================================================

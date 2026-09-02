@@ -1,0 +1,115 @@
+/**
+   * Call Nvidia NIM API (Nemotron 3 Ultra) via Vercel Edge Streaming Function
+   * Consumes Server-Sent Events (SSE) stream and accumulates the full response
+   * @param {string} systemPrompt - Complete prompt with financial context
+   * @param {string} apiKey - Nvidia API key
+   * @param {AbortSignal} [signal] - Optional abort signal for cancellation
+   * @returns {Promise<string>} Complete AI response text
+   */
+  async function _callNvidiaAPI(systemPrompt, apiKey, signal) {
+    const response = await fetch('https://personal-hub-rose-xi.vercel.app/api/ask-nvidia', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream',
+      },
+      body: JSON.stringify({ apiKey, systemPrompt }),
+      signal,
+      // IMPORTANT: keepalive allows the request to survive page unload
+      // (though in Edge runtime the server-side streaming persists regardless)
+      keepalive: true,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(`Nvidia API error: ${response.status} - ${error.error || response.statusText}`);
+    }
+
+    // Verify we got a streaming response
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('text/event-stream')) {
+      // Fallback: non-streaming response (shouldn't happen with new Edge API)
+      const data = await response.json();
+      return data.response || 'Không có phản hồi từ AI.';
+    }
+
+    // Parse SSE stream
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let accumulatedText = '';
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process complete SSE events (separated by double newline)
+        const events = buffer.split('\n\n');
+        buffer = events.pop() || ''; // Keep incomplete event in buffer
+
+        for (const event of events) {
+          if (!event.trim()) continue;
+
+          // Parse SSE format: each line starts with "data: "
+          const lines = event.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6).trim();
+              if (data === '[DONE]') {
+                // Stream complete
+                return accumulatedText || 'Không có phản hồi từ AI.';
+              }
+              try {
+                const parsed = JSON.parse(data);
+                // OpenAI-compatible streaming format: choices[0].delta.content
+                const chunk = parsed.choices?.[0]?.delta?.content;
+                if (chunk) {
+                  accumulatedText += chunk;
+
+                  // OPTIONAL: Real-time UI update during streaming
+                  // Uncomment the next lines if you want live token-by-token rendering
+                  // const responseEl = document.getElementById('cf-ai-response');
+                  // if (responseEl) {
+                  //   _renderAIResponse(accumulatedText + '▌'); // Cursor effect
+                  // }
+                }
+              } catch {
+                // Ignore malformed chunks
+              }
+            }
+          }
+        }
+
+        // Check for abort signal
+        if (signal?.aborted) {
+          reader.cancel();
+          throw new DOMException('Aborted', 'AbortError');
+        }
+      }
+
+      // Process any remaining buffer
+      if (buffer.trim()) {
+        const lines = buffer.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6).trim();
+            if (data !== '[DONE]') {
+              try {
+                const parsed = JSON.parse(data);
+                const chunk = parsed.choices?.[0]?.delta?.content;
+                if (chunk) accumulatedText += chunk;
+              } catch {}
+            }
+          }
+        }
+      }
+
+      return accumulatedText || 'Không có phản hồi từ AI.';
+
+    } finally {
+      reader.releaseLock();
+    }
+  }

@@ -15279,6 +15279,117 @@ body.theme-optimized .hub-cf-chart-canvas-wrap canvas {
 .hub-cf-breakdown-bar-fill--income { background: var(--success); }
 
 
+/* ═══ SEGMENTED TAB SWITCHER (Ledger / Stats) — BULLETPROOF FLEX ═══ */
+.hub-cf-tab-switcher {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-full);
+  padding: 4px;
+  margin: 12px 0 16px 0;
+  gap: 2px;
+}
+
+.hub-cf-tab-switcher-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color var(--duration-fast), background var(--duration-fast);
+  white-space: nowrap;
+  z-index: 2;
+  position: relative; /* stacking context for perfect pill */
+}
+
+.hub-cf-tab-switcher-btn:hover {
+  color: var(--text-primary);
+}
+
+/* ACTIVE STATE — perfect pill via pseudo-element on the BUTTON itself */
+.hub-cf-tab-switcher-btn[aria-selected="true"] {
+  color: var(--bg-deep);
+}
+
+.hub-cf-tab-switcher-btn[aria-selected="true"]::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-full);
+  background: var(--success);
+  box-shadow: 0 2px 8px rgba(68, 255, 136, 0.4);
+  z-index: -1; /* sits behind text/icon */
+  transition: transform var(--duration-base) var(--ease-out-expo),
+              opacity var(--duration-base) var(--ease-out-expo);
+}
+
+/* ICON */
+.hub-cf-tab-switcher-icon {
+  font-size: 0.85rem;
+  line-height: 1;
+  transition: opacity var(--duration-fast);
+}
+
+/* RESPONSIVE */
+@media (max-width: 480px) {
+  .hub-cf-tab-switcher-btn {
+    padding: 8px 12px;
+    font-size: 0.72rem;
+  }
+  .hub-cf-tab-switcher-icon {
+    display: none;
+  }
+}
+
+/* ═══ THEME VARIANTS — CSS VARIABLES ONLY, NO HARDCODED HEX ═══ */
+
+[data-theme="solar-zen"] .hub-cf-tab-switcher {
+  background: var(--bg-elevated);
+  border-color: var(--glass-border);
+}
+[data-theme="solar-zen"] .hub-cf-tab-switcher-btn {
+  color: var(--text-secondary);
+}
+[data-theme="solar-zen"] .hub-cf-tab-switcher-btn:hover {
+  color: var(--text-primary);
+}
+[data-theme="solar-zen"] .hub-cf-tab-switcher-btn[aria-selected="true"] {
+  color: var(--bg-deep);
+}
+[data-theme="solar-zen"] .hub-cf-tab-switcher-btn[aria-selected="true"]::before {
+  background: var(--success);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+[data-theme="lofi-twilight"] .hub-cf-tab-switcher {
+  background: var(--bg-elevated);
+  border-color: var(--glass-border);
+}
+[data-theme="lofi-twilight"] .hub-cf-tab-switcher-btn {
+  color: var(--text-secondary);
+}
+[data-theme="lofi-twilight"] .hub-cf-tab-switcher-btn:hover {
+  color: var(--text-primary);
+}
+[data-theme="lofi-twilight"] .hub-cf-tab-switcher-btn[aria-selected="true"] {
+  color: var(--bg-deep);
+}
+[data-theme="lofi-twilight"] .hub-cf-tab-switcher-btn[aria-selected="true"]::before {
+  background: var(--success);
+  box-shadow: 0 2px 8px rgba(68, 255, 136, 0.3);
+}
+
+/* Default/Cyberpunk theme uses root variables — no override block needed */
+
+
 /* ============================================================
    THEME OVERRIDES
    ============================================================ */
