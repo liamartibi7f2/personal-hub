@@ -97,6 +97,7 @@ const cashflowModule = (function () {
 
       // Modal
       modalTitle:       'New Transaction',
+      modalTitleEdit:   'Edit Transaction',
       tabExpense:       'Expense',
       tabIncome:        'Income',
       labelAmount:      'Amount (VND)',
@@ -164,6 +165,7 @@ const cashflowModule = (function () {
 
       // Modal
       modalTitle:       'Thêm Giao Dịch',
+      modalTitleEdit:   'Sửa Giao Dịch',
       tabExpense:      'Chi Phí',
       tabIncome:       'Thu Nhập',
       labelAmount:      'Số tiền (VND)',
@@ -220,6 +222,7 @@ const cashflowModule = (function () {
       placeholderNote:     'VD: Mượn tiền ăn trưa, Mượn cấp bách...',
       btnCancel:           'Hủy',
       btnSave:             'Lưu',
+      modalTitleEdit:      'Sửa Thông Tin Nợ',
       confirmMarkPaid:     'Đánh dấu "{name}" đã trả nợ {amount}?',
       confirmAddToIncome:  'Bạn có muốn thêm khoản nợ này vào Thu nhập CashFlow dưới danh mục "Thu nợ"?',
       confirmDelete:       'Xóa khoản nợ của "{name}" ({amount})?',
@@ -262,6 +265,7 @@ const cashflowModule = (function () {
       placeholderNote:     'e.g. Lunch money, Emergency loan...',
       btnCancel:           'Cancel',
       btnSave:             'Save',
+      modalTitleEdit:      'Edit Debt Info',
       confirmMarkPaid:     'Mark "{name}" as paid ({amount})?',
       confirmAddToIncome:  'Add this debt to CashFlow Income as "Debt Collection"?',
       confirmDelete:       'Delete debt from "{name}" ({amount})?',
@@ -330,6 +334,10 @@ const cashflowModule = (function () {
 
   // ── Bound handlers for cleanup ──
   let _boundKeydown = null;
+
+  // ── Edit state ──
+  let _editingTxId   = null;  // Current transaction being edited, or null
+  let _editingDebtId = null;  // Current debt being edited, or null
 
   // ============================================================
   //   AI ADVISOR PERSISTENT STATE
@@ -880,6 +888,78 @@ function _restoreAIState() {
       if (!_currentMonth) _currentMonth = _currentYearMonth();
 
       // ══════════════════════════════════════════
+      // INJECT EDIT BUTTON CSS (Theme-synced)
+      // ══════════════════════════════════════════
+      if (!document.getElementById('hub-cf-edit-styles')) {
+        var styleEl = document.createElement('style');
+        styleEl.id = 'hub-cf-edit-styles';
+        styleEl.textContent = `
+/* ============================================================
+   EDIT BUTTONS — Theme-synced inline SVG styling
+   ============================================================ */
+
+.hub-cf-edit-btn,
+.hub-cf-debt-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 180ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+              background 180ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+              transform 120ms ease-out;
+  opacity: 0.75;
+}
+
+.hub-cf-edit-btn:hover,
+.hub-cf-debt-edit-btn:hover {
+  opacity: 1;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  transform: scale(1.05);
+}
+
+.hub-cf-edit-btn:focus-visible,
+.hub-cf-debt-edit-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  opacity: 1;
+}
+
+.hub-cf-edit-btn:active,
+.hub-cf-debt-edit-btn:active {
+  transform: scale(0.96);
+}
+
+.hub-cf-edit-btn svg,
+.hub-cf-debt-edit-btn svg {
+  display: block;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  stroke: currentColor;
+}
+
+/* Actions container for flex layout with gap */
+.hub-cf-tx-actions,
+.hub-cf-debt-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+}
+        `;
+        document.head.appendChild(styleEl);
+      }
+
+      // ══════════════════════════════════════════
       // HTML STRUCTURE
       // ══════════════════════════════════════════
       container.innerHTML = `
@@ -1113,6 +1193,7 @@ function _restoreAIState() {
 <div class="hub-cf-overlay" id="hub-cf-overlay" role="dialog" aria-modal="true" aria-label="${_t('modalTitle')}" style="display:none;">
   <div class="hub-cf-modal glass">
     <div class="hub-cf-modal-header">
+      <h3 class="hub-cf-modal-title" data-i18n="modalTitle">${_t('modalTitle')}</h3>
       <div class="hub-cf-tab-group">
         <button class="hub-cf-tab hub-cf-tab--active" data-tab="expense" id="hub-cf-tab-expense">
           <span class="hub-cf-tab-dot hub-cf-tab-dot--expense"></span>
@@ -1542,11 +1623,34 @@ function _restoreAIState() {
       html += '<td title="' + _escapeAttr(tx.desc || '') + '">' + _escHtml(tx.desc || '—') + '</td>';
       html += '<td><span class="hub-cf-cat-chip">' + _escHtml(catName) + '</span></td>';
       html += '<td>' + amountFormatted + '</td>';
-      html += '<td><button class="hub-cf-delete-btn" data-tx-id="' + tx.id + '" title="Delete">✕</button></td>';
+      html += '<td>';
+      html += '<div class="hub-cf-tx-actions">';
+      html += '<button class="hub-cf-edit-btn" data-tx-id="' + tx.id + '" title="Chỉnh sửa" aria-label="Chỉnh sửa giao dịch">';
+      html += '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">';
+      html += '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>';
+      html += '<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>';
+      html += '</svg>';
+      html += '</button>';
+      html += '<button class="hub-cf-delete-btn" data-tx-id="' + tx.id + '" title="Xóa" aria-label="Xóa giao dịch">✕</button>';
+      html += '</div>';
+      html += '</td>';
       html += '</tr>';
     });
 
     tbody.innerHTML = html;
+
+    // Event delegation for edit buttons (transaction)
+    // Bind ONCE to tbody - handles dynamically rendered edit buttons
+    if (!tbody.dataset.editDelegationBound) {
+      tbody.dataset.editDelegationBound = 'true';
+      tbody.addEventListener('click', function (e) {
+        var editBtn = e.target.closest('.hub-cf-edit-btn');
+        if (!editBtn) return;
+        e.stopPropagation();
+        var txId = editBtn.getAttribute('data-tx-id');
+        if (txId) _openEditTransactionModal(txId);
+      });
+    }
 
     // Bind delete buttons
     tbody.querySelectorAll('.hub-cf-delete-btn').forEach(function (btn) {
@@ -1737,6 +1841,12 @@ function _restoreAIState() {
         '<div class="hub-cf-debt-actions">' +
           (status !== 'paid' ?
             '<button class="hub-cf-debt-btn hub-cf-debt-btn--paid" data-debt-id="' + debt.id + '" data-i18n="btnMarkPaid" title="' + _pd_t('btnMarkPaid') + '">' + _pd_t('btnMarkPaid') + '</button>' : '') +
+          '<button class="hub-cf-debt-edit-btn" data-debt-id="' + debt.id + '" title="Chỉnh sửa" aria-label="Chỉnh sửa khoản nợ">' +
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>' +
+          '<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>' +
+          '</svg>' +
+          '</button>' +
           '<button class="hub-cf-debt-btn hub-cf-debt-btn--delete" data-debt-id="' + debt.id + '" title="' + _pd_t('btnDelete') + '">✕</button>' +
         '</div>' +
       '</td>' +
@@ -1884,6 +1994,18 @@ function _restoreAIState() {
       var html = '';
       activeDebts.forEach(function (debt) { html += _renderDebtRow(debt); });
       tbody.innerHTML = html;
+
+      // Event delegation for debt edit buttons
+      if (!tbody.dataset.editDelegationBound) {
+        tbody.dataset.editDelegationBound = 'true';
+        tbody.addEventListener('click', function (e) {
+          var editBtn = e.target.closest('.hub-cf-debt-edit-btn');
+          if (!editBtn) return;
+          e.stopPropagation();
+          var debtId = editBtn.getAttribute('data-debt-id');
+          if (debtId) _openEditDebtModal(debtId);
+        });
+      }
 
       tbody.querySelectorAll('.hub-cf-debt-btn--paid').forEach(function (btn) {
         btn.addEventListener('click', function (e) {
@@ -2101,6 +2223,31 @@ function _restoreAIState() {
 
     // Pocket Debt events
     _bindDebtEvents();
+
+    // Listen for global language change events
+    window.addEventListener('hubLanguageChanged', function (e) {
+      var newLang = e.detail;
+      // Update transaction modal title if open
+      var modalOverlay = _qs('#hub-cf-overlay');
+      if (modalOverlay && modalOverlay.style.display === 'flex') {
+        var isEditing = _editingTxId !== null;
+        var titleEl = _qs('#hub-cf-overlay .hub-cf-modal-title');
+        if (titleEl) {
+          titleEl.textContent = isEditing ? _t('modalTitleEdit') : _t('modalTitle');
+        }
+        modalOverlay.setAttribute('aria-label', isEditing ? _t('modalTitleEdit') : _t('modalTitle'));
+      }
+      // Update debt modal title if open
+      var debtOverlay = _qs('#hub-cf-debt-overlay');
+      if (debtOverlay && debtOverlay.style.display === 'flex') {
+        var isEditingDebt = _editingDebtId !== null;
+        var debtTitleEl = _qs('#hub-cf-debt-overlay .hub-cf-modal-title');
+        if (debtTitleEl) {
+          debtTitleEl.textContent = isEditingDebt ? _pd_t('modalTitleEdit') : _pd_t('modalTitle');
+        }
+        debtOverlay.setAttribute('aria-label', isEditingDebt ? _pd_t('modalTitleEdit') : _pd_t('modalTitle'));
+      }
+    });
   }
 
   // ============================================================
@@ -2196,7 +2343,70 @@ function _restoreAIState() {
 
   function _closeModal() {
     const overlay = _qs('#hub-cf-overlay');
-    if (overlay) overlay.style.display = 'none';
+    if (overlay) {
+      overlay.style.display = 'none';
+      // Reset edit state
+      _editingTxId = null;
+      const titleEl = _qs('#hub-cf-overlay .hub-cf-modal-title');
+      if (titleEl) titleEl.textContent = _t('modalTitle');
+      overlay.setAttribute('aria-label', _t('modalTitle'));
+    }
+  }
+
+  // Update modal title when language changes
+  function _updateTransactionModalTitle() {
+    const overlay = _qs('#hub-cf-overlay');
+    if (overlay && overlay.style.display === 'flex') {
+      const isEditing = _editingTxId !== null;
+      overlay.setAttribute('aria-label', isEditing ? _t('modalTitleEdit') : _t('modalTitle'));
+    }
+  }
+
+  // ══════════════════════════════════════════
+  // EDIT TRANSACTION MODAL LOGIC
+  // ══════════════════════════════════════════
+
+  function _openEditTransactionModal(txId) {
+    const tx = _data.transactions.find(t => t.id === txId);
+    if (!tx) return;
+
+    _editingTxId = txId;
+
+    const overlay = _qs('#hub-cf-overlay');
+    if (!overlay) return;
+
+    // Reset form first
+    const form = _qs('#hub-cf-form');
+    if (form) form.reset();
+
+    // Update modal title and aria-label
+    const editTitle = _t('modalTitleEdit') || 'Sửa Giao Dịch';
+    overlay.setAttribute('aria-label', editTitle);
+    const titleEl = _qs('#hub-cf-overlay .hub-cf-modal-title');
+    if (titleEl) titleEl.textContent = editTitle;
+
+    // Switch to correct tab
+    _switchTab(tx.type);
+
+    // Populate fields
+    const amountInput = _qs('#hub-cf-amount');
+    const dateInput = _qs('#hub-cf-date');
+    const descInput = _qs('#hub-cf-desc');
+    const categorySelect = _qs('#hub-cf-category');
+
+    if (amountInput) amountInput.value = tx.amount;
+    if (dateInput) {
+      // Format date as YYYY-MM-DD for input type="date"
+      dateInput.value = tx.year + '-' + String(tx.month).padStart(2, '0') + '-' + String(tx.day).padStart(2, '0');
+    }
+    if (descInput) descInput.value = tx.desc || '';
+    if (categorySelect) categorySelect.value = tx.category;
+
+    // Show modal
+    overlay.style.display = 'flex';
+    setTimeout(function () {
+      if (amountInput) amountInput.focus();
+    }, 150);
   }
 
   function _saveTransaction() {
@@ -2224,19 +2434,37 @@ function _restoreAIState() {
     const month = parseInt(dateParts[1], 10);
     const day   = parseInt(dateParts[2], 10);
 
-    const tx = {
-      id: _uid(),
-      type: _activeTab,  // 'expense' or 'income'
-      amount: amount,
-      year: year,
-      month: month,
-      day: day,
-      desc: desc || '',
-      category: category,
-      createdAt: Date.now()
-    };
-
-    _data.transactions.push(tx);
+    if (_editingTxId) {
+      // EDIT MODE: Update existing transaction
+      const txIndex = _data.transactions.findIndex(t => t.id === _editingTxId);
+      if (txIndex !== -1) {
+        _data.transactions[txIndex] = {
+          ..._data.transactions[txIndex],
+          type: _activeTab,
+          amount: amount,
+          year: year,
+          month: month,
+          day: day,
+          desc: desc || '',
+          category: category
+        };
+      }
+      _editingTxId = null;
+    } else {
+      // CREATE MODE: Add new transaction
+      const tx = {
+        id: _uid(),
+        type: _activeTab,
+        amount: amount,
+        year: year,
+        month: month,
+        day: day,
+        desc: desc || '',
+        category: category,
+        createdAt: Date.now()
+      };
+      _data.transactions.push(tx);
+    }
 
     // ── BREAK THE OFFLINE SEAL: user explicitly added data ──
     if (_isOfflineMode) { _isOfflineMode = false; }
@@ -2246,7 +2474,7 @@ function _restoreAIState() {
     _renderAllViews();
     _updateChart();
 
-    // If the new TX month matches the viewing month, ledger updates naturally
+    // If the TX month matches the viewing month, ledger updates naturally
     // If not, switch to the TX's month
     if (year !== _currentMonth.year || month !== _currentMonth.month) {
       _currentMonth.year = year;
@@ -3435,7 +3663,70 @@ function _restoreAIState() {
 
   function _closeDebtModal() {
     var overlay = _qs('#hub-cf-debt-overlay');
-    if (overlay) overlay.style.display = 'none';
+    if (overlay) {
+      overlay.style.display = 'none';
+      _editingDebtId = null;
+      const titleEl = _qs('#hub-cf-debt-overlay .hub-cf-modal-title');
+      if (titleEl) titleEl.textContent = _pd_t('modalTitle');
+      overlay.setAttribute('aria-label', _pd_t('modalTitle'));
+    }
+  }
+
+  // Update debt modal title when language changes
+  function _updateDebtModalTitle() {
+    var overlay = _qs('#hub-cf-debt-overlay');
+    if (overlay && overlay.style.display === 'flex') {
+      var isEditing = _editingDebtId !== null;
+      var titleEl = _qs('#hub-cf-debt-overlay .hub-cf-modal-title');
+      if (titleEl) {
+        titleEl.textContent = isEditing ? _pd_t('modalTitleEdit') : _pd_t('modalTitle');
+      }
+      overlay.setAttribute('aria-label', isEditing ? _pd_t('modalTitleEdit') : _pd_t('modalTitle'));
+    }
+  }
+
+  // ══════════════════════════════════════════
+  // EDIT DEBT MODAL LOGIC
+  // ══════════════════════════════════════════
+
+  function _openEditDebtModal(debtId) {
+    const debt = _data.debts.find(d => d.id === debtId);
+    if (!debt) return;
+
+    _editingDebtId = debtId;
+
+    var overlay = _qs('#hub-cf-debt-overlay');
+    if (!overlay) return;
+
+    // Reset form
+    var form = _qs('#hub-cf-debt-form');
+    if (form) form.reset();
+
+    // Update modal title
+    var titleEl = _qs('#hub-cf-debt-overlay .hub-cf-modal-title');
+    var editTitle = _pd_t('modalTitleEdit') || 'Sửa Thông Tin Nợ';
+    if (titleEl) {
+      titleEl.textContent = editTitle;
+    }
+    overlay.setAttribute('aria-label', editTitle);
+
+    // Populate fields
+    var debtorInput = _qs('#hub-cf-debt-debtor');
+    var amountInput = _qs('#hub-cf-debt-amount');
+    var dateBorrowedInput = _qs('#hub-cf-debt-date-borrowed');
+    var expectedReturnInput = _qs('#hub-cf-debt-expected-return');
+    var noteInput = _qs('#hub-cf-debt-note');
+
+    if (debtorInput) debtorInput.value = debt.debtorName || '';
+    if (amountInput) amountInput.value = debt.amount || '';
+    if (dateBorrowedInput) dateBorrowedInput.value = debt.dateBorrowed || '';
+    if (expectedReturnInput) expectedReturnInput.value = debt.expectedReturnDate || '';
+    if (noteInput) noteInput.value = debt.note || '';
+
+    overlay.style.display = 'flex';
+    setTimeout(function () {
+      if (debtorInput) debtorInput.focus();
+    }, 150);
   }
 
   function _handleDebtFormSubmit(e) {
@@ -3456,14 +3747,45 @@ function _restoreAIState() {
       return;
     }
 
-    _addDebt(
-      debtorName.value.trim(),
-      Number(amount.value),
-      dateBorrowed.value,
-      expectedReturn.value,
-      note ? note.value.trim() : ''
-    );
+    if (_editingDebtId) {
+      // EDIT MODE: Update existing debt
+      var debtIndex = _data.debts.findIndex(d => d.id === _editingDebtId);
+      if (debtIndex !== -1) {
+        _data.debts[debtIndex] = {
+          ..._data.debts[debtIndex],
+          debtorName: debtorName.value.trim(),
+          amount: Number(amount.value),
+          dateBorrowed: dateBorrowed.value,
+          expectedReturnDate: expectedReturn.value,
+          note: note ? note.value.trim() : ''
+        };
+      }
+      _editingDebtId = null;
+    } else {
+      // CREATE MODE: Add new debt
+      _addDebt(
+        debtorName.value.trim(),
+        Number(amount.value),
+        dateBorrowed.value,
+        expectedReturn.value,
+        note ? note.value.trim() : ''
+      );
+    }
+
+    _debouncedPersist();
     _closeDebtModal();
+    _refreshDebtSummary();
+    _refreshDebtLedger();
+
+    // Reset modal title
+    var titleEl = _qs('#hub-cf-debt-overlay .hub-cf-modal-title');
+    if (titleEl) {
+      titleEl.textContent = _pd_t('modalTitle');
+    }
+    var overlay = _qs('#hub-cf-debt-overlay');
+    if (overlay) {
+      overlay.setAttribute('aria-label', _pd_t('modalTitle'));
+    }
   }
 
   // ============================================================
