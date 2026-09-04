@@ -3294,6 +3294,37 @@ function _restoreAIState() {
   }
 
   /**
+   * Call Nvidia Nemotron 3 Ultra API via Vercel backend
+   * @param {string} systemPrompt - Complete prompt with context
+   * @param {string} apiKey - Nvidia NIM API key
+   * @param {AbortSignal} [signal] - Optional abort signal for cancellation
+   * @returns {Promise<string>} AI response text
+   */
+  async function _callNvidiaAPI(systemPrompt, apiKey, signal) {
+    const response = await _resilientFetch(
+      'https://personal-hub-rose-xi.vercel.app/api/ask-nvidia',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          apiKey: apiKey,
+          systemPrompt: systemPrompt
+        })
+      }, { timeout: 120000, maxRetries: 2, keepalive: true, signal }
+    );
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(`Nvidia API error: ${response.status} - ${error.message || response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.response || 'Không có phản hồi từ AI.';
+  }
+
+  /**
    * Open AI Key Management Modal
    */
   function _openAIKeyModal() {
