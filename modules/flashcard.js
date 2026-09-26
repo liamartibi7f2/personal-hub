@@ -342,8 +342,7 @@ const flashcardModule = (function () {
 
   // Default AI schema (used when no cloud data exists)
   const DEFAULT_AI_SCHEMA = [
-    { id: 'phonetic', name: 'Phonetic', prompt: 'Provide the IPA phonetic transcription.', isDeletable: false, position: 'top' },
-    { id: 'synonym', name: 'Synonym', prompt: 'Provide 2-3 common synonyms.', isDeletable: true, position: 'bottom' }
+    { id: 'phonetic', name: 'Phonetic', prompt: 'Provide the IPA phonetic transcription.', isDeletable: false, position: 'top' }
   ];
 
   // --- Default starter cards (new Gemini-compatible format) ---
@@ -781,7 +780,7 @@ const flashcardModule = (function () {
     }).join(',\n');
 
     var prompt = 'You are an English vocabulary tutor. Return ONLY valid JSON for the word \'' + targetWord + '\'.\n' +
-      'Keys: type, vietnamese, describe, examples, note, word_family, idioms, collocations, clozeSentence' +
+      'Keys: type, vietnamese, describe, examples, note, synonyms, word_family, idioms, collocations, clozeSentence' +
       (schema.length > 0 ? ', ' + schema.map(function (f) { return f.id; }).join(', ') : '') + '.\n' +
       '- type: short part of speech in parentheses (n), (v), (adj), (adv)\n' +
       '- vietnamese: concise Vietnamese meaning\n' +
