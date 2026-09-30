@@ -550,6 +550,9 @@ D. Local Councils`;
           >
         </div>
 
+        <!-- Hidden file input (triggered by button in action bar) -->
+        <input type="file" id="hub-quiz-file-upload" accept=".txt,.md,.docx" style="display:none;">
+
         <!-- Info card -->
         <div class="quiz-info glass-card">
           <div class="quiz-info-icon">📋</div>
@@ -576,6 +579,9 @@ D. Local Councils`;
               <path d="M2 9l4 4 8-8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
             Save Deck
+          </button>
+          <button class="btn btn-ghost" id="hub-quiz-import-file-btn" type="button">
+            📂 Import File
           </button>
           <button class="btn btn-ghost" id="btn-reset-default">
             ↺ Load Sample
@@ -629,6 +635,51 @@ D. Local Councils`;
       const titleInput = _container.querySelector('#deck-title-input');
       if (titleInput) titleInput.focus();
     }, 150);
+
+    // --- Import File Logic ---
+    const fileBtn = _container.querySelector('#hub-quiz-import-file-btn');
+    const fileInput = _container.querySelector('#hub-quiz-file-upload');
+
+    if (fileBtn && fileInput) {
+      fileBtn.addEventListener('click', () => fileInput.click());
+
+      fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        try {
+          let text = '';
+          const ext = file.name.split('.').pop().toLowerCase();
+
+          if (ext === 'txt' || ext === 'md') {
+            text = await _readFileAsText(file);
+          } else if (ext === 'docx') {
+            text = await _readDocxFile(file);
+          } else {
+            _showErrors(['Unsupported file type. Use .txt, .md, or .docx']);
+            fileInput.value = '';
+            return;
+          }
+
+          // Populate textarea
+          const ta = _container.querySelector('#quiz-textarea');
+          if (ta) ta.value = text;
+
+          // Auto-fill title from filename if empty
+          const titleInput = _container.querySelector('#deck-title-input');
+          if (titleInput && !titleInput.value.trim()) {
+            titleInput.value = file.name.replace(/\.(txt|md|docx)$/i, '');
+          }
+
+          _showToast('File imported: ' + file.name);
+        } catch (err) {
+          console.error('[Quiz] File import failed:', err);
+          _showErrors(['Failed to read file: ' + err.message]);
+        } finally {
+          fileInput.value = ''; // Allow re-importing same file
+        }
+      });
+    }
   }
 
   /* ==========================================================
@@ -1772,6 +1823,48 @@ ${answerKey || '(empty — solve the questions yourself)'}
       _aiGenerating = false;
       if (btnText) btnText.textContent = '⚡ Generate Quiz';
     }
+  }
+
+  /* ==========================================================
+     FILE READING HELPERS (for Import File feature)
+     ========================================================== */
+
+  /**
+   * Read a File object as plain text using FileReader.
+   * @param {File} file
+   * @returns {Promise<string>}
+   */
+  function _readFileAsText(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function (e) { resolve(e.target.result); };
+      reader.onerror = function () { reject(new Error('Failed to read file: ' + file.name)); };
+      reader.readAsText(file);
+    });
+  }
+
+  /**
+   * Read a .docx File using mammoth.js and extract raw text.
+   * Requires mammoth.browser.min.js to be loaded via CDN.
+   * @param {File} file
+   * @returns {Promise<string>}
+   */
+  function _readDocxFile(file) {
+    return new Promise(function (resolve, reject) {
+      if (typeof mammoth === 'undefined') {
+        reject(new Error('Mammoth.js library is not loaded. Cannot parse .docx files.'));
+        return;
+      }
+
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        mammoth.extractRawText({ arrayBuffer: e.target.result })
+          .then(function (result) { resolve(result.value); })
+          .catch(function (err) { reject(new Error('Failed to parse .docx: ' + (err.message || err))); });
+      };
+      reader.onerror = function () { reject(new Error('Failed to read file: ' + file.name)); };
+      reader.readAsArrayBuffer(file);
+    });
   }
 
   /* ==========================================================
