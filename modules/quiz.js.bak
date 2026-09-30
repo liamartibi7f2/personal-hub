@@ -45,7 +45,6 @@ const quizModule = (function () {
 
   // --- Shuffle state ---
   let _shuffle          = false;
-  let _shuffleAnswers   = false;
 
   // ── Ghost save guard ──
   // The moment the browser starts unloading (page reload / tab close),
@@ -86,7 +85,6 @@ const quizModule = (function () {
         answeredMap: state.answeredMap || {},
         selectedMap: state.selectedMap || {},
         shuffleEnabled: _shuffle,
-        shuffleAnswersEnabled: _shuffleAnswers,
         savedAt: Date.now()
       };
       localStorage.setItem(key, JSON.stringify(payload));
@@ -833,10 +831,6 @@ D. Local Councils`;
     let totalQuestions = 0;
     (_currentDeck.sections || []).forEach(s => { totalQuestions += s.questions.length; });
 
-    // Check for saved practice progress
-    const hasProgress = _hasPracticeProgress(_currentDeck.id);
-    const progressData = hasProgress ? _loadPracticeProgress(_currentDeck.id) : null;
-
     _container.innerHTML = `
       <div class="tab-content quiz-app">
         <div class="quiz-header-row">
@@ -850,14 +844,7 @@ D. Local Councils`;
             <div class="mode-select-icon">📝</div>
             <h3>Practice Mode</h3>
             <p>Answer questions at your own pace. Get immediate feedback after each answer. No time limit.</p>
-            <button class="btn btn-primary" id="btn-start-practice" data-mode="practice">
-              ${hasProgress ? 'Continue Practice' : 'Start Practice'}
-            </button>
-            ${hasProgress ? `
-              <button class="btn btn-ghost" id="btn-restart-practice" style="margin-top: 8px; width: 100%;" data-action="restart">
-                Start Over
-              </button>
-            ` : ''}
+            <button class="btn btn-primary" data-mode="practice">Start Practice</button>
           </div>
 
           <div class="mode-select-card glass-card" id="mode-test">
@@ -872,34 +859,19 @@ D. Local Councils`;
           </div>
         </div>
 
-        <!-- Shuffle Options Container -->
-        <div class="mode-shuffle-container glass-card">
-          <div class="mode-shuffle-row">
-            <div class="mode-shuffle-info">
-              <span class="mode-shuffle-icon">🔀</span>
-              <div>
-                <span class="mode-shuffle-label">Shuffle Questions</span>
-                <span class="mode-shuffle-hint">Randomize question order</span>
-              </div>
+        <!-- Shuffle Toggle -->
+        <div class="mode-shuffle-row glass-card">
+          <div class="mode-shuffle-info">
+            <span class="mode-shuffle-icon">🔀</span>
+            <div>
+              <span class="mode-shuffle-label">Shuffle Questions</span>
+              <span class="mode-shuffle-hint">Randomize question &amp; option order</span>
             </div>
-            <label class="toggle-switch" title="Toggle shuffle questions">
-              <input type="checkbox" id="hub-toggle-shuffle-qs" ${_shuffle ? 'checked' : ''}>
-              <span class="toggle-slider"></span>
-            </label>
           </div>
-          <div class="mode-shuffle-row">
-            <div class="mode-shuffle-info">
-              <span class="mode-shuffle-icon">🔀</span>
-              <div>
-                <span class="mode-shuffle-label">Shuffle Answers</span>
-                <span class="mode-shuffle-hint">Randomize A, B, C, D options</span>
-              </div>
-            </div>
-            <label class="toggle-switch" title="Toggle shuffle answers">
-              <input type="checkbox" id="hub-toggle-shuffle-ans" ${_shuffleAnswers ? 'checked' : ''}>
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
+          <label class="toggle-switch" title="Toggle shuffle">
+            <input type="checkbox" id="shuffle-toggle" ${_shuffle ? 'checked' : ''}>
+            <span class="toggle-slider"></span>
+          </label>
         </div>
       </div>
     `;
@@ -914,17 +886,15 @@ D. Local Councils`;
 
     if (btnStartPractice) {
       btnStartPractice.addEventListener('click', () => {
-        const shuffleQs = _container.querySelector('#hub-toggle-shuffle-qs');
-        const shuffleAns = _container.querySelector('#hub-toggle-shuffle-ans');
-        _shuffle = shuffleQs ? shuffleQs.checked : false;
-        _shuffleAnswers = shuffleAns ? shuffleAns.checked : false;
+        const shuffleCheckbox = _container.querySelector('#shuffle-toggle');
+        _shuffle = shuffleCheckbox ? shuffleCheckbox.checked : false;
 
         if (hasProgress && progressData) {
           // Resume from saved progress
           _resumePracticeSession(progressData);
         } else {
           // Fresh start
-          if (_shuffle || _shuffleAnswers) {
+          if (_shuffle) {
             _shuffleQuizData();
           }
           _testMode = false;
@@ -937,11 +907,9 @@ D. Local Councils`;
       btnRestartPractice.addEventListener('click', () => {
         // Clear progress and start fresh
         _clearPracticeProgress(_currentDeck.id);
-        const shuffleQs = _container.querySelector('#hub-toggle-shuffle-qs');
-        const shuffleAns = _container.querySelector('#hub-toggle-shuffle-ans');
-        _shuffle = shuffleQs ? shuffleQs.checked : false;
-        _shuffleAnswers = shuffleAns ? shuffleAns.checked : false;
-        if (_shuffle || _shuffleAnswers) {
+        const shuffleCheckbox = _container.querySelector('#shuffle-toggle');
+        _shuffle = shuffleCheckbox ? shuffleCheckbox.checked : false;
+        if (_shuffle) {
           _shuffleQuizData();
         }
         _testMode = false;
@@ -952,12 +920,10 @@ D. Local Councils`;
     // Test mode button
     _container.querySelectorAll('[data-mode="test"]').forEach(btn => {
       btn.addEventListener('click', () => {
-        const shuffleQs = _container.querySelector('#hub-toggle-shuffle-qs');
-        const shuffleAns = _container.querySelector('#hub-toggle-shuffle-ans');
-        _shuffle = shuffleQs ? shuffleQs.checked : false;
-        _shuffleAnswers = shuffleAns ? shuffleAns.checked : false;
+        const shuffleCheckbox = _container.querySelector('#shuffle-toggle');
+        _shuffle = shuffleCheckbox ? shuffleCheckbox.checked : false;
 
-        if (_shuffle || _shuffleAnswers) {
+        if (_shuffle) {
           _shuffleQuizData();
         }
         const timeInput = _container.querySelector('#test-time-input');
@@ -990,29 +956,10 @@ D. Local Councils`;
     _quizData = {
       sections: _quizData.sections.map(section => ({
         title: section.title,
-        questions: _shuffleArray(section.questions).map(q => {
-          // Shuffle options if enabled
-          let options = q.options;
-          let correctIndex = options.findIndex(o => o.isCorrect);
-
-          if (_shuffleAnswers && options.length > 1) {
-            // Shuffle the options array
-            options = _shuffleArray([...options]);
-            // Find the NEW index of the correct answer after shuffle
-            correctIndex = options.findIndex(o => o.isCorrect);
-          }
-
-          // Re-assign letters A, B, C, D based on new positions
-          options = options.map((opt, idx) => ({
-            ...opt,
-            letter: String.fromCharCode(65 + idx) // A=65, B=66, C=67, D=68
-          }));
-
-          return {
-            text: q.text,
-            options
-          };
-        })
+        questions: _shuffleArray(section.questions).map(q => ({
+          text: q.text,
+          options: _shuffleArray(q.options)
+        }))
       }))
     };
 
@@ -1034,9 +981,8 @@ D. Local Councils`;
   function _resumePracticeSession(progressData) {
     if (!_quizData || !progressData) return;
 
-    // Restore shuffle states
+    // Restore shuffle state
     _shuffle = progressData.shuffleEnabled || false;
-    _shuffleAnswers = progressData.shuffleAnswersEnabled || false;
 
     // Restore the shuffled questions if they were saved
     if (progressData.shuffledQuestions) {
@@ -1044,7 +990,7 @@ D. Local Councils`;
         sections: progressData.shuffledQuestions
       };
       _shuffledQuestionsCache = progressData.shuffledQuestions;
-    } else if (_shuffle || _shuffleAnswers) {
+    } else if (_shuffle) {
       _shuffleQuizData();
     }
 

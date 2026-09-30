@@ -5093,6 +5093,191 @@ ul, ol { list-style: none; }
 }
 
 /* ----------------------------------------------------------
+   MODE SHUFFLE CONTAINER — Two independent toggle rows
+   ---------------------------------------------------------- */
+.mode-shuffle-container {
+  margin-top: var(--space-lg);
+  padding: var(--space-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg);
+}
+
+.mode-shuffle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-sm) 0;
+}
+
+.mode-shuffle-row:first-child {
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: var(--space-md);
+  margin-bottom: var(--space-xs);
+}
+
+.mode-shuffle-row:last-child {
+  padding-top: var(--space-xs);
+}
+
+.mode-shuffle-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex: 1;
+  min-width: 0;
+}
+
+.mode-shuffle-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.mode-shuffle-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.03em;
+}
+
+.mode-shuffle-hint {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  margin-top: 1px;
+}
+
+/* ----------------------------------------------------------
+   TOGGLE SWITCH — Theme-synced checkbox slider
+   ---------------------------------------------------------- */
+.toggle-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 48px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  transition: background-color var(--duration-fast) var(--ease-out-expo),
+              border-color var(--duration-fast) var(--ease-out-expo),
+              box-shadow var(--duration-fast) var(--ease-out-expo);
+  border-radius: 28px;
+}
+
+.toggle-slider::before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background-color: var(--text-primary);
+  transition: transform var(--duration-fast) var(--ease-out-expo),
+              background-color var(--duration-fast) var(--ease-out-expo);
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(20px);
+  background-color: var(--bg-surface);
+}
+
+.toggle-switch input:focus-visible + .toggle-slider {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-primary) 30%, transparent);
+}
+
+/* ----------------------------------------------------------
+   MODE SELECT BUTTONS — Theme-synced
+   ---------------------------------------------------------- */
+.mode-select-card .btn-primary {
+  background: var(--accent-primary);
+  color: var(--bg-surface);
+  border: none;
+}
+
+.mode-select-card .btn-primary:hover {
+  background: color-mix(in srgb, var(--accent-primary) 90%, white);
+  box-shadow: var(--shadow-glow, 0 0 20px color-mix(in srgb, var(--accent-primary) 50%, transparent));
+}
+
+.mode-select-card .btn-accent {
+  background: var(--accent-secondary, var(--warning));
+  color: var(--bg-surface);
+  border: none;
+}
+
+.mode-select-card .btn-accent:hover {
+  background: color-mix(in srgb, var(--accent-secondary, var(--warning)) 90%, white);
+  box-shadow: var(--shadow-glow, 0 0 20px color-mix(in srgb, var(--accent-secondary, var(--warning)) 50%, transparent));
+}
+
+.mode-select-card .btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.mode-select-card .btn-ghost:hover {
+  background: var(--bg-surface);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+/* ----------------------------------------------------------
+   OPTIMIZED THEME OVERRIDES — body.theme-optimized
+   ---------------------------------------------------------- */
+body.theme-optimized .mode-select-card,
+body.theme-optimized .mode-shuffle-container,
+body.theme-optimized .quiz-topbar,
+body.theme-optimized .quiz-question-card,
+body.theme-optimized .quiz-bottom-actions .btn,
+body.theme-optimized .test-timer-bar {
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transition: none !important;
+}
+
+body.theme-optimized .mode-select-card:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+body.theme-optimized .toggle-slider,
+body.theme-optimized .toggle-slider::before {
+  transition: none !important;
+}
+
+/* ----------------------------------------------------------
    TEST MODE TIMER
    ---------------------------------------------------------- */
 .test-timer-bar {

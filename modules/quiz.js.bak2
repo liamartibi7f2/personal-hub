@@ -1,19 +1,19 @@
-/* ============================================================
-   HUB.OS — modules/quiz.js
+﻿/* ============================================================
+   HUB.OS â€” modules/quiz.js
    Multiple-Choice Quiz tool with Multi-Deck Management.
 
    Three UI States:
-     1. LIBRARY — browse saved decks, create new, play, delete
-     2. EDITOR  — paste raw text + title, parse & save as deck
-     3. PLAY    — interactive multiple-choice quiz
+     1. LIBRARY â€” browse saved decks, create new, play, delete
+     2. EDITOR  â€” paste raw text + title, parse & save as deck
+     3. PLAY    â€” interactive multiple-choice quiz
 
    Decks are persisted in localStorage under key "quiz_decks".
    The parser (parseQuizText) is exported as a public function.
 
    Module contract:
      - id: 'quiz'
-     - render(container) → injects the quiz UI
-     - destroy()        → cleans up state
+     - render(container) â†’ injects the quiz UI
+     - destroy()        â†’ cleans up state
    ============================================================ */
 
 const quizModule = (function () {
@@ -27,8 +27,8 @@ const quizModule = (function () {
   let _mode         = 'library';   // 'library' | 'editor' | 'play'
   let _quizData     = null;        // Parsed quiz for current play session: { sections: [...] }
   let _currentDeck  = null;        // The deck object being played (has id, title, sections)
-  let _answeredMap  = {};          // key: "sectionIdx-questionIdx" → 'correct'|'incorrect'|'revealed'
-  let _selectedMap  = {};          // key: "sectionIdx-questionIdx" → option letter user picked
+  let _answeredMap  = {};          // key: "sectionIdx-questionIdx" â†’ 'correct'|'incorrect'|'revealed'
+  let _selectedMap  = {};          // key: "sectionIdx-questionIdx" â†’ option letter user picked
   let _decks        = null;        // In-memory array of all decks (loaded once from HubDB)
   let _pageUnloading = false;      // Prevents ghost saves during page reload
   let _shuffledQuestionsCache = null; // Cached shuffled questions for resume
@@ -47,7 +47,7 @@ const quizModule = (function () {
   let _shuffle          = false;
   let _shuffleAnswers   = false;
 
-  // ── Ghost save guard ──
+  // â”€â”€ Ghost save guard â”€â”€
   // The moment the browser starts unloading (page reload / tab close),
   // mark _pageUnloading so no async save callback will fire a write.
   window.addEventListener('beforeunload', function () {
@@ -155,11 +155,11 @@ D. Local Councils`;
     container.innerHTML =
       '<div class="tab-content quiz-app" style="display:flex;align-items:center;justify-content:center;min-height:300px">' +
         '<div class="hub-notes-loading" style="font-family:var(--font-mono);color:var(--text-muted);font-size:0.85rem">' +
-          '<span class="hub-notes-loading-dot">●</span> Loading decks...' +
+          '<span class="hub-notes-loading-dot">â—</span> Loading decks...' +
         '</div>' +
       '</div>';
 
-    // 2) Await data (async — may hit Firestore)
+    // 2) Await data (async â€” may hit Firestore)
     await _loadDecksAsync();
 
     _mode = 'library';
@@ -233,7 +233,7 @@ D. Local Councils`;
 
   /**
    * Save the current in-memory decks array to HubDB.
-   * Fire-and-forget — callers don't need to await.
+   * Fire-and-forget â€” callers don't need to await.
    */
   function _saveDecks() {
     if (_pageUnloading) return; // Prevent ghost saves during page reload
@@ -243,7 +243,7 @@ D. Local Councils`;
   /**
    * Add a new deck to the in-memory array and persist.
    * @param {string} title
-   * @param {Object} parsed — output of parseQuizText(): { sections, errors }
+   * @param {Object} parsed â€” output of parseQuizText(): { sections, errors }
    * @returns {Object} the newly created deck
    */
   function _addDeck(title, parsed) {
@@ -277,7 +277,7 @@ D. Local Councils`;
   }
 
   /* ==========================================================
-     STATE 1 — DECK LIBRARY
+     STATE 1 â€” DECK LIBRARY
      Grid of glassmorphism cards, one per saved deck.
      ========================================================== */
 
@@ -309,7 +309,7 @@ D. Local Councils`;
                 </div>
                 <p class="deck-card-meta">
                   ${questionCount} question${questionCount !== 1 ? 's' : ''}
-                  ${sectionCount > 1 ? ` · ${sectionCount} sections` : ''}
+                  ${sectionCount > 1 ? ` Â· ${sectionCount} sections` : ''}
                 </p>
                 <div class="deck-card-actions">
                   <button class="deck-play-btn" data-action="play" data-deck-id="${_escAttr(deck.id)}">
@@ -353,14 +353,14 @@ D. Local Councils`;
             Create New Deck
           </button>
           <button class="btn btn-secondary deck-ai-btn" id="btn-ai-generate">
-            <span class="ai-btn-icon">✨</span> AI Generate
+            <span class="ai-btn-icon">âœ¨</span> AI Generate
           </button>
         </div>
 
         ${hasDecks ? gridHtml : `
           <!-- Empty state -->
           <div class="empty-state">
-            <div class="empty-state-icon">📝</div>
+            <div class="empty-state-icon">ðŸ“</div>
             <h3>No decks yet</h3>
             <p>Create your first quiz deck by pasting formatted text.</p>
             <button class="btn btn-primary" id="btn-create-first">
@@ -425,7 +425,7 @@ D. Local Councils`;
         <div class="ai-modal-overlay" id="ai-modal-overlay" style="display:none;">
           <div class="ai-modal glass-card">
             <div class="ai-modal-header">
-              <h3><span class="ai-modal-icon">✨</span> AI Quiz Generator</h3>
+              <h3><span class="ai-modal-icon">âœ¨</span> AI Quiz Generator</h3>
               <button class="ai-modal-close" id="btn-ai-close" aria-label="Close">&times;</button>
             </div>
             <div class="ai-modal-body">
@@ -438,7 +438,7 @@ D. Local Councils`;
                 <textarea id="ai-quiz-content" class="quiz-textarea glass ai-textarea" placeholder="Paste your Quiz questions and options here..." spellcheck="false"></textarea>
               </div>
               <div class="form-group">
-                <label for="ai-quiz-key">Answer Key <span class="ai-label-hint">(Optional — leave blank to let AI solve it)</span></label>
+                <label for="ai-quiz-key">Answer Key <span class="ai-label-hint">(Optional â€” leave blank to let AI solve it)</span></label>
                 <textarea id="ai-quiz-key" class="quiz-textarea glass ai-textarea-key" placeholder="Paste Answer Key here (Optional - Leave blank to let AI solve it)" spellcheck="false"></textarea>
               </div>
             </div>
@@ -447,7 +447,7 @@ D. Local Councils`;
               <div class="ai-modal-actions">
                 <button class="btn btn-ghost" id="btn-ai-cancel">Cancel</button>
                 <button class="btn btn-primary" id="btn-ai-generate-confirm">
-                  <span id="ai-generate-btn-text">⚡ Generate Quiz</span>
+                  <span id="ai-generate-btn-text">âš¡ Generate Quiz</span>
                 </button>
               </div>
             </div>
@@ -547,7 +547,7 @@ D. Local Councils`;
           document.execCommand('copy');
           const fb = _container.querySelector('#hub-quiz-share-feedback');
           if (fb) {
-            fb.textContent = '✓ Link copied to clipboard!';
+            fb.textContent = 'âœ“ Link copied to clipboard!';
             fb.style.color = 'var(--success)';
             fb.style.textShadow = '0 0 8px rgba(68, 255, 136, 0.5)';
             setTimeout(() => { if (fb) fb.textContent = ''; }, 3000);
@@ -597,8 +597,8 @@ D. Local Councils`;
   }
 
   /* ==========================================================
-     STATE 2 — DECK EDITOR
-     (Modified from the original input mode — adds title field)
+     STATE 2 â€” DECK EDITOR
+     (Modified from the original input mode â€” adds title field)
      ========================================================== */
 
   function _renderEditorMode() {
@@ -609,7 +609,7 @@ D. Local Councils`;
         <!-- Header -->
         <div class="quiz-header-row">
           <button class="btn btn-ghost" id="btn-back-library" style="padding:6px 14px;">
-            ⬅ Back
+            â¬… Back
           </button>
           <h2 class="section-header" style="margin-bottom:0;">Create New Deck</h2>
           <span class="quiz-badge">Editor</span>
@@ -632,10 +632,10 @@ D. Local Councils`;
 
         <!-- Info card -->
         <div class="quiz-info glass-card">
-          <div class="quiz-info-icon">📋</div>
+          <div class="quiz-info-icon">ðŸ“‹</div>
           <div class="quiz-info-text">
             <p>Paste your quiz text below using the supported format:</p>
-            <code>'Section Title</code> starts a section —
+            <code>'Section Title</code> starts a section â€”
             <code>*B. answer</code> marks the correct option.
             Questions are separated by blank lines.
           </div>
@@ -658,10 +658,10 @@ D. Local Councils`;
             Save Deck
           </button>
           <button class="btn btn-ghost" id="hub-quiz-import-file-btn" type="button">
-            📂 Import File
+            ðŸ“‚ Import File
           </button>
           <button class="btn btn-ghost" id="btn-reset-default">
-            ↺ Load Sample
+            â†º Load Sample
           </button>
           <button class="btn btn-ghost" id="btn-cancel-editor">
             Cancel
@@ -760,7 +760,7 @@ D. Local Councils`;
   }
 
   /* ==========================================================
-     HANDLE SAVE DECK — Parse text, validate, persist
+     HANDLE SAVE DECK â€” Parse text, validate, persist
      ========================================================== */
 
   function _handleSaveDeck() {
@@ -822,154 +822,11 @@ D. Local Councils`;
   }
 
   /* ==========================================================
-     STATE 3 — MODE SELECT
+     STATE 3 â€” MODE SELECT
      Choose between Practice and Test mode before playing.
      ========================================================== */
 
-  function _renderModeSelect() {
-    if (!_container || !_currentDeck) return;
 
-    const deckTitle = _currentDeck.title;
-    let totalQuestions = 0;
-    (_currentDeck.sections || []).forEach(s => { totalQuestions += s.questions.length; });
-
-    // Check for saved practice progress
-    const hasProgress = _hasPracticeProgress(_currentDeck.id);
-    const progressData = hasProgress ? _loadPracticeProgress(_currentDeck.id) : null;
-
-    _container.innerHTML = `
-      <div class="tab-content quiz-app">
-        <div class="quiz-header-row">
-          <button class="btn btn-ghost" id="btn-back-from-select" style="padding:6px 14px;">⬅ Back</button>
-          <h2 class="section-header" style="margin-bottom:0;">${_esc(deckTitle)}</h2>
-          <span class="quiz-badge">${totalQuestions} Qs</span>
-        </div>
-
-        <div class="mode-select-container">
-          <div class="mode-select-card glass-card" id="mode-practice">
-            <div class="mode-select-icon">📝</div>
-            <h3>Practice Mode</h3>
-            <p>Answer questions at your own pace. Get immediate feedback after each answer. No time limit.</p>
-            <button class="btn btn-primary" id="btn-start-practice" data-mode="practice">
-              ${hasProgress ? 'Continue Practice' : 'Start Practice'}
-            </button>
-            ${hasProgress ? `
-              <button class="btn btn-ghost" id="btn-restart-practice" style="margin-top: 8px; width: 100%;" data-action="restart">
-                Start Over
-              </button>
-            ` : ''}
-          </div>
-
-          <div class="mode-select-card glass-card" id="mode-test">
-            <div class="mode-select-icon">⏱️</div>
-            <h3>Test Mode</h3>
-            <p>Simulate a real exam. Timer counts down — submit before time runs out. No feedback until you finish.</p>
-            <div class="mode-test-time">
-              <label for="test-time-input">Time limit (minutes):</label>
-              <input type="number" id="test-time-input" class="form-group input" value="45" min="1" max="180" step="1">
-            </div>
-            <button class="btn btn-accent" data-mode="test">Start Test</button>
-          </div>
-        </div>
-
-        <!-- Shuffle Options Container -->
-        <div class="mode-shuffle-container glass-card">
-          <div class="mode-shuffle-row">
-            <div class="mode-shuffle-info">
-              <span class="mode-shuffle-icon">🔀</span>
-              <div>
-                <span class="mode-shuffle-label">Shuffle Questions</span>
-                <span class="mode-shuffle-hint">Randomize question order</span>
-              </div>
-            </div>
-            <label class="toggle-switch" title="Toggle shuffle questions">
-              <input type="checkbox" id="hub-toggle-shuffle-qs" ${_shuffle ? 'checked' : ''}>
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-          <div class="mode-shuffle-row">
-            <div class="mode-shuffle-info">
-              <span class="mode-shuffle-icon">🔀</span>
-              <div>
-                <span class="mode-shuffle-label">Shuffle Answers</span>
-                <span class="mode-shuffle-hint">Randomize A, B, C, D options</span>
-              </div>
-            </div>
-            <label class="toggle-switch" title="Toggle shuffle answers">
-              <input type="checkbox" id="hub-toggle-shuffle-ans" ${_shuffleAnswers ? 'checked' : ''}>
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-        </div>
-      </div>
-    `;
-
-    // Back button
-    const btnBack = _container.querySelector('#btn-back-from-select');
-    if (btnBack) btnBack.addEventListener('click', () => { _mode = 'library'; _currentDeck = null; _renderApp(); });
-
-    // Practice mode buttons
-    const btnStartPractice = _container.querySelector('#btn-start-practice');
-    const btnRestartPractice = _container.querySelector('#btn-restart-practice');
-
-    if (btnStartPractice) {
-      btnStartPractice.addEventListener('click', () => {
-        const shuffleQs = _container.querySelector('#hub-toggle-shuffle-qs');
-        const shuffleAns = _container.querySelector('#hub-toggle-shuffle-ans');
-        _shuffle = shuffleQs ? shuffleQs.checked : false;
-        _shuffleAnswers = shuffleAns ? shuffleAns.checked : false;
-
-        if (hasProgress && progressData) {
-          // Resume from saved progress
-          _resumePracticeSession(progressData);
-        } else {
-          // Fresh start
-          if (_shuffle || _shuffleAnswers) {
-            _shuffleQuizData();
-          }
-          _testMode = false;
-          _startPlaySession();
-        }
-      });
-    }
-
-    if (btnRestartPractice) {
-      btnRestartPractice.addEventListener('click', () => {
-        // Clear progress and start fresh
-        _clearPracticeProgress(_currentDeck.id);
-        const shuffleQs = _container.querySelector('#hub-toggle-shuffle-qs');
-        const shuffleAns = _container.querySelector('#hub-toggle-shuffle-ans');
-        _shuffle = shuffleQs ? shuffleQs.checked : false;
-        _shuffleAnswers = shuffleAns ? shuffleAns.checked : false;
-        if (_shuffle || _shuffleAnswers) {
-          _shuffleQuizData();
-        }
-        _testMode = false;
-        _startPlaySession();
-      });
-    }
-
-    // Test mode button
-    _container.querySelectorAll('[data-mode="test"]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const shuffleQs = _container.querySelector('#hub-toggle-shuffle-qs');
-        const shuffleAns = _container.querySelector('#hub-toggle-shuffle-ans');
-        _shuffle = shuffleQs ? shuffleQs.checked : false;
-        _shuffleAnswers = shuffleAns ? shuffleAns.checked : false;
-
-        if (_shuffle || _shuffleAnswers) {
-          _shuffleQuizData();
-        }
-        const timeInput = _container.querySelector('#test-time-input');
-        const minutes = timeInput ? Math.max(1, Math.min(180, parseInt(timeInput.value, 10) || 45)) : 45;
-        _testMode = true;
-        _testTimeLimit = minutes * 60;
-        _testTimeRemaining = _testTimeLimit;
-        _testSubmitted = false;
-        _startPlaySession();
-      });
-    });
-  }
 
   /* ==========================================================
      SHUFFLE (Fisher-Yates)
@@ -1074,7 +931,7 @@ D. Local Councils`;
         _testSubmitted = true;
         // Disable all option buttons
         _container.querySelectorAll('.quiz-option').forEach(b => b.disabled = true);
-        alert("⏰ Time's Up! Click OK to see your results.");
+        alert("â° Time's Up! Click OK to see your results.");
         _submitTest();
       }
     }, 1000);
@@ -1139,8 +996,8 @@ D. Local Councils`;
   }
 
   /* ==========================================================
-     STATE 4 — PLAY MODE
-     (Interactive quiz — with optional test mode timer)
+     STATE 4 â€” PLAY MODE
+     (Interactive quiz â€” with optional test mode timer)
      ========================================================== */
 
   function _renderPlayMode() {
@@ -1203,8 +1060,8 @@ D. Local Councils`;
                   >
                     <span class="option-letter">${opt.letter}</span>
                     <span class="option-text">${_escPreserveBr(opt.text)}</span>
-                    ${answered && opt.isCorrect ? '<span class="option-icon">✓</span>' : ''}
-                    ${answered && selected === opt.letter && !opt.isCorrect ? '<span class="option-icon">✗</span>' : ''}
+                    ${answered && opt.isCorrect ? '<span class="option-icon">âœ“</span>' : ''}
+                    ${answered && selected === opt.letter && !opt.isCorrect ? '<span class="option-icon">âœ—</span>' : ''}
                   </button>
                 `;
               }).join('')}
@@ -1214,8 +1071,8 @@ D. Local Councils`;
             ${answered ? `
               <div class="quiz-feedback ${_answeredMap[key] === 'correct' ? 'feedback-correct' : 'feedback-incorrect'}">
                 ${_answeredMap[key] === 'correct'
-                  ? '✓ Correct!'
-                  : `✗ Incorrect — the correct answer is <strong>${_getCorrectOptionLetter(q)}</strong>`
+                  ? 'âœ“ Correct!'
+                  : `âœ— Incorrect â€” the correct answer is <strong>${_getCorrectOptionLetter(q)}</strong>`
                 }
               </div>
             ` : ''}
@@ -1239,14 +1096,14 @@ D. Local Councils`;
         ${_testMode && !_testSubmitted ? `
           <!-- Test Mode Sticky Timer -->
           <div class="test-timer-bar glass-card" id="test-timer-bar">
-            <span class="test-timer-label">⏱️ Time Remaining</span>
+            <span class="test-timer-label">â±ï¸ Time Remaining</span>
             <span class="test-timer-display" id="test-timer-display">${_formatTime(_testTimeRemaining)}</span>
           </div>
         ` : ''}
 
         ${_testSubmitted ? `
           <div class="test-submitted-banner glass-card">
-            <span>🏁 Test Submitted</span>
+            <span>ðŸ Test Submitted</span>
           </div>
         ` : ''}
 
@@ -1254,7 +1111,7 @@ D. Local Councils`;
         <div class="quiz-topbar glass-card">
           <div class="quiz-topbar-left">
             <button class="btn btn-ghost" id="btn-back-to-decks" style="padding:6px 14px;">
-              ⬅ Back to Decks
+              â¬… Back to Decks
             </button>
             <div>
               <h2 class="section-header" style="margin-bottom:0;">${_esc(deckTitle)}</h2>
@@ -1291,16 +1148,16 @@ D. Local Councils`;
         <div class="quiz-bottom-actions">
           ${_testMode && !_testSubmitted && !allAnswered ? `
             <button class="btn btn-accent test-submit-btn" id="btn-submit-test">
-              🏁 Submit Test
+              ðŸ Submit Test
             </button>
           ` : ''}
           ${allAnswered ? `
             <div class="quiz-complete-banner glass-card">
-              <span class="quiz-complete-icon">${correctCount === totalQuestions ? '🏆' : correctCount >= totalQuestions / 2 ? '👍' : '📚'}</span>
+              <span class="quiz-complete-icon">${correctCount === totalQuestions ? 'ðŸ†' : correctCount >= totalQuestions / 2 ? 'ðŸ‘' : 'ðŸ“š'}</span>
               <span class="quiz-complete-text">
                 ${correctCount === totalQuestions
                   ? 'Perfect score! All answers correct.'
-                  : `Quiz complete — ${correctCount} out of ${totalQuestions} correct (${Math.round(correctCount / totalQuestions * 100)}%).`}
+                  : `Quiz complete â€” ${correctCount} out of ${totalQuestions} correct (${Math.round(correctCount / totalQuestions * 100)}%).`}
               </span>
             </div>
           ` : ''}
@@ -1355,7 +1212,7 @@ D. Local Councils`;
       _renderApp();
     });
 
-    // Option clicks — skip if user was highlighting text
+    // Option clicks â€” skip if user was highlighting text
     _container.querySelectorAll('.quiz-option:not([disabled])').forEach(btn => {
       btn.addEventListener('click', (e) => {
         if (window.getSelection().toString().trim().length > 0) return;
@@ -1509,7 +1366,7 @@ D. Local Councils`;
   async function _handleShareDeck(deckId) {
     const deck = _getDeckById(deckId);
     if (!deck) {
-      console.warn('[Quiz] _handleShareDeck — deck not found:', deckId);
+      console.warn('[Quiz] _handleShareDeck â€” deck not found:', deckId);
       return;
     }
 
@@ -1532,7 +1389,7 @@ D. Local Councils`;
 
     if (!overlay) {
       console.warn('[Quiz] Share overlay element (#hub-quiz-share-overlay) not found in DOM');
-      _showToast('Share modal unavailable — please reload the page.');
+      _showToast('Share modal unavailable â€” please reload the page.');
       shareBtns.forEach(function (btn) { btn.disabled = false; });
       return;
     }
@@ -1626,7 +1483,7 @@ D. Local Councils`;
       _decks.unshift(newDeck);
       _saveDecks();
 
-      statusEl.textContent = '✓ Deck imported successfully!';
+      statusEl.textContent = 'âœ“ Deck imported successfully!';
       statusEl.className = 'hub-quiz-import-status hub-quiz-import-status--success';
 
       // Clear input and re-render library
@@ -1698,7 +1555,7 @@ D. Local Councils`;
 
       var auth = HubDB.getAuthStatus();
 
-      // Not ready yet — retry until HubDB is initialised or auth settles
+      // Not ready yet â€” retry until HubDB is initialised or auth settles
       if (!auth && attempts < maxAttempts) {
         setTimeout(_tryImport, 500);
         return;
@@ -1714,7 +1571,7 @@ D. Local Councils`;
         return;
       }
 
-      // HubDB ready — proceed
+      // HubDB ready â€” proceed
       proceed();
     }
 
@@ -1768,7 +1625,7 @@ D. Local Councils`;
   }
 
   /* ==========================================================
-     SMART TEXT HIGHLIGHTER — Multi-Color Cyberpunk Palette
+     SMART TEXT HIGHLIGHTER â€” Multi-Color Cyberpunk Palette
      ========================================================== */
 
   const HL_COLORS = [
@@ -1837,7 +1694,7 @@ D. Local Councils`;
 
       _tooltipEl.innerHTML = swatchesHtml + `
         <span class="hl-palette-divider"></span>
-        <button class="hl-palette-clear" aria-label="Clear highlights in selection">✕</button>
+        <button class="hl-palette-clear" aria-label="Clear highlights in selection">âœ•</button>
       `;
 
       _tooltipEl.addEventListener('mousedown', _onPaletteMouseDown);
@@ -1865,7 +1722,7 @@ D. Local Councils`;
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed) return;
 
-    // Clear button — remove highlights within selection
+    // Clear button â€” remove highlights within selection
     const clearBtn = e.target.closest('.hl-palette-clear');
     if (clearBtn) {
       _clearHighlightsInSelection(sel);
@@ -1874,7 +1731,7 @@ D. Local Councils`;
       return;
     }
 
-    // Color swatch — apply highlight
+    // Color swatch â€” apply highlight
     const swatch = e.target.closest('.hl-palette-swatch');
     if (!swatch) return;
 
@@ -1949,7 +1806,7 @@ D. Local Councils`;
     el.style.display = 'block';
     el.innerHTML = `
       <div class="quiz-error-toast glass-card">
-        <span class="quiz-error-icon">⚠️</span>
+        <span class="quiz-error-icon">âš ï¸</span>
         <div class="quiz-error-list">
           ${errors.map(e => `<p>${_esc(e)}</p>`).join('')}
         </div>
@@ -1966,7 +1823,7 @@ D. Local Councils`;
   }
 
   /* ==========================================================
-     AI QUIZ GENERATOR — Gemini API integration
+     AI QUIZ GENERATOR â€” Gemini API integration
      ========================================================== */
 
   async function _handleAIGenerate() {
@@ -2003,13 +1860,13 @@ D. Local Councils`;
     })();
 
     if (!apiKey) {
-      if (statusHint) statusHint.textContent = '❌ No API key found. Set it in Settings & Backup.';
+      if (statusHint) statusHint.textContent = 'âŒ No API key found. Set it in Settings & Backup.';
       return;
     }
 
     _aiGenerating = true;
-    if (statusHint) statusHint.textContent = '⏳ Generating quiz with AI...';
-    if (btnText) btnText.textContent = '⏳ Generating...';
+    if (statusHint) statusHint.textContent = 'â³ Generating quiz with AI...';
+    if (btnText) btnText.textContent = 'â³ Generating...';
 
     const prompt = `You are a quiz parser AI. Given raw quiz text and an optional answer key, produce a structured JSON array.
 
@@ -2018,7 +1875,7 @@ RULES:
 2. Options must be labeled A, B, C, D, etc.
 3. If the answer key is provided, map the correct letters to each question in order.
 4. If the answer key is EMPTY, act as an expert and solve each question to determine the correct answer.
-5. Return ONLY a valid JSON array — no markdown fences, no explanatory text.
+5. Return ONLY a valid JSON array â€” no markdown fences, no explanatory text.
 
 REQUIRED OUTPUT FORMAT:
 [{"text": "Question text here?", "options": [{"letter": "A", "text": "Option text", "isCorrect": true}, {"letter": "B", "text": "Option text", "isCorrect": false}]}]
@@ -2028,7 +1885,7 @@ ${content}
 --- END CONTENT ---
 
 --- ANSWER KEY ---
-${answerKey || '(empty — solve the questions yourself)'}
+${answerKey || '(empty â€” solve the questions yourself)'}
 --- END ANSWER KEY ---`;
 
     try {
@@ -2082,10 +1939,10 @@ ${answerKey || '(empty — solve the questions yourself)'}
 
     } catch (err) {
       console.warn('[Quiz AI]', err);
-      if (statusHint) statusHint.textContent = '❌ ' + (err.message || 'Generation failed');
+      if (statusHint) statusHint.textContent = 'âŒ ' + (err.message || 'Generation failed');
     } finally {
       _aiGenerating = false;
-      if (btnText) btnText.textContent = '⚡ Generate Quiz';
+      if (btnText) btnText.textContent = 'âš¡ Generate Quiz';
     }
   }
 
@@ -2179,13 +2036,13 @@ ${answerKey || '(empty — solve the questions yourself)'}
 
 /* ==========================================================
    EXPORTED: parseQuizText(rawText)
-   Public parser function — can be reused or tested externally.
+   Public parser function â€” can be reused or tested externally.
    Parses the custom quiz text format into a structured object.
 
    Format rules:
-     - 'Title at line start → new section
+     - 'Title at line start â†’ new section
      - Blank lines separate question blocks
-     - *B. text → correct answer marker
+     - *B. text â†’ correct answer marker
      - <br /> tags preserved in question/option text
 
    Returns: { sections: [...], errors: [...] }
@@ -2264,7 +2121,7 @@ function parseQuizText(rawText) {
       } else {
         const preview = block[0] ? block[0].substring(0, 40) : '(empty)';
         errors.push(
-          `Skipped invalid question block in "${section.title}": "${preview}..." — no correct answer (*) found.`
+          `Skipped invalid question block in "${section.title}": "${preview}..." â€” no correct answer (*) found.`
         );
         console.warn('[Quiz Parser] Skipped invalid block:', block);
       }
@@ -2299,7 +2156,7 @@ function _splitIntoBlocks(lines) {
     }
 
     if (line.trim() === '') {
-      // Blank line — end current block (if not empty)
+      // Blank line â€” end current block (if not empty)
       if (currentBlock.length > 0) {
         blocks.push(currentBlock);
       }
@@ -2343,7 +2200,7 @@ function _parseQuestionBlock(lines, sectionTitle) {
 
       options.push({ letter, text, isCorrect });
     } else {
-      // Not an option line → part of the question text
+      // Not an option line â†’ part of the question text
       questionLines.push(trimmed);
     }
   }
