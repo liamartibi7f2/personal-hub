@@ -2967,10 +2967,12 @@ const prompt = buildAIPrompt(word, _aiSchema);
             ${SRS_BUTTONS.map(btn => {
               const deckSrs = deck && deck.srs ? deck.srs : null;
               const timeLabel = _getNextReviewLabel(btn.quality, card, deckSrs);
+              const shortcutKey = btn.quality + 1; // 1=Again, 2=Hard, 3=Good, 4=Easy
               return `
                 <button class="srs-assessment-btn" data-quality="${btn.cssQuality}" data-label="${btn.label}">
                   <span class="srs-time-badge">${timeLabel}</span>
                   <span class="srs-btn-label">${btn.label}</span>
+                  <kbd class="shortcut-hint">${shortcutKey}</kbd>
                 </button>
               `;
             }).join('')}
@@ -3443,16 +3445,29 @@ const prompt = buildAIPrompt(word, _aiSchema);
 
     // ═══════════════════════════════════════════
     // NUMBER KEYS 1-4 → rate card (document-level)
-    // Cleaned up above, re-attached here.
+    // CRITICAL GUARD: Only trigger when assessment panel is visible
+    // and user is NOT typing in an input/textarea
     // ═══════════════════════════════════════════
     const numberHandler = (e) => {
       if (_isProcessing) return;                         // HARD LOCK
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-      if (!_cardFlipped || _studyLocked) return;
+
+      // CRITICAL GUARD: Only respond if the SRS assessment panel is visible (has .revealed class)
+      const panel = _container?.querySelector('#srs-assessment-panel');
+      if (!_cardFlipped || _studyLocked || !panel || !panel.classList.contains('revealed')) return;
+
       const keyMap = { '1': QUALITY.AGAIN, '2': QUALITY.HARD, '3': QUALITY.GOOD, '4': QUALITY.EASY };
       const quality = keyMap[e.key];
       if (quality !== undefined) {
         e.preventDefault();
+
+        // Visual feedback: add pressed state to the corresponding button
+        const btn = panel.querySelector(`.srs-assessment-btn[data-quality="${keyMap[e.key]}"]`);
+        if (btn) {
+          btn.classList.add('srs-btn-pressed');
+          setTimeout(() => btn.classList.remove('srs-btn-pressed'), 100);
+        }
+
         _handleAssessment(quality, cardIdx);
       }
     };

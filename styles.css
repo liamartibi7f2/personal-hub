@@ -5907,6 +5907,85 @@ mark.cyber-hl-pink:hover {
 .srs-assessment-btn[data-quality="3"]:hover .srs-btn-label { color: var(--accent-primary); }
 
 /* ----------------------------------------------------------
+   SHORTCUT HINT — Keyboard number key indicator (1/2/3/4)
+   Subtle dark badge matching Hub.OS dark aesthetic
+   ---------------------------------------------------------- */
+
+.shortcut-hint {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  font-family: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text-muted);
+  background: var(--bg-elevated, rgba(255,255,255,0.04));
+  border: 1px solid var(--glass-border, rgba(255,255,255,0.08));
+  border-radius: var(--radius-sm, 4px);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.05),
+    0 1px 2px rgba(0,0,0,0.2);
+  opacity: 0.55;
+  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+  pointer-events: none;
+}
+
+/* Show hint more prominently on hover/focus of parent button */
+.srs-assessment-btn:hover .shortcut-hint,
+.srs-assessment-btn:focus-visible .shortcut-hint {
+  opacity: 0.85;
+  color: var(--text-secondary);
+  background: var(--bg-elevated-hover, rgba(255,255,255,0.07));
+}
+
+/* Pressed state for keyboard activation feedback */
+.srs-assessment-btn.srs-btn-pressed .shortcut-hint {
+  opacity: 1;
+  color: var(--accent-primary);
+  background: var(--accent-primary, rgba(0,200,150,0.15));
+  border-color: var(--accent-primary);
+  animation: srs-hint-pulse 0.1s ease;
+}
+
+@keyframes srs-hint-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.92); }
+  100% { transform: scale(1); }
+}
+
+/* Dark theme refinements */
+@media (prefers-color-scheme: dark) {
+  .shortcut-hint {
+    background: rgba(15, 15, 20, 0.6);
+    border-color: rgba(255,255,255,0.06);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.03),
+      0 1px 3px rgba(0,0,0,0.4);
+  }
+  .srs-assessment-btn:hover .shortcut-hint,
+  .srs-assessment-btn:focus-visible .shortcut-hint {
+    background: rgba(20, 20, 30, 0.7);
+    border-color: rgba(255,255,255,0.1);
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .shortcut-hint,
+  .srs-assessment-btn.srs-btn-pressed .shortcut-hint {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* ----------------------------------------------------------
    SRS COMPLETION SCREEN
    ---------------------------------------------------------- */
 
@@ -7543,6 +7622,25 @@ mark.cyber-hl-pink:hover {
     -webkit-backdrop-filter: none;
   }
 
+  .shortcut-hint {
+    background: rgba(15, 15, 20, 0.7);
+    border-color: rgba(255,255,255,0.06);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.03),
+      0 1px 3px rgba(0,0,0,0.4);
+  }
+
+  .srs-assessment-btn:hover .shortcut-hint,
+  .srs-assessment-btn:focus-visible .shortcut-hint {
+    background: rgba(20, 20, 30, 0.8);
+    border-color: rgba(255,255,255,0.1);
+  }
+
+  .srs-assessment-btn.srs-btn-pressed .shortcut-hint {
+    background: var(--accent-primary, rgba(0,200,150,0.15));
+    border-color: var(--accent-primary);
+  }
+
   /* Overlays — keep minimal blur for depth or kill it */
   .settings-overlay,
   .backup-overlay,
@@ -8158,6 +8256,28 @@ mark.cyber-hl-pink:hover {
   border-color: rgba(0, 0, 0, 0.08);
 }
 
+[data-theme="solar-zen"] .shortcut-hint {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: var(--text-muted);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.5),
+    0 1px 2px rgba(0,0,0,0.08);
+}
+
+[data-theme="solar-zen"] .srs-assessment-btn:hover .shortcut-hint,
+[data-theme="solar-zen"] .srs-assessment-btn:focus-visible .shortcut-hint {
+  background: rgba(0, 0, 0, 0.07);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: var(--text-secondary);
+}
+
+[data-theme="solar-zen"] .srs-assessment-btn.srs-btn-pressed .shortcut-hint {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: var(--accent-primary, #6366f1);
+  color: var(--accent-primary, #6366f1);
+}
+
 /* Timer ring background track */
 [data-theme="solar-zen"] .timer-ring-bg {
   stroke: rgba(0, 0, 0, 0.08);
@@ -8669,6 +8789,28 @@ mark.cyber-hl-pink:hover {
 [data-theme="lofi-twilight"] .srs-assessment-btn {
   background: rgba(187, 154, 247, 0.06);
   border-color: rgba(187, 154, 247, 0.12);
+}
+
+[data-theme="lofi-twilight"] .shortcut-hint {
+  background: rgba(25, 28, 45, 0.7);
+  border-color: rgba(187, 154, 247, 0.15);
+  color: var(--text-muted);
+  box-shadow:
+    inset 0 1px 0 rgba(187, 154, 247, 0.1),
+    0 1px 3px rgba(0,0,0,0.3);
+}
+
+[data-theme="lofi-twilight"] .srs-assessment-btn:hover .shortcut-hint,
+[data-theme="lofi-twilight"] .srs-assessment-btn:focus-visible .shortcut-hint {
+  background: rgba(35, 38, 55, 0.8);
+  border-color: rgba(187, 154, 247, 0.25);
+  color: var(--text-secondary);
+}
+
+[data-theme="lofi-twilight"] .srs-assessment-btn.srs-btn-pressed .shortcut-hint {
+  background: rgba(187, 154, 247, 0.18);
+  border-color: var(--accent-primary, #bb9af7);
+  color: var(--accent-primary, #bb9af7);
 }
 
 /* Vibe pill with lavender tint */
