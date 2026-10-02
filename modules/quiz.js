@@ -1065,6 +1065,8 @@ D. Local Councils`;
 
   function _startTestTimer() {
     if (_testTimerId) return;
+    // Initialize the progress ring on start
+    _updateTimerRing(1.0); // Start at 100%
     _testTimerId = setInterval(() => {
       _testTimeRemaining--;
       _updateTimerDisplay();
@@ -1094,16 +1096,37 @@ D. Local Councils`;
   }
 
   function _updateTimerDisplay() {
-    const el = document.getElementById('test-timer-display');
-    if (!el) return;
+    // Update the SVG timer ring in the sticky header
+    const progress = _testTimeRemaining / Math.max(1, _testTimeLimit);
+    _updateTimerRing(progress);
 
-    el.textContent = _formatTime(_testTimeRemaining);
+    // Update the text inside the ring
+    const textEl = document.getElementById('quiz-timer-ring-text');
+    if (textEl) {
+      textEl.textContent = _formatTime(_testTimeRemaining);
+    }
 
-    const urgent = _testTimeRemaining < 60;
-    const warning = _testTimeRemaining < 300 && !urgent;
+    // Add/remove danger state classes on the wrapper
+    const wrapper = document.getElementById('hub-timer-ring-wrapper');
+    if (wrapper) {
+      const urgent = _testTimeRemaining <= 60;
+      const warning = _testTimeRemaining <= 300 && !urgent;
+      wrapper.classList.toggle('timer-urgent', urgent);
+      wrapper.classList.toggle('timer-warning', warning);
+    }
+  }
 
-    el.classList.toggle('timer-urgent', urgent);
-    el.classList.toggle('timer-warning', warning);
+  /**
+   * Update the SVG progress ring based on progress (0 to 1)
+   * @param {number} progress - 1.0 = full, 0.0 = empty
+   */
+  function _updateTimerRing(progress) {
+    const progressEl = document.getElementById('quiz-timer-ring-progress');
+    if (!progressEl) return;
+
+    const circumference = 2 * Math.PI * 24; // r = 24
+    const offset = circumference * (1 - progress);
+    progressEl.style.strokeDashoffset = offset;
   }
 
   function _submitTest() {
@@ -1236,21 +1259,13 @@ D. Local Councils`;
 
     _container.innerHTML = `
       <div class="tab-content quiz-app">
-        ${_testMode && !_testSubmitted ? `
-          <!-- Test Mode Sticky Timer -->
-          <div class="test-timer-bar glass-card" id="test-timer-bar">
-            <span class="test-timer-label">⏱️ Time Remaining</span>
-            <span class="test-timer-display" id="test-timer-display">${_formatTime(_testTimeRemaining)}</span>
-          </div>
-        ` : ''}
-
         ${_testSubmitted ? `
           <div class="test-submitted-banner glass-card">
             <span>🏁 Test Submitted</span>
           </div>
         ` : ''}
 
-        <!-- Top bar: back button + deck title + score -->
+        <!-- Top bar: back button + deck title + score + stats -->
         <div class="quiz-topbar glass-card">
           <div class="quiz-topbar-left">
             <button class="btn btn-ghost" id="btn-back-to-decks" style="padding:6px 14px;">
@@ -1262,6 +1277,43 @@ D. Local Councils`;
             <span class="quiz-badge quiz-badge-live">${_testSubmitted ? 'Submitted' : (_testMode ? 'Test' : 'Live')}</span>
           </div>
           <div class="quiz-topbar-right">
+            ${_testMode ? `
+            <!-- Test Mode: Circular Timer Ring (replaces Correct/Incorrect stats) -->
+            <div class="quiz-timer-ring-wrapper" id="hub-timer-ring-wrapper">
+              <div class="quiz-timer-ring">
+                <svg width="56" height="56" viewBox="0 0 56 56" class="quiz-timer-ring-svg">
+                  <!-- Background track -->
+                  <circle cx="28" cy="28" r="24" fill="none"
+                          stroke="rgba(255,255,255,0.06)" stroke-width="4"/>
+                  <!-- Progress ring -->
+                  <circle cx="28" cy="28" r="24" fill="none"
+                          stroke="var(--accent-primary)"
+                          stroke-width="4" stroke-linecap="round"
+                          stroke-dasharray="${2 * Math.PI * 24}"
+                          stroke-dashoffset="0"
+                          class="quiz-timer-ring-progress"
+                          id="quiz-timer-ring-progress"
+                          style="transition: stroke-dashoffset 0.5s var(--ease-out-expo), stroke 0.3s var(--ease-out-expo);"/>
+                </svg>
+                <span class="quiz-timer-ring-text" id="quiz-timer-ring-text">${_formatTime(_testTimeRemaining)}</span>
+              </div>
+              <span class="quiz-timer-ring-label">Time Remaining</span>
+            </div>
+            ` : `
+            <!-- Practice Mode: Correct/Incorrect Stats -->
+            <div class="quiz-stats" id="hub-live-stats">
+              <div class="quiz-stat correct">
+                <span class="quiz-stat-icon">✓</span>
+                <span>Correct</span>
+                <span class="quiz-stat-count" id="hub-live-correct">${correctCount}</span>
+              </div>
+              <div class="quiz-stat incorrect">
+                <span class="quiz-stat-icon">✗</span>
+                <span>Incorrect</span>
+                <span class="quiz-stat-count" id="hub-live-wrong">${_getWrongCount()}</span>
+              </div>
+            </div>
+            `}
             <!-- Score ring -->
             <div class="quiz-score-display ${allAnswered ? 'score-complete' : ''}">
               <div class="quiz-score-ring">
@@ -1380,6 +1432,11 @@ D. Local Councils`;
         if (_shuffle && _quizData) {
           _shuffleQuizData();
         }
+        // Reset test timer if in test mode
+        if (_testMode) {
+          _testTimeRemaining = _testTimeLimit;
+          _testSubmitted = false;
+        }
         _renderPlayMode();
         _container.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
@@ -1429,6 +1486,12 @@ D. Local Councils`;
 
     // Increment quiz session counter for dashboard stats
     _incrementQuizCount();
+
+    // --- Live Correct/Incorrect counters in sticky header ---
+    const correctEl = document.getElementById('hub-live-correct');
+    const wrongEl = document.getElementById('hub-live-wrong');
+    if (correctEl) correctEl.textContent = _getCorrectCount();
+    if (wrongEl) wrongEl.textContent = _getWrongCount();
 
     // Save practice progress after every answer
     if (!_testMode && _currentDeck) {
@@ -1498,6 +1561,11 @@ D. Local Councils`;
     // Clear progress since all answers are now revealed (quiz effectively complete)
     if (_currentDeck && !_testMode) {
       _clearPracticeProgress(_currentDeck.id);
+    }
+    // In test mode, revealing all answers effectively submits the test
+    if (_testMode) {
+      _testSubmitted = true;
+      _stopTestTimer();
     }
     _renderPlayMode();
   }

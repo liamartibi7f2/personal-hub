@@ -4415,10 +4415,17 @@ ul, ol { list-style: none; }
 
 /* --- Quiz Mode: Top bar --- */
 .quiz-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: var(--space-md) var(--space-lg) !important;
+  background: var(--glass-bg, rgba(10, 10, 10, 0.85));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 .quiz-topbar-left {
   display: flex;
@@ -4429,6 +4436,43 @@ ul, ol { list-style: none; }
   display: flex;
   align-items: center;
   gap: var(--space-md);
+}
+
+/* Live quiz stats (Correct/Incorrect counters) */
+.quiz-stats {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  margin-left: auto;
+  padding: 0 1rem;
+}
+
+.quiz-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.quiz-stat.correct {
+  color: var(--success, #44ff88);
+  text-shadow: 0 0 8px rgba(68, 255, 136, 0.5);
+}
+
+.quiz-stat.incorrect {
+  color: var(--danger, #ff4466);
+  text-shadow: 0 0 8px rgba(255, 68, 102, 0.5);
+}
+
+.quiz-stat-icon {
+  font-size: 1.1rem;
+}
+
+.quiz-stat-count {
+  min-width: 2ch;
+  text-align: right;
 }
 
 /* Score ring display */
@@ -5319,6 +5363,84 @@ body.theme-optimized .toggle-slider::before {
   to   { opacity: 0.5; }
 }
 
+/* ----------------------------------------------------------
+   TEST MODE CIRCULAR TIMER RING (in sticky header)
+   ---------------------------------------------------------- */
+.quiz-timer-ring-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px;
+}
+
+.quiz-timer-ring {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.quiz-timer-ring-svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+
+.quiz-timer-ring-progress {
+  transition: stroke-dashoffset 0.5s var(--ease-out-expo), stroke 0.3s var(--ease-out-expo);
+}
+
+.quiz-timer-ring-text {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-mono);
+  font-size: 0.75rem; /* 12px - small enough for 5 chars like "120:00" */
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.5px;
+  color: var(--accent-primary);
+  line-height: 1;
+  white-space: nowrap;
+  transition: color var(--duration-fast);
+}
+
+.quiz-timer-ring-label {
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Danger state (<= 60s) - red ring & text with pulse */
+.quiz-timer-ring-wrapper.timer-urgent .quiz-timer-ring-progress {
+  stroke: var(--danger, #ff4444);
+  animation: timer-ring-pulse 1s ease-in-out infinite alternate;
+}
+
+.quiz-timer-ring-wrapper.timer-urgent .quiz-timer-ring-text {
+  color: var(--danger, #ff4444);
+  animation: timer-ring-pulse 1s ease-in-out infinite alternate;
+}
+
+/* Warning state (<= 5min) - amber ring & text */
+.quiz-timer-ring-wrapper.timer-warning .quiz-timer-ring-progress {
+  stroke: #f59e0b;
+}
+
+.quiz-timer-ring-wrapper.timer-warning .quiz-timer-ring-text {
+  color: #f59e0b;
+}
+
+@keyframes timer-ring-pulse {
+  from { opacity: 1; }
+  to   { opacity: 0.6; }
+}
+
 /* Submit button */
 .test-submit-btn {
   width: 100%;
@@ -5799,6 +5921,25 @@ mark.cyber-hl-pink:hover {
   }
   .test-timer-display {
     font-size: 1.2rem;
+  }
+  /* Timer ring responsive */
+  .quiz-timer-ring {
+    width: 48px;
+    height: 48px;
+  }
+  .quiz-timer-ring-svg {
+    width: 48px;
+    height: 48px;
+  }
+  .quiz-timer-ring-text {
+    font-size: 0.7rem;
+  }
+  .quiz-timer-ring-label {
+    font-size: 0.5rem;
+  }
+  .quiz-timer-ring-wrapper {
+    gap: 1px;
+    padding: 2px 6px;
   }
 }
 

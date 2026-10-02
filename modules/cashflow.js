@@ -25,15 +25,15 @@ const cashflowModule = (function () {
   ];
 
   const EXPENSE_CATEGORIES = [
-    { id: 'nha-o',                   name: 'Nhà ở',                    nameVI: 'Nhà ở' },
-    { id: 'an-uong',                 name: 'Ăn uống',                  nameVI: 'Ăn uống' },
-    { id: 'di-chuyen',               name: 'Di chuyển',                nameVI: 'Di chuyển' },
-    { id: 'tieu-dung-thiet-yeu',     name: 'Tiêu dùng thiết yếu',      nameVI: 'Tiêu dùng thiết yếu' },
-    { id: 'tieu-dung-khac',          name: 'Tiêu dùng khác',           nameVI: 'Tiêu dùng khác' },
-    { id: 'doodad',                  name: 'Doodad',                   nameVI: 'Doodad' },
-    { id: 'cho-di',                  name: 'Cho đi',                   nameVI: 'Cho đi' },
-    { id: 'phat-trien-ban-than',     name: 'Phát triển bản thân',      nameVI: 'Phát triển bản thân' },
-    { id: 'chi-phi-khac',            name: 'Chi phí khác',             nameVI: 'Chi phí khác' }
+    { id: 'nha-o',                   name: '🏠 Nhà ở',                 nameVI: '🏠 Nhà ở' },
+    { id: 'an-uong',                 name: '🍜 Ăn uống',               nameVI: '🍜 Ăn uống' },
+    { id: 'di-chuyen',               name: '🛵 Di chuyển',             nameVI: '🛵 Di chuyển' },
+    { id: 'tieu-dung-thiet-yeu',     name: '🛒 Tiêu dùng thiết yếu',    nameVI: '🛒 Tiêu dùng thiết yếu' },
+    { id: 'tieu-dung-khac',          name: '🛍️ Tiêu dùng khác',         nameVI: '🛍️ Tiêu dùng khác' },
+    { id: 'doodad',                  name: '🎮 Doodad',                nameVI: '🎮 Doodad' },
+    { id: 'cho-di',                  name: '❤️ Cho đi',                nameVI: '❤️ Cho đi' },
+    { id: 'phat-trien-ban-than',     name: '📚 Phát triển bản thân',    nameVI: '📚 Phát triển bản thân' },
+    { id: 'chi-phi-khac',            name: '🏷️ Chi phí khác',           nameVI: '🏷️ Chi phí khác' }
   ];
 
   // ── Balance account types ──
@@ -45,6 +45,33 @@ const cashflowModule = (function () {
     { id: 'cho-muon',       name: 'Cho mượn',       nameVI: 'Cho mượn' },
     { id: 'no',             name: 'Nợ',             nameVI: 'Nợ' }
   ];
+
+  // ── Source types (UPDATED: 3-way categorization) ──
+  const SOURCE_TYPES = [
+    { id: 'uncategorized', name: 'Uncategorized', nameVI: 'Chưa phân loại' },
+    { id: 'bank',          name: 'Bank Transfer', nameVI: 'Chuyển khoản' },
+    { id: 'cash',          name: 'Cash',          nameVI: 'Tiền mặt' }
+  ];
+
+  // ── Category emoji mapping for backward compatibility ──
+  // Maps legacy category names (without emojis) to new emoji-enhanced names
+  const CATEGORY_ICONS = {
+    // Expense categories
+    'Nhà ở':                    '🏠 Nhà ở',
+    'Ăn uống':                  '🍜 Ăn uống',
+    'Di chuyển':                '🛵 Di chuyển',
+    'Tiêu dùng thiết yếu':      '🛒 Tiêu dùng thiết yếu',
+    'Tiêu dùng khác':           '🛍️ Tiêu dùng khác',
+    'Doodad':                   '🎮 Doodad',
+    'Cho đi':                   '❤️ Cho đi',
+    'Phát triển bản thân':      '📚 Phát triển bản thân',
+    'Chi phí khác':             '🏷️ Chi phí khác',
+    // Income categories (for future use / completeness)
+    'Lương':                    '💰 Lương',
+    'Kinh doanh, đầu tư':       '📈 Kinh doanh, đầu tư',
+    'Thu nhập bị động':         '💎 Thu nhập bị động',
+    'Thu nhập khác':            '💵 Thu nhập khác'
+  };
 
   // ============================================================
   //   I18N DICTIONARY — All static UI strings for CashFlow
@@ -61,11 +88,19 @@ const cashflowModule = (function () {
       incomeSub:        'TOTAL INCOME',
       expenseLabel:     'EXPENSE',
       expenseSub:       'TOTAL EXPENSE',
+      cashWalletLabel:  'CASH WALLET',
+      cashWalletSub:    'PHYSICAL CASH ON HAND',
+      bankAccountLabel: 'BANK ACCOUNT',
+      bankAccountSub:   'DIGITAL / BANK BALANCE',
+      uncategorizedLabel:  'UNCATEGORIZED',
+      uncategorizedSub:    'NEEDS REVIEW',
 
       // Chart
       chartTitle:       'INCOME VS EXPENSE',
       chartIncome:      'Income',
       chartExpense:     'Expense',
+      chartCash:        'Cash Flow',
+      chartBank:        'Bank Flow',
       chartDay:         'Day',
       chartMonth:       'Month',
       chartYear:        'Year',
@@ -104,6 +139,10 @@ const cashflowModule = (function () {
       labelDate:        'Date',
       labelDesc:        'Description',
       labelCategory:    'Category',
+      labelSource:      'Source',
+      sourceUncategorized: 'Uncategorized',
+      sourceCash:       'Cash (Physical)',
+      sourceBank:       'Bank Transfer',
       placeholderDesc:  'e.g. Grab, coffee, books...',
       btnCancel:        'Cancel',
       btnSave:          'Save',
@@ -130,11 +169,19 @@ const cashflowModule = (function () {
       incomeSub:        'TỔNG THU NHẬP',
       expenseLabel:     'CHI PHÍ',
       expenseSub:       'TỔNG CHI PHÍ',
+      cashWalletLabel:  'TIỀN MẶT',
+      cashWalletSub:    'TIỀN MẶT TRONG TAY',
+      bankAccountLabel: 'CHUYỂN KHOẢN',
+      bankAccountSub:   'SỐ DƯ TÀI KHOẢN',
+      uncategorizedLabel:  'CHƯA PHÂN LOẠI',
+      uncategorizedSub:    'CẦN XEM XÉT',
 
       // Chart
       chartTitle:       'THU NHẬP VÀ CHI PHÍ',
       chartIncome:      'Thu Nhập',
       chartExpense:     'Chi Phí',
+      chartCash:        'Dòng tiền mặt',
+      chartBank:        'Dòng ngân hàng',
       chartDay:         'Ngày',
       chartMonth:       'Tháng',
       chartYear:        'Năm',
@@ -172,6 +219,10 @@ const cashflowModule = (function () {
       labelDate:        'Ngày',
       labelDesc:        'Mô tả',
       labelCategory:    'Hạng mục',
+      labelSource:      'Nguồn',
+      sourceUncategorized: 'Chưa phân loại',
+      sourceCash:       'Tiền mặt',
+      sourceBank:       'Chuyển khoản',
       placeholderDesc:  'VD: Bún bò, Grab, Sách Clean Code...',
       btnCancel:        'Hủy',
       btnSave:          'Lưu',
@@ -386,7 +437,7 @@ const cashflowModule = (function () {
     return {
       startingBalance: 0,
       balanceSnapshots: [],  // { year, month, accountId, amount }
-      transactions: [],       // { id, type, amount, day, month, year, desc, category, createdAt }
+      transactions: [],       // { id, type, amount, day, month, year, desc, category, source, createdAt }
       debts: []               // { id, debtorName, amount, dateBorrowed, expectedReturnDate, status, note, paidAt, createdAt }
     };
   }
@@ -548,6 +599,11 @@ const cashflowModule = (function () {
     if (!Array.isArray(_data.balanceSnapshots)) _data.balanceSnapshots = [];
     if (!Array.isArray(_data.debts)) _data.debts = [];
     if (typeof _data.startingBalance !== 'number') _data.startingBalance = 0;
+
+    // 🔑 BACKWARD COMPATIBILITY: Default missing source to 'uncategorized'
+    _data.transactions.forEach(function (tx) {
+      if (!tx.source) tx.source = 'uncategorized';
+    });
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -797,9 +853,80 @@ const cashflowModule = (function () {
     return list.find(function (c) { return c.id === catId; }) || { id: catId, name: catId, nameVI: catId };
   }
 
-  /** Lookup category name for display */
+  /** Lookup category name for display with emoji mapping for legacy data */
   function _categoryDisplayName(catId, type) {
-    return _lookupCategory(catId, type).nameVI || _lookupCategory(catId, type).name;
+    var cat = _lookupCategory(catId, type);
+    var displayName = cat.nameVI || cat.name || catId;
+
+    // Backward compatibility: map legacy names (without emojis) to new emoji versions
+    if (CATEGORY_ICONS[displayName]) {
+      return CATEGORY_ICONS[displayName];
+    }
+    // Also check if the name already has an emoji (starts with emoji char)
+    // If not, and it's not in our map, return as-is
+    return displayName;
+  }
+
+  /** Calculate running cash balance (all-time) */
+  function _calcCashBalance() {
+    if (!_data || !_data.transactions) return 0;
+    let cashIncome = 0;
+    let cashExpense = 0;
+    _data.transactions.forEach(function (tx) {
+      if (tx.source !== 'cash') return;
+      if (tx.type === 'income') cashIncome += (tx.amount || 0);
+      else cashExpense += (tx.amount || 0);
+    });
+    // Add initial balance offset from localStorage
+    var initCash = parseInt(localStorage.getItem('hub_cashflow_init_cash') || '0', 10);
+    return cashIncome - cashExpense + (isNaN(initCash) ? 0 : initCash);
+  }
+
+  /** Calculate running bank balance (all-time) */
+  function _calcBankBalance() {
+    if (!_data || !_data.transactions) return 0;
+    let bankIncome = 0;
+    let bankExpense = 0;
+    _data.transactions.forEach(function (tx) {
+      if (tx.source !== 'bank') return;
+      if (tx.type === 'income') bankIncome += (tx.amount || 0);
+      else bankExpense += (tx.amount || 0);
+    });
+    // Add initial balance offset from localStorage
+    var initBank = parseInt(localStorage.getItem('hub_cashflow_init_bank') || '0', 10);
+    return bankIncome - bankExpense + (isNaN(initBank) ? 0 : initBank);
+  }
+
+  /** Calculate running uncategorized balance (all-time) — NEW */
+  function _calcUncategorizedBalance() {
+    if (!_data || !_data.transactions) return 0;
+    let uncategorizedIncome = 0;
+    let uncategorizedExpense = 0;
+    _data.transactions.forEach(function (tx) {
+      if (tx.source !== 'uncategorized') return;
+      if (tx.type === 'income') uncategorizedIncome += (tx.amount || 0);
+      else uncategorizedExpense += (tx.amount || 0);
+    });
+    return uncategorizedIncome - uncategorizedExpense;
+  }
+
+  /** Calculate monthly cash flow for chart */
+  function _getMonthlyCashFlow(year, month) {
+    if (!_data || !_data.transactions) return { cashIncome: 0, cashExpense: 0, bankIncome: 0, bankExpense: 0, uncategorizedIncome: 0, uncategorizedExpense: 0 };
+    const txs = _getMonthTransactions(year, month);
+    let cashIncome = 0, cashExpense = 0, bankIncome = 0, bankExpense = 0, uncategorizedIncome = 0, uncategorizedExpense = 0;
+    txs.forEach(function (tx) {
+      if (tx.type === 'income') {
+        if (tx.source === 'cash') cashIncome += tx.amount;
+        else if (tx.source === 'bank') bankIncome += tx.amount;
+        else if (tx.source === 'uncategorized') uncategorizedIncome += tx.amount;
+      } else {
+        if (tx.source === 'cash') cashExpense += tx.amount;
+        else if (tx.source === 'bank') bankExpense += tx.amount;
+        else if (tx.source === 'uncategorized') uncategorizedExpense += tx.amount;
+      }
+    });
+    return { cashIncome, cashExpense, bankIncome, bankExpense, uncategorizedIncome, uncategorizedExpense };
   }
 
   // ============================================================
@@ -893,8 +1020,7 @@ function _restoreAIState() {
       if (!document.getElementById('hub-cf-edit-styles')) {
         var styleEl = document.createElement('style');
         styleEl.id = 'hub-cf-edit-styles';
-        styleEl.textContent = `
-/* ============================================================
+        styleEl.textContent = `/* ============================================================
    EDIT BUTTONS — Theme-synced inline SVG styling
    ============================================================ */
 
@@ -955,7 +1081,237 @@ function _restoreAIState() {
   justify-content: flex-end;
   align-items: center;
 }
-        `;
+
+/* ============================================================
+   DASHBOARD SUMMARY CONTAINER — Sync with glass-card panels
+   ============================================================ */
+
+.hub-cf-dashboard {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ============================================================
+   6-COLUMN GRID LAYOUT — Balanced Symmetrical Cards
+   ============================================================ */
+
+.cashflow-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+  align-items: start;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Force Pocket Debt to span full width */
+.cashflow-summary-grid .hub-cf-debt-summary-card--fullwidth {
+  grid-column: 1 / -1;
+}
+
+/* 6-Column Spanning Rules (Desktop) */
+
+/* Row 1: Net Worth (1), Savings (2), Bank (3) — each 1/3 width */
+.cashflow-summary-grid .hub-cf-card:nth-child(1),  /* Net Worth */
+.cashflow-summary-grid .hub-cf-card:nth-child(2),  /* Savings */
+.cashflow-summary-grid .hub-cf-card:nth-child(3) { /* Bank Account */
+  grid-column: span 2;
+}
+
+/* Row 2: Cash (4), Uncategorized (5) — each 1/2 width */
+.cashflow-summary-grid .hub-cf-card:nth-child(4),  /* Cash Wallet */
+.cashflow-summary-grid .hub-cf-card:nth-child(5) { /* Uncategorized */
+  grid-column: span 3;
+}
+
+/* Row 3: Income (6), Expense (7) — each 1/2 width, side by side */
+.cashflow-summary-grid .hub-cf-card:nth-child(6),  /* Income */
+.cashflow-summary-grid .hub-cf-card:nth-child(7) { /* Expense */
+  grid-column: span 3;
+}
+
+/* Mobile Responsiveness: Stack all cards vertically */
+@media (max-width: 768px) {
+  .cashflow-summary-grid {
+    grid-template-columns: 1fr;
+  }
+  .cashflow-summary-grid .hub-cf-card,
+  .cashflow-summary-grid .hub-cf-debt-summary-card--fullwidth {
+    grid-column: span 6 !important;
+  }
+}
+
+/* 3-WAY SOURCE CARDS & WARNING STATE */
+
+/* Prevent text overflow in all cards */
+.hub-cf-card {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  min-width: 0; /* Critical: allows grid items to shrink below content size */
+}
+
+.hub-cf-card-value {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.hub-cf-card-label,
+.hub-cf-card-sub {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Source cards (Bank, Cash, Uncategorized) */
+.hub-cf-card--source {
+  position: relative;
+  border-left: 3px solid var(--primary);
+}
+
+.hub-cf-card--bank { border-left-color: var(--info, #00bcd4); }
+.hub-cf-card--cash { border-left-color: var(--success, #00e676); }
+.hub-cf-card--uncategorized { border-left-color: var(--accent-secondary, #ffb300); }
+
+/* Warning state: Uncategorized balance > 0 */
+.hub-cf-card--uncategorized.hub-cf-card--has-uncategorized {
+  border-left-color: var(--accent-secondary, #ffb300);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-secondary) 40%, transparent);
+}
+
+.hub-cf-card--uncategorized.hub-cf-card--has-uncategorized .hub-cf-card-value--uncategorized {
+  color: var(--accent-secondary, #ffb300);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--accent-secondary) 60%, transparent);
+}
+
+/* ============================================================
+   EDIT BUTTONS FOR SUMMARY CARDS — Fixed positioning
+   ============================================================ */
+
+/* Parent card must be relative for absolute positioning of edit btn */
+.hub-cf-card {
+  position: relative;
+}
+
+/* Edit button inside summary cards */
+.hub-cf-card-edit-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 180ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+              background 180ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+              transform 120ms ease-out;
+  opacity: 0.7;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.hub-cf-card-edit-btn:hover {
+  opacity: 1;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  transform: scale(1.05);
+}
+
+.hub-cf-card-edit-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  opacity: 1;
+}
+
+.hub-cf-card-edit-btn:active {
+  transform: scale(0.96);
+}
+
+.hub-cf-card-edit-btn svg {
+  display: block;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  stroke: currentColor;
+}
+
+/* Value row layout for cards with edit button */
+.hub-cf-card-value-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hub-cf-card-icon {
+  font-size: 1.1rem;
+  opacity: 0.8;
+}
+
+.hub-cf-card-value--networth { color: var(--primary); }
+.hub-cf-card-value--savings { color: var(--success, #00e676); }
+.hub-cf-card-value--bank { color: var(--info, #00bcd4); }
+.hub-cf-card-value--cash { color: var(--success, #00e676); }
+.hub-cf-card-value--uncategorized { color: var(--text-muted); transition: color 0.3s ease; }
+.hub-cf-card-value--income { color: var(--success, #00e676); }
+.hub-cf-card-value--expense { color: var(--danger, #ff5252); }
+.hub-cf-card-value--debt { color: var(--warning, #ffb300); }
+
+/* Source badge in transaction table */
+.hub-cf-source-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  margin-left: 6px;
+  flex-shrink: 0;
+}
+
+.hub-cf-source-badge--bank {
+  background: color-mix(in srgb, var(--info, #00bcd4) 20%, transparent);
+  color: var(--info, #00bcd4);
+  border: 1px solid color-mix(in srgb, var(--info, #00bcd4) 40%, transparent);
+}
+
+.hub-cf-source-badge--cash {
+  background: color-mix(in srgb, var(--success, #00e676) 20%, transparent);
+  color: var(--success, #00e676);
+  border: 1px solid color-mix(in srgb, var(--success, #00e676) 40%, transparent);
+}
+
+.hub-cf-source-badge--uncategorized {
+  background: color-mix(in srgb, var(--accent-secondary, #ffb300) 20%, transparent);
+  color: var(--accent-secondary, #ffb300);
+  border: 1px solid color-mix(in srgb, var(--accent-secondary, #ffb300) 40%, transparent);
+}
+
+/* Category chip + badge inline */
+.hub-cf-cat-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm, 6px);
+  font-size: 0.68rem;
+  font-weight: 500;
+  background: color-mix(in srgb, var(--primary) 15%, transparent);
+  color: var(--primary);
+  margin-right: 4px;
+}';
+        document.head.appendChild(styleEl);
+      }`;
         document.head.appendChild(styleEl);
       }
 
@@ -965,48 +1321,96 @@ function _restoreAIState() {
       container.innerHTML = `
 <div class="hub-cf-container">
 
-  <!-- ═══ DASHBOARD — 3×2 Summary Grid ═══ -->
-  <div class="cashflow-summary-grid">
+  <!-- ═══ DASHBOARD — Summary Section ═══ -->
+  <div class="hub-cf-dashboard glass-card">
+    <div class="cashflow-summary-grid">
 
-    <!-- Card 1: Net Worth -->
-    <div class="hub-cf-card">
-      <span class="hub-cf-card-label" data-i18n="netWorthLabel">${_t('netWorthLabel')}</span>
-      <div class="hub-cf-card-value-row">
-        <span class="hub-cf-card-value hub-cf-card-value--networth" id="cf-networth">0 ₫</span>
-        <button class="hub-cf-card-edit-btn" data-target="net-worth" title="Edit Net Worth">✏️</button>
+      <!-- Card 1: Net Worth (Grand Total) - NO EDIT BUTTON -->
+      <div class="hub-cf-card hub-cf-card--networth">
+        <span class="hub-cf-card-label" data-i18n="netWorthLabel">${_t('netWorthLabel')}</span>
+        <div class="hub-cf-card-value-row">
+          <span class="hub-cf-card-value hub-cf-card-value--networth" id="cf-networth">0 ₫</span>
+        </div>
+        <span class="hub-cf-card-sub" data-i18n="netWorthSub">${_t('netWorthSub')}</span>
       </div>
-    </div>
 
-    <!-- Card 2: Savings & Investments -->
-    <div class="hub-cf-card">
-      <span class="hub-cf-card-label" data-i18n="savingsLabel">${_t('savingsLabel')}</span>
-      <div class="hub-cf-card-value-row">
-        <span class="hub-cf-card-value hub-cf-card-value--savings" id="cf-savings">0 ₫</span>
-        <button class="hub-cf-card-edit-btn" data-target="savings" title="Edit Savings &amp; Investments">✏️</button>
+      <!-- Card 2: Savings / Investments -->
+      <div class="hub-cf-card hub-cf-card--savings">
+        <span class="hub-cf-card-label" data-i18n="savingsLabel">${_t('savingsLabel')}</span>
+        <div class="hub-cf-card-value-row">
+          <span class="hub-cf-card-value hub-cf-card-value--savings" id="cf-savings">0 ₫</span>
+          <button class="hub-cf-card-edit-btn" data-target="savings" title="Edit Savings & Investments" aria-label="Edit Savings & Investments">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+          </button>
+        </div>
+        <span class="hub-cf-card-sub" data-i18n="savingsSub">${_t('savingsSub')}</span>
       </div>
-    </div>
 
-    <!-- Card 3: Income -->
-    <div class="hub-cf-card">
-      <span class="hub-cf-card-label" data-i18n="incomeLabel">${_t('incomeLabel')}</span>
-      <span class="hub-cf-card-value hub-cf-card-value--income" id="cf-income">0 ₫</span>
-    </div>
-
-    <!-- Card 4: Expense -->
-    <div class="hub-cf-card">
-      <span class="hub-cf-card-label" data-i18n="expenseLabel">${_t('expenseLabel')}</span>
-      <span class="hub-cf-card-value hub-cf-card-value--expense" id="cf-expense">0 ₫</span>
-    </div>
-
-  <!-- Card 5: Pocket Debt (Sổ nợ bỏ túi) — Full Width -->
-    <div class="hub-cf-card hub-cf-debt-summary-card hub-cf-debt-summary-card--fullwidth">
-      <span class="hub-cf-card-label" data-i18n="debtSummaryTitle">${_pd_t('debtSummaryTitle')}</span>
-      <div class="hub-cf-card-value-row">
-        <span class="hub-cf-card-value hub-cf-card-value--debt" id="cf-debt-pending">${_formatVNFull(_getTotalPendingDebt())}</span>
-        <span class="hub-cf-card-sub" data-i18n="totalPendingDebt">${_pd_t('totalPendingDebt')}</span>
+      <!-- Card 3: CHUYỂN KHOẢN (Bank Balance) -->
+      <div class="hub-cf-card hub-cf-card--source hub-cf-card--bank">
+        <span class="hub-cf-card-label" data-i18n="bankAccountLabel">${_t('bankAccountLabel')}</span>
+        <div class="hub-cf-card-value-row">
+          <span class="hub-cf-card-value hub-cf-card-value--bank" id="cf-bank-balance">0 ₫</span>
+          <button class="hub-cf-card-edit-btn" id="btn-edit-bank" data-target="bank" title="Edit Bank Account Balance" aria-label="Edit Bank Account Balance">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+          </button>
+        </div>
+        <span class="hub-cf-card-sub" data-i18n="bankAccountSub">${_t('bankAccountSub')}</span>
       </div>
-    </div>
 
+      <!-- Card 4: TIỀN MẶT (Cash Wallet Balance) -->
+      <div class="hub-cf-card hub-cf-card--source hub-cf-card--cash">
+        <span class="hub-cf-card-label" data-i18n="cashWalletLabel">${_t('cashWalletLabel')}</span>
+        <div class="hub-cf-card-value-row">
+          <span class="hub-cf-card-value hub-cf-card-value--cash" id="cf-cash-balance">0 ₫</span>
+          <button class="hub-cf-card-edit-btn" id="btn-edit-cash" data-target="cash" title="Edit Cash Wallet Balance" aria-label="Edit Cash Wallet Balance">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+          </button>
+        </div>
+        <span class="hub-cf-card-sub" data-i18n="cashWalletSub">${_t('cashWalletSub')}</span>
+      </div>
+
+      <!-- Card 5: CHƯA PHÂN LOẠI (Uncategorized Balance) -->
+      <div class="hub-cf-card hub-cf-card--source hub-cf-card--uncategorized" id="cf-uncategorized-card">
+        <span class="hub-cf-card-label" data-i18n="uncategorizedLabel">${_t('uncategorizedLabel')}</span>
+        <div class="hub-cf-card-value-row">
+          <span class="hub-cf-card-value hub-cf-card-value--uncategorized" id="cf-uncategorized-balance">0 ₫</span>
+          <span class="hub-cf-card-icon" aria-hidden="true">❓</span>
+        </div>
+        <span class="hub-cf-card-sub" data-i18n="uncategorizedSub">${_t('uncategorizedSub')}</span>
+      </div>
+
+      <!-- Card 6: Income (Monthly) -->
+      <div class="hub-cf-card hub-cf-card--income-monthly">
+        <span class="hub-cf-card-label" data-i18n="incomeLabel">${_t('incomeLabel')}</span>
+        <span class="hub-cf-card-value hub-cf-card-value--income" id="cf-income">0 ₫</span>
+      </div>
+
+      <!-- Card 7: Expense (Monthly) -->
+      <div class="hub-cf-card hub-cf-card--expense-monthly">
+        <span class="hub-cf-card-label" data-i18n="expenseLabel">${_t('expenseLabel')}</span>
+        <span class="hub-cf-card-value hub-cf-card-value--expense" id="cf-expense">0 ₫</span>
+      </div>
+
+      <!-- Card 8: Pocket Debt (Sổ nợ bỏ túi) — Full Width -->
+      <div class="hub-cf-card hub-cf-debt-summary-card hub-cf-debt-summary-card--fullwidth">
+        <span class="hub-cf-card-label" data-i18n="debtSummaryTitle">${_pd_t('debtSummaryTitle')}</span>
+        <div class="hub-cf-card-value-row">
+          <span class="hub-cf-card-value hub-cf-card-value--debt" id="cf-debt-pending">${_formatVNFull(_getTotalPendingDebt())}</span>
+          <span class="hub-cf-card-sub" data-i18n="totalPendingDebt">${_pd_t('totalPendingDebt')}</span>
+        </div>
+      </div>
+
+    </div>
   </div>
 <!-- ═══ REAL-TIME CHART ═══ -->
     <div class="hub-cf-chart-section glass-card">
@@ -1224,6 +1628,14 @@ function _restoreAIState() {
                  placeholder="${_t('placeholderDesc')}" maxlength="120" />
         </div>
         <div class="hub-cf-form-group">
+          <label class="hub-cf-form-label" for="hub-cf-source" data-i18n="labelSource">${_t('labelSource')}</label>
+          <select id="hub-cf-source" class="hub-cf-form-input hub-cf-source-select" required>
+            <option value="uncategorized" data-i18n="sourceUncategorized">${_t('sourceUncategorized')}</option>
+            <option value="bank" data-i18n="sourceBank">${_t('sourceBank')}</option>
+            <option value="cash" data-i18n="sourceCash">${_t('sourceCash')}</option>
+          </select>
+        </div>
+        <div class="hub-cf-form-group">
           <label class="hub-cf-form-label" for="hub-cf-category" data-i18n="labelCategory">${_t('labelCategory')}</label>
           <select id="hub-cf-category" class="hub-cf-form-input hub-cf-category-select" required></select>
         </div>
@@ -1423,7 +1835,7 @@ function _restoreAIState() {
    * _computeLiveNetWorth()
    *
    * Dynamic all-time Net Worth formula:
-   *   totalIncomeAllTime — totalExpenseAllTime + _netWorthOffset
+   *   totalIncomeAllTime — totalExpenseAllTime + _netWorthOffset + initBank + initCash
    *
    * This is called both by the edit prompt (to show the current value)
    * and by updateDashboardTotals() (to render the card). Keeping it in
@@ -1441,7 +1853,12 @@ function _restoreAIState() {
       else allExpense += (tx.amount || 0);
     });
 
-    return allIncome - allExpense + (_netWorthOffset || 0);
+    // Include initial balance offsets from localStorage
+    var initBank = parseInt(localStorage.getItem('hub_cashflow_init_bank') || '0', 10);
+    var initCash = parseInt(localStorage.getItem('hub_cashflow_init_cash') || '0', 10);
+    var initOffset = (isNaN(initBank) ? 0 : initBank) + (isNaN(initCash) ? 0 : initCash);
+
+    return allIncome - allExpense + (_netWorthOffset || 0) + initOffset;
   }
 
   function updateDashboardTotals() {
@@ -1449,8 +1866,14 @@ function _restoreAIState() {
     if (!_data || !_data.transactions) {
       _setTextById('cf-networth', '0 ₫');
       _setTextById('cf-savings',  '0 ₫');
+      _setTextById('cf-bank-balance', '0 ₫');
+      _setTextById('cf-cash-balance', '0 ₫');
+      _setTextById('cf-uncategorized-balance', '0 ₫');
       _setTextById('cf-income',   '0 ₫');
       _setTextById('cf-expense',  '0 ₫');
+      // Reset warning state
+      const uncCard = document.getElementById('cf-uncategorized-card');
+      if (uncCard) uncCard.classList.remove('hub-cf-card--has-uncategorized');
       return;
     }
 
@@ -1500,9 +1923,19 @@ function _restoreAIState() {
     // ── 2. Sum income & expense from filtered transactions (time-windowed) ──
     var totalIncome = 0;
     var totalExpense = 0;
+    var cashIncome = 0, cashExpense = 0, bankIncome = 0, bankExpense = 0, uncIncome = 0, uncExpense = 0;
     filteredTxs.forEach(function (tx) {
-      if (tx.type === 'income') totalIncome += (tx.amount || 0);
-      else totalExpense += (tx.amount || 0);
+      if (tx.type === 'income') {
+        totalIncome += (tx.amount || 0);
+        if (tx.source === 'bank') bankIncome += tx.amount;
+        else if (tx.source === 'cash') cashIncome += tx.amount;
+        else if (tx.source === 'uncategorized') uncIncome += tx.amount;
+      } else {
+        totalExpense += (tx.amount || 0);
+        if (tx.source === 'bank') bankExpense += tx.amount;
+        else if (tx.source === 'cash') cashExpense += tx.amount;
+        else if (tx.source === 'uncategorized') uncExpense += tx.amount;
+      }
     });
 
     // ── 3. Net Worth: DYNAMIC all-time formula ──
@@ -1514,20 +1947,41 @@ function _restoreAIState() {
     //    moves dynamically — it is NOT a frozen static number.
     var netWorth = _computeLiveNetWorth();
 
-    // ── 4. Savings: manual value only (not tied to transaction stream) ──
+    // ── 4. All-time balances per source ──
+    var cashBalance = _calcCashBalance();
+    var bankBalance = _calcBankBalance();
+    var uncategorizedBalance = _calcUncategorizedBalance();
+
+    // ── 5. Savings: manual value only (not tied to transaction stream) ──
     var savings = _savingsBalance || 0;
 
-    // ═══ 5. WRITE to DOM — full exact numbers, no abbreviation ═══
+    // ═══ 6. WRITE to DOM — full exact numbers, no abbreviation ═══
     _setTextById('cf-networth', _formatVNFull(netWorth));
-    _setTextById('cf-savings',  _formatVNFull(savings));
-    _setTextById('cf-income',   _formatVNFull(totalIncome));
-    _setTextById('cf-expense',  _formatVNFull(totalExpense));
+    _setTextById('cf-savings', _formatVNFull(savings));
+    _setTextById('cf-bank-balance', _formatVNFull(bankBalance));
+    _setTextById('cf-cash-balance', _formatVNFull(cashBalance));
+    _setTextById('cf-uncategorized-balance', _formatVNFull(uncategorizedBalance));
+    _setTextById('cf-income', _formatVNFull(totalIncome));
+    _setTextById('cf-expense', _formatVNFull(totalExpense));
 
     // Belt + suspenders
     _setText('#cf-networth', _formatVNFull(netWorth));
-    _setText('#cf-savings',  _formatVNFull(savings));
-    _setText('#cf-income',   _formatVNFull(totalIncome));
-    _setText('#cf-expense',  _formatVNFull(totalExpense));
+    _setText('#cf-savings', _formatVNFull(savings));
+    _setText('#cf-bank-balance', _formatVNFull(bankBalance));
+    _setText('#cf-cash-balance', _formatVNFull(cashBalance));
+    _setText('#cf-uncategorized-balance', _formatVNFull(uncategorizedBalance));
+    _setText('#cf-income', _formatVNFull(totalIncome));
+    _setText('#cf-expense', _formatVNFull(totalExpense));
+
+    // 🔑 Conditional warning for Uncategorized > 0
+    const uncCard = document.getElementById('cf-uncategorized-card');
+    if (uncCard) {
+      if (uncategorizedBalance > 0) {
+        uncCard.classList.add('hub-cf-card--has-uncategorized');
+      } else {
+        uncCard.classList.remove('hub-cf-card--has-uncategorized');
+      }
+    }
   }
 
   /** Calculate savings & investments total */
@@ -1617,11 +2071,20 @@ function _restoreAIState() {
       var prefix = isExpense ? '-' : '+';
       var amountFormatted = prefix + _formatVND(tx.amount).replace(/^\+/, '+').replace(/^-/, '-');
       var catName = _categoryDisplayName(tx.category, tx.type);
+      // Source badge
+      var sourceBadge = '';
+      if (tx.source === 'bank') {
+        sourceBadge = '<span class="hub-cf-source-badge hub-cf-source-badge--bank" title="' + _t('sourceBank') + '">🏦</span>';
+      } else if (tx.source === 'cash') {
+        sourceBadge = '<span class="hub-cf-source-badge hub-cf-source-badge--cash" title="' + _t('sourceCash') + '">💵</span>';
+      } else {
+        sourceBadge = '<span class="hub-cf-source-badge hub-cf-source-badge--uncategorized" title="' + _t('sourceUncategorized') + '">❓</span>';
+      }
 
       html += '<tr class="' + rowClass + '" data-tx-id="' + tx.id + '">';
       html += '<td>' + _formatDate(tx.day, tx.month, tx.year) + '</td>';
       html += '<td title="' + _escapeAttr(tx.desc || '') + '">' + _escHtml(tx.desc || '—') + '</td>';
-      html += '<td><span class="hub-cf-cat-chip">' + _escHtml(catName) + '</span></td>';
+      html += '<td><span class="hub-cf-cat-chip">' + _escHtml(catName) + '</span> ' + sourceBadge + '</td>';
       html += '<td>' + amountFormatted + '</td>';
       html += '<td>';
       html += '<div class="hub-cf-tx-actions">';
@@ -2127,6 +2590,46 @@ function _restoreAIState() {
           });
           updateDashboardTotals();
           _showToast('✅ Đã cập nhật Tiết kiệm / Đầu tư: ' + _formatVNSavings(parsed));
+
+        } else if (target === 'bank') {
+          // ── Vietnamese prompt for Bank Account ──
+          // Bank balance is calculated from all-time bank transactions.
+          // User can set an initial offset by editing.
+          // Store as localStorage: hub_cashflow_init_bank
+          var liveBank = _calcBankBalance();
+          var currentVal = liveBank ? liveBank.toLocaleString('vi-VN') : '0';
+          var raw = prompt('Nhập số dư ban đầu Tài khoản Ngân hàng (VND):', currentVal);
+          if (raw === null) return; // user cancelled — do nothing
+
+          var clean = String(raw).replace(/[\s,.]/g, '');
+          var parsed = parseInt(clean, 10);
+          if (isNaN(parsed)) return;
+
+          // Save initial balance offset to localStorage
+          localStorage.setItem('hub_cashflow_init_bank', String(parsed - liveBank));
+
+          updateDashboardTotals();
+          _showToast('✅ Đã cập nhật số dư Ngân hàng: ' + _formatVNFull(parsed));
+
+        } else if (target === 'cash') {
+          // ── Vietnamese prompt for Cash Wallet ──
+          // Cash balance is calculated from all-time cash transactions.
+          // User can set an initial offset by editing.
+          // Store as localStorage: hub_cashflow_init_cash
+          var liveCash = _calcCashBalance();
+          var currentVal = liveCash ? liveCash.toLocaleString('vi-VN') : '0';
+          var raw = prompt('Nhập số dư ban đầu Ví Tiền mặt (VND):', currentVal);
+          if (raw === null) return; // user cancelled — do nothing
+
+          var clean = String(raw).replace(/[\s,.]/g, '');
+          var parsed = parseInt(clean, 10);
+          if (isNaN(parsed)) return;
+
+          // Save initial balance offset to localStorage
+          localStorage.setItem('hub_cashflow_init_cash', String(parsed - liveCash));
+
+          updateDashboardTotals();
+          _showToast('✅ Đã cập nhật số dư Tiền mặt: ' + _formatVNFull(parsed));
         }
       });
     }
@@ -2393,6 +2896,7 @@ function _restoreAIState() {
     const dateInput = _qs('#hub-cf-date');
     const descInput = _qs('#hub-cf-desc');
     const categorySelect = _qs('#hub-cf-category');
+    const sourceSelect = _qs('#hub-cf-source');  // NEW
 
     if (amountInput) amountInput.value = tx.amount;
     if (dateInput) {
@@ -2401,6 +2905,7 @@ function _restoreAIState() {
     }
     if (descInput) descInput.value = tx.desc || '';
     if (categorySelect) categorySelect.value = tx.category;
+    if (sourceSelect) sourceSelect.value = tx.source || 'bank';  // NEW: default to 'bank'
 
     // Show modal
     overlay.style.display = 'flex';
@@ -2414,6 +2919,7 @@ function _restoreAIState() {
     const dateStr   = (_qs('#hub-cf-date') ? _qs('#hub-cf-date').value : '');
     const desc      = (_qs('#hub-cf-desc') ? _qs('#hub-cf-desc').value.trim() : '');
     const category  = (_qs('#hub-cf-category') ? _qs('#hub-cf-category').value : '');
+    const source    = (_qs('#hub-cf-source') ? _qs('#hub-cf-source').value : 'bank'); // NEW
 
     const amount = parseInt(amountStr, 10);
     if (!amountStr || isNaN(amount) || amount <= 0) {
@@ -2426,6 +2932,10 @@ function _restoreAIState() {
     }
     if (!category) {
       _showInput('hub-cf-category');
+      return;
+    }
+    if (!source) {
+      _showInput('hub-cf-source');
       return;
     }
 
@@ -2446,7 +2956,8 @@ function _restoreAIState() {
           month: month,
           day: day,
           desc: desc || '',
-          category: category
+          category: category,
+          source: source  // NEW: persist source
         };
       }
       _editingTxId = null;
@@ -2461,6 +2972,7 @@ function _restoreAIState() {
         day: day,
         desc: desc || '',
         category: category,
+        source: source,  // NEW: capture source
         createdAt: Date.now()
       };
       _data.transactions.push(tx);
@@ -2711,6 +3223,26 @@ function _restoreAIState() {
 
           var desc     = String(rawDesc || row['Mô tả'] || '').trim();
           var category = String(rawCat  || row['Hạng mục'] || '').trim();
+          // Parse source field with defensive checks — unrecognized → "uncategorized"
+          var rawSource = '';
+          try {
+            // Handle both array rows (header=1) and object rows (header row as keys)
+            if (Array.isArray(row)) {
+              // Column index 5 would be 'Nguồn' / 'Source' based on expected layout
+              rawSource = String(row[5] || '').trim().toLowerCase();
+            } else {
+              rawSource = String(row['Nguồn'] || row['Source'] || row['nguon'] || row['source'] || '').trim().toLowerCase();
+            }
+          } catch (_) {
+            rawSource = '';
+          }
+          var source = 'uncategorized'; // Default: unrecognized → uncategorized
+          if (rawSource === 'cash' || rawSource === 'tiền mặt' || rawSource === 'tien mat' || rawSource === 'cash (physical)' || rawSource === 'tiền' || rawSource === 'tien') {
+            source = 'cash';
+          } else if (rawSource === 'bank' || rawSource === 'chuyển khoản' || rawSource === 'chuyen khoan' || rawSource === 'bank transfer' || rawSource === 'tài khoản ngân hàng' || rawSource === 'tai khoan ngan hang' || rawSource === 'ngân hàng' || rawSource === 'ngan hang' || rawSource === 'chuyen') {
+            source = 'bank';
+          }
+          // Any other value (including empty, 'unknown', 'other', etc.) stays as 'uncategorized'
 
           importedTxs.push({
             id: _uid(),
@@ -2721,6 +3253,7 @@ function _restoreAIState() {
             day: dayVal,
             desc: desc || '',
             category: category || '',
+            source: source,  // NEW
             createdAt: Date.now()
           });
         }
@@ -2741,8 +3274,7 @@ function _restoreAIState() {
       await _persist();
 
       // ═══ 5. FULL UI REFRESH ═══
-      updateDashboardTotals();
-      _refreshLedger();
+      _renderAllViews();
       _updateChart();
 
       var msg = _t('importSuccess') + ' ' + importedTxs.length + ' ' + _t('importSuccess1');
@@ -2777,11 +3309,18 @@ function _restoreAIState() {
       var incomeRows = [];
 
       _data.transactions.forEach(function (tx) {
+        // Defensive: ensure source exists and is valid
+        var src = tx.source || 'uncategorized';
+        var sourceLabel = '';
+        if (src === 'cash') sourceLabel = _t('sourceCash');
+        else if (src === 'bank') sourceLabel = _t('sourceBank');
+        else sourceLabel = _t('sourceUncategorized');
         var row = {
           'Ngày': tx.day || 0,
           'Tháng': tx.month || 0,
           'Mô tả': (tx.desc || ''),
           'Hạng mục': _categoryDisplayName(tx.category, tx.type),
+          'Nguồn': sourceLabel,
           'Số tiền': (tx.amount || 0)
         };
         if (tx.type === 'expense') {
@@ -2809,23 +3348,23 @@ function _restoreAIState() {
       // Sheet 1: Expenses
       if (expenseRows.length > 0) {
         var wsExpense = XLSX.utils.json_to_sheet(expenseRows, {
-          header: ['Ngày', 'Tháng', 'Mô tả', 'Hạng mục', 'Số tiền']
+          header: ['Ngày', 'Tháng', 'Mô tả', 'Hạng mục', 'Nguồn', 'Số tiền']
         });
         XLSX.utils.book_append_sheet(wb, wsExpense, 'Expenses');
       } else {
         // Still create empty sheet with headers
-        var wsEmptyExpense = XLSX.utils.aoa_to_sheet([['Ngày', 'Tháng', 'Mô tả', 'Hạng mục', 'Số tiền']]);
+        var wsEmptyExpense = XLSX.utils.aoa_to_sheet([['Ngày', 'Tháng', 'Mô tả', 'Hạng mục', 'Nguồn', 'Số tiền']]);
         XLSX.utils.book_append_sheet(wb, wsEmptyExpense, 'Expenses');
       }
 
       // Sheet 2: Income
       if (incomeRows.length > 0) {
         var wsIncome = XLSX.utils.json_to_sheet(incomeRows, {
-          header: ['Ngày', 'Tháng', 'Mô tả', 'Hạng mục', 'Số tiền']
+          header: ['Ngày', 'Tháng', 'Mô tả', 'Hạng mục', 'Nguồn', 'Số tiền']
         });
         XLSX.utils.book_append_sheet(wb, wsIncome, 'Income');
       } else {
-        var wsEmptyIncome = XLSX.utils.aoa_to_sheet([['Ngày', 'Tháng', 'Mô tả', 'Hạng mục', 'Số tiền']]);
+        var wsEmptyIncome = XLSX.utils.aoa_to_sheet([['Ngày', 'Tháng', 'Mô tả', 'Hạng mục', 'Nguồn', 'Số tiền']]);
         XLSX.utils.book_append_sheet(wb, wsEmptyIncome, 'Income');
       }
 
@@ -3000,30 +3539,53 @@ function _restoreAIState() {
     var labels = [];
     var incomeData = [];
     var expenseData = [];
+    var cashIncomeData = [];
+    var cashExpenseData = [];
+    var bankIncomeData = [];
+    var bankExpenseData = [];
+    var uncategorizedIncomeData = [];
+    var uncategorizedExpenseData = [];
 
     if (!_data || !_data.transactions || _data.transactions.length === 0) {
-      return { labels: labels, incomeData: incomeData, expenseData: expenseData };
+      return {
+        labels: labels,
+        incomeData: incomeData,
+        expenseData: expenseData,
+        cashIncomeData: cashIncomeData,
+        cashExpenseData: cashExpenseData,
+        bankIncomeData: bankIncomeData,
+        bankExpenseData: bankExpenseData,
+        uncategorizedIncomeData: uncategorizedIncomeData,
+        uncategorizedExpenseData: uncategorizedExpenseData
+      };
     }
 
-    var trans = _data.transactions.slice(); // shallow copy
+    var trans = _data.transactions.slice();
 
     if (_chartFilter === 'day') {
-      // Group by date (dd/mm), last 30 days
       var dayMap = {};
-      // Get date range: last 30 days
       var now = new Date();
       for (var i = 29; i >= 0; i--) {
         var d = new Date(now);
         d.setDate(d.getDate() - i);
         var key = String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
-        dayMap[key] = { income: 0, expense: 0 };
+        dayMap[key] = { income: 0, expense: 0, cashIncome: 0, cashExpense: 0, bankIncome: 0, bankExpense: 0, uncategorizedIncome: 0, uncategorizedExpense: 0 };
       }
 
       trans.forEach(function (tx) {
         var key = String(tx.day).padStart(2, '0') + '/' + String(tx.month).padStart(2, '0');
         if (dayMap[key] !== undefined) {
-          if (tx.type === 'income') dayMap[key].income += tx.amount;
-          else dayMap[key].expense += tx.amount;
+          if (tx.type === 'income') {
+            dayMap[key].income += tx.amount;
+            if (tx.source === 'cash') dayMap[key].cashIncome += tx.amount;
+            else if (tx.source === 'bank') dayMap[key].bankIncome += tx.amount;
+            else if (tx.source === 'uncategorized') dayMap[key].uncategorizedIncome += tx.amount;
+          } else {
+            dayMap[key].expense += tx.amount;
+            if (tx.source === 'cash') dayMap[key].cashExpense += tx.amount;
+            else if (tx.source === 'bank') dayMap[key].bankExpense += tx.amount;
+            else if (tx.source === 'uncategorized') dayMap[key].uncategorizedExpense += tx.amount;
+          }
         }
       });
 
@@ -3031,16 +3593,30 @@ function _restoreAIState() {
         labels.push(key);
         incomeData.push(dayMap[key].income);
         expenseData.push(dayMap[key].expense);
+        cashIncomeData.push(dayMap[key].cashIncome);
+        cashExpenseData.push(dayMap[key].cashExpense);
+        bankIncomeData.push(dayMap[key].bankIncome);
+        bankExpenseData.push(dayMap[key].bankExpense);
+        uncategorizedIncomeData.push(dayMap[key].uncategorizedIncome);
+        uncategorizedExpenseData.push(dayMap[key].uncategorizedExpense);
       });
 
     } else if (_chartFilter === 'month') {
-      // Group by month, show all unique months
       var monthMap = {};
       trans.forEach(function (tx) {
         var key = String(tx.month).padStart(2, '0') + '/' + tx.year;
-        if (!monthMap[key]) monthMap[key] = { income: 0, expense: 0, year: tx.year, month: tx.month };
-        if (tx.type === 'income') monthMap[key].income += tx.amount;
-        else monthMap[key].expense += tx.amount;
+        if (!monthMap[key]) monthMap[key] = { income: 0, expense: 0, cashIncome: 0, cashExpense: 0, bankIncome: 0, bankExpense: 0, uncategorizedIncome: 0, uncategorizedExpense: 0, year: tx.year, month: tx.month };
+        if (tx.type === 'income') {
+          monthMap[key].income += tx.amount;
+          if (tx.source === 'cash') monthMap[key].cashIncome += tx.amount;
+          else if (tx.source === 'bank') monthMap[key].bankIncome += tx.amount;
+          else if (tx.source === 'uncategorized') monthMap[key].uncategorizedIncome += tx.amount;
+        } else {
+          monthMap[key].expense += tx.amount;
+          if (tx.source === 'cash') monthMap[key].cashExpense += tx.amount;
+          else if (tx.source === 'bank') monthMap[key].bankExpense += tx.amount;
+          else if (tx.source === 'uncategorized') monthMap[key].uncategorizedExpense += tx.amount;
+        }
       });
 
       var keys = Object.keys(monthMap).sort(function (a, b) {
@@ -3055,15 +3631,29 @@ function _restoreAIState() {
         labels.push(label);
         incomeData.push(m.income);
         expenseData.push(m.expense);
+        cashIncomeData.push(m.cashIncome);
+        cashExpenseData.push(m.cashExpense);
+        bankIncomeData.push(m.bankIncome);
+        bankExpenseData.push(m.bankExpense);
+        uncategorizedIncomeData.push(m.uncategorizedIncome);
+        uncategorizedExpenseData.push(m.uncategorizedExpense);
       });
 
     } else if (_chartFilter === 'year') {
-      // Group by year
       var yearMap = {};
       trans.forEach(function (tx) {
-        if (!yearMap[tx.year]) yearMap[tx.year] = { income: 0, expense: 0 };
-        if (tx.type === 'income') yearMap[tx.year].income += tx.amount;
-        else yearMap[tx.year].expense += tx.amount;
+        if (!yearMap[tx.year]) yearMap[tx.year] = { income: 0, expense: 0, cashIncome: 0, cashExpense: 0, bankIncome: 0, bankExpense: 0, uncategorizedIncome: 0, uncategorizedExpense: 0 };
+        if (tx.type === 'income') {
+          yearMap[tx.year].income += tx.amount;
+          if (tx.source === 'cash') yearMap[tx.year].cashIncome += tx.amount;
+          else if (tx.source === 'bank') yearMap[tx.year].bankIncome += tx.amount;
+          else if (tx.source === 'uncategorized') yearMap[tx.year].uncategorizedIncome += tx.amount;
+        } else {
+          yearMap[tx.year].expense += tx.amount;
+          if (tx.source === 'cash') yearMap[tx.year].cashExpense += tx.amount;
+          else if (tx.source === 'bank') yearMap[tx.year].bankExpense += tx.amount;
+          else if (tx.source === 'uncategorized') yearMap[tx.year].uncategorizedExpense += tx.amount;
+        }
       });
 
       var yearKeys = Object.keys(yearMap).sort();
@@ -3071,10 +3661,26 @@ function _restoreAIState() {
         labels.push(String(yr));
         incomeData.push(yearMap[yr].income);
         expenseData.push(yearMap[yr].expense);
+        cashIncomeData.push(yearMap[yr].cashIncome);
+        cashExpenseData.push(yearMap[yr].cashExpense);
+        bankIncomeData.push(yearMap[yr].bankIncome);
+        bankExpenseData.push(yearMap[yr].bankExpense);
+        uncategorizedIncomeData.push(yearMap[yr].uncategorizedIncome);
+        uncategorizedExpenseData.push(yearMap[yr].uncategorizedExpense);
       });
     }
 
-    return { labels: labels, incomeData: incomeData, expenseData: expenseData };
+    return {
+      labels: labels,
+      incomeData: incomeData,
+      expenseData: expenseData,
+      cashIncomeData: cashIncomeData,
+      cashExpenseData: cashExpenseData,
+      bankIncomeData: bankIncomeData,
+      bankExpenseData: bankExpenseData,
+      uncategorizedIncomeData: uncategorizedIncomeData,
+      uncategorizedExpenseData: uncategorizedExpenseData
+    };
   }
 
   function _destroyChart() {
@@ -3112,8 +3718,11 @@ function _restoreAIState() {
         message: 'Chưa có dữ liệu giao dịch.',
         categoryTotals: { income: {}, expense: {} },
         balances: {
-          netWorth: _computeLiveNetWorth() || 0,
-          savings: _savingsBalance || 0
+          netWorth: _computeLiveNetWorth(),
+          savings: _savingsBalance || 0,
+          cashBalance: _calcCashBalance(),
+          bankBalance: _calcBankBalance(),
+          uncategorizedBalance: _calcUncategorizedBalance()
         }
       });
     }
@@ -3139,7 +3748,8 @@ function _restoreAIState() {
       c: _categoryDisplayName(tx.category, tx.type), // Category
       a: tx.amount,                                // Amount
       t: tx.type === 'expense' ? '-' : '+',        // Type indicator
-      n: tx.desc || ''                             // Note
+      n: tx.desc || '',                             // Note
+      s: tx.source || 'bank'                        // Source (NEW)
     }));
 
     return JSON.stringify({
@@ -3152,7 +3762,9 @@ function _restoreAIState() {
       categoryTotals: categoryTotals,
       balances: {
         netWorth: _computeLiveNetWorth(),
-        savings: _savingsBalance || 0
+        savings: _savingsBalance || 0,
+        cashBalance: _calcCashBalance(),   // NEW
+        bankBalance: _calcBankBalance()    // NEW
       }
     });
   }
@@ -3454,6 +4066,8 @@ function _restoreAIState() {
         "CHỈ SỬ DỤNG MẢNG 'transactions' ĐỂ PHÂN TÍCH MẪU THÓI QUEN, TẦN SUẤT GIAO DỊCH, VÀ MÔ TẢ CHI TIẾT. " +
         "NẾU BẠN TỰ TÍNH TOÁN, CON SỐ SẼ SAI (HALLUCINATION). TUÂN THỦ NGHIÊM NGẶT QUY TẮC NÀY. " +
         "Dựa vào dữ liệu tài chính dưới đây để: Phân tích thói quen tiêu dùng, đưa ra chiến lược quản lý vốn nghiêm ngặt, và tư vấn cách phân bổ dòng tiền tối ưu nhất để gia tăng tài sản. " +
+        "LƯU Ý QUAN TRỌNG: Mỗi giao dịch có trường 's' (source) chỉ 'cash' (Tiền mặt) hoặc 'bank' (Ngân hàng). " +
+        "Hãy phân tích riêng dòng tiền Tiền mặt và Ngân hàng, tư vấn cách quản lý số dư ví tiền mặt và tài khoản ngân hàng. " +
         "Dữ liệu dòng tiền: " + context;
 
       // Call appropriate API with abort signal
