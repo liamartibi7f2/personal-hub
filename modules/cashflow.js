@@ -21,7 +21,8 @@ const cashflowModule = (function () {
     { id: 'luong',             name: 'Lương',                nameVI: 'Lương' },
     { id: 'kinh-doanh',        name: 'Kinh doanh, đầu tư',   nameVI: 'Kinh doanh, đầu tư' },
     { id: 'thu-nhap-bi-dong',  name: 'Thu nhập bị động',     nameVI: 'Thu nhập bị động' },
-    { id: 'thu-nhap-khac',     name: 'Thu nhập khác',        nameVI: 'Thu nhập khác' }
+    { id: 'thu-nhap-khac',     name: 'Thu nhập khác',        nameVI: 'Thu nhập khác' },
+    { id: 'tiet-kiem',         name: '🐷 Tiết kiệm',         nameVI: '🐷 Tiết kiệm' }
   ];
 
   const EXPENSE_CATEGORIES = [
@@ -33,7 +34,8 @@ const cashflowModule = (function () {
     { id: 'doodad',                  name: '🎮 Doodad',                nameVI: '🎮 Doodad' },
     { id: 'cho-di',                  name: '❤️ Cho đi',                nameVI: '❤️ Cho đi' },
     { id: 'phat-trien-ban-than',     name: '📚 Phát triển bản thân',    nameVI: '📚 Phát triển bản thân' },
-    { id: 'chi-phi-khac',            name: '🏷️ Chi phí khác',           nameVI: '🏷️ Chi phí khác' }
+    { id: 'chi-phi-khac',            name: '🏷️ Chi phí khác',           nameVI: '🏷️ Chi phí khác' },
+    { id: 'tiet-kiem',               name: '🐷 Tiết kiệm',             nameVI: '🐷 Tiết kiệm' }
   ];
 
   // ── Balance account types ──
@@ -66,11 +68,13 @@ const cashflowModule = (function () {
     'Cho đi':                   '❤️ Cho đi',
     'Phát triển bản thân':      '📚 Phát triển bản thân',
     'Chi phí khác':             '🏷️ Chi phí khác',
+    'Tiết kiệm':                '🐷 Tiết kiệm',
     // Income categories (for future use / completeness)
     'Lương':                    '💰 Lương',
     'Kinh doanh, đầu tư':       '📈 Kinh doanh, đầu tư',
     'Thu nhập bị động':         '💎 Thu nhập bị động',
-    'Thu nhập khác':            '💵 Thu nhập khác'
+    'Thu nhập khác':            '💵 Thu nhập khác',
+    'Tiết kiệm':                '🐷 Tiết kiệm'
   };
 
   // ============================================================
@@ -143,6 +147,7 @@ const cashflowModule = (function () {
       sourceUncategorized: 'Uncategorized',
       sourceCash:       'Cash (Physical)',
       sourceBank:       'Bank Transfer',
+      sourceSavings:    'Savings',
       placeholderDesc:  'e.g. Grab, coffee, books...',
       btnCancel:        'Cancel',
       btnSave:          'Save',
@@ -223,6 +228,7 @@ const cashflowModule = (function () {
       sourceUncategorized: 'Chưa phân loại',
       sourceCash:       'Tiền mặt',
       sourceBank:       'Chuyển khoản',
+      sourceSavings:    'Tiết kiệm',
       placeholderDesc:  'VD: Bún bò, Grab, Sách Clean Code...',
       btnCancel:        'Hủy',
       btnSave:          'Lưu',
@@ -370,8 +376,12 @@ const cashflowModule = (function () {
   // ── Private state ──
   let _container     = null;
   let _data          = null;   // { transactions: [], balanceSnapshots: [], startingBalance: 0 }
-  let _netWorthOffset = 0;     // Cloud-synced manual override for net worth
-  let _savingsBalance = 0;     // Cloud-synced manual override for savings/investments
+  let _cashFlowMeta = {        // Cloud-synced meta: netWorthOffset, savingsBalance, initBank, initCash
+    netWorthOffset: 0,
+    savingsBalance: 0,
+    initBank: 0,
+    initCash: 0
+  };
   let _isDataLoaded  = false;
   let _sessionLoaded = false;  // Prevent re-fetch on tab switch
   let _isOfflineMode = false;  // CRITICAL: true when cloud unreachable + no local cache.
@@ -466,32 +476,28 @@ const cashflowModule = (function () {
   async function _loadData() {
     if (_sessionLoaded && _data) return;
 
-    // ── 1. Try loading from HubDB (tiered: Firestore → IndexedDB → localStorage) ──
-    var loaded = null;
-    var cloudFailed = false;
+    // Show loading state immediately
+    console.log('[CashFlow] Loading data from Firebase...');
 
-    try {
-      if (typeof HubDB !== 'undefined' && typeof HubDB.loadCashFlowData === 'function') {
-        loaded = await HubDB.loadCashFlowData();
+    // ── 1. Load BOTH data and meta in parallel from HubDB ──
+    // NO FALLBACKS — use the REAL functions from database.js.
+    // If they throw, let the error bubble up so we see it in console.
+    var loaded = await HubDB.loadCashFlowData();
+    var meta = await HubDB.loadCashFlowMeta();
 
-        // Detect if the load came from a fallback (not Firestore)
-        // loadCashFlowData returns null only when ALL tiers are empty.
-        // If it returns data, we don't know the source — that's fine,
-        // we just need to know if data exists.
-      }
-    } catch (e) {
-      cloudFailed = true;
-      console.warn('[CashFlow] HubDB.loadCashFlowData threw:', e.message);
-    }
+    // ── 2. Apply meta FIRST (loadCashFlowMeta returns defaults if missing) ──
+    _cashFlowMeta.netWorthOffset = meta.netWorthOffset;
+    _cashFlowMeta.savingsBalance = meta.savingsBalance;
+    _cashFlowMeta.initBank = meta.initBank;
+    _cashFlowMeta.initCash = meta.initCash;
 
-    // ── 2. Initialize state based on load result ──
+    // ── 3. Initialize state based on transaction load result ──
     if (loaded && Array.isArray(loaded.transactions)) {
       // Data found (from cloud, IndexedDB, or localStorage)
       _data = loaded;
       _ensureDefault();
       _isDataLoaded = true;
       _isOfflineMode = false;
-      updateDashboardTotals();
     } else {
       // ═══ NO DATA FOUND ANYWHERE ═══
       // This is either:
@@ -513,23 +519,8 @@ const cashflowModule = (function () {
       console.warn('[CashFlow]    Auto-save is DISABLED until user performs a write action.');
     }
 
-    // ── 3. Load meta offsets (netWorth & savings) ──
-    try {
-      if (typeof HubDB !== 'undefined' && typeof HubDB.loadCashFlowMeta === 'function') {
-        var meta = await HubDB.loadCashFlowMeta();
-        if (meta) {
-          _netWorthOffset = Number(meta.netWorthOffset) || 0;
-          _savingsBalance = Number(meta.savingsBalance) || 0;
-        }
-      }
-    } catch (_) {}
-
     _sessionLoaded = true;
-
-    // ═══ Final render ═══
-    if (loaded && Array.isArray(loaded.transactions)) {
-      updateDashboardTotals();
-    }
+    console.log('[CashFlow] Data loaded successfully. Meta:', _cashFlowMeta);
   }
 
   /** ═══ SAFE PERSIST: Never auto-save when in offline mode ═══
@@ -564,17 +555,20 @@ const cashflowModule = (function () {
     } catch (_) {}
   }
 
-  /** Persist meta offsets (netWorthOffset + savingsBalance).
+  /** Debounced persist for meta (netWorthOffset, savingsBalance, initBank, initCash).
    *  Meta writes are lightweight — no offline guard needed. */
-  async function _persistMeta() {
-    try {
+  function _debouncedPersistMeta() {
+    if (typeof HubDebounce !== 'undefined') {
+      HubDebounce.call('cf-meta', function () {
+        if (typeof HubDB !== 'undefined' && typeof HubDB.saveCashFlowMeta === 'function') {
+          HubDB.saveCashFlowMeta(_cashFlowMeta).catch(function (_) {});
+        }
+      }, SAVE_DELAY);
+    } else {
       if (typeof HubDB !== 'undefined' && typeof HubDB.saveCashFlowMeta === 'function') {
-        await HubDB.saveCashFlowMeta({
-          netWorthOffset: _netWorthOffset,
-          savingsBalance: _savingsBalance
-        });
+        HubDB.saveCashFlowMeta(_cashFlowMeta).catch(function (_) {});
       }
-    } catch (_) {}
+    }
   }
 
   function _debouncedPersist() {
@@ -582,14 +576,6 @@ const cashflowModule = (function () {
       HubDebounce.call('cashflow', _persist, SAVE_DELAY);
     } else {
       _persist();
-    }
-  }
-
-  function _debouncedPersistMeta() {
-    if (typeof HubDebounce !== 'undefined') {
-      HubDebounce.call('cf-meta', _persistMeta, SAVE_DELAY);
-    } else {
-      _persistMeta();
     }
   }
 
@@ -877,9 +863,9 @@ const cashflowModule = (function () {
       if (tx.type === 'income') cashIncome += (tx.amount || 0);
       else cashExpense += (tx.amount || 0);
     });
-    // Add initial balance offset from localStorage
-    var initCash = parseInt(localStorage.getItem('hub_cashflow_init_cash') || '0', 10);
-    return cashIncome - cashExpense + (isNaN(initCash) ? 0 : initCash);
+    // Add initial balance offset from meta (synced via Firestore)
+    var initCash = _cashFlowMeta.initCash || 0;
+    return cashIncome - cashExpense + initCash;
   }
 
   /** Calculate running bank balance (all-time) */
@@ -892,9 +878,9 @@ const cashflowModule = (function () {
       if (tx.type === 'income') bankIncome += (tx.amount || 0);
       else bankExpense += (tx.amount || 0);
     });
-    // Add initial balance offset from localStorage
-    var initBank = parseInt(localStorage.getItem('hub_cashflow_init_bank') || '0', 10);
-    return bankIncome - bankExpense + (isNaN(initBank) ? 0 : initBank);
+    // Add initial balance offset from meta (synced via Firestore)
+    var initBank = _cashFlowMeta.initBank || 0;
+    return bankIncome - bankExpense + initBank;
   }
 
   /** Calculate running uncategorized balance (all-time) — NEW */
@@ -910,23 +896,40 @@ const cashflowModule = (function () {
     return uncategorizedIncome - uncategorizedExpense;
   }
 
+  /** Calculate running savings balance (all-time) from transactions */
+  function _calcSavingsBalance() {
+    if (!_data || !_data.transactions) return 0;
+    let savingsIncome = 0;
+    let savingsExpense = 0;
+    _data.transactions.forEach(function (tx) {
+      if (tx.source !== 'savings') return;
+      if (tx.type === 'income') savingsIncome += (tx.amount || 0);
+      else savingsExpense += (tx.amount || 0);
+    });
+    // Add initial balance offset from meta (synced via Firestore)
+    var initSavings = _cashFlowMeta.savingsBalance || 0;
+    return savingsIncome - savingsExpense + initSavings;
+  }
+
   /** Calculate monthly cash flow for chart */
   function _getMonthlyCashFlow(year, month) {
-    if (!_data || !_data.transactions) return { cashIncome: 0, cashExpense: 0, bankIncome: 0, bankExpense: 0, uncategorizedIncome: 0, uncategorizedExpense: 0 };
+    if (!_data || !_data.transactions) return { cashIncome: 0, cashExpense: 0, bankIncome: 0, bankExpense: 0, uncategorizedIncome: 0, uncategorizedExpense: 0, savingsIncome: 0, savingsExpense: 0 };
     const txs = _getMonthTransactions(year, month);
-    let cashIncome = 0, cashExpense = 0, bankIncome = 0, bankExpense = 0, uncategorizedIncome = 0, uncategorizedExpense = 0;
+    let cashIncome = 0, cashExpense = 0, bankIncome = 0, bankExpense = 0, uncategorizedIncome = 0, uncategorizedExpense = 0, savingsIncome = 0, savingsExpense = 0;
     txs.forEach(function (tx) {
       if (tx.type === 'income') {
         if (tx.source === 'cash') cashIncome += tx.amount;
         else if (tx.source === 'bank') bankIncome += tx.amount;
         else if (tx.source === 'uncategorized') uncategorizedIncome += tx.amount;
+        else if (tx.source === 'savings') savingsIncome += tx.amount;
       } else {
         if (tx.source === 'cash') cashExpense += tx.amount;
         else if (tx.source === 'bank') bankExpense += tx.amount;
         else if (tx.source === 'uncategorized') uncategorizedExpense += tx.amount;
+        else if (tx.source === 'savings') savingsExpense += tx.amount;
       }
     });
-    return { cashIncome, cashExpense, bankIncome, bankExpense, uncategorizedIncome, uncategorizedExpense };
+    return { cashIncome, cashExpense, bankIncome, bankExpense, uncategorizedIncome, uncategorizedExpense, savingsIncome, savingsExpense };
   }
 
   // ============================================================
@@ -1299,6 +1302,12 @@ function _restoreAIState() {
   border: 1px solid color-mix(in srgb, var(--accent-secondary, #ffb300) 40%, transparent);
 }
 
+.hub-cf-source-badge--savings {
+  background: color-mix(in srgb, var(--success, #00e676) 20%, transparent);
+  color: var(--success, #00e676);
+  border: 1px solid color-mix(in srgb, var(--success, #00e676) 40%, transparent);
+}
+
 /* Category chip + badge inline */
 .hub-cf-cat-chip {
   display: inline-block;
@@ -1325,11 +1334,17 @@ function _restoreAIState() {
   <div class="hub-cf-dashboard glass-card">
     <div class="cashflow-summary-grid">
 
-      <!-- Card 1: Net Worth (Grand Total) - NO EDIT BUTTON -->
+      <!-- Card 1: Net Worth (Grand Total) — WITH EDIT BUTTON -->
       <div class="hub-cf-card hub-cf-card--networth">
         <span class="hub-cf-card-label" data-i18n="netWorthLabel">${_t('netWorthLabel')}</span>
         <div class="hub-cf-card-value-row">
           <span class="hub-cf-card-value hub-cf-card-value--networth" id="cf-networth">0 ₫</span>
+          <button class="hub-cf-card-edit-btn" id="btn-edit-networth" data-target="net-worth" title="Chỉnh sửa Tổng Tài Sản" aria-label="Chỉnh sửa Tổng Tài Sản">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+          </button>
         </div>
         <span class="hub-cf-card-sub" data-i18n="netWorthSub">${_t('netWorthSub')}</span>
       </div>
@@ -1633,6 +1648,7 @@ function _restoreAIState() {
             <option value="uncategorized" data-i18n="sourceUncategorized">${_t('sourceUncategorized')}</option>
             <option value="bank" data-i18n="sourceBank">${_t('sourceBank')}</option>
             <option value="cash" data-i18n="sourceCash">${_t('sourceCash')}</option>
+            <option value="savings" data-i18n="sourceSavings">${_t('sourceSavings')}</option>
           </select>
         </div>
         <div class="hub-cf-form-group">
@@ -1834,31 +1850,21 @@ function _restoreAIState() {
   /**
    * _computeLiveNetWorth()
    *
-   * Dynamic all-time Net Worth formula:
-   *   totalIncomeAllTime — totalExpenseAllTime + _netWorthOffset + initBank + initCash
+   * NEW FORMULA: Net Worth = Bank + Cash + Uncategorized + netWorthOffset
+   * EXPLICITLY EXCLUDES Savings/Investments
    *
-   * This is called both by the edit prompt (to show the current value)
-   * and by updateDashboardTotals() (to render the card). Keeping it in
-   * one place prevents the offset formula from drifting out of sync.
-   *
-   * @returns {number} Current live net worth
+   * @returns {number} Current live net worth (liquid assets only)
    */
   function _computeLiveNetWorth() {
-    if (!_data || !_data.transactions) return _netWorthOffset || 0;
+    if (!_data || !_data.transactions) return _cashFlowMeta.netWorthOffset || 0;
 
-    var allIncome = 0;
-    var allExpense = 0;
-    _data.transactions.forEach(function (tx) {
-      if (tx.type === 'income') allIncome += (tx.amount || 0);
-      else allExpense += (tx.amount || 0);
-    });
+    // All-time balances per source (liquid assets only)
+    var cashBalance = _calcCashBalance();
+    var bankBalance = _calcBankBalance();
+    var uncategorizedBalance = _calcUncategorizedBalance();
 
-    // Include initial balance offsets from localStorage
-    var initBank = parseInt(localStorage.getItem('hub_cashflow_init_bank') || '0', 10);
-    var initCash = parseInt(localStorage.getItem('hub_cashflow_init_cash') || '0', 10);
-    var initOffset = (isNaN(initBank) ? 0 : initBank) + (isNaN(initCash) ? 0 : initCash);
-
-    return allIncome - allExpense + (_netWorthOffset || 0) + initOffset;
+    // Net Worth = Bank + Cash + Uncategorized + offset
+    return bankBalance + cashBalance + uncategorizedBalance + (_cashFlowMeta.netWorthOffset || 0);
   }
 
   function updateDashboardTotals() {
@@ -1921,39 +1927,50 @@ function _restoreAIState() {
     }
 
     // ── 2. Sum income & expense from filtered transactions (time-windowed) ──
+    // ACCOUNTING RULE: Internal transfers to/from Savings are NOT income/expense.
+    // Exclude transactions where source === 'savings' OR category === 'Tiết kiệm' / '🐷 Tiết kiệm'.
     var totalIncome = 0;
     var totalExpense = 0;
-    var cashIncome = 0, cashExpense = 0, bankIncome = 0, bankExpense = 0, uncIncome = 0, uncExpense = 0;
+    var cashIncome = 0, cashExpense = 0, bankIncome = 0, bankExpense = 0, uncIncome = 0, uncExpense = 0, savingsIncome = 0, savingsExpense = 0;
     filteredTxs.forEach(function (tx) {
+      var isSavingsRelated = tx.source === 'savings' ||
+        tx.category === 'tiet-kiem' ||
+        tx.category === 'Tiết kiệm' ||
+        tx.category === '🐷 Tiết kiệm';
+
       if (tx.type === 'income') {
-        totalIncome += (tx.amount || 0);
+        // Only count as global income if NOT an internal savings transfer
+        if (!isSavingsRelated) {
+          totalIncome += (tx.amount || 0);
+        }
         if (tx.source === 'bank') bankIncome += tx.amount;
         else if (tx.source === 'cash') cashIncome += tx.amount;
         else if (tx.source === 'uncategorized') uncIncome += tx.amount;
+        else if (tx.source === 'savings') savingsIncome += tx.amount;
       } else {
-        totalExpense += (tx.amount || 0);
+        // Only count as global expense if NOT an internal savings transfer
+        if (!isSavingsRelated) {
+          totalExpense += (tx.amount || 0);
+        }
         if (tx.source === 'bank') bankExpense += tx.amount;
         else if (tx.source === 'cash') cashExpense += tx.amount;
         else if (tx.source === 'uncategorized') uncExpense += tx.amount;
+        else if (tx.source === 'savings') savingsExpense += tx.amount;
       }
     });
 
-    // ── 3. Net Worth: DYNAMIC all-time formula ──
-    //    Net Worth = ALL-TIME income — ALL-TIME expense + (_netWorthOffset)
-    //
-    //    When the user edits via ✏️, the handler calculates a new offset
-    //    so that this formula resolves to their target for the current
-    //    transaction set. As transactions are added/deleted, the card
-    //    moves dynamically — it is NOT a frozen static number.
+    // ── 3. Net Worth: NEW FORMULA — Liquid assets only (EXCLUDES Savings) ──
+    //    Net Worth = Bank + Cash + Uncategorized + netWorthOffset
     var netWorth = _computeLiveNetWorth();
 
     // ── 4. All-time balances per source ──
     var cashBalance = _calcCashBalance();
     var bankBalance = _calcBankBalance();
     var uncategorizedBalance = _calcUncategorizedBalance();
+    var savingsBalance = _calcSavingsBalance();
 
-    // ── 5. Savings: manual value only (not tied to transaction stream) ──
-    var savings = _savingsBalance || 0;
+    // ── 5. Savings: dynamic calculation from transactions + initSavings ──
+    var savings = savingsBalance;
 
     // ═══ 6. WRITE to DOM — full exact numbers, no abbreviation ═══
     _setTextById('cf-networth', _formatVNFull(netWorth));
@@ -2077,6 +2094,8 @@ function _restoreAIState() {
         sourceBadge = '<span class="hub-cf-source-badge hub-cf-source-badge--bank" title="' + _t('sourceBank') + '">🏦</span>';
       } else if (tx.source === 'cash') {
         sourceBadge = '<span class="hub-cf-source-badge hub-cf-source-badge--cash" title="' + _t('sourceCash') + '">💵</span>';
+      } else if (tx.source === 'savings') {
+        sourceBadge = '<span class="hub-cf-source-badge hub-cf-source-badge--savings" title="' + _t('sourceSavings') + '">🐷</span>';
       } else {
         sourceBadge = '<span class="hub-cf-source-badge hub-cf-source-badge--uncategorized" title="' + _t('sourceUncategorized') + '">❓</span>';
       }
@@ -2532,104 +2551,128 @@ function _restoreAIState() {
         var target = btn.getAttribute('data-target');
 
         if (target === 'net-worth') {
-          // ── Vietnamese prompt for Net Worth ──
-          // Show the CURRENT live net worth (dynamic), not the raw offset
-          var liveNetWorth = _computeLiveNetWorth();
-          var currentVal = liveNetWorth ? liveNetWorth.toLocaleString('vi-VN') : '0';
-          var raw = prompt('Nhập số dư Tổng Tài Sản hiện tại (VND):', currentVal);
+          // ── Vietnamese prompt for Net Worth Target ──
+          // HARD RESET METHOD: Retrieve current displayed value, calculate difference,
+          // add difference to EXISTING netWorthOffset. This guarantees the final render
+          // EXACTLY matches targetNumber regardless of transaction history.
+          var currentNetWorthDisplayed = _computeLiveNetWorth(); // current rendered value (Bank + Cash + Uncat + offset)
+          var currentVal = currentNetWorthDisplayed ? currentNetWorthDisplayed.toLocaleString('vi-VN') : '0';
+          var raw = prompt('Nhập Tổng Tài Sản mục tiêu (VND):', currentVal);
           if (raw === null) return; // user cancelled — do nothing
 
-          // Strip spaces, commas, dots (thousand separators), then parse
           var clean = String(raw).replace(/[\s,.]/g, '');
-          var userTarget = parseInt(clean, 10);
-          if (isNaN(userTarget)) return; // invalid input — bail silently
+          var targetNumber = parseInt(clean, 10);
+          if (isNaN(targetNumber)) return;
 
-          // Calculate the TRUE offset:
-          //   offset = userTarget — (allIncome — allExpense)
-          // This way the dynamic formula:
-          //   display = allIncome — allExpense + _netWorthOffset
-          // resolves to exactly userTarget at this moment.
-          var allIncome = 0;
-          var allExpense = 0;
-          if (_data && _data.transactions) {
-            _data.transactions.forEach(function (tx) {
-              if (tx.type === 'income') allIncome += (tx.amount || 0);
-              else allExpense += (tx.amount || 0);
+          // Foolproof calculation:
+          // difference = targetNumber - currentNetWorthDisplayed
+          // new_netWorthOffset = current_netWorthOffset + difference
+          var difference = targetNumber - currentNetWorthDisplayed;
+          var newNetWorthOffset = (_cashFlowMeta.netWorthOffset || 0) + difference;
+          _cashFlowMeta.netWorthOffset = newNetWorthOffset;
+
+          // Persist to Firestore via HubDB
+          if (typeof HubDB !== 'undefined' && typeof HubDB.saveCashFlowMeta === 'function') {
+            HubDB.saveCashFlowMeta(_cashFlowMeta).catch(function (err) {
+              console.error('[CashFlow] Meta persist failed:', err);
             });
           }
-          _netWorthOffset = userTarget - (allIncome - allExpense);
-
-          // Push calculated offset to Firestore immediately
-          _persistMeta().catch(function (err) {
-            console.error('[CashFlow] Meta persist failed:', err);
-          });
 
           updateDashboardTotals();
-          _showToast('✅ Đã cập nhật Tổng Tài Sản: ' + _formatVNFull(userTarget));
+          _showToast('✅ Tổng Tài Sản: ' + _formatVNFull(targetNumber));
 
         } else if (target === 'savings') {
-          // ── Vietnamese prompt for Savings ──
-          // Savings is purely manual (no transaction math applied).
-          // Show the current $avings value, replace with whatever the
-          // user enters. Balance snapshots are stored separately in
-          // $ata.balanceSnapshots and are not recomputed here.
-          var liveSavings = _savingsBalance || 0;
-          var currentVal = liveSavings ? liveSavings.toLocaleString('vi-VN') : '0';
-          var raw = prompt('Nhập số dư Tiết kiệm / Đầu tư hiện tại (VND):', currentVal);
+          // ── Vietnamese prompt for Savings Target ──
+          // HARD RESET METHOD: Retrieve current displayed value, calculate difference,
+          // add difference to EXISTING savingsBalance. This guarantees the final render
+          // EXACTLY matches targetNumber regardless of transaction history.
+          var currentSavingsDisplayed = _calcSavingsBalance(); // current rendered value (transactions + savingsBalance)
+          var currentVal = currentSavingsDisplayed ? currentSavingsDisplayed.toLocaleString('vi-VN') : '0';
+          var raw = prompt('Nhập số dư Tiết kiệm / Đầu tư mục tiêu (VND):', currentVal);
           if (raw === null) return; // user cancelled — do nothing
 
-          // Strip commas, dots, spaces
-          var cleaned = String(raw).replace(/[\s,.]/g, '');
-          var parsed = parseInt(cleaned, 10);
+          var clean = String(raw).replace(/[\s,.]/g, '');
+          var targetNumber = parseInt(clean, 10);
+          if (isNaN(targetNumber)) return;
 
-          if (isNaN(parsed)) return;
+          // Foolproof calculation:
+          // difference = targetNumber - currentSavingsDisplayed
+          // new_savingsBalance = current_savingsBalance + difference
+          var difference = targetNumber - currentSavingsDisplayed;
+          var newSavingsBalance = (_cashFlowMeta.savingsBalance || 0) + difference;
+          _cashFlowMeta.savingsBalance = newSavingsBalance;
 
-          _savingsBalance = parsed;
-          _persistMeta().catch(function (err) {
-            console.error('[CashFlow] Meta persist failed:', err);
-          });
+          // Persist to Firestore via HubDB
+          if (typeof HubDB !== 'undefined' && typeof HubDB.saveCashFlowMeta === 'function') {
+            HubDB.saveCashFlowMeta(_cashFlowMeta).catch(function (err) {
+              console.error('[CashFlow] Meta persist failed:', err);
+            });
+          }
+
           updateDashboardTotals();
-          _showToast('✅ Đã cập nhật Tiết kiệm / Đầu tư: ' + _formatVNSavings(parsed));
+          _showToast('✅ Tiết kiệm / Đầu tư: ' + _formatVNFull(targetNumber));
 
         } else if (target === 'bank') {
-          // ── Vietnamese prompt for Bank Account ──
-          // Bank balance is calculated from all-time bank transactions.
-          // User can set an initial offset by editing.
-          // Store as localStorage: hub_cashflow_init_bank
-          var liveBank = _calcBankBalance();
-          var currentVal = liveBank ? liveBank.toLocaleString('vi-VN') : '0';
-          var raw = prompt('Nhập số dư ban đầu Tài khoản Ngân hàng (VND):', currentVal);
+          // ── Vietnamese prompt for Bank Account Target ──
+          // HARD RESET METHOD: Retrieve current displayed value, calculate difference,
+          // add difference to EXISTING initBank. This guarantees the final render
+          // EXACTLY matches targetNumber regardless of transaction history.
+          var currentBankDisplayed = _calcBankBalance(); // current rendered value (transactions + initBank)
+          var currentVal = currentBankDisplayed ? currentBankDisplayed.toLocaleString('vi-VN') : '0';
+          var raw = prompt('Nhập số dư Ngân hàng mục tiêu (VND):', currentVal);
           if (raw === null) return; // user cancelled — do nothing
 
           var clean = String(raw).replace(/[\s,.]/g, '');
-          var parsed = parseInt(clean, 10);
-          if (isNaN(parsed)) return;
+          var targetNumber = parseInt(clean, 10);
+          if (isNaN(targetNumber)) return;
 
-          // Save initial balance offset to localStorage
-          localStorage.setItem('hub_cashflow_init_bank', String(parsed - liveBank));
+          // Foolproof calculation:
+          // difference = targetNumber - currentBankDisplayed
+          // new_init_bank = current_init_bank + difference
+          var difference = targetNumber - currentBankDisplayed;
+          var newInitBank = (_cashFlowMeta.initBank || 0) + difference;
+          _cashFlowMeta.initBank = newInitBank;
+
+          // Persist to Firestore via HubDB
+          if (typeof HubDB !== 'undefined' && typeof HubDB.saveCashFlowMeta === 'function') {
+            HubDB.saveCashFlowMeta(_cashFlowMeta).catch(function (err) {
+              console.error('[CashFlow] Meta persist failed:', err);
+            });
+          }
 
           updateDashboardTotals();
-          _showToast('✅ Đã cập nhật số dư Ngân hàng: ' + _formatVNFull(parsed));
+          _showToast('✅ Số dư Ngân hàng: ' + _formatVNFull(targetNumber));
 
         } else if (target === 'cash') {
-          // ── Vietnamese prompt for Cash Wallet ──
-          // Cash balance is calculated from all-time cash transactions.
-          // User can set an initial offset by editing.
-          // Store as localStorage: hub_cashflow_init_cash
-          var liveCash = _calcCashBalance();
-          var currentVal = liveCash ? liveCash.toLocaleString('vi-VN') : '0';
-          var raw = prompt('Nhập số dư ban đầu Ví Tiền mặt (VND):', currentVal);
+          // ── Vietnamese prompt for Cash Wallet Target ──
+          // HARD RESET METHOD: Retrieve current displayed value, calculate difference,
+          // add difference to EXISTING initCash. This guarantees the final render
+          // EXACTLY matches targetNumber regardless of transaction history.
+          var currentCashDisplayed = _calcCashBalance(); // current rendered value (transactions + initCash)
+          var currentVal = currentCashDisplayed ? currentCashDisplayed.toLocaleString('vi-VN') : '0';
+          var raw = prompt('Nhập số dư Tiền mặt mục tiêu (VND):', currentVal);
           if (raw === null) return; // user cancelled — do nothing
 
           var clean = String(raw).replace(/[\s,.]/g, '');
-          var parsed = parseInt(clean, 10);
-          if (isNaN(parsed)) return;
+          var targetNumber = parseInt(clean, 10);
+          if (isNaN(targetNumber)) return;
 
-          // Save initial balance offset to localStorage
-          localStorage.setItem('hub_cashflow_init_cash', String(parsed - liveCash));
+          // Foolproof calculation:
+          // difference = targetNumber - currentCashDisplayed
+          // new_init_cash = current_init_cash + difference
+          var difference = targetNumber - currentCashDisplayed;
+          var newInitCash = (_cashFlowMeta.initCash || 0) + difference;
+          _cashFlowMeta.initCash = newInitCash;
+
+          // Persist to Firestore via HubDB
+          if (typeof HubDB !== 'undefined' && typeof HubDB.saveCashFlowMeta === 'function') {
+            HubDB.saveCashFlowMeta(_cashFlowMeta).catch(function (err) {
+              console.error('[CashFlow] Meta persist failed:', err);
+            });
+          }
 
           updateDashboardTotals();
-          _showToast('✅ Đã cập nhật số dư Tiền mặt: ' + _formatVNFull(parsed));
+          _showToast('✅ Số dư Tiền mặt: ' + _formatVNFull(targetNumber));
         }
       });
     }
@@ -3241,6 +3284,8 @@ function _restoreAIState() {
             source = 'cash';
           } else if (rawSource === 'bank' || rawSource === 'chuyển khoản' || rawSource === 'chuyen khoan' || rawSource === 'bank transfer' || rawSource === 'tài khoản ngân hàng' || rawSource === 'tai khoan ngan hang' || rawSource === 'ngân hàng' || rawSource === 'ngan hang' || rawSource === 'chuyen') {
             source = 'bank';
+          } else if (rawSource === 'savings' || rawSource === 'tiết kiệm' || rawSource === 'tiet kiem' || rawSource === 'saving') {
+            source = 'savings';
           }
           // Any other value (including empty, 'unknown', 'other', etc.) stays as 'uncategorized'
 
@@ -3314,6 +3359,7 @@ function _restoreAIState() {
         var sourceLabel = '';
         if (src === 'cash') sourceLabel = _t('sourceCash');
         else if (src === 'bank') sourceLabel = _t('sourceBank');
+        else if (src === 'savings') sourceLabel = _t('sourceSavings');
         else sourceLabel = _t('sourceUncategorized');
         var row = {
           'Ngày': tx.day || 0,
@@ -3719,7 +3765,7 @@ function _restoreAIState() {
         categoryTotals: { income: {}, expense: {} },
         balances: {
           netWorth: _computeLiveNetWorth(),
-          savings: _savingsBalance || 0,
+          savings: _cashFlowMeta.savingsBalance || 0,
           cashBalance: _calcCashBalance(),
           bankBalance: _calcBankBalance(),
           uncategorizedBalance: _calcUncategorizedBalance()
@@ -3762,7 +3808,7 @@ function _restoreAIState() {
       categoryTotals: categoryTotals,
       balances: {
         netWorth: _computeLiveNetWorth(),
-        savings: _savingsBalance || 0,
+        savings: _cashFlowMeta.savingsBalance || 0,
         cashBalance: _calcCashBalance(),   // NEW
         bankBalance: _calcBankBalance()    // NEW
       }

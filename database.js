@@ -409,10 +409,10 @@ const HubDB = (function () {
   }
 
   /**
-   * ═══ DUAL-WRITE for metadata (netWorthOffset + savingsBalance) ═══
+   * ═══ DUAL-WRITE for metadata (netWorthOffset + savingsBalance + initBank + initCash) ═══
    * Same pattern: IndexedDB first, then Firestore.
    *
-   * @param {Object} meta — { netWorthOffset: number, savingsBalance: number }
+   * @param {Object} meta — { netWorthOffset: number, savingsBalance: number, initBank: number, initCash: number }
    */
   async function saveCashFlowMeta(meta) {
     // ── STEP 1: IndexedDB cache ──
@@ -546,13 +546,13 @@ const HubDB = (function () {
   /**
    * ═══ SAFE LOAD for CashFlow metadata ═══
    *
-   * Load netWorthOffset + savingsBalance with the same tiered approach:
+   * Load netWorthOffset + savingsBalance + initBank + initCash with the same tiered approach:
    * Cloud → IndexedDB → localStorage → defaults.
    *
-   * @returns {Object} — { netWorthOffset: 0, savingsBalance: 0 }
+   * @returns {Object} — { netWorthOffset: 0, savingsBalance: 0, initBank: 0, initCash: 0 }
    */
   async function loadCashFlowMeta() {
-    var defaults = { netWorthOffset: 0, savingsBalance: 0 };
+    var defaults = { netWorthOffset: 0, savingsBalance: 0, initBank: 0, initCash: 0 };
 
     // STEP 1: Offline fast path — check IndexedDB first
     if (navigator.onLine === false) {
@@ -582,14 +582,18 @@ const HubDB = (function () {
           try {
             var resolved = {
               netWorthOffset: Number(meta.netWorthOffset) || 0,
-              savingsBalance: Number(meta.savingsBalance) || 0
+              savingsBalance: Number(meta.savingsBalance) || 0,
+              initBank: Number(meta.initBank) || 0,
+              initCash: Number(meta.initCash) || 0
             };
             await _idb.cacheCFMeta(resolved);
             localStorage.setItem(CF_LOCAL_OFFSET, JSON.stringify(resolved));
           } catch (_) {}
           return {
             netWorthOffset: Number(meta.netWorthOffset) || 0,
-            savingsBalance: Number(meta.savingsBalance) || 0
+            savingsBalance: Number(meta.savingsBalance) || 0,
+            initBank: Number(meta.initBank) || 0,
+            initCash: Number(meta.initCash) || 0
           };
         }
         return defaults;
