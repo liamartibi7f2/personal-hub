@@ -40,6 +40,40 @@ const dashboardModule = (function () {
        ────────────────────────────────────────────── */
     render(container) {
       container.innerHTML = `
+        <style id="dashboard-custom-css">
+  /* Force bright colors and neon glow for all stat values */
+  .dashboard .widget-stat-value {
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    opacity: 1 !important;
+    display: inline-block;
+  }
+  .dashboard .widget-stat-value--green { color: var(--primary, #00e676) !important; text-shadow: 0 0 12px rgba(0,230,118,0.4); }
+  .dashboard .widget-stat-value--cyan { color: var(--cyan, #00f0ff) !important; text-shadow: 0 0 12px rgba(0,240,255,0.4); }
+  .dashboard .widget-stat-value--purple { color: var(--purple, #b148d2) !important; text-shadow: 0 0 12px rgba(177,72,210,0.4); }
+
+  /* Enforce equal heights and vertical centering for all Financial Cards */
+  .dash-nav-card {
+    display: flex;
+    flex-direction: column;
+  }
+  .dash-nav-card .widget-body {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    flex: 1;
+    min-height: 85px;
+    padding: 12px 16px;
+  }
+  .dash-nav-card .widget-stat-row {
+    margin: 0;
+    align-items: center;
+  }
+  .dash-nav-card .widget-stat-value {
+    font-size: 1.3rem !important;
+    margin-bottom: 4px;
+  }
+</style>
         <div class="tab-content dashboard">
           <!-- Hero Row: greeting + clock | viz habit board -->
           <div class="dashboard-hero-row">
@@ -170,54 +204,76 @@ const dashboardModule = (function () {
             </div><!-- /dashboard-widgets -->
           </div>
 
-          <!-- Quick Launch 2.0 -->
+          <!-- Financial Overview 2.0 -->
           <div>
-            <p class="section-header dashboard-v2-header">🚀 Quick Launch</p>
-            <div class="dashboard-launch">
-              <div class="launch-card-v2 glass-card" data-target="flashcards">
-                <div class="launch-card-v2-icon">
-                  <span>🃏</span>
+            <p class="section-header dashboard-v2-header">💳 Financial Overview</p>
+            <div class="dashboard-widgets">
+
+              <!-- Card 1: Net Worth -->
+              <div class="widget-card-v2 glass-card dash-nav-card" data-target="cashflow" style="cursor:pointer;">
+                <div class="widget-v2-accent" style="background: var(--primary, #00e676)"></div>
+                <div class="widget-v2-header">
+                  <div class="widget-v2-icon-ring"><span class="widget-icon">🏦</span></div>
+                  <div class="widget-v2-title-group">
+                    <h3 class="widget-title">Net Worth</h3>
+                    <span class="widget-v2-subtitle">Total Assets</span>
+                  </div>
                 </div>
-                <div class="launch-card-v2-body">
-                  <h3 class="launch-card-v2-title">Flashcards</h3>
-                  <p class="launch-card-v2-desc">Study vocabulary with 3D flip cards</p>
-                </div>
-                <div class="launch-card-v2-arrow">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </div>
-              </div>
-              <div class="launch-card-v2 glass-card" data-target="pomodoro">
-                <div class="launch-card-v2-icon">
-                  <span>⏱️</span>
-                </div>
-                <div class="launch-card-v2-body">
-                  <h3 class="launch-card-v2-title">Pomodoro</h3>
-                  <p class="launch-card-v2-desc">Focus timer with progress tracking</p>
-                </div>
-                <div class="launch-card-v2-arrow">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
+                <div class="widget-body">
+                  <div class="widget-stat" style="text-align: center; width: 100%;">
+                    <span class="widget-stat-value widget-stat-value--green" id="w-cf-networth">0 đ</span>
+                  </div>
                 </div>
               </div>
-              <div class="launch-card-v2 glass-card" data-target="quiz">
-                <div class="launch-card-v2-icon">
-                  <span>📝</span>
+
+              <!-- Card 2: Liquidity (Cash & Bank) -->
+              <div class="widget-card-v2 glass-card dash-nav-card" data-target="cashflow" style="cursor:pointer;">
+                <div class="widget-v2-accent" style="background: var(--cyan, #00f0ff)"></div>
+                <div class="widget-v2-header">
+                  <div class="widget-v2-icon-ring"><span class="widget-icon">💵</span></div>
+                  <div class="widget-v2-title-group">
+                    <h3 class="widget-title">Liquidity</h3>
+                    <span class="widget-v2-subtitle">Cash & Bank</span>
+                  </div>
                 </div>
-                <div class="launch-card-v2-body">
-                  <h3 class="launch-card-v2-title">Quiz</h3>
-                  <p class="launch-card-v2-desc">Multiple-choice challenge mode</p>
-                </div>
-                <div class="launch-card-v2-arrow">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
+                <div class="widget-body">
+                  <div class="widget-stat-row">
+                    <div class="widget-stat">
+                      <span class="widget-stat-value widget-stat-value--cyan" id="w-cf-cash">0 đ</span>
+                      <span class="widget-stat-label">Cash</span>
+                    </div>
+                    <div class="widget-stat-divider"></div>
+                    <div class="widget-stat">
+                      <span class="widget-stat-value widget-stat-value--cyan" id="w-cf-bank">0 đ</span>
+                      <span class="widget-stat-label">Bank</span>
+                    </div>
+                  </div>
                 </div>
               </div>
+
+              <!-- Card 3: Savings -->
+              <div class="widget-card-v2 glass-card dash-nav-card" data-target="cashflow" style="cursor:pointer;">
+                <div class="widget-v2-accent" style="background: var(--purple, #b148d2)"></div>
+                <div class="widget-v2-header">
+                  <div class="widget-v2-icon-ring"><span class="widget-icon">🐷</span></div>
+                  <div class="widget-v2-title-group">
+                    <h3 class="widget-title">Savings</h3>
+                    <span class="widget-v2-subtitle">Piggy Bank</span>
+                  </div>
+                </div>
+                <div class="widget-body">
+                  <div class="widget-stat" style="text-align: center; width: 100%;">
+                    <span class="widget-stat-value widget-stat-value--purple" id="w-cf-savings">0 đ</span>
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
+
+          <style>
+            .dash-nav-card:hover { transform: translateY(-3px); }
+          </style>
 
           <!-- KatsuDuckling Reserved Footer -->
           <div class="dashboard-footer">
@@ -369,10 +425,10 @@ const dashboardModule = (function () {
       this._bindVizEvents();
       this._bindVizSettingsHelper();
 
-      // ── Bind Quick Launch card clicks ──
-      container.querySelectorAll('.launch-card-v2[data-target]').forEach(el => {
+      // ── Bind navigation cards (like CashFlow widgets) ──
+      container.querySelectorAll('.dash-nav-card[data-target]').forEach(el => {
         el.addEventListener('click', (e) => {
-          if (e.target.closest('.widget-btn')) return;
+          if (e.target.closest('button')) return; // Ignore if clicking a button inside
           const target = el.dataset.target;
           if (target && typeof app !== 'undefined' && app.switchTo) {
             app.switchTo(target);
@@ -883,6 +939,7 @@ const dashboardModule = (function () {
       this._updatePomodoroWidget();
       this._updateFlashcardWidget();
       this._updateQuizWidget();
+      this._updateCashFlowWidget(); // Added line
     },
 
     /* ──────────────────────────────────────────────
@@ -994,6 +1051,31 @@ const dashboardModule = (function () {
       });
 
       setText('w-quiz-questions', totalQuestions);
+    },
+
+    /* ──────────────────────────────────────────────
+       _updateCashFlowWidget()
+       Reads hub_cf_meta to display financial stats
+       ────────────────────────────────────────────── */
+    _updateCashFlowWidget() {
+      try {
+        const metaRaw = localStorage.getItem('hub_cf_meta');
+        const meta = metaRaw ? JSON.parse(metaRaw) : {}; // Default to empty object if null
+
+        const formatVND = (val) => new Intl.NumberFormat('vi-VN').format(val || 0) + ' đ';
+
+        const netWorthEl = document.getElementById('w-cf-networth');
+        const cashEl = document.getElementById('w-cf-cash');
+        const bankEl = document.getElementById('w-cf-bank');
+        const savingsEl = document.getElementById('w-cf-savings');
+
+        if (netWorthEl) netWorthEl.textContent = formatVND(meta.netWorthOffset || 0);
+        if (cashEl) cashEl.textContent = formatVND(meta.initCash || 0);
+        if (bankEl) bankEl.textContent = formatVND(meta.initBank || 0);
+        if (savingsEl) savingsEl.textContent = formatVND(meta.savingsBalance || 0);
+      } catch (e) {
+        console.warn('Error parsing cashflow meta for dashboard', e);
+      }
     }
   };
 

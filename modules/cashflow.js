@@ -2399,8 +2399,8 @@ function _restoreAIState() {
       <form id="hub-cf-form" autocomplete="off">
         <div class="hub-cf-form-group">
           <label class="hub-cf-form-label" for="hub-cf-amount" data-i18n="labelAmount">${_t('labelAmount')}</label>
-          <input type="number" id="hub-cf-amount" class="hub-cf-form-input hub-cf-amount-input"
-                 placeholder="0" min="0" step="1000" required inputmode="numeric" />
+          <input type="text" id="hub-cf-amount" class="hub-cf-form-input hub-cf-amount-input"
+                 placeholder="0" required inputmode="numeric" />
         </div>
         <div class="hub-cf-form-group">
           <label class="hub-cf-form-label" for="hub-cf-date" data-i18n="labelDate">${_t('labelDate')}</label>
@@ -2450,8 +2450,8 @@ function _restoreAIState() {
         </div>
         <div class="hub-cf-form-group">
           <label class="hub-cf-form-label" for="hub-cf-debt-amount" data-i18n="labelAmount">${_pd_t('labelAmount')}</label>
-          <input type="number" id="hub-cf-debt-amount" class="hub-cf-form-input hub-cf-amount-input"
-                 placeholder="${_pd_t('placeholderAmount')}" min="0" step="1000" required inputmode="numeric" />
+          <input type="text" id="hub-cf-debt-amount" class="hub-cf-form-input hub-cf-amount-input"
+                 placeholder="${_pd_t('placeholderAmount')}" required inputmode="numeric" />
         </div>
         <div class="hub-cf-form-grid">
           <div class="hub-cf-form-group">
@@ -4005,6 +4005,26 @@ function _restoreAIState() {
 
     // Populate initial category options
     _populateCategories();
+
+    // Shorthand logic for amount input
+    function applyShorthandLogic(inputId) {
+      var input = _qs(inputId);
+      if (!input) return;
+      input.addEventListener('input', function(e) {
+        var val = this.value.toLowerCase();
+        if (val.endsWith('k')) {
+          var num = parseFloat(val.replace('k', ''));
+          if (!isNaN(num)) this.value = num * 1000;
+        } else if (val.endsWith('m')) {
+          var num = parseFloat(val.replace('m', ''));
+          if (!isNaN(num)) this.value = num * 1000000;
+        } else {
+          // Strip out any non-numeric characters EXCEPT dot (for decimals before shorthand)
+          this.value = this.value.replace(/[^0-9.]/g, '');
+        }
+      });
+    }
+    applyShorthandLogic('#hub-cf-amount');
   }
 
   function _populateCategories() {
@@ -4017,6 +4037,15 @@ function _restoreAIState() {
       html += '<option value="' + cat.id + '">' + _escHtml(cat.name) + '</option>';
     });
     select.innerHTML = html;
+
+    // --- Restore Sticky Category ---
+    try {
+      var lastCat = localStorage.getItem('hub_cf_last_category_' + _activeTab);
+      if (lastCat && !window.isEditingTransactionMode) { // Ensure we don't override edit mode
+        var exists = Array.from(select.options).some(function(opt) { return opt.value === lastCat; });
+        if (exists) select.value = lastCat;
+      }
+    } catch(e) {}
   }
 
   /** Populate category checkbox list for filter popover (uses ALL categories, not tab-dependent) */
@@ -4062,8 +4091,19 @@ function _restoreAIState() {
     const form = _qs('#hub-cf-form');
     if (form) form.reset();
 
+    window.isEditingTransactionMode = false; // Flag for populateCategories
+
     const dateInput = _qs('#hub-cf-date');
     if (dateInput) dateInput.value = _todayISO();
+
+    // Restore Sticky Source
+    try {
+      var lastSource = localStorage.getItem('hub_cf_last_source');
+      var sourceSelect = _qs('#hub-cf-source');
+      if (lastSource && sourceSelect) {
+        sourceSelect.value = lastSource;
+      }
+    } catch(e) {}
 
     overlay.style.display = 'flex';
     setTimeout(function () {
@@ -4105,6 +4145,9 @@ function _restoreAIState() {
 
     const overlay = _qs('#hub-cf-overlay');
     if (!overlay) return;
+
+    // PROTECT EDIT MODE: Prevent sticky defaults from overriding actual transaction data
+    window.isEditingTransactionMode = true;
 
     // Reset form first
     const form = _qs('#hub-cf-form');
@@ -4208,6 +4251,12 @@ function _restoreAIState() {
 
     // ── BREAK THE OFFLINE SEAL: user explicitly added data ──
     if (_isOfflineMode) { _isOfflineMode = false; }
+
+    // --- Save Sticky Defaults ---
+    try {
+      localStorage.setItem('hub_cf_last_source', source);
+      localStorage.setItem('hub_cf_last_category_' + _activeTab, category);
+    } catch(e) {}
 
     _debouncedPersist();
     _closeModal();
@@ -5586,6 +5635,26 @@ function _restoreAIState() {
 
     // Event delegation for Paid History Modal delete buttons (static parent, bound once)
     _bindDebtHistoryModalDelegation();
+
+    // Shorthand logic for debt amount input
+    function applyShorthandLogic(inputId) {
+      var input = _qs(inputId);
+      if (!input) return;
+      input.addEventListener('input', function(e) {
+        var val = this.value.toLowerCase();
+        if (val.endsWith('k')) {
+          var num = parseFloat(val.replace('k', ''));
+          if (!isNaN(num)) this.value = num * 1000;
+        } else if (val.endsWith('m')) {
+          var num = parseFloat(val.replace('m', ''));
+          if (!isNaN(num)) this.value = num * 1000000;
+        } else {
+          // Strip out any non-numeric characters EXCEPT dot (for decimals before shorthand)
+          this.value = this.value.replace(/[^0-9.]/g, '');
+        }
+      });
+    }
+    applyShorthandLogic('#hub-cf-debt-amount');
   }
 
   function _openDebtModal() {
