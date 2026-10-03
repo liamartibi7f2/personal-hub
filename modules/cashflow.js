@@ -127,6 +127,20 @@ const cashflowModule = (function () {
       thDesc:           'Description',
       thCat:            'Category',
       thAmt:            'Amount',
+      labelDateFrom:    'From',
+      labelDateTo:      'To',
+      sortNewest:       'Newest First',
+      sortOldest:       'Oldest First',
+      sortHighest:      'Highest First',
+      sortLowest:       'Lowest First',
+      sortNone:         'No Sort',
+      labelKeyword:     'Keyword',
+      labelSelectCategories: 'Select Categories',
+      labelMin:         'Min',
+      labelMax:         'Max',
+      placeholderKeyword: 'Search description...',
+      btnClear:         'Clear',
+      btnApply:         'Apply',
       noCategoryData:   'No category data for this month.',
       noTxYet:          'No transactions yet.',
       noTxHint:         'Tap <strong>Add Transaction</strong> to start tracking.',
@@ -209,6 +223,20 @@ const cashflowModule = (function () {
       thDesc:           'Mô tả',
       thCat:            'Hạng mục',
       thAmt:            'Số tiền',
+      labelDateFrom:    'Từ',
+      labelDateTo:      'Đến',
+      sortNewest:       'Mới nhất trước',
+      sortOldest:       'Cũ nhất trước',
+      sortHighest:      'Cao nhất trước',
+      sortLowest:       'Thấp nhất trước',
+      sortNone:         'Không sắp xếp',
+      labelKeyword:     'Từ khóa',
+      labelSelectCategories: 'Chọn hạng mục',
+      labelMin:         'Tối thiểu',
+      labelMax:         'Tối đa',
+      placeholderKeyword: 'Tìm kiếm mô tả...',
+      btnClear:         'Xóa bộ lọc',
+      btnApply:         'Áp dụng',
       noTransData:      'Không có dữ liệu hạng mục trong tháng này.',
       noTransYet:       'Chưa có giao dịch nào.',
       noTransHint:      'Nhấn <strong>Thêm Giao Dịch</strong> để bắt đầu theo dõi.',
@@ -287,12 +315,20 @@ const cashflowModule = (function () {
       toastDebtPaid:       '✅ Đã đánh dấu đã trả: {name} - {amount}',
       toastDebtDeleted:    '✅ Đã xóa khoản nợ: {name}',
       toastIncomeAdded:    '✅ Đã thêm vào Thu nhập: Thu nợ từ {name}',
+      toastRecoveryDone:   '✅ Đã thu nợ {amount} vào {wallet}',
       noDebtsYet:          'Chưa có khoản nợ nào.',
       noDebtsHint:         'Nhấn <strong>Thêm nợ mới</strong> để bắt đầu theo dõi.',
       historyTitle:        'LỊCH SỬ ĐÃ TRẢ',
       toggleHistory:       'Xem lịch sử',
       emptyHistory:        'Chưa có khoản nợ nào được trả.',
-      btnClose:            'Đóng'
+      btnClose:            'Đóng',
+      // Debt Recovery Modal
+      recoveryTitle:       'THU HỒI NỢ',
+      labelRecoverySource: 'Nguồn nhận tiền',
+      optionCash:          'Tiền mặt (Cash)',
+      optionBank:          'Chuyển khoản (Bank)',
+      hintRecoveryNoIncome: 'Tiền nợ sẽ được cộng vào ví bạn chọn. Loại này <strong>không tính vào Thu nhập</strong>.',
+      btnConfirm:          'Xác nhận'
     },
     en: {
       debtSummaryTitle:    'POCKET DEBT',
@@ -330,12 +366,20 @@ const cashflowModule = (function () {
       toastDebtPaid:       '✅ Marked paid: {name} - {amount}',
       toastDebtDeleted:    '✅ Deleted debt: {name}',
       toastIncomeAdded:    '✅ Added to Income: Debt collection from {name}',
+      toastRecoveryDone:   '✅ Recovered {amount} into {wallet}',
       noDebtsYet:          'No debts yet.',
       noDebtsHint:         'Click <strong>Add New Debt</strong> to start tracking.',
       historyTitle:        'PAID HISTORY',
       toggleHistory:       'View History',
       emptyHistory:        'No paid debts yet.',
-      btnClose:            'Close'
+      btnClose:            'Close',
+      // Debt Recovery Modal
+      recoveryTitle:       'DEBT RECOVERY',
+      labelRecoverySource: 'Destination Wallet',
+      optionCash:          'Cash (Physical)',
+      optionBank:          'Bank Transfer',
+      hintRecoveryNoIncome: 'Money will be added to selected wallet. This does <strong>not count as Income</strong>.',
+      btnConfirm:          'Confirm'
     }
   };
 
@@ -380,7 +424,21 @@ const cashflowModule = (function () {
     netWorthOffset: 0,
     savingsBalance: 0,
     initBank: 0,
-    initCash: 0
+    initCash: 0,
+    budgets: {}                // Category budget limits: { categoryId: amount }
+  };
+
+  // ═══════════════════════════════════════════════════════════════
+  // CENTRALIZED TABLE FILTER STATE — Data Pipeline Architecture
+  // ═══════════════════════════════════════════════════════════════
+  // Single source of truth for all column filters.
+  // Each column gets its own namespace; pipelines compose without conflict.
+  // Extensible: description, category, amount can be added later.
+  let _txTableState = {
+    date: { from: null, to: null, sort: 'desc' },
+    description: { keyword: '' },
+    category: { selected: [] },
+    amount: { min: null, max: null, sort: null }
   };
   let _isDataLoaded  = false;
   let _sessionLoaded = false;  // Prevent re-fetch on tab switch
@@ -490,6 +548,7 @@ const cashflowModule = (function () {
     _cashFlowMeta.savingsBalance = meta.savingsBalance;
     _cashFlowMeta.initBank = meta.initBank;
     _cashFlowMeta.initCash = meta.initCash;
+    _cashFlowMeta.budgets = meta.budgets || {};
 
     // ── 3. Initialize state based on transaction load result ──
     if (loaded && Array.isArray(loaded.transactions)) {
@@ -755,6 +814,73 @@ const cashflowModule = (function () {
     return _data.transactions.filter(function (tx) {
       return tx.year === year && tx.month === month;
     });
+  }
+
+  /** ═══════════════════════════════════════════════════════════════
+   * DATA PIPELINE: Filter & Sort Transactions
+   * Centralized function that applies _txTableState to a fresh copy
+   * of the current month's transactions. Pure — no mutation of _data.
+   * ═══════════════════════════════════════════════════════════════ */
+  function _getFilteredAndSortedTransactions() {
+    // 1. Get fresh copy of current month's transactions (no mutation)
+    var txs = _getMonthTransactions(_currentMonth.year, _currentMonth.month).slice();
+
+    // 2. Apply Date Filter
+    var from = _txTableState.date.from;
+    var to = _txTableState.date.to;
+    if (from !== null) {
+      txs = txs.filter(function (tx) { return (tx.day || 0) >= from; });
+    }
+    if (to !== null) {
+      txs = txs.filter(function (tx) { return (tx.day || 0) <= to; });
+    }
+
+    // 3. Apply Description Filter (case-insensitive keyword search)
+    var keyword = _txTableState.description.keyword;
+    if (keyword && keyword.trim()) {
+      var kw = keyword.trim().toLowerCase();
+      txs = txs.filter(function (tx) {
+        return (tx.desc || '').toLowerCase().indexOf(kw) !== -1;
+      });
+    }
+
+    // 4. Apply Category Filter (multi-select)
+    var selectedCats = _txTableState.category.selected;
+    if (selectedCats && selectedCats.length > 0) {
+      txs = txs.filter(function (tx) {
+        return selectedCats.indexOf(tx.category) !== -1;
+      });
+    }
+
+    // 5. Apply Amount Filter
+    var minAmt = _txTableState.amount.min;
+    var maxAmt = _txTableState.amount.max;
+    if (minAmt !== null) {
+      txs = txs.filter(function (tx) { return (tx.amount || 0) >= minAmt; });
+    }
+    if (maxAmt !== null) {
+      txs = txs.filter(function (tx) { return (tx.amount || 0) <= maxAmt; });
+    }
+
+    // 6. Apply Sort (priority: amount sort > date sort)
+    var amtSort = _txTableState.amount.sort;
+    if (amtSort === 'asc' || amtSort === 'desc') {
+      txs.sort(function (a, b) {
+        var amtA = a.amount || 0;
+        var amtB = b.amount || 0;
+        return amtSort === 'asc' ? amtA - amtB : amtB - amtA;
+      });
+    } else {
+      // Fallback to date sort
+      var dateSort = _txTableState.date.sort;
+      txs.sort(function (a, b) {
+        var dayA = a.day || 0;
+        var dayB = b.day || 0;
+        return dateSort === 'asc' ? dayA - dayB : dayB - dayA;
+      });
+    }
+
+    return txs;
   }
 
   /** Sum income for a month */
@@ -1318,9 +1444,570 @@ function _restoreAIState() {
   background: color-mix(in srgb, var(--primary) 15%, transparent);
   color: var(--primary);
   margin-right: 4px;
-}';
-        document.head.appendChild(styleEl);
-      }`;
+}
+
+/* Smart Budget UI */
+.hub-cf-cat-budget-btn {
+  background: transparent; border: none; padding: 0 0 0 6px;
+  cursor: pointer; opacity: 0.4; font-size: 0.8rem; transition: all 0.2s;
+}
+.hub-cf-cat-budget-btn:hover { opacity: 1; transform: scale(1.1); }
+.hub-cf-bar-safe { background-color: var(--success, #00e676) !important; }
+.hub-cf-bar-warning { background-color: var(--warning, #ffb300) !important; }
+.hub-cf-bar-danger { background-color: var(--danger, #ff5252) !important; box-shadow: 0 0 6px color-mix(in srgb, var(--danger) 50%, transparent); }
+.hub-cf-budget-over { animation: cfPulseDanger 1.5s infinite; color: var(--danger); font-weight: bold; }
+@keyframes cfPulseDanger { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+/* ============================================================
+   FILTER POPOVER — Date column (extensible for other columns)
+   ============================================================ */
+.hub-cf-col-filterable {
+  position: relative;
+  user-select: none;
+}
+
+.hub-cf-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-left: 4px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 180ms, background 180ms, transform 120ms;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+.hub-cf-filter-btn:hover {
+  opacity: 1;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  transform: scale(1.05);
+}
+.hub-cf-filter-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  opacity: 1;
+}
+
+.hub-cf-filter-popover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 1000;
+  min-width: 220px;
+  max-width: 280px;
+  padding: 0;
+  margin-top: 4px;
+  border-radius: var(--radius-md, 10px);
+  background: var(--bg-glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  overflow: hidden;
+  animation: cfPopoverIn 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+@keyframes cfPopoverIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.hub-cf-filter-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+}
+.hub-cf-filter-popover-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.hub-cf-filter-popover-close {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1.2rem;
+  line-height: 1;
+  border-radius: var(--radius-sm, 6px);
+  transition: color 150ms, background 150ms;
+}
+.hub-cf-filter-popover-close:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.hub-cf-filter-popover-body {
+  padding: 12px;
+}
+.hub-cf-filter-row {
+  margin-bottom: 10px;
+}
+.hub-cf-filter-row:last-child { margin-bottom: 0; }
+.hub-cf-filter-row label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.hub-cf-filter-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  border-radius: var(--radius-sm, 6px);
+  background: color-mix(in srgb, var(--bg-card) 80%, transparent);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  box-sizing: border-box;
+  transition: border-color 150ms, box-shadow 150ms;
+}
+.hub-cf-filter-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent);
+}
+
+.hub-cf-filter-sort-row {
+  display: flex;
+  gap: 16px;
+}
+.hub-cf-filter-sort-row label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.74rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  margin-bottom: 0;
+}
+.hub-cf-filter-sort-row input[type="radio"] {
+  accent-color: var(--primary);
+  width: 14px;
+  height: 14px;
+}
+
+.hub-cf-filter-popover-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+  background: color-mix(in srgb, var(--bg-card) 50%, transparent);
+}
+.hub-cf-filter-btn-clear,
+.hub-cf-filter-btn-apply {
+  padding: 6px 14px;
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  font-size: 0.74rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 150ms;
+}
+.hub-cf-filter-btn-clear {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+.hub-cf-filter-btn-clear:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.hub-cf-filter-btn-apply {
+  background: var(--primary);
+  color: white;
+}
+.hub-cf-filter-btn-apply:hover {
+  filter: brightness(1.1);
+}
+
+/* ============================================================
+   TABLE FILTER POPOVER (DATE & PIPELINE) — Supplemental Styles
+   ============================================================ */
+.hub-cf-col-filterable {
+  position: relative;
+  cursor: pointer;
+}
+
+.hub-cf-th-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-start;
+}
+
+.hub-cf-filter-icon {
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #888);
+  padding: 2px;
+  cursor: pointer;
+  border-radius: 4px;
+  display: inline-flex;
+  transition: all 0.2s;
+}
+
+.hub-cf-filter-icon:hover, .hub-cf-filter-icon.active {
+  color: var(--primary, #00e676);
+  background: color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+.hub-cf-filter-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 999;
+  width: 240px;
+  background: var(--bg-card, #121212);
+  border: 1px solid color-mix(in srgb, var(--text-muted) 20%, transparent);
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-transform: none;
+  font-weight: normal;
+  color: var(--text-primary, #e0e0e0);
+}
+
+/* Add a tiny triangle arrow pointing up */
+.hub-cf-filter-popover::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 16px;
+  width: 10px;
+  height: 10px;
+  background: var(--bg-card, #121212);
+  border-left: 1px solid color-mix(in srgb, var(--text-muted) 20%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--text-muted) 20%, transparent);
+  transform: rotate(45deg);
+}
+
+.cf-popover-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+.cf-popover-group label {
+  font-size: 0.75rem;
+  color: var(--text-muted, #888);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.cf-popover-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cf-popover-row input[type="number"] {
+  width: 100%;
+  background: rgba(0,0,0,0.2);
+  border: 1px solid color-mix(in srgb, var(--text-muted) 30%, transparent);
+  color: var(--text-primary, #fff);
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.cf-popover-row input[type="number"]:focus {
+  border-color: var(--primary, #00e676);
+}
+
+.cf-popover-group label.cf-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-primary, #e0e0e0);
+  text-transform: none;
+  font-weight: normal;
+  cursor: pointer;
+}
+
+.cf-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--text-muted) 20%, transparent);
+}
+
+/* Fix Clipping: Allow popovers to escape table wrappers */
+.hub-cf-ledger.glass-card,
+.hub-cf-view-wrapper,
+.hub-cf-table-wrap,
+.hub-cf-table {
+  overflow: visible !important;
+}
+
+/* Custom Checkbox Design for Category Popover */
+#filter-cat-list {
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+/* Sleek Scrollbar */
+#filter-cat-list::-webkit-scrollbar { width: 4px; }
+#filter-cat-list::-webkit-scrollbar-track { background: transparent; }
+#filter-cat-list::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text-muted) 30%, transparent); border-radius: 4px; }
+
+.cf-category-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  transition: background 0.2s;
+  cursor: pointer;
+}
+.cf-category-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Hide native checkbox */
+.cf-category-item input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--text-muted, #888);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  margin: 0;
+  margin-top: 3px;
+  transition: all 0.2s;
+}
+
+/* Checked state */
+.cf-category-item input[type="checkbox"]:checked {
+  background: var(--primary, #00e676);
+  border-color: var(--primary, #00e676);
+}
+
+/* Custom Checkmark */
+.cf-category-item input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #121212;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.cf-category-label {
+  font-size: 0.85rem;
+  color: var(--text-primary, #e0e0e0);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+/* Table Header Filter Styles */
+.hub-cf-th-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-start;
+}
+
+.hub-cf-filter-icon {
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #888);
+  padding: 2px;
+  cursor: pointer;
+  border-radius: 4px;
+  display: inline-flex;
+  transition: all 0.2s;
+}
+
+.hub-cf-filter-icon:hover, .hub-cf-filter-icon.active {
+  color: var(--primary, #00e676);
+  background: color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+/* ============================================================
+   PROFESSIONAL FILTER POPOVER STYLING
+   ============================================================ */
+
+/* Professional Input Styling */
+.cf-input-styled {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.3) !important;
+  border: 1px solid color-mix(in srgb, var(--text-muted) 30%, transparent) !important;
+  color: var(--text-primary) !important;
+  padding: 8px 10px !important;
+  border-radius: 6px !important;
+  font-size: 0.85rem !important;
+  outline: none;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+.cf-input-styled:focus { border-color: var(--primary) !important; }
+
+/* Vertical Radio Alignment */
+.cf-radio-vertical-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+.cf-radio-vertical-group .cf-radio-label {
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.cf-radio-vertical-group .cf-radio-label input[type="radio"] {
+  accent-color: var(--primary);
+  width: 14px;
+  height: 14px;
+}
+
+/* Popover Action Buttons */
+.cf-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--text-muted) 20%, transparent);
+}
+
+/* Popover Row Layout */
+.cf-popover-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cf-popover-row .cf-input-styled { flex: 1; }
+.cf-popover-row span { flex-shrink: 0; }
+
+/* Category List Styling */
+#filter-cat-list {
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+#filter-cat-list::-webkit-scrollbar { width: 4px; }
+#filter-cat-list::-webkit-scrollbar-track { background: transparent; }
+#filter-cat-list::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text-muted) 30%, transparent); border-radius: 4px; }
+
+.cf-category-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  transition: background 0.2s;
+  cursor: pointer;
+}
+.cf-category-item:hover { background: rgba(255, 255, 255, 0.05); }
+
+.cf-category-item input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--text-muted, #888);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  margin: 0;
+  margin-top: 3px;
+  transition: all 0.2s;
+}
+.cf-category-item input[type="checkbox"]:checked {
+  background: var(--primary, #00e676);
+  border-color: var(--primary, #00e676);
+}
+.cf-category-item input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #121212;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.cf-category-label {
+  font-size: 0.85rem;
+  color: var(--text-primary, #e0e0e0);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+/* ============================================================
+   GOLDEN BULLET: Scrollable Table + Sticky Headers + Unclipped Popovers
+   ============================================================ */
+
+/* 1. Enable internal scrolling with a safety net for vertical popover space */
+.hub-cf-table-wrap {
+  max-height: 450px !important;
+  min-height: 380px !important; /* Guarantees enough vertical space for the longest popover to drop down */
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+/* 2. Sticky Headers: Keep filters visible while scrolling */
+.hub-cf-table th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 20 !important;
+  background: var(--bg-card, #121212) !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3) !important;
+}
+
+/* 3. Horizontal Anti-Clipping: Force right-side popovers to open INWARD */
+#popover-filter-cat,
+#popover-filter-amt {
+  left: auto !important;
+  right: 0 !important;
+}
+
+/* 4. Left-side popovers open normally */
+#popover-filter-date,
+#popover-filter-desc {
+  left: 0 !important;
+  right: auto !important;
+}
+`;
         document.head.appendChild(styleEl);
       }
 
@@ -1504,10 +2191,92 @@ function _restoreAIState() {
         <table class="hub-cf-table">
           <thead>
             <tr>
-              <th class="hub-cf-col--date" data-i18n="thDate">${_t('thDate')}</th>
-              <th class="hub-cf-col--desc" data-i18n="thDesc">${_t('thDesc')}</th>
-              <th class="hub-cf-col--cat" data-i18n="thCat">${_t('thCat')}</th>
-              <th class="hub-cf-col--amt" data-i18n="thAmt">${_t('thAmt')}</th>
+              <th class="hub-cf-col--date hub-cf-col-filterable">
+                <div class="hub-cf-th-inner">
+                  <span data-i18n="thDate">${_t('thDate')}</span>
+                  <button class="hub-cf-filter-icon" id="btn-filter-date" aria-label="Filter Date" title="Filter by Date">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                  </button>
+                </div>
+                <div class="hub-cf-filter-popover glass" id="popover-filter-date" style="display:none; width: 220px;">
+                  <div class="cf-popover-group">
+                    <div class="cf-popover-row">
+                      <input type="number" id="filter-date-from" placeholder="${_t('labelDateFrom')}" min="1" max="31" class="cf-input-styled">
+                      <span style="color: var(--text-muted);">-</span>
+                      <input type="number" id="filter-date-to" placeholder="${_t('labelDateTo')}" min="1" max="31" class="cf-input-styled">
+                    </div>
+                  </div>
+                  <div class="cf-popover-group cf-radio-vertical-group" style="margin-top: 8px;">
+                    <label class="cf-radio-label"><input type="radio" name="filter-date-sort" value="desc" checked> ${_t('sortNewest')}</label>
+                    <label class="cf-radio-label"><input type="radio" name="filter-date-sort" value="asc"> ${_t('sortOldest')}</label>
+                  </div>
+                  <div class="cf-popover-actions">
+                    <button id="btn-filter-date-clear" class="hub-cf-modal-btn--cancel" style="padding:4px 12px; font-size:12px;">${_t('btnClear')}</button>
+                    <button id="btn-filter-date-apply" class="hub-cf-modal-btn--save" style="padding:4px 12px; font-size:12px;">${_t('btnApply')}</button>
+                  </div>
+                </div>
+              </th>
+              <th class="hub-cf-col--desc hub-cf-col-filterable">
+                <div class="hub-cf-th-inner">
+                  <span data-i18n="thDesc">${_t('thDesc')}</span>
+                  <button class="hub-cf-filter-icon" id="btn-filter-desc" aria-label="Filter Description" title="Filter by Description">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                  </button>
+                </div>
+                <div class="hub-cf-filter-popover glass" id="popover-filter-desc" style="display:none; width: 220px;">
+                  <div class="cf-popover-group">
+                    <div class="cf-popover-row">
+                      <input type="text" id="filter-desc-keyword" placeholder="${_t('placeholderKeyword')}" class="cf-input-styled">
+                    </div>
+                  </div>
+                  <div class="cf-popover-actions">
+                    <button id="btn-filter-desc-clear" class="hub-cf-modal-btn--cancel" style="padding:4px 12px; font-size:12px;">${_t('btnClear')}</button>
+                    <button id="btn-filter-desc-apply" class="hub-cf-modal-btn--save" style="padding:4px 12px; font-size:12px;">${_t('btnApply')}</button>
+                  </div>
+                </div>
+              </th>
+              <th class="hub-cf-col--cat hub-cf-col-filterable">
+                <div class="hub-cf-th-inner">
+                  <span data-i18n="thCat">${_t('thCat')}</span>
+                  <button class="hub-cf-filter-icon" id="btn-filter-cat" aria-label="Filter Category" title="Filter by Category">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 12 12 17 22 12"></polyline><polyline points="2 17 12 22 22 17"></polyline></svg>
+                  </button>
+                </div>
+                <div class="hub-cf-filter-popover glass" id="popover-filter-cat" style="display:none; width: 240px;">
+                  <div class="cf-popover-group" id="filter-cat-list" style="max-height: 200px; overflow-y: auto; padding-right: 4px;">
+                  </div>
+                  <div class="cf-popover-actions">
+                    <button id="btn-filter-cat-clear" class="hub-cf-modal-btn--cancel" style="padding:4px 12px; font-size:12px;">${_t('btnClear')}</button>
+                    <button id="btn-filter-cat-apply" class="hub-cf-modal-btn--save" style="padding:4px 12px; font-size:12px;">${_t('btnApply')}</button>
+                  </div>
+                </div>
+              </th>
+              <th class="hub-cf-col--amt hub-cf-col-filterable">
+                <div class="hub-cf-th-inner">
+                  <span data-i18n="thAmt">${_t('thAmt')}</span>
+                  <button class="hub-cf-filter-icon" id="btn-filter-amt" aria-label="Filter Amount" title="Filter by Amount">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+                  </button>
+                </div>
+                <div class="hub-cf-filter-popover glass" id="popover-filter-amt" style="display:none; width: 220px;">
+                  <div class="cf-popover-group">
+                    <div class="cf-popover-row">
+                      <input type="number" id="filter-amt-min" placeholder="${_t('labelMin')} (VND)" min="0" class="cf-input-styled">
+                      <span style="color: var(--text-muted);">-</span>
+                      <input type="number" id="filter-amt-max" placeholder="${_t('labelMax')} (VND)" min="0" class="cf-input-styled">
+                    </div>
+                  </div>
+                  <div class="cf-popover-group cf-radio-vertical-group" style="margin-top: 8px;">
+                    <label class="cf-radio-label"><input type="radio" name="sort-amt" value="desc"> ${_t('sortHighest')}</label>
+                    <label class="cf-radio-label"><input type="radio" name="sort-amt" value="asc"> ${_t('sortLowest')}</label>
+                    <label class="cf-radio-label"><input type="radio" name="sort-amt" value="none" checked> ${_t('sortNone')}</label>
+                  </div>
+                  <div class="cf-popover-actions">
+                    <button id="btn-filter-amt-clear" class="hub-cf-modal-btn--cancel" style="padding:4px 12px; font-size:12px;">${_t('btnClear')}</button>
+                    <button id="btn-filter-amt-apply" class="hub-cf-modal-btn--save" style="padding:4px 12px; font-size:12px;">${_t('btnApply')}</button>
+                  </div>
+                </div>
+              </th>
               <th class="hub-cf-col--act"></th>
             </tr>
           </thead>
@@ -1723,6 +2492,32 @@ function _restoreAIState() {
       <div class="hub-cf-debt-history-modal-list" id="hub-cf-debt-history-modal-list"></div>
     </div>
   </div>
+</div>
+
+<!-- ═══ DEBT RECOVERY MODAL (Thu hồi nợ) ═══ -->
+<div class="hub-cf-overlay" id="hub-cf-debt-recovery-overlay" role="dialog" aria-modal="true" aria-label="${_pd_t('recoveryTitle')}" style="display:none;">
+  <div class="hub-cf-modal hub-cf-debt-recovery-modal glass">
+    <div class="hub-cf-modal-header">
+      <h3 class="hub-cf-modal-title" data-i18n="recoveryTitle">${_pd_t('recoveryTitle')}</h3>
+      <button class="hub-cf-modal-close" id="hub-cf-debt-recovery-modal-close" aria-label="Close modal">✕</button>
+    </div>
+    <div class="hub-cf-modal-body">
+      <form id="hub-cf-debt-recovery-form" autocomplete="off">
+        <div class="hub-cf-form-group">
+          <label class="hub-cf-form-label" for="debt-recovery-source" data-i18n="labelRecoverySource">${_pd_t('labelRecoverySource')}</label>
+          <select id="debt-recovery-source" class="hub-cf-form-input" required>
+            <option value="cash" data-i18n="optionCash">${_pd_t('optionCash')}</option>
+            <option value="bank" selected data-i18n="optionBank">${_pd_t('optionBank')}</option>
+          </select>
+        </div>
+        <p class="hub-cf-form-hint" data-i18n="hintRecoveryNoIncome">${_pd_t('hintRecoveryNoIncome')}</p>
+        <div class="hub-cf-form-actions">
+          <button type="button" class="hub-cf-modal-btn hub-cf-modal-btn--cancel" id="hub-cf-debt-recovery-btn-cancel" data-i18n="btnCancel">${_pd_t('btnCancel')}</button>
+          <button type="button" class="hub-cf-modal-btn hub-cf-modal-btn--save" id="hub-cf-debt-recovery-btn-confirm" data-i18n="btnConfirm">${_pd_t('btnConfirm')}</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>`;
 
       // ══════════════════════════════════════════
@@ -1929,6 +2724,7 @@ function _restoreAIState() {
     // ── 2. Sum income & expense from filtered transactions (time-windowed) ──
     // ACCOUNTING RULE: Internal transfers to/from Savings are NOT income/expense.
     // Exclude transactions where source === 'savings' OR category === 'Tiết kiệm' / '🐷 Tiết kiệm'.
+    // ALSO EXCLUDE: Debt recovery ("🤝 Thu nợ") — this is an asset transfer, not revenue.
     var totalIncome = 0;
     var totalExpense = 0;
     var cashIncome = 0, cashExpense = 0, bankIncome = 0, bankExpense = 0, uncIncome = 0, uncExpense = 0, savingsIncome = 0, savingsExpense = 0;
@@ -1938,9 +2734,12 @@ function _restoreAIState() {
         tx.category === 'Tiết kiệm' ||
         tx.category === '🐷 Tiết kiệm';
 
+      // 🔑 Debt recovery is an asset transfer, not revenue — exclude from global Income
+      var isDebtRecovery = tx.category === 'thu-no' || tx.category === 'Thu nợ';
+
       if (tx.type === 'income') {
-        // Only count as global income if NOT an internal savings transfer
-        if (!isSavingsRelated) {
+        // Only count as global income if NOT an internal savings transfer AND NOT debt recovery
+        if (!isSavingsRelated && !isDebtRecovery) {
           totalIncome += (tx.amount || 0);
         }
         if (tx.source === 'bank') bankIncome += tx.amount;
@@ -2059,7 +2858,9 @@ function _restoreAIState() {
   }
 
   function _refreshTransactions() {
-    var txs = _getMonthTransactions(_currentMonth.year, _currentMonth.month);
+    // Use Data Pipeline: filtered + sorted transactions
+    var rawMonthTxs = _getMonthTransactions(_currentMonth.year, _currentMonth.month);
+    var txs = typeof _getFilteredAndSortedTransactions === 'function' ? _getFilteredAndSortedTransactions() : rawMonthTxs;
     var emptyEl = _qs('#hub-cf-empty-state');
     var tableEl = _qs('#hub-cf-table-wrap');
     var tbody   = _qs('#hub-cf-tx-body');
@@ -2067,19 +2868,29 @@ function _restoreAIState() {
 
     if (!emptyEl || !tableEl || !tbody) return;
 
-    if (txs.length === 0) {
+    // Case 1: Absolutely no transactions this month (Raw data is empty)
+    if (rawMonthTxs.length === 0) {
       emptyEl.style.display = 'flex';
       tableEl.style.display = 'none';
       if (countEl) countEl.textContent = _t('txCount_zero');
       return;
     }
 
+    // Case 2: Has data, but filtered result is empty
+    if (txs.length === 0) {
+      emptyEl.style.display = 'none';
+      tableEl.style.display = ''; // MUST KEEP TABLE VISIBLE SO FILTERS REMAIN ACCESSIBLE
+      if (countEl) countEl.textContent = _t('txCount_zero');
+
+      // Inject a "No results found" row directly into the tbody
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:32px 16px; color:var(--text-muted);">Không tìm thấy giao dịch nào khớp với bộ lọc.</td></tr>';
+      return;
+    }
+
+    // Case 3: Normal rendering (Has filtered data)
     emptyEl.style.display = 'none';
     tableEl.style.display = '';
     if (countEl) countEl.textContent = txs.length + ' ' + _t('txCount_other');
-
-    // Sort by day desc
-    txs.sort(function (a, b) { return (b.day || 0) - (a.day || 0); });
 
     var html = '';
     txs.forEach(function (tx) {
@@ -2209,7 +3020,7 @@ function _restoreAIState() {
       });
     }
 
-    // ── EXPENSE SECTION ──
+    // ── EXPENSE SECTION (Smart Budget) ──
     if (expenseSorted.length > 0) {
       if (incomeSorted.length > 0) {
         html += '<p class="hub-cf-breakdown-section-label" style="margin-top:2px;">' + _t('breakdownExpense') + '</p>';
@@ -2220,17 +3031,57 @@ function _restoreAIState() {
         var cat = _lookupCategory(entry.id, 'expense');
         var name = cat ? cat.name : entry.id;
         var amt  = entry.amt;
-        var pct  = totalExpense > 0 ? Math.round((amt / totalExpense) * 100) : 0;
+        var budgetLimit = _cashFlowMeta.budgets && _cashFlowMeta.budgets[entry.id];
 
-        html += '<div class="hub-cf-breakdown-item">';
-        html += '<span class="hub-cf-breakdown-name">' + _escHtml(name) + '</span>';
-        html += '<span class="hub-cf-breakdown-amt hub-cf-breakdown-amt--expense">' +
-                  _formatVND(amt) + ' (' + pct + '%)' +
-                '</span>';
-        html += '</div>';
-        html += '<div class="hub-cf-breakdown-bar-track">';
-        html += '<div class="hub-cf-breakdown-bar-fill hub-cf-breakdown-bar-fill--expense" style="width:' + pct + '%"></div>';
-        html += '</div>';
+        // Budget edit button HTML (explicit for clarity)
+        var btnHtml = '<button class="hub-cf-cat-budget-btn" data-cat-id="' + entry.id + '" title="Cài đặt ngân sách">✏️</button>';
+
+        // Legacy mode: no budget set → pct relative to totalExpense
+        if (!budgetLimit || budgetLimit <= 0) {
+          var pct = totalExpense > 0 ? Math.round((amt / totalExpense) * 100) : 0;
+
+          html += '<div class="hub-cf-breakdown-item">';
+          html += '<span class="hub-cf-breakdown-name">' + _escHtml(name) + btnHtml + '</span>';
+          html += '<span class="hub-cf-breakdown-amt hub-cf-breakdown-amt--expense">' +
+                    _formatVND(amt) + ' (' + pct + '%)' +
+                  '</span>';
+          html += '</div>';
+          html += '<div class="hub-cf-breakdown-bar-track">';
+          html += '<div class="hub-cf-breakdown-bar-fill hub-cf-breakdown-bar-fill--expense" style="width:' + Math.min(pct, 100) + '%"></div>';
+          html += '</div>';
+        }
+        // Smart Budget mode: budgetLimit > 0
+        else {
+          var budgetPct = (amt / budgetLimit) * 100;
+          var displayPct = Math.round(budgetPct);
+          var barPct = Math.min(budgetPct, 100);
+
+          // Determine dynamic color & bar class based on budgetPct
+          var color;
+          if (budgetPct <= 50) {
+            color = 'var(--success, #00e676)';
+          } else if (budgetPct <= 85) {
+            color = 'var(--warning, #ffb300)';
+          } else {
+            color = 'var(--danger, #ff5252)';
+          }
+
+          // Over-budget pulse class for amount text (keep if over 100%)
+          var amtClass = 'hub-cf-breakdown-amt';
+          if (budgetPct > 100) {
+            amtClass += ' hub-cf-budget-over';
+          }
+
+          html += '<div class="hub-cf-breakdown-item">';
+          html += '<span class="hub-cf-breakdown-name">' + _escHtml(name) + btnHtml + '</span>';
+          html += '<span class="' + amtClass + '" style="color:' + color + ';">' +
+                    _formatVND(amt) + ' / ' + _formatVND(budgetLimit) + ' (' + displayPct + '%)' +
+                  '</span>';
+          html += '</div>';
+          html += '<div class="hub-cf-breakdown-bar-track">';
+          html += '<div class="hub-cf-breakdown-bar-fill" style="width:' + barPct + '%; background-color:' + color + ';"></div>';
+          html += '</div>';
+        }
       });
     }
 
@@ -2240,6 +3091,33 @@ function _restoreAIState() {
     }
 
     container.innerHTML = html;
+
+    // ── Event delegation for budget edit buttons (bound ONCE via dataset guard) ──
+    if (!container.dataset.budgetDelegationBound) {
+      container.dataset.budgetDelegationBound = 'true';
+      container.addEventListener('click', function (e) {
+        var btn = e.target.closest('.hub-cf-cat-budget-btn');
+        if (!btn) return;
+        e.stopPropagation();
+
+        var catId = btn.getAttribute('data-cat-id');
+        var currentBudget = _cashFlowMeta.budgets[catId] || 0;
+
+        var raw = prompt('Nhập ngân sách tối đa cho tháng (VND)\n(Nhập 0 để xóa ngân sách hạng mục này):', currentBudget);
+        if (raw !== null) {
+          var val = parseInt(String(raw).replace(/[\s,.]/g, ''), 10);
+          if (!isNaN(val) && val > 0) {
+            _cashFlowMeta.budgets[catId] = val;
+          } else if (val === 0) {
+            delete _cashFlowMeta.budgets[catId];
+          }
+          if (typeof HubDB !== 'undefined' && typeof HubDB.saveCashFlowMeta === 'function') {
+            HubDB.saveCashFlowMeta(_cashFlowMeta).catch(function (_) {});
+          }
+          _renderCategoryBreakdown();
+        }
+      });
+    }
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -2520,6 +3398,25 @@ function _restoreAIState() {
     if (historyOverlay && historyOverlay.style.display === 'flex') {
       _refreshDebtHistoryModal();
     }
+    // Refresh debt recovery modal if visible
+    var recoveryOverlay = _qs('#hub-cf-debt-recovery-overlay');
+    if (recoveryOverlay && recoveryOverlay.style.display === 'flex') {
+      var cashOption = _qs('#debt-recovery-source option[value="cash"]');
+      var bankOption = _qs('#debt-recovery-source option[value="bank"]');
+      var hintEl = _qs('#hub-cf-debt-recovery-overlay [data-i18n="hintRecoveryNoIncome"]');
+      var cancelBtn = _qs('#hub-cf-debt-recovery-btn-cancel');
+      var confirmBtn = _qs('#hub-cf-debt-recovery-btn-confirm');
+      var labelEl = _qs('#hub-cf-debt-recovery-overlay [data-i18n="labelRecoverySource"]');
+      var titleEl = _qs('#hub-cf-debt-recovery-overlay .hub-cf-modal-title');
+      if (cashOption) cashOption.textContent = _pd_t('optionCash');
+      if (bankOption) bankOption.textContent = _pd_t('optionBank');
+      if (hintEl) hintEl.innerHTML = _pd_t('hintRecoveryNoIncome');
+      if (cancelBtn) cancelBtn.textContent = _pd_t('btnCancel');
+      if (confirmBtn) confirmBtn.textContent = _pd_t('btnConfirm');
+      if (labelEl) labelEl.textContent = _pd_t('labelRecoverySource');
+      if (titleEl) titleEl.textContent = _pd_t('recoveryTitle');
+      recoveryOverlay.setAttribute('aria-label', _pd_t('recoveryTitle'));
+    }
   }
 
   // ============================================================
@@ -2756,10 +3653,13 @@ function _restoreAIState() {
       statsTab.addEventListener('click',  function () { _switchLedgerView('stats');  });
     }
 
-    // Escape key to close modal
+    // Escape key to close modals
     _boundKeydown = function (e) {
       if (e.key === 'Escape') {
         _closeModal();
+        _closeDebtModal();
+        _closeDebtHistoryModal();
+        _closeDebtRecoveryModal();
       }
     };
     document.addEventListener('keydown', _boundKeydown);
@@ -2793,6 +3693,267 @@ function _restoreAIState() {
         }
         debtOverlay.setAttribute('aria-label', isEditingDebt ? _pd_t('modalTitleEdit') : _pd_t('modalTitle'));
       }
+      // Update debt recovery modal if open
+      var recoveryOverlay = _qs('#hub-cf-debt-recovery-overlay');
+      if (recoveryOverlay && recoveryOverlay.style.display === 'flex') {
+        var recoveryTitleEl = _qs('#hub-cf-debt-recovery-overlay .hub-cf-modal-title');
+        if (recoveryTitleEl) {
+          recoveryTitleEl.textContent = _pd_t('recoveryTitle');
+        }
+        recoveryOverlay.setAttribute('aria-label', _pd_t('recoveryTitle'));
+        // Update select options and hint
+        var cashOption = _qs('#debt-recovery-source option[value="cash"]');
+        var bankOption = _qs('#debt-recovery-source option[value="bank"]');
+        var hintEl = _qs('#hub-cf-debt-recovery-overlay [data-i18n="hintRecoveryNoIncome"]');
+        var cancelBtn = _qs('#hub-cf-debt-recovery-btn-cancel');
+        var confirmBtn = _qs('#hub-cf-debt-recovery-btn-confirm');
+        var labelEl = _qs('#hub-cf-debt-recovery-overlay [data-i18n="labelRecoverySource"]');
+        if (cashOption) cashOption.textContent = _pd_t('optionCash');
+        if (bankOption) bankOption.textContent = _pd_t('optionBank');
+        if (hintEl) hintEl.innerHTML = _pd_t('hintRecoveryNoIncome');
+        if (cancelBtn) cancelBtn.textContent = _pd_t('btnCancel');
+        if (confirmBtn) confirmBtn.textContent = _pd_t('btnConfirm');
+        if (labelEl) labelEl.textContent = _pd_t('labelRecoverySource');
+      }
+    });
+
+    // ═══════════════════════════════════════════════════════════════
+    // FILTER POPOVER TOGGLE LOGIC (Unified)
+    // ═══════════════════════════════════════════════════════════════
+
+    // Helper: Close ALL filter popovers
+    function _closeAllFilterPopovers() {
+      var popovers = [
+        _qs('#popover-filter-date'),
+        _qs('#popover-filter-desc'),
+        _qs('#popover-filter-cat'),
+        _qs('#popover-filter-amt')
+      ];
+      var buttons = [
+        _qs('#btn-filter-date'),
+        _qs('#btn-filter-desc'),
+        _qs('#btn-filter-cat'),
+        _qs('#btn-filter-amt')
+      ];
+      popovers.forEach(function (p) { if (p) p.style.display = 'none'; });
+      buttons.forEach(function (b) { if (b) b.classList.remove('active'); });
+    }
+
+    // Helper: Toggle a specific filter popover
+    function _bindFilterToggle(btnId, popoverId, onOpen) {
+      var btn = _qs('#' + btnId);
+      var popover = _qs('#' + popoverId);
+      if (!btn || !popover) return;
+
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var isCurrentlyOpen = popover.style.display === 'flex';
+        _closeAllFilterPopovers();
+
+        // Toggle: only open if it wasn't already open
+        if (!isCurrentlyOpen) {
+          if (typeof onOpen === 'function') onOpen();
+          popover.style.display = 'flex';
+          btn.classList.add('active');
+        }
+      });
+    }
+
+    // Bind all 4 filter toggles with their specific onOpen handlers
+    _bindFilterToggle('btn-filter-date', 'popover-filter-date', function () {
+      var dateFromInput = _qs('#filter-date-from');
+      var dateToInput = _qs('#filter-date-to');
+      var datePopover = _qs('#popover-filter-date');
+      if (dateFromInput) dateFromInput.value = _txTableState.date.from || '';
+      if (dateToInput) dateToInput.value = _txTableState.date.to || '';
+      if (datePopover) {
+        var sortRadio = datePopover.querySelector('input[name="filter-date-sort"][value="' + _txTableState.date.sort + '"]');
+        if (sortRadio) sortRadio.checked = true;
+      }
+    });
+
+    _bindFilterToggle('btn-filter-desc', 'popover-filter-desc', function () {
+      var descKeywordInput = _qs('#filter-desc-keyword');
+      if (descKeywordInput) descKeywordInput.value = _txTableState.description.keyword || '';
+    });
+
+    _bindFilterToggle('btn-filter-cat', 'popover-filter-cat', function () {
+      _populateCategoryFilterOptions();
+    });
+
+    _bindFilterToggle('btn-filter-amt', 'popover-filter-amt', function () {
+      var amtMinInput = _qs('#filter-amt-min');
+      var amtMaxInput = _qs('#filter-amt-max');
+      var amtPopover = _qs('#popover-filter-amt');
+      if (amtMinInput) amtMinInput.value = _txTableState.amount.min || '';
+      if (amtMaxInput) amtMaxInput.value = _txTableState.amount.max || '';
+      if (amtPopover) {
+        var sortRadio = amtPopover.querySelector('input[name="sort-amt"][value="' + (_txTableState.amount.sort || 'none') + '"]');
+        if (sortRadio) sortRadio.checked = true;
+      }
+    });
+
+    // Apply/Clear handlers for Date filter
+    (function () {
+      var datePopover = _qs('#popover-filter-date');
+      var dateFromInput = _qs('#filter-date-from');
+      var dateToInput = _qs('#filter-date-to');
+      var dateApplyBtn = _qs('#btn-filter-date-apply');
+      var dateClearBtn = _qs('#btn-filter-date-clear');
+
+      if (dateApplyBtn) {
+        dateApplyBtn.addEventListener('click', function () {
+          var from = dateFromInput && dateFromInput.value ? parseInt(dateFromInput.value, 10) : null;
+          var to = dateToInput && dateToInput.value ? parseInt(dateToInput.value, 10) : null;
+          var sortRadio = datePopover && datePopover.querySelector('input[name="filter-date-sort"]:checked');
+          var sort = sortRadio ? sortRadio.value : 'desc';
+
+          _txTableState.date = { from: from, to: to, sort: sort };
+          if (datePopover) datePopover.style.display = 'none';
+          var btn = _qs('#btn-filter-date');
+          if (btn) btn.classList.remove('active');
+          _refreshTransactions();
+        });
+      }
+      if (dateClearBtn) {
+        dateClearBtn.addEventListener('click', function () {
+          _txTableState.date = { from: null, to: null, sort: 'desc' };
+          if (dateFromInput) dateFromInput.value = '';
+          if (dateToInput) dateToInput.value = '';
+          if (datePopover) {
+            var defaultSortRadio = datePopover.querySelector('input[name="filter-date-sort"][value="desc"]');
+            if (defaultSortRadio) defaultSortRadio.checked = true;
+          }
+          if (datePopover) datePopover.style.display = 'none';
+          var btn = _qs('#btn-filter-date');
+          if (btn) btn.classList.remove('active');
+          _refreshTransactions();
+        });
+      }
+    })();
+
+    // Apply/Clear handlers for Description filter
+    (function () {
+      var descPopover = _qs('#popover-filter-desc');
+      var descKeywordInput = _qs('#filter-desc-keyword');
+      var descApplyBtn = _qs('#btn-filter-desc-apply');
+      var descClearBtn = _qs('#btn-filter-desc-clear');
+
+      if (descApplyBtn) {
+        descApplyBtn.addEventListener('click', function () {
+          _txTableState.description.keyword = descKeywordInput && descKeywordInput.value ? descKeywordInput.value : '';
+          if (descPopover) descPopover.style.display = 'none';
+          var btn = _qs('#btn-filter-desc');
+          if (btn) btn.classList.remove('active');
+          _refreshTransactions();
+        });
+      }
+      if (descClearBtn) {
+        descClearBtn.addEventListener('click', function () {
+          _txTableState.description.keyword = '';
+          if (descKeywordInput) descKeywordInput.value = '';
+          if (descPopover) descPopover.style.display = 'none';
+          var btn = _qs('#btn-filter-desc');
+          if (btn) btn.classList.remove('active');
+          _refreshTransactions();
+        });
+      }
+    })();
+
+    // Apply/Clear handlers for Category filter
+    (function () {
+      var catPopover = _qs('#popover-filter-cat');
+      var catApplyBtn = _qs('#btn-filter-cat-apply');
+      var catClearBtn = _qs('#btn-filter-cat-clear');
+
+      if (catApplyBtn) {
+        catApplyBtn.addEventListener('click', function () {
+          var checkboxes = catPopover && catPopover.querySelectorAll('input[type="checkbox"]:checked');
+          var selected = [];
+          if (checkboxes) {
+            checkboxes.forEach(function (cb) { selected.push(cb.value); });
+          }
+          _txTableState.category.selected = selected;
+          if (catPopover) catPopover.style.display = 'none';
+          var btn = _qs('#btn-filter-cat');
+          if (btn) btn.classList.remove('active');
+          _refreshTransactions();
+        });
+      }
+      if (catClearBtn) {
+        catClearBtn.addEventListener('click', function () {
+          _txTableState.category.selected = [];
+          if (catPopover) {
+            var checkboxes = catPopover.querySelectorAll('input[type="checkbox"]');
+            checkboxes.forEach(function (cb) { cb.checked = false; });
+          }
+          if (catPopover) catPopover.style.display = 'none';
+          var btn = _qs('#btn-filter-cat');
+          if (btn) btn.classList.remove('active');
+          _refreshTransactions();
+        });
+      }
+    })();
+
+    // Apply/Clear handlers for Amount filter
+    (function () {
+      var amtPopover = _qs('#popover-filter-amt');
+      var amtMinInput = _qs('#filter-amt-min');
+      var amtMaxInput = _qs('#filter-amt-max');
+      var amtApplyBtn = _qs('#btn-filter-amt-apply');
+      var amtClearBtn = _qs('#btn-filter-amt-clear');
+
+      if (amtApplyBtn) {
+        amtApplyBtn.addEventListener('click', function () {
+          var min = amtMinInput && amtMinInput.value ? parseInt(amtMinInput.value, 10) : null;
+          var max = amtMaxInput && amtMaxInput.value ? parseInt(amtMaxInput.value, 10) : null;
+          var sortRadio = amtPopover && amtPopover.querySelector('input[name="sort-amt"]:checked');
+          var sort = sortRadio ? sortRadio.value : null;
+
+          _txTableState.amount = { min: min, max: max, sort: sort };
+          if (amtPopover) amtPopover.style.display = 'none';
+          var btn = _qs('#btn-filter-amt');
+          if (btn) btn.classList.remove('active');
+          _refreshTransactions();
+        });
+      }
+      if (amtClearBtn) {
+        amtClearBtn.addEventListener('click', function () {
+          _txTableState.amount = { min: null, max: null, sort: null };
+          if (amtMinInput) amtMinInput.value = '';
+          if (amtMaxInput) amtMaxInput.value = '';
+          if (amtPopover) {
+            var defaultSortRadio = amtPopover.querySelector('input[name="sort-amt"][value="none"]');
+            if (defaultSortRadio) defaultSortRadio.checked = true;
+          }
+          if (amtPopover) amtPopover.style.display = 'none';
+          var btn = _qs('#btn-filter-amt');
+          if (btn) btn.classList.remove('active');
+          _refreshTransactions();
+        });
+      }
+    })();
+
+    // Close all popovers on outside click
+    document.addEventListener('click', function (e) {
+      var popovers = [
+        _qs('#popover-filter-date'),
+        _qs('#popover-filter-desc'),
+        _qs('#popover-filter-cat'),
+        _qs('#popover-filter-amt')
+      ];
+      var buttons = [
+        _qs('#btn-filter-date'),
+        _qs('#btn-filter-desc'),
+        _qs('#btn-filter-cat'),
+        _qs('#btn-filter-amt')
+      ];
+      popovers.forEach(function (p, i) {
+        if (p && p.style.display === 'flex' && !p.contains(e.target) && e.target !== buttons[i]) {
+          p.style.display = 'none';
+          if (buttons[i]) buttons[i].classList.remove('active');
+        }
+      });
     });
   }
 
@@ -2856,6 +4017,30 @@ function _restoreAIState() {
       html += '<option value="' + cat.id + '">' + _escHtml(cat.name) + '</option>';
     });
     select.innerHTML = html;
+  }
+
+  /** Populate category checkbox list for filter popover (uses ALL categories, not tab-dependent) */
+  function _populateCategoryFilterOptions() {
+    const container = _qs('#filter-cat-list');
+    if (!container) return;
+
+    // Combine income and expense categories for filtering
+    var allCats = INCOME_CATEGORIES.concat(EXPENSE_CATEGORIES);
+    var html = '';
+    allCats.forEach(function (cat) {
+      var isChecked = _txTableState.category.selected.indexOf(cat.id) !== -1;
+      html += '<label class="cf-category-item">';
+      html += '  <input type="checkbox" value="' + cat.id + '" class="cf-filter-cat-checkbox"' + (isChecked ? ' checked' : '') + ' />';
+      html += '  <span class="cf-category-label">' + _escHtml(cat.name) + '</span>';
+      html += '</label>';
+    });
+    container.innerHTML = html;
+  }
+
+  /** Close all filter popovers */
+  function _closeAllFilterPopovers() {
+    var popovers = _container ? _container.querySelectorAll('.hub-cf-filter-popover') : [];
+    popovers.forEach(function (p) { p.style.display = 'none'; });
   }
 
   function _switchTab(tab) {
@@ -3084,10 +4269,33 @@ function _restoreAIState() {
     var debt = _data.debts.find(function (d) { return d.id === debtId; });
     if (!debt) return;
 
+    // Confirm
     var confirmMsg = _pd_t('confirmMarkPaid')
       .replace('{name}', debt.debtorName)
       .replace('{amount}', _formatVND(debt.amount));
     if (!confirm(confirmMsg)) return;
+
+    // Store debtId for the recovery modal to use
+    window.currentDebtRecoveryId = debtId;
+
+    // Show the custom Debt Recovery modal
+    var overlay = _qs('#hub-cf-debt-recovery-overlay');
+    if (overlay) {
+      overlay.style.display = 'flex';
+      // Focus the select dropdown
+      setTimeout(function () {
+        var selectEl = _qs('#debt-recovery-source');
+        if (selectEl) selectEl.focus();
+      }, 150);
+    }
+  }
+
+  function _executeDebtRecovery(targetSource) {
+    var debtId = window.currentDebtRecoveryId;
+    if (!debtId) return;
+
+    var debt = _data.debts.find(function (d) { return d.id === debtId; });
+    if (!debt) return;
 
     debt.status = 'paid';
     debt.paidAt = Date.now();
@@ -3099,11 +4307,33 @@ function _restoreAIState() {
       .replace('{name}', debt.debtorName)
       .replace('{amount}', _formatVND(debt.amount)));
 
-    // Prompt to add to CashFlow income
-    var addToIncomeMsg = _pd_t('confirmAddToIncome');
-    if (confirm(addToIncomeMsg)) {
-      _addDebtCollectionToIncome(debt);
-    }
+    // Auto-generate recovery transaction with category "🤝 Thu nợ"
+    // This is an asset transfer, NOT revenue — excluded from global Income
+    var tx = {
+      id: _uid(),
+      type: 'income',
+      amount: Number(debt.amount),
+      year: new Date().getFullYear(),
+      month: new Date().getMonth() + 1,
+      day: new Date().getDate(),
+      desc: 'Thu nợ: ' + debt.debtorName + (debt.note ? ' - ' + debt.note : ''),
+      category: 'thu-no', // "🤝 Thu nợ" — excluded from global Income
+      source: targetSource,
+      createdAt: Date.now()
+    };
+
+    _data.transactions.push(tx);
+    _debouncedPersist();
+    _renderAllViews(); // Updates dashboard totals, ledger, chart
+    _updateChart();
+
+    var walletLabel = targetSource === 'cash' ? _pd_t('optionCash') : _pd_t('optionBank');
+    _showToast(_pd_t('toastRecoveryDone')
+      .replace('{amount}', _formatVND(debt.amount))
+      .replace('{wallet}', walletLabel));
+
+    // Clear the temp variable
+    window.currentDebtRecoveryId = null;
   }
 
   function _addDebtCollectionToIncome(debt) {
@@ -4324,6 +5554,36 @@ function _restoreAIState() {
       });
     }
 
+    // ═══ DEBT RECOVERY MODAL EVENTS ═══
+    // Modal close (Recovery modal)
+    var recoveryCloseBtn = _qs('#hub-cf-debt-recovery-modal-close');
+    if (recoveryCloseBtn) recoveryCloseBtn.addEventListener('click', _closeDebtRecoveryModal);
+
+    // Modal cancel (Recovery modal)
+    var recoveryCancelBtn = _qs('#hub-cf-debt-recovery-btn-cancel');
+    if (recoveryCancelBtn) recoveryCancelBtn.addEventListener('click', _closeDebtRecoveryModal);
+
+    // Overlay backdrop (Recovery modal)
+    var recoveryOverlay = _qs('#hub-cf-debt-recovery-overlay');
+    if (recoveryOverlay) {
+      recoveryOverlay.addEventListener('click', function (e) {
+        if (e.target === recoveryOverlay) _closeDebtRecoveryModal();
+      });
+    }
+
+    // Confirm button (Recovery modal) - reads selected source and executes recovery
+    var recoveryConfirmBtn = _qs('#hub-cf-debt-recovery-btn-confirm');
+    if (recoveryConfirmBtn) {
+      recoveryConfirmBtn.addEventListener('click', function () {
+        var selectEl = _qs('#debt-recovery-source');
+        if (selectEl) {
+          var targetSource = selectEl.value;
+          _executeDebtRecovery(targetSource);
+          _closeDebtRecoveryModal();
+        }
+      });
+    }
+
     // Event delegation for Paid History Modal delete buttons (static parent, bound once)
     _bindDebtHistoryModalDelegation();
   }
@@ -4353,6 +5613,22 @@ function _restoreAIState() {
       const titleEl = _qs('#hub-cf-debt-overlay .hub-cf-modal-title');
       if (titleEl) titleEl.textContent = _pd_t('modalTitle');
       overlay.setAttribute('aria-label', _pd_t('modalTitle'));
+    }
+  }
+
+  // ══════════════════════════════════════════
+  // DEBT RECOVERY MODAL LOGIC
+  // ══════════════════════════════════════════
+
+  function _closeDebtRecoveryModal() {
+    var overlay = _qs('#hub-cf-debt-recovery-overlay');
+    if (overlay) {
+      overlay.style.display = 'none';
+      // Reset select to default
+      var selectEl = _qs('#debt-recovery-source');
+      if (selectEl) selectEl.value = 'bank';
+      // Clear temp variable
+      window.currentDebtRecoveryId = null;
     }
   }
 

@@ -59,6 +59,7 @@
       toastDebtPaid:       '✅ Đã đánh dấu đã trả: {name} - {amount}',
       toastDebtDeleted:    '✅ Đã xóa khoản nợ: {name}',
       toastIncomeAdded:    '✅ Đã thêm vào Thu nhập: Thu nợ từ {name}',
+      toastRecoveryDone:   '✅ Đã thu nợ {amount} vào {wallet}',
 
       // Empty state
       noDebtsYet:          'Chưa có khoản nợ nào.',
@@ -67,7 +68,15 @@
       // History
       historyTitle:        'LỊCH SỬ ĐÃ TRẢ',
       toggleHistory:       'Xem lịch sử',
-      emptyHistory:        'Chưa có khoản nợ nào được trả.'
+      emptyHistory:        'Chưa có khoản nợ nào được trả.',
+
+      // Debt Recovery Modal
+      recoveryTitle:       'THU HỒI NỢ',
+      labelRecoverySource: 'Nguồn nhận tiền',
+      optionCash:          'Tiền mặt (Cash)',
+      optionBank:          'Chuyển khoản (Bank)',
+      hintRecoveryNoIncome: 'Tiền nợ sẽ được cộng vào ví bạn chọn. Loại này <strong>không tính vào Thu nhập</strong>.',
+      btnConfirm:          'Xác nhận'
     },
 
     en: {
@@ -111,13 +120,22 @@
       toastDebtPaid:       '✅ Marked paid: {name} - {amount}',
       toastDebtDeleted:    '✅ Deleted debt: {name}',
       toastIncomeAdded:    '✅ Added to Income: Debt collection from {name}',
+      toastRecoveryDone:   '✅ Recovered {amount} into {wallet}',
 
       noDebtsYet:          'No debts yet.',
       noDebtsHint:         'Click <strong>Add New Debt</strong> to start tracking.',
 
       historyTitle:        'PAID HISTORY',
       toggleHistory:       'View History',
-      emptyHistory:        'No paid debts yet.'
+      emptyHistory:        'No paid debts yet.',
+
+      // Debt Recovery Modal
+      recoveryTitle:       'DEBT RECOVERY',
+      labelRecoverySource: 'Destination Wallet',
+      optionCash:          'Cash (Physical)',
+      optionBank:          'Bank Transfer',
+      hintRecoveryNoIncome: 'Money will be added to selected wallet. This does <strong>not count as Income</strong>.',
+      btnConfirm:          'Confirm'
     }
   };
 
@@ -495,6 +513,15 @@
       .replace('{amount}', _formatVND(debt.amount));
     if (!confirm(confirmMsg)) return;
 
+    // Prompt for destination wallet
+    var walletChoice = prompt(
+      'Tiền nợ được trả vào ví nào?\nNhập 1: Tiền mặt (Cash)\nNhập 2: Chuyển khoản (Bank)',
+      '2'
+    );
+    if (walletChoice === null) return; // User cancelled
+
+    var targetSource = walletChoice === '1' ? 'cash' : 'bank';
+
     debt.status = 'paid';
     debt.paidAt = Date.now();
     _debouncedPersist();
@@ -505,11 +532,28 @@
       .replace('{name}', debt.debtorName)
       .replace('{amount}', _formatVND(debt.amount)));
 
-    // Prompt to add to CashFlow income
-    var addToIncomeMsg = _pd_t('confirmAddToIncome');
-    if (confirm(addToIncomeMsg)) {
-      _addDebtCollectionToIncome(debt);
-    }
+    // Auto-generate recovery transaction with category "🤝 Thu nợ"
+    // This is an asset transfer, NOT revenue — excluded from global Income
+    var tx = {
+      id: _uid(),
+      type: 'income',
+      amount: Number(debt.amount),
+      year: new Date().getFullYear(),
+      month: new Date().getMonth() + 1,
+      day: new Date().getDate(),
+      desc: 'Thu nợ: ' + debt.debtorName + (debt.note ? ' - ' + debt.note : ''),
+      category: 'thu-no', // "🤝 Thu nợ" — excluded from global Income
+      source: targetSource,
+      createdAt: Date.now()
+    };
+
+    _data.transactions.push(tx);
+    _debouncedPersist();
+    _renderAllViews(); // Updates dashboard totals, ledger, chart
+    _updateChart();
+
+    var walletLabel = targetSource === 'cash' ? 'Tiền mặt' : 'Chuyển khoản';
+    _showToast('✅ Đã thu nợ ' + _formatVND(debt.amount) + ' vào ' + walletLabel);
   }
 
   function _addDebtCollectionToIncome(debt) {

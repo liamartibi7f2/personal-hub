@@ -409,10 +409,10 @@ const HubDB = (function () {
   }
 
   /**
-   * ═══ DUAL-WRITE for metadata (netWorthOffset + savingsBalance + initBank + initCash) ═══
+   * ═══ DUAL-WRITE for metadata (netWorthOffset + savingsBalance + initBank + initCash + budgets) ═══
    * Same pattern: IndexedDB first, then Firestore.
    *
-   * @param {Object} meta — { netWorthOffset: number, savingsBalance: number, initBank: number, initCash: number }
+   * @param {Object} meta — { netWorthOffset: number, savingsBalance: number, initBank: number, initCash: number, budgets: object }
    */
   async function saveCashFlowMeta(meta) {
     // ── STEP 1: IndexedDB cache ──
@@ -427,7 +427,13 @@ const HubDB = (function () {
       try {
         await Promise.race([
           _cfMetaDocRef()
-            .set(meta, { merge: true })
+            .set({
+              netWorthOffset: Number(meta.netWorthOffset) || 0,
+              savingsBalance: Number(meta.savingsBalance) || 0,
+              initBank: Number(meta.initBank) || 0,
+              initCash: Number(meta.initCash) || 0,
+              budgets: meta.budgets || {}
+            }, { merge: true })
             .catch(function (err) {
               console.error('[HubDB] CashFlow Meta write failed:', err);
               throw err;
@@ -546,23 +552,30 @@ const HubDB = (function () {
   /**
    * ═══ SAFE LOAD for CashFlow metadata ═══
    *
-   * Load netWorthOffset + savingsBalance + initBank + initCash with the same tiered approach:
+   * Load netWorthOffset + savingsBalance + initBank + initCash + budgets with the same tiered approach:
    * Cloud → IndexedDB → localStorage → defaults.
    *
-   * @returns {Object} — { netWorthOffset: 0, savingsBalance: 0, initBank: 0, initCash: 0 }
+   * @returns {Object} — { netWorthOffset: 0, savingsBalance: 0, initBank: 0, initCash: 0, budgets: {} }
    */
   async function loadCashFlowMeta() {
-    var defaults = { netWorthOffset: 0, savingsBalance: 0, initBank: 0, initCash: 0 };
+    var defaults = { netWorthOffset: 0, savingsBalance: 0, initBank: 0, initCash: 0, budgets: {} };
 
     // STEP 1: Offline fast path — check IndexedDB first
     if (navigator.onLine === false) {
       try {
         var idbOffMeta = await _idb.loadCFMeta();
-        if (idbOffMeta && typeof idbOffMeta.netWorthOffset !== 'undefined') return idbOffMeta;
+        if (idbOffMeta && typeof idbOffMeta.netWorthOffset !== 'undefined') {
+          if (!idbOffMeta.budgets) idbOffMeta.budgets = {};
+          return idbOffMeta;
+        }
       } catch (_) {}
       try {
         var rawL = localStorage.getItem(CF_LOCAL_OFFSET);
-        if (rawL) return JSON.parse(rawL);
+        if (rawL) {
+          var parsed = JSON.parse(rawL);
+          if (!parsed.budgets) parsed.budgets = {};
+          return parsed;
+        }
       } catch (_) {}
       return defaults;
     }
@@ -584,7 +597,8 @@ const HubDB = (function () {
               netWorthOffset: Number(meta.netWorthOffset) || 0,
               savingsBalance: Number(meta.savingsBalance) || 0,
               initBank: Number(meta.initBank) || 0,
-              initCash: Number(meta.initCash) || 0
+              initCash: Number(meta.initCash) || 0,
+              budgets: meta.budgets || {}
             };
             await _idb.cacheCFMeta(resolved);
             localStorage.setItem(CF_LOCAL_OFFSET, JSON.stringify(resolved));
@@ -593,7 +607,8 @@ const HubDB = (function () {
             netWorthOffset: Number(meta.netWorthOffset) || 0,
             savingsBalance: Number(meta.savingsBalance) || 0,
             initBank: Number(meta.initBank) || 0,
-            initCash: Number(meta.initCash) || 0
+            initCash: Number(meta.initCash) || 0,
+            budgets: meta.budgets || {}
           };
         }
         return defaults;
@@ -605,13 +620,20 @@ const HubDB = (function () {
     // STEP 3: IndexedDB fallback
     try {
       var idbMeta = await _idb.loadCFMeta();
-      if (idbMeta && typeof idbMeta.netWorthOffset !== 'undefined') return idbMeta;
+      if (idbMeta && typeof idbMeta.netWorthOffset !== 'undefined') {
+        if (!idbMeta.budgets) idbMeta.budgets = {};
+        return idbMeta;
+      }
     } catch (_) {}
 
     // STEP 4: localStorage
     try {
       var raw = localStorage.getItem(CF_LOCAL_OFFSET);
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (!parsed.budgets) parsed.budgets = {};
+        return parsed;
+      }
     } catch (_) {}
     return defaults;
   }
