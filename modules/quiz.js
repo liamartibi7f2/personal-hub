@@ -872,33 +872,74 @@ D. Local Councils`;
           </div>
         </div>
 
-        <!-- Shuffle Options Container -->
+        <!-- Shuffle Options Container — Bulletproof Layout -->
         <div class="mode-shuffle-container glass-card">
           <div class="mode-shuffle-row">
             <div class="mode-shuffle-info">
-              <span class="mode-shuffle-icon">🔀</span>
-              <div>
+              <span class="mode-shuffle-icon" aria-hidden="true">🔀</span>
+              <div class="mode-shuffle-text">
                 <span class="mode-shuffle-label">Shuffle Questions</span>
                 <span class="mode-shuffle-hint">Randomize question order</span>
               </div>
             </div>
             <label class="toggle-switch" title="Toggle shuffle questions">
               <input type="checkbox" id="hub-toggle-shuffle-qs" ${_shuffle ? 'checked' : ''}>
-              <span class="toggle-slider"></span>
+              <span class="toggle-track">
+                <span class="toggle-thumb"></span>
+              </span>
             </label>
           </div>
+
           <div class="mode-shuffle-row">
             <div class="mode-shuffle-info">
-              <span class="mode-shuffle-icon">🔀</span>
-              <div>
+              <span class="mode-shuffle-icon" aria-hidden="true">🔀</span>
+              <div class="mode-shuffle-text">
                 <span class="mode-shuffle-label">Shuffle Answers</span>
                 <span class="mode-shuffle-hint">Randomize A, B, C, D options</span>
               </div>
             </div>
             <label class="toggle-switch" title="Toggle shuffle answers">
               <input type="checkbox" id="hub-toggle-shuffle-ans" ${_shuffleAnswers ? 'checked' : ''}>
-              <span class="toggle-slider"></span>
+              <span class="toggle-track">
+                <span class="toggle-thumb"></span>
+              </span>
             </label>
+          </div>
+
+          <!-- Custom Study Range — Compact Unified Pill -->
+          <div class="mode-shuffle-row mode-range-row">
+            <div class="mode-shuffle-info">
+              <span class="mode-shuffle-icon" aria-hidden="true">📍</span>
+              <div class="mode-shuffle-text">
+                <span class="mode-shuffle-label">Custom Study Range</span>
+                <span class="mode-shuffle-hint">Study specific questions by global index (1-${totalQuestions})</span>
+              </div>
+            </div>
+            <div class="mode-range-pill" id="mode-range-pill">
+              <input
+                type="number"
+                id="range-start-input"
+                class="mode-range-input"
+                placeholder="1"
+                min="1"
+                max="${totalQuestions}"
+                step="1"
+                inputmode="numeric"
+                aria-label="Start question number"
+              >
+              <span class="mode-range-separator" aria-hidden="true">to</span>
+              <input
+                type="number"
+                id="range-end-input"
+                class="mode-range-input"
+                placeholder="${totalQuestions}"
+                min="1"
+                max="${totalQuestions}"
+                step="1"
+                inputmode="numeric"
+                aria-label="End question number"
+              >
+            </div>
           </div>
         </div>
       </div>
@@ -907,6 +948,45 @@ D. Local Councils`;
     // Back button
     const btnBack = _container.querySelector('#btn-back-from-select');
     if (btnBack) btnBack.addEventListener('click', () => { _mode = 'library'; _currentDeck = null; _renderApp(); });
+
+    // Validation helper for custom range
+    function _validateAndGetRange() {
+      const startInput = _container.querySelector('#range-start-input');
+      const endInput = _container.querySelector('#range-end-input');
+
+      const startVal = startInput ? startInput.value.trim() : '';
+      const endVal = endInput ? endInput.value.trim() : '';
+
+      // Empty = use full range
+      if (!startVal && !endVal) {
+        return { valid: true, start: 1, end: totalQuestions };
+      }
+
+      const start = parseInt(startVal, 10);
+      const end = parseInt(endVal, 10);
+
+      if (isNaN(start) || isNaN(end)) {
+        alert('Please enter valid numbers for both Start and End, or leave both blank.');
+        return { valid: false };
+      }
+
+      if (start < 1 || start > totalQuestions) {
+        alert('Start question must be between 1 and ' + totalQuestions + '.');
+        return { valid: false };
+      }
+
+      if (end < 1 || end > totalQuestions) {
+        alert('End question must be between 1 and ' + totalQuestions + '.');
+        return { valid: false };
+      }
+
+      if (start > end) {
+        alert('Start question cannot be greater than End question.');
+        return { valid: false };
+      }
+
+      return { valid: true, start, end };
+    }
 
     // Practice mode buttons
     const btnStartPractice = _container.querySelector('#btn-start-practice');
@@ -918,6 +998,15 @@ D. Local Councils`;
         const shuffleAns = _container.querySelector('#hub-toggle-shuffle-ans');
         _shuffle = shuffleQs ? shuffleQs.checked : false;
         _shuffleAnswers = shuffleAns ? shuffleAns.checked : false;
+
+        // Validate custom range
+        const range = _validateAndGetRange();
+        if (!range.valid) return;
+
+        // Apply range slicing BEFORE shuffle
+        if (range.start !== 1 || range.end !== totalQuestions) {
+          _quizData = _sliceQuizData(range.start, range.end);
+        }
 
         if (hasProgress && progressData) {
           // Resume from saved progress
@@ -941,6 +1030,16 @@ D. Local Councils`;
         const shuffleAns = _container.querySelector('#hub-toggle-shuffle-ans');
         _shuffle = shuffleQs ? shuffleQs.checked : false;
         _shuffleAnswers = shuffleAns ? shuffleAns.checked : false;
+
+        // Validate custom range
+        const range = _validateAndGetRange();
+        if (!range.valid) return;
+
+        // Apply range slicing BEFORE shuffle
+        if (range.start !== 1 || range.end !== totalQuestions) {
+          _quizData = _sliceQuizData(range.start, range.end);
+        }
+
         if (_shuffle || _shuffleAnswers) {
           _shuffleQuizData();
         }
@@ -956,6 +1055,15 @@ D. Local Councils`;
         const shuffleAns = _container.querySelector('#hub-toggle-shuffle-ans');
         _shuffle = shuffleQs ? shuffleQs.checked : false;
         _shuffleAnswers = shuffleAns ? shuffleAns.checked : false;
+
+        // Validate custom range
+        const range = _validateAndGetRange();
+        if (!range.valid) return;
+
+        // Apply range slicing BEFORE shuffle
+        if (range.start !== 1 || range.end !== totalQuestions) {
+          _quizData = _sliceQuizData(range.start, range.end);
+        }
 
         if (_shuffle || _shuffleAnswers) {
           _shuffleQuizData();
@@ -1018,6 +1126,60 @@ D. Local Councils`;
 
     // Cache the shuffled questions for progress saving
     _shuffledQuestionsCache = _quizData.sections;
+  }
+
+  /**
+   * Slice quiz data to only include questions within the specified global range.
+   * Preserves section boundaries and re-numbers questions within each section.
+   * @param {number} startPos - 1-based global start position (inclusive)
+   * @param {number} endPos - 1-based global end position (inclusive)
+   * @returns {Object} New quizData object with sliced sections
+   */
+  function _sliceQuizData(startPos, endPos) {
+    if (!_quizData) return _quizData;
+
+    // Convert to 0-based indices
+    const start = Math.max(0, startPos - 1);
+    const end = Math.min(_quizData.sections.reduce((sum, s) => sum + s.questions.length, 0) - 1, endPos - 1);
+
+    if (start > end) return _quizData;
+
+    // Flatten all questions with their section info
+    const allQuestions = [];
+    _quizData.sections.forEach((section, sectionIdx) => {
+      section.questions.forEach((question, questionIdx) => {
+        allQuestions.push({
+          sectionIdx,
+          sectionTitle: section.title,
+          questionIdx,
+          question
+        });
+      });
+    });
+
+    // Slice the range
+    const slicedQuestions = allQuestions.slice(start, end + 1);
+
+    // Group back by section
+    const sectionMap = new Map();
+    slicedQuestions.forEach(item => {
+      if (!sectionMap.has(item.sectionIdx)) {
+        sectionMap.set(item.sectionIdx, {
+          title: item.sectionTitle,
+          questions: []
+        });
+      }
+      sectionMap.get(item.sectionIdx).questions.push(item.question);
+    });
+
+    // Rebuild sections array in original order
+    const newSections = [];
+    const originalSectionIndices = Array.from(sectionMap.keys()).sort((a, b) => a - b);
+    originalSectionIndices.forEach(sectionIdx => {
+      newSections.push(sectionMap.get(sectionIdx));
+    });
+
+    return { sections: newSections };
   }
 
   function _startPlaySession() {

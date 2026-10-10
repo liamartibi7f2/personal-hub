@@ -5102,69 +5102,37 @@ ul, ol { list-style: none; }
   text-align: center;
 }
 
-/* Shuffle toggle row */
-.mode-shuffle-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-md) var(--space-lg) !important;
-  border-radius: var(--radius-md) !important;
-}
-.mode-shuffle-info {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-}
-.mode-shuffle-icon {
-  font-size: 1.3rem;
-  flex-shrink: 0;
-}
-.mode-shuffle-label {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  letter-spacing: 0.03em;
-}
-.mode-shuffle-hint {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
-  color: var(--text-muted);
-  letter-spacing: 0.05em;
-  margin-top: 1px;
-}
-
-/* ----------------------------------------------------------
-   MODE SHUFFLE CONTAINER — Two independent toggle rows
-   ---------------------------------------------------------- */
+/* ==========================================================
+   MODE SHUFFLE CONTAINER — Unified Premium Layout
+   ========================================================== */
 .mode-shuffle-container {
   margin-top: var(--space-lg);
-  padding: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
   border: 1px solid var(--border-color);
   background: var(--bg-elevated);
   border-radius: var(--radius-lg);
+  backdrop-filter: var(--glass-blur, blur(16px));
+  -webkit-backdrop-filter: var(--glass-blur, blur(16px));
 }
 
+/* Unified row layout: Left info | Right control */
 .mode-shuffle-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-md);
   padding: var(--space-sm) 0;
+  min-height: 48px; /* Ensures vertical alignment parity across rows */
 }
 
-.mode-shuffle-row:first-child {
+/* Row dividers */
+.mode-shuffle-row:not(:last-child) {
   border-bottom: 1px solid var(--border-color);
+  margin-bottom: var(--space-sm);
   padding-bottom: var(--space-md);
-  margin-bottom: var(--space-xs);
 }
 
-.mode-shuffle-row:last-child {
-  padding-top: var(--space-xs);
-}
-
+/* Left side: Icon + Text stack */
 .mode-shuffle-info {
   display: flex;
   align-items: center;
@@ -5174,18 +5142,30 @@ ul, ol { list-style: none; }
 }
 
 .mode-shuffle-icon {
-  font-size: 1.25rem;
+  font-size: 1.35rem;
   line-height: 1;
   flex-shrink: 0;
+  width: 36px;
+  text-align: center;
+}
+
+.mode-shuffle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .mode-shuffle-label {
   display: block;
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-primary);
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .mode-shuffle-hint {
@@ -5193,19 +5173,27 @@ ul, ol { list-style: none; }
   font-family: var(--font-mono);
   font-size: 0.62rem;
   color: var(--text-muted);
-  letter-spacing: 0.05em;
-  margin-top: 1px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* ----------------------------------------------------------
-   TOGGLE SWITCH — Theme-synced checkbox slider
-   ---------------------------------------------------------- */
+/* Right side: Unified control alignment */
+.mode-shuffle-row > :last-child {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* ==========================================================
+   TOGGLE SWITCH — Refined
+   ========================================================== */
 .toggle-switch {
   position: relative;
   display: inline-flex;
   align-items: center;
-  width: 48px;
-  height: 28px;
+  width: 52px;
+  height: 30px;
   flex-shrink: 0;
 }
 
@@ -5218,45 +5206,321 @@ ul, ol { list-style: none; }
 
 .toggle-slider {
   position: absolute;
+  inset: 0;
   cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
-  transition: background-color var(--duration-fast) var(--ease-out-expo),
-              border-color var(--duration-fast) var(--ease-out-expo),
-              box-shadow var(--duration-fast) var(--ease-out-expo);
-  border-radius: 28px;
+  transition:
+    background-color var(--duration-fast) var(--ease-out-expo),
+    border-color var(--duration-fast) var(--ease-out-expo),
+    box-shadow var(--duration-fast) var(--ease-out-expo);
+  border-radius: 9999px;
 }
 
 .toggle-slider::before {
   position: absolute;
   content: "";
-  height: 20px;
-  width: 20px;
+  height: 22px;
+  width: 22px;
   left: 3px;
-  bottom: 3px;
+  top: 50%;
+  transform: translateY(-50%);
   background-color: var(--text-primary);
-  transition: transform var(--duration-fast) var(--ease-out-expo),
-              background-color var(--duration-fast) var(--ease-out-expo);
+  transition:
+    transform var(--duration-fast) var(--ease-out-expo),
+    background-color var(--duration-fast) var(--ease-out-expo);
   border-radius: 50%;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
 }
 
 .toggle-switch input:checked + .toggle-slider {
   background-color: var(--accent-primary);
   border-color: var(--accent-primary);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent-primary) 40%, transparent);
 }
 
 .toggle-switch input:checked + .toggle-slider::before {
-  transform: translateX(20px);
+  transform: translateY(-50%) translateX(22px);
   background-color: var(--bg-surface);
 }
 
 .toggle-switch input:focus-visible + .toggle-slider {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-primary) 30%, transparent);
+}
+
+/* ==========================================================
+   CUSTOM STUDY RANGE — Premium Number Inputs
+   ========================================================== */
+.mode-range-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+}
+
+.mode-range-field {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 96px;
+}
+
+.mode-range-field-label {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+/* Premium Number Input — Theme-adaptive, glassmorphism */
+.mode-range-input {
+  width: 100%;
+  min-width: 96px;
+  padding: 10px 12px;
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 500;
+  text-align: center;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--bg-surface) 85%, transparent);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition:
+    border-color var(--duration-fast) var(--ease-out-expo),
+    box-shadow var(--duration-fast) var(--ease-out-expo),
+    background-color var(--duration-fast) var(--ease-out-expo);
+}
+
+/* Hide browser spin buttons — cross-browser */
+.mode-range-input::-webkit-outer-spin-button,
+.mode-range-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.mode-range-input {
+  -moz-appearance: textfield;
+}
+
+/* Placeholder styling */
+.mode-range-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.5;
+  font-weight: 400;
+}
+
+/* Focus State — Neon glow using theme's primary accent */
+.mode-range-input:focus {
+  border-color: var(--accent-primary);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--accent-primary) 20%, transparent),
+    0 0 16px color-mix(in srgb, var(--accent-primary) 15%, transparent);
+  background: var(--bg-surface);
+}
+
+/* Separator — subtle, theme-adaptive */
+.mode-range-separator {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+  padding-bottom: 2px; /* Aligns with input text baseline */
+}
+
+/* Theme-optimized override (performance mode) */
+body.theme-optimized .mode-shuffle-container {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+
+body.theme-optimized .mode-range-input {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  box-shadow: none;
+}
+
+body.theme-optimized .mode-range-input:focus {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 30%, transparent);
+}
+
+/* ==========================================================
+   TOGGLE SWITCH — Bulletproof, Theme-Synced, Flex-Centered
+   ========================================================== */
+.toggle-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 52px;
+  height: 28px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+/* Track: Flex container to perfectly center the thumb vertically */
+.toggle-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 2px;
+  background: var(--glass-bg, rgba(18, 18, 30, 0.65));
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.08));
+  border-radius: 9999px;
+  transition:
+    background-color var(--duration-fast) var(--ease-out-expo),
+    border-color var(--duration-fast) var(--ease-out-expo),
+    box-shadow var(--duration-fast) var(--ease-out-expo);
+}
+
+/* Thumb: Centered via Flexbox on .toggle-track — no pixel hacks */
+.toggle-thumb {
+  display: block;
+  width: 22px;
+  height: 22px;
+  background: var(--text-primary);
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  transition:
+    transform var(--duration-fast) var(--ease-out-expo),
+    background-color var(--duration-fast) var(--ease-out-expo);
+  flex-shrink: 0;
+}
+
+/* Unchecked → thumb starts at left (flex-start) */
+.toggle-switch input:not(:checked) + .toggle-track {
+  justify-content: flex-start;
+}
+
+/* Checked → thumb moves to right (flex-end) + accent background */
+.toggle-switch input:checked + .toggle-track {
+  justify-content: flex-end;
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent-primary) 40%, transparent);
+}
+
+.toggle-switch input:checked + .toggle-track .toggle-thumb {
+  background: var(--bg-surface);
+}
+
+/* Focus ring on the track */
+.toggle-switch input:focus-visible + .toggle-track {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-primary) 30%, transparent);
+}
+
+/* ==========================================================
+   CUSTOM STUDY RANGE — Compact Unified Pill
+   ========================================================== */
+.mode-range-pill {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 28px;
+  padding: 0 4px;
+  background: var(--glass-bg, rgba(18, 18, 30, 0.65));
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.08));
+  border-radius: 9999px;
+  backdrop-filter: var(--glass-blur, blur(16px));
+  -webkit-backdrop-filter: var(--glass-blur, blur(16px));
+  transition:
+    border-color var(--duration-fast) var(--ease-out-expo),
+    box-shadow var(--duration-fast) var(--ease-out-expo),
+    background-color var(--duration-fast) var(--ease-out-expo);
+}
+
+/* Focus on ANY input inside → entire pill glows */
+.mode-range-pill:focus-within {
+  border-color: var(--accent-primary);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--accent-primary) 20%, transparent),
+    0 0 16px color-mix(in srgb, var(--accent-primary) 15%, transparent);
+  background: var(--bg-surface);
+}
+
+/* Inputs inside pill: no border, no radius, transparent bg, inherit height */
+.mode-range-input {
+  flex: 0 0 72px;
+  min-width: 72px;
+  height: 100%;
+  padding: 0 8px;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-align: center;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  outline: none;
+}
+
+/* Hide spin buttons */
+.mode-range-input::-webkit-outer-spin-button,
+.mode-range-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.mode-range-input {
+  -moz-appearance: textfield;
+}
+
+.mode-range-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.5;
+  font-weight: 400;
+}
+
+/* Separator inside pill */
+.mode-range-separator {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 6px;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+
+/* Theme-optimized override (performance mode) */
+body.theme-optimized .mode-shuffle-container {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+
+body.theme-optimized .toggle-track {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+}
+
+body.theme-optimized .mode-range-pill {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+body.theme-optimized .mode-range-pill:focus-within,
+body.theme-optimized .toggle-switch input:focus-visible + .toggle-track {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 30%, transparent);
 }
 
 /* ----------------------------------------------------------

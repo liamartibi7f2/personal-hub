@@ -728,6 +728,80 @@ const cashflowModule = (function () {
     if (el) el.innerHTML = html;
   }
 
+  /* ──────────────────────────────────────────────
+     _enableKeyboardNavigation(formSelector)
+     - Keyboard jumping (Enter, Arrows)
+     - Shift+S Quick Save
+     - Bulletproof Vietnamese IME Guard
+     ────────────────────────────────────────────── */
+  function _enableKeyboardNavigation(formSelector) {
+    var form = _qs(formSelector);
+    if (!form) return;
+
+    // Feature: Shift + S to Quick Save
+    if (!form.dataset.shortcutBound) {
+      form.dataset.shortcutBound = "true";
+      form.addEventListener('keydown', function(e) {
+        if (e.shiftKey && e.key.toLowerCase() === 's') {
+          e.preventDefault();
+          var saveBtn = form.querySelector('button.widget-btn-green, button#btn-save-tx, button[type="submit"]');
+          if (saveBtn) saveBtn.click();
+        }
+      });
+    }
+
+    var focusable = Array.from(form.querySelectorAll('input, select, button.widget-btn-green, button#btn-save-tx'));
+    if (focusable.length === 0) return;
+
+    focusable.forEach(function(el, index) {
+      if (el.dataset.kbnavBound) return;
+      el.dataset.kbnavBound = "true";
+
+      el.addEventListener('keydown', function(e) {
+        var isSelect = el.tagName.toLowerCase() === 'select';
+        var isDate = el.type === 'date';
+        var isNumberType = el.type === 'number';
+
+        // 1. BRUTE FORCE: Stop native number stepping BEFORE IME checks
+        if (isNumberType && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+          e.preventDefault();
+          // Fallback for strict IMEs that bypass preventDefault
+          el.blur();
+          el.focus();
+        }
+
+        // 2. VIETNAMESE IME GUARD (Input Method Editor)
+        // If the user is currently composing a Vietnamese word (e.g. typing 'a' then 's' for 'á'),
+        // or the browser reports keyCode 229 (Processing), DO NOT jump focus. Let them finish typing.
+        if (e.isComposing || e.keyCode === 229) {
+          return;
+        }
+
+        // 3. ENTER KEY: Jump next or submit
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (el.tagName.toLowerCase() === 'button') {
+            el.click();
+          } else if (index < focusable.length - 1) {
+            focusable[index + 1].focus();
+          }
+        }
+
+        // 4. ARROW DOWN: Jump next
+        if (e.key === 'ArrowDown' && !isSelect && !isDate) {
+          e.preventDefault();
+          if (index < focusable.length - 1) focusable[index + 1].focus();
+        }
+
+        // 5. ARROW UP: Jump previous
+        if (e.key === 'ArrowUp' && !isSelect && !isDate) {
+          e.preventDefault();
+          if (index > 0) focusable[index - 1].focus();
+        }
+      });
+    });
+  }
+
   // ============================================================
   //   FORMATTING
   // ============================================================
@@ -1063,7 +1137,6 @@ const cashflowModule = (function () {
 // ============================================================
 
 function _restoreAIState() {
-  const responseEl = _qs('#cf-ai-response');
   const providerSelect = _qs('#cf-ai-provider');
   const promptInput = _qs('#cf-ai-prompt');
   const askBtn = _qs('#cf-ai-ask-btn');
@@ -1074,47 +1147,34 @@ function _restoreAIState() {
     // Don't add listener here — _bindEvents will handle it
   }
 
+  // Always render chat history from persistent state
+  _renderChatHistory();
+
+  // Generate proactive insight
+  _generateAIInsight();
+
   if (_aiState.isLoading && _aiState.abortController) {
-    // Request still in flight — restore loading UI
-    if (responseEl) {
-      responseEl.classList.add('loading');
-      responseEl.textContent = 'Đang phân tích... (tiếp tục ở nền)';
-    }
+    // Request still in flight — show loading bubble
+    _showAILoading('Đang phân tích... (tiếp tục ở nền)');
     if (promptInput) promptInput.disabled = true;
     if (askBtn) {
       askBtn.disabled = true;
-      askBtn.textContent = 'Đang hỏi...';
-    }
-  } else if (_aiState.currentResponse) {
-    // Has cached response — restore it
-    if (responseEl) {
-      _renderAIResponse(_aiState.currentResponse);
-    }
-    // Re-enable input
-    if (promptInput) promptInput.disabled = false;
-    if (askBtn) {
-      askBtn.disabled = false;
-      askBtn.textContent = 'Hỏi';
+      askBtn.innerHTML = '<span class="loading-spinner" style="width:20px;height:20px;border:2.5px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin 1s linear infinite;display:inline-block;"></span>';
     }
   } else if (_aiState.lastError) {
-    // Has cached error — restore error UI
-    if (responseEl) {
-      _showAIError(_aiState.lastError);
-    }
+    // Has cached error — show error bubble
+    _showAIError(_aiState.lastError);
     if (promptInput) promptInput.disabled = false;
     if (askBtn) {
       askBtn.disabled = false;
-      askBtn.textContent = 'Hỏi';
+      askBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>';
     }
   } else {
-    // Default state
-    if (responseEl) {
-      responseEl.textContent = 'AI Advisor is ready. Ask me about your spending...';
-    }
+    // Default state - UI ready
     if (promptInput) promptInput.disabled = false;
     if (askBtn) {
       askBtn.disabled = false;
-      askBtn.textContent = 'Hỏi';
+      askBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>';
     }
   }
 }
@@ -2007,6 +2067,296 @@ function _restoreAIState() {
   left: 0 !important;
   right: auto !important;
 }
+
+/* ============================================================
+   AI COPILOT — Glassmorphism Chat Interface (Modern FinTech)
+   ============================================================ */
+
+.hub-cf-ai-advisor {
+  display: flex;
+  flex-direction: column;
+  height: 520px;
+  gap: 16px;
+  position: relative;
+  background: linear-gradient(180deg,
+    rgba(255,255,255,0.02) 0%,
+    transparent 50%,
+    rgba(255,255,255,0.01) 100%);
+  border-radius: 16px;
+  padding: 16px;
+}
+
+/* Proactive Insight Banner */
+.cf-ai-insight-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--primary, #00e676) 12%, transparent) 0%,
+    color-mix(in srgb, var(--primary, #00e676) 4%, transparent) 100%);
+  border: 1px solid color-mix(in srgb, var(--primary, #00e676) 25%, transparent);
+  border-left: 3px solid var(--primary, #00e676);
+  border-radius: 12px;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  animation: slideDown 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow:
+    0 4px 20px rgba(0, 230, 118, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.cf-ai-insight-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+  margin-top: 2px;
+  filter: drop-shadow(0 2px 4px rgba(0, 230, 118, 0.3));
+}
+.cf-ai-insight-text {
+  flex: 1;
+  line-height: 1.5;
+}
+.cf-ai-insight-text strong {
+  color: var(--primary, #00e676);
+  font-weight: 600;
+}
+
+/* Chat History Area */
+.cf-ai-chat-history {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px 4px 16px;
+  scroll-behavior: smooth;
+}
+.cf-ai-chat-history::-webkit-scrollbar { width: 4px; }
+.cf-ai-chat-history::-webkit-scrollbar-track { background: transparent; }
+.cf-ai-chat-history::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--primary, #00e676), rgba(0, 230, 118, 0.4));
+  border-radius: 4px;
+  border: none;
+}
+
+/* Glassmorphism Chat Bubbles */
+.cf-ai-bubble {
+  display: flex;
+  gap: 10px;
+  max-width: 85%;
+  animation: fadeInUp 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+.cf-ai-bubble--user {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+.cf-ai-bubble--system {
+  align-self: flex-start;
+}
+.cf-ai-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg,
+    rgba(255,255,255,0.08) 0%,
+    rgba(255,255,255,0.02) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 1.1rem;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+.cf-ai-bubble--user .cf-ai-avatar {
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--primary, #00e676) 25%, transparent) 0%,
+    color-mix(in srgb, var(--primary, #00e676) 10%, transparent) 100%);
+  border-color: color-mix(in srgb, var(--primary, #00e676) 40%, transparent);
+}
+.cf-ai-msg {
+  padding: 14px 18px;
+  border-radius: 16px;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+  position: relative;
+  word-wrap: break-word;
+}
+.cf-ai-bubble--system .cf-ai-msg {
+  background: linear-gradient(135deg,
+    rgba(0, 0, 0, 0.5) 0%,
+    rgba(20, 20, 20, 0.6) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-top-left-radius: 6px;
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+.cf-ai-bubble--user .cf-ai-msg {
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--primary, #00e676) 22%, transparent) 0%,
+    color-mix(in srgb, var(--primary, #00e676) 10%, transparent) 100%);
+  border: 1px solid color-mix(in srgb, var(--primary, #00e676) 35%, transparent);
+  border-top-right-radius: 6px;
+  box-shadow:
+    0 4px 20px rgba(0, 230, 118, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* Input Section & Quick Prompt Chips */
+.cf-ai-input-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cf-ai-quick-prompts {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scroll-snap-type: x proximity;
+}
+.cf-ai-quick-prompts::-webkit-scrollbar { display: none; }
+.cf-ai-chip {
+  background: linear-gradient(135deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0.02) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  scroll-snap-align: start;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.cf-ai-chip:hover {
+  background: linear-gradient(135deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0.05) 100%);
+  border-color: var(--primary, #00e676);
+  color: var(--primary, #00e676);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 230, 118, 0.2);
+}
+.cf-ai-chip:active {
+  transform: translateY(0) scale(0.98);
+}
+.cf-ai-input-wrapper {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.cf-ai-main-input {
+  flex: 1;
+  background: linear-gradient(135deg,
+    rgba(0, 0, 0, 0.5) 0%,
+    rgba(20, 20, 20, 0.6) 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 24px !important;
+  padding: 14px 20px !important;
+  font-size: 0.9rem !important;
+  color: var(--text-primary) !important;
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.cf-ai-main-input:focus {
+  outline: none !important;
+  border-color: var(--primary, #00e676) !important;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--primary, #00e676) 25%, transparent),
+    0 8px 30px rgba(0, 230, 118, 0.1) !important;
+}
+.cf-ai-main-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+.cf-ai-send-btn {
+  border-radius: 50% !important;
+  width: 48px;
+  height: 48px;
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--primary, #00e676) 0%, #00c85a 100%) !important;
+  border: none !important;
+  color: #0d1117 !important;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  box-shadow:
+    0 4px 16px rgba(0, 230, 118, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+.cf-ai-send-btn:hover {
+  transform: scale(1.05);
+  box-shadow:
+    0 6px 24px rgba(0, 230, 118, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.cf-ai-send-btn:active {
+  transform: scale(0.96);
+}
+.cf-ai-send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Animations */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .cf-ai-bubble { max-width: 92%; }
+  .hub-cf-ai-advisor { height: 480px; padding: 12px; }
+  .cf-ai-msg { padding: 12px 14px; font-size: 0.85rem; }
+  .cf-ai-main-input { padding: 12px 16px !important; font-size: 0.85rem !important; }
+  .cf-ai-send-btn { width: 44px; height: 44px; }
+}
+
+/* Settings button hover */
+.hub-cf-ai-settings-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--primary, #00e676);
+  color: var(--primary, #00e676);
+  transform: rotate(30deg) scale(1.05);
+}
+.hub-cf-ai-settings-btn:active {
+  transform: rotate(30deg) scale(0.95);
+}
+
+/* Provider select styling */
+.hub-cf-ai-select:hover {
+  border-color: var(--primary, #00e676) !important;
+}
+.hub-cf-ai-select:focus {
+  outline: none !important;
+  border-color: var(--primary, #00e676) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary, #00e676) 25%, transparent);
+}
 `;
         document.head.appendChild(styleEl);
       }
@@ -2335,20 +2685,51 @@ function _restoreAIState() {
   </div>
 </div>
 
-<!-- ═══ AI FINANCIAL ADVISOR ═══ -->
-<div class="hub-cf-ai-advisor glass-card">
-  <div class="hub-cf-ai-header">
-    <h4 class="hub-cf-ai-title">🤖 AI Financial Advisor</h4>
-    <select id="cf-ai-provider" class="hub-cf-ai-select">
-      <option value="gemini">Gemini 3.7 Flash</option>
-      <option value="nvidia">Nvidia Nemotron 3 Ultra</option>
-    </select>
-    <button id="cf-ai-settings-btn" class="hub-cf-ai-settings-btn" title="Cài đặt API Key" aria-label="Cài đặt API Key">⚙️</button>
+<!-- ═══ AI FINANCIAL ADVISOR — PROACTIVE WEALTH COPILOT ═══ -->
+<div class="hub-cf-ai-advisor">
+  <div class="hub-cf-ai-header" style="display: flex; align-items: center; justify-content: space-between; padding: 0 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.06); margin-bottom: 8px;">
+    <h4 class="hub-cf-ai-title" style="font-size: 1.05rem; font-weight: 600; background: linear-gradient(135deg, var(--text-primary) 0%, var(--primary, #00e676) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">🤖 Trợ lý Tài chính AI</h4>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <select id="cf-ai-provider" class="hub-cf-ai-select" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 6px 12px; font-size: 0.75rem; color: var(--text-primary); cursor: pointer; appearance: none; background-image: url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"%23888\" stroke-width=\"2\"><polyline points=\"6 9 12 15 18 9\"></polyline></svg>'); background-repeat: no-repeat; background-position: right 8px center; padding-right: 32px;">
+        <option value="gemini">Gemini 3.7 Flash</option>
+        <option value="nvidia">Nvidia Nemotron 3 Ultra</option>
+      </select>
+      <button id="cf-ai-settings-btn" class="hub-cf-ai-settings-btn" title="Cài đặt API Key" aria-label="Cài đặt API Key" style="width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94); font-size: 1rem;">⚙️</button>
+    </div>
   </div>
-  <div id="cf-ai-response" class="cf-ai-response-box">AI Advisor is ready. Ask me about your spending...</div>
-  <div class="hub-cf-ai-input-row">
-    <input type="text" id="cf-ai-prompt" class="hub-cf-ai-input" placeholder="Hỏi về chi tiêu tháng này (VD: Tiền ăn hết bao nhiêu?)..." autocomplete="off" data-lpignore="true" data-form-type="other">
-    <button id="cf-ai-ask-btn" class="hub-cf-ai-btn">Hỏi</button>
+
+  <!-- Proactive Insight Banner -->
+  <div class="cf-ai-insight-banner" id="cf-ai-insight-banner" style="display: flex;">
+    <span class="cf-ai-insight-icon">💡</span>
+    <div class="cf-ai-insight-text">
+      <strong>Quick Insight:</strong> <span id="cf-ai-insight-message">Đang phân tích dữ liệu chi tiêu tháng này...</span>
+    </div>
+  </div>
+
+  <!-- Chat History Area -->
+  <div class="cf-ai-chat-history" id="hub-cf-ai-output">
+    <div class="cf-ai-bubble cf-ai-bubble--system">
+      <div class="cf-ai-avatar">🤖</div>
+      <div class="cf-ai-msg">Xin chào Commander. Tôi là Trợ lý Tài chính AI. Bạn muốn phân tích điều gì hôm nay?</div>
+    </div>
+  </div>
+
+  <!-- Quick Prompts & Input Area -->
+  <div class="cf-ai-input-section">
+    <div class="cf-ai-quick-prompts" id="cf-ai-quick-prompts">
+      <button class="cf-ai-chip" data-prompt="Tóm tắt thu chi tháng này">💰 Tóm tắt thu chi tháng này</button>
+      <button class="cf-ai-chip" data-prompt="Khoản chi nào lớn nhất?">🚨 Khoản chi nào lớn nhất?</button>
+      <button class="cf-ai-chip" data-prompt="Gợi ý tiết kiệm">📉 Gợi ý tiết kiệm</button>
+      <button class="cf-ai-chip" data-prompt="Phân tích dòng tiền tiền mặt vs ngân hàng">💸 Dòng tiền Cash vs Bank</button>
+      <button class="cf-ai-chip" data-prompt="Dự báo chi tiêu tháng tới">🔮 Dự báo tháng tới</button>
+    </div>
+
+    <div class="cf-ai-input-wrapper">
+      <input type="text" id="cf-ai-prompt" class="hub-cf-form-input cf-ai-main-input" placeholder="Hỏi về chi tiêu của bạn..." autocomplete="off" data-lpignore="true" data-form-type="other">
+      <button id="cf-ai-ask-btn" class="cf-ai-send-btn" aria-label="Gửi câu hỏi">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+      </button>
+    </div>
   </div>
 </div>
 
@@ -4110,6 +4491,9 @@ function _restoreAIState() {
       const amountInput = _qs('#hub-cf-amount');
       if (amountInput) amountInput.focus();
     }, 150);
+
+    // Enable keyboard navigation for transaction form
+    _enableKeyboardNavigation('#hub-cf-form');
   }
 
   function _closeModal() {
@@ -4183,6 +4567,9 @@ function _restoreAIState() {
     setTimeout(function () {
       if (amountInput) amountInput.focus();
     }, 150);
+
+    // Enable keyboard navigation for transaction form
+    _enableKeyboardNavigation('#hub-cf-form');
   }
 
   function _saveTransaction() {
@@ -5095,12 +5482,12 @@ function _restoreAIState() {
   }
 
   /**
-   * Render markdown-like text to the response box
+   * Render markdown-like text to a system chat bubble
    * @param {string} text - Text content to render
    */
   function _renderAIResponse(text) {
-    const el = document.getElementById('cf-ai-response');
-    if (!el) return;
+    const output = _qs('#hub-cf-ai-output');
+    if (!output) return;
 
     // Simple markdown-ish rendering: **bold**, *italic*, `code`, line breaks
     let html = _escHtml(text)
@@ -5109,31 +5496,69 @@ function _restoreAIState() {
       .replace(/`(.+?)`/g, '<code style="background:rgba(0,240,255,0.1);padding:1px 4px;border-radius:3px;font-family:var(--font-mono);">$1</code>')
       .replace(/\n/g, '<br>');
 
-    el.innerHTML = html;
-    el.classList.remove('loading');
-    el.scrollTop = el.scrollHeight;
+    // Replace the last system bubble (loading) or append new one
+    const bubbles = output.querySelectorAll('.cf-ai-bubble--system');
+    if (bubbles.length > 0) {
+      const lastBubble = bubbles[bubbles.length - 1];
+      const msgEl = lastBubble.querySelector('.cf-ai-msg');
+      if (msgEl && msgEl.textContent === 'Đang phân tích...') {
+        msgEl.innerHTML = html;
+        output.scrollTop = output.scrollHeight;
+        return;
+      }
+    }
+    // Append new system bubble
+    _appendAIChatBubble(text, 'system');
   }
 
   /**
-   * Show loading state in response box
+   * Show loading state as a system chat bubble
    * @param {string} message - Optional loading message
    */
   function _showAILoading(message = 'Đang phân tích...') {
-    const el = document.getElementById('cf-ai-response');
-    if (!el) return;
-    el.classList.add('loading');
-    el.textContent = message;
+    _appendAIChatBubble(message, 'system');
   }
 
   /**
-   * Show error in response box
+   * Show error as a system chat bubble
    * @param {string} message - Error message
    */
   function _showAIError(message) {
-    const el = document.getElementById('cf-ai-response');
-    if (!el) return;
-    el.classList.remove('loading');
-    el.innerHTML = `<span style="color:var(--danger);">⚠️ ${_escHtml(message)}</span>`;
+    const output = _qs('#hub-cf-ai-output');
+    if (!output) return;
+
+    // Remove loading bubble if exists
+    const bubbles = output.querySelectorAll('.cf-ai-bubble--system');
+    if (bubbles.length > 0) {
+      const lastBubble = bubbles[bubbles.length - 1];
+      const msgEl = lastBubble.querySelector('.cf-ai-msg');
+      if (msgEl && msgEl.textContent === 'Đang phân tích...') {
+        lastBubble.remove();
+      }
+    }
+
+    _appendAIChatBubble(`⚠️ ${_escHtml(message)}`, 'system');
+  }
+
+  /**
+   * Render full chat history from conversationHistory state
+   */
+  function _renderChatHistory() {
+    const output = _qs('#hub-cf-ai-output');
+    if (!output) return;
+
+    // Clear existing except welcome message
+    output.innerHTML = '';
+
+    // Add welcome bubble
+    _appendAIChatBubble('Xin chào Commander. Tôi là Trợ lý Tài chính AI. Bạn muốn phân tích điều gì hôm nay?', 'system');
+
+    // Render conversation history
+    _aiState.conversationHistory.forEach(function(msg) {
+      _appendAIChatBubble(msg.content, msg.role);
+    });
+
+    output.scrollTop = output.scrollHeight;
   }
 
   /**
@@ -5369,8 +5794,11 @@ function _restoreAIState() {
 
     // Disable UI during request (will be restored on re-render if user navigates away)
     askBtn.disabled = true;
+    askBtn.innerHTML = '<span class="loading-spinner" style="width:20px;height:20px;border:2.5px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin 1s linear infinite;display:inline-block;"></span>';
     promptInput.disabled = true;
-    _showAILoading();
+
+    // Append user bubble IMMEDIATELY
+    _appendAIChatBubble(userQuery, 'user');
 
     // Add user message to conversation history
     _aiState.conversationHistory.push({
@@ -5379,8 +5807,14 @@ function _restoreAIState() {
       timestamp: Date.now()
     });
 
+    // Show loading bubble
+    _showAILoading();
+
     // Save state immediately for persistence across tab switches
     _saveAIState();
+
+    // Clear input after sending
+    promptInput.value = '';
 
     try {
       // Build system prompt with financial context
@@ -5424,14 +5858,8 @@ function _restoreAIState() {
       // Persist state
       _saveAIState();
 
-      // Render response if UI still available
-      const responseEl = document.getElementById('cf-ai-response');
-      if (responseEl) {
-        _renderAIResponse(responseText);
-      }
-
-      // Clear input on success
-      promptInput.value = '';
+      // Render AI response bubble (replaces loading bubble)
+      _renderAIResponse(responseText);
 
     } catch (error) {
       // DEDUPLICATION: ignore stale errors from superseded requests
@@ -5445,6 +5873,18 @@ function _restoreAIState() {
         _aiState.isLoading = false;
         _aiState.currentResponse = 'Yêu cầu đã bị hủy.';
         _saveAIState();
+        // Remove loading bubble
+        const output = _qs('#hub-cf-ai-output');
+        if (output) {
+          const bubbles = output.querySelectorAll('.cf-ai-bubble--system');
+          if (bubbles.length > 0) {
+            const lastBubble = bubbles[bubbles.length - 1];
+            const msgEl = lastBubble.querySelector('.cf-ai-msg');
+            if (msgEl && msgEl.textContent === 'Đang phân tích...') {
+              lastBubble.remove();
+            }
+          }
+        }
         return;
       }
 
@@ -5453,11 +5893,8 @@ function _restoreAIState() {
       _aiState.lastError = error.message;
       _saveAIState();
 
-      // Show error with retry option if UI available
-      const responseEl = document.getElementById('cf-ai-response');
-      if (responseEl) {
-        _showAIError(`Lỗi: ${error.message}`);
-      }
+      // Show error bubble (replaces loading bubble)
+      _showAIError(`Lỗi: ${error.message}`);
 
     } finally {
       // Only re-enable UI if this is still the current request
@@ -5465,7 +5902,10 @@ function _restoreAIState() {
         _aiState.abortController = null;
 
         // Re-enable UI if elements still exist (user hasn't navigated away)
-        if (askBtn) askBtn.disabled = false;
+        if (askBtn) {
+          askBtn.disabled = false;
+          askBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>';
+        }
         if (promptInput) {
           promptInput.disabled = false;
           promptInput.focus();
@@ -5551,6 +5991,136 @@ function _restoreAIState() {
       }
     });
   }
+
+  /**
+   * Helper: Append chat bubble to the conversation history
+   * @param {string} text - Message text
+   * @param {'user'|'system'} sender - Message sender
+   */
+  function _appendAIChatBubble(text, sender) {
+    var out = _qs('#hub-cf-ai-output');
+    if (!out) return;
+    var isUser = sender === 'user';
+    var avatar = isUser ? '👤' : '🤖';
+    var bubbleClass = isUser ? 'cf-ai-bubble--user' : 'cf-ai-bubble--system';
+
+    // Simple markdown rendering for system messages
+    var content = _escHtml(text);
+    if (!isUser) {
+      content = content
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/`(.+?)`/g, '<code style="background:rgba(0,240,255,0.1);padding:1px 6px;border-radius:4px;font-family:var(--font-mono);font-size:0.85em;">$1</code>')
+        .replace(/\n/g, '<br>');
+    }
+
+    var html = '<div class="cf-ai-bubble ' + bubbleClass + '">' +
+                 '<div class="cf-ai-avatar">' + avatar + '</div>' +
+                 '<div class="cf-ai-msg">' + content + '</div>' +
+               '</div>';
+    out.insertAdjacentHTML('beforeend', html);
+    out.scrollTop = out.scrollHeight; // Auto-scroll to bottom
+  }
+
+  /**
+   * Bind Quick Prompt Chips
+   */
+  function _bindAIQuickPrompts() {
+    var chips = document.querySelectorAll('.cf-ai-chip');
+    var input = _qs('#cf-ai-prompt');
+    var btn = _qs('#cf-ai-ask-btn');
+
+    chips.forEach(function(chip) {
+      chip.addEventListener('click', function() {
+        var prompt = this.getAttribute('data-prompt') || this.textContent.trim();
+        if (input) input.value = prompt;
+        if (btn) btn.click();
+      });
+    });
+  }
+
+  /**
+   * Show proactive insight banner
+   * @param {string} message - Insight message
+   */
+  function _showAIInsight(message) {
+    var banner = _qs('#cf-ai-insight-banner');
+    var msgEl = _qs('#cf-ai-insight-message');
+    if (banner && msgEl) {
+      msgEl.textContent = message;
+      banner.style.display = 'flex';
+    }
+  }
+
+  /**
+   * Hide proactive insight banner
+   */
+  function _hideAIInsight() {
+    var banner = _qs('#cf-ai-insight-banner');
+    if (banner) banner.style.display = 'none';
+  }
+
+  /**
+   * Generate proactive financial insights based on current data
+   */
+  function _generateAIInsight() {
+    if (!_data || !_data.transactions || _data.transactions.length === 0) {
+      _showAIInsight('Chưa có dữ liệu giao dịch. Hãy thêm giao dịch đầu tiên để tôi có thể phân tích cho bạn.');
+      return;
+    }
+
+    var ym = _currentMonth || _currentYearMonth();
+    var monthTxs = _getMonthTransactions(ym.year, ym.month);
+
+    if (monthTxs.length === 0) {
+      _showAIInsight('Tháng này chưa có giao dịch nào. Bạn có thể nhập dữ liệu hoặc chuyển sang tháng khác để tôi phân tích.');
+      return;
+    }
+
+    var income = monthTxs.filter(t => t.type === 'income').reduce((s, t) => s + (t.amount || 0), 0);
+    var expense = monthTxs.filter(t => t.type === 'expense').reduce((s, t) => s + (t.amount || 0), 0);
+    var net = income - expense;
+    var savingsRate = income > 0 ? ((net / income) * 100).toFixed(1) : 0;
+
+    // Find top expense category
+    var expenseByCat = {};
+    monthTxs.filter(t => t.type === 'expense').forEach(t => {
+      var cat = _categoryDisplayName(t.category, 'expense');
+      expenseByCat[cat] = (expenseByCat[cat] || 0) + (t.amount || 0);
+    });
+    var topExpense = Object.entries(expenseByCat).sort((a, b) => b[1] - a[1])[0];
+
+    // Check cash vs bank balance
+    var cashBalance = _calcCashBalance();
+    var bankBalance = _calcBankBalance();
+
+    var insights = [];
+
+    if (net < 0) {
+      insights.push('⚠️ Tháng này bạn chi tiêu hơn thu nhập ' + _formatVND(Math.abs(net)) + '. Cân nhắc cắt giảm chi phí không cần thiết.');
+    } else if (savingsRate < 20) {
+      insights.push('💡 Tỷ lệ tiết kiệm ' + savingsRate + '% đang thấp. Mục tiêu khuyến nghị: 20%+ thu nhập.');
+    } else {
+      insights.push('✅ Tuyệt vời! Tỷ lệ tiết kiệm ' + savingsRate + '% đạt tiêu chuẩn tài chính lành mạnh.');
+    }
+
+    if (topExpense) {
+      var pct = ((topExpense[1] / expense) * 100).toFixed(1);
+      insights.push('📊 Khoản chi lớn nhất: ' + topExpense[0] + ' (' + _formatVND(topExpense[1]) + ', ' + pct + '% tổng chi).');
+    }
+
+    if (cashBalance > bankBalance * 2) {
+      insights.push('💵 Tiền mặt (' + _formatVND(cashBalance) + ') gấp đôi ngân hàng. Cân nhắc chuyển khoản để an toàn hơn.');
+    } else if (bankBalance > cashBalance * 5) {
+      insights.push('🏦 Ngân hàng chiếm đa số. Giữ tiền mặt đủ chi tiêu hàng ngày (~3-5M) để tối ưu dòng tiền.');
+    }
+
+    // Randomly pick one insight to show
+    var insight = insights[Math.floor(Math.random() * insights.length)];
+    _showAIInsight(insight);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
 
   // ══════════════════════════════════════════════════════════════
   // DEBT EVENT BINDING & MODAL HANDLERS
@@ -5672,6 +6242,9 @@ function _restoreAIState() {
       var debtorInput = _qs('#hub-cf-debt-debtor');
       if (debtorInput) debtorInput.focus();
     }, 150);
+
+    // Enable keyboard navigation for debt form
+    _enableKeyboardNavigation('#hub-cf-debt-form');
   }
 
   function _closeDebtModal() {
@@ -5756,6 +6329,9 @@ function _restoreAIState() {
     setTimeout(function () {
       if (debtorInput) debtorInput.focus();
     }, 150);
+
+    // Enable keyboard navigation for debt form
+    _enableKeyboardNavigation('#hub-cf-debt-form');
   }
 
   function _handleDebtFormSubmit(e) {
