@@ -906,7 +906,7 @@ D. Local Councils`;
             </label>
           </div>
 
-          <!-- Custom Study Range — Compact Unified Pill -->
+          <!-- Custom Study Range — Compact Unified Pill (matches toggle height) -->
           <div class="mode-shuffle-row mode-range-row">
             <div class="mode-shuffle-info">
               <span class="mode-shuffle-icon" aria-hidden="true">📍</span>
@@ -1095,36 +1095,44 @@ D. Local Councils`;
   function _shuffleQuizData() {
     if (!_quizData) return;
 
-    _quizData = {
-      sections: _quizData.sections.map(section => ({
-        title: section.title,
-        questions: _shuffleArray(section.questions).map(q => {
-          // Shuffle options if enabled
-          let options = q.options;
-          let correctIndex = options.findIndex(o => o.isCorrect);
-
-          if (_shuffleAnswers && options.length > 1) {
-            // Shuffle the options array
-            options = _shuffleArray([...options]);
-            // Find the NEW index of the correct answer after shuffle
-            correctIndex = options.findIndex(o => o.isCorrect);
-          }
-
-          // Re-assign letters A, B, C, D based on new positions
-          options = options.map((opt, idx) => ({
-            ...opt,
-            letter: String.fromCharCode(65 + idx) // A=65, B=66, C=67, D=68
-          }));
-
-          return {
-            text: q.text,
-            options
-          };
-        })
+    // Deep-clone the quiz data to avoid mutating the original source
+    const clonedSections = _quizData.sections.map(section => ({
+      title: section.title,
+      questions: section.questions.map(q => ({
+        text: q.text,
+        options: q.options.map(opt => ({ ...opt }))
       }))
-    };
+    }));
 
-    // Cache the shuffled questions for progress saving
+    // 1. QUESTION SHUFFLING — strictly gated by _shuffle
+    if (_shuffle) {
+      clonedSections.forEach(section => {
+        section.questions = _shuffleArray(section.questions);
+      });
+    }
+    // If _shuffle is false, clonedSections keeps the original question order
+
+    // 2. OPTION SHUFFLING — strictly gated by _shuffleAnswers
+    if (_shuffleAnswers) {
+      clonedSections.forEach(section => {
+        section.questions.forEach(q => {
+          if (q.options.length > 1) {
+            q.options = _shuffleArray(q.options);
+            // Re-assign letters A, B, C, D based on the NEW order after shuffle
+            q.options = q.options.map((opt, idx) => ({
+              ...opt,
+              letter: String.fromCharCode(65 + idx) // A=65, B=66, C=67, D=68
+            }));
+          }
+        });
+      });
+    }
+    // If _shuffleAnswers is false, options keep their original order and letter assignments
+
+    // 3. COMMIT: replace _quizData.sections with the processed clone
+    _quizData = { sections: clonedSections };
+
+    // 4. CACHE the final processed state for progress persistence
     _shuffledQuestionsCache = _quizData.sections;
   }
 
@@ -1316,6 +1324,15 @@ D. Local Councils`;
     _revealAllAnswers();
     _renderPlayMode();
 
+    // After re-render, update all navigator buttons to reflect final states (correct/incorrect)
+    if (_quizData) {
+      _quizData.sections.forEach(function (section, si) {
+        section.questions.forEach(function (q, qi) {
+          _updateNavigatorBtn(si, qi);
+        });
+      });
+    }
+
     // Scroll to results
     setTimeout(() => {
       const banner = _container.querySelector('.quiz-complete-banner');
@@ -1357,6 +1374,7 @@ D. Local Councils`;
         const key = `${si}-${qi}`;
         const selected = _selectedMap[key] || null;
         const answered = !!_answeredMap[key];
+        const isTestActive = _testMode && !_testSubmitted;
 
         return `
           <div class="quiz-question-card glass-card" id="q-card-${si}-${qi}">
@@ -1370,33 +1388,46 @@ D. Local Councils`;
             <div class="quiz-options" data-si="${si}" data-qi="${qi}">
               ${q.options.map(opt => {
                 let optClass = 'quiz-option glass';
-                if (answered) {
+                let iconHtml = '';
+                let disableBtn = false;
+
+                if (isTestActive) {
+                  // TEST MODE (unsubmitted): only show neutral selection, NO right/wrong reveal
+                  if (selected === opt.letter) {
+                    optClass += ' option-selected';
+                  }
+                  disableBtn = false; // Keep enabled for selection
+                } else if (answered) {
+                  // PRACTICE MODE or TEST SUBMITTED: reveal correct/incorrect
+                  disableBtn = true;
                   if (opt.isCorrect) {
                     optClass += ' option-correct';
+                    iconHtml = '<span class="option-icon">✓</span>';
                   } else if (selected === opt.letter && !opt.isCorrect) {
                     optClass += ' option-incorrect';
+                    iconHtml = '<span class="option-icon">✗</span>';
                   } else {
                     optClass += ' option-disabled';
                   }
                 }
+
                 return `
                   <button
                     class="${optClass}"
                     data-letter="${opt.letter}"
-                    ${answered ? 'disabled' : ''}
+                    ${disableBtn ? 'disabled' : ''}
                     aria-label="Option ${opt.letter}: ${_escAttr(opt.text)}"
                   >
                     <span class="option-letter">${opt.letter}</span>
                     <span class="option-text">${_escPreserveBr(opt.text)}</span>
-                    ${answered && opt.isCorrect ? '<span class="option-icon">✓</span>' : ''}
-                    ${answered && selected === opt.letter && !opt.isCorrect ? '<span class="option-icon">✗</span>' : ''}
+                    ${iconHtml}
                   </button>
                 `;
               }).join('')}
             </div>
 
-            <!-- Feedback message after answering -->
-            ${answered ? `
+            <!-- Feedback message: HIDDEN in active Test Mode, shown otherwise -->
+            ${(!isTestActive && answered) ? `
               <div class="quiz-feedback ${_answeredMap[key] === 'correct' ? 'feedback-correct' : 'feedback-incorrect'}">
                 ${_answeredMap[key] === 'correct'
                   ? '✓ Correct!'
@@ -1419,86 +1450,130 @@ D. Local Councils`;
       `;
     }).join('');
 
+    // Build navigator HTML with continuous global numbering
+    const navigatorHtml = _buildNavigatorHtml(sections, 'nav');
+    const navigatorModalHtml = _buildNavigatorHtml(sections, 'nav-modal');
+
     _container.innerHTML = `
-      <div class="tab-content quiz-app">
+      <div class="tab-content quiz-app quiz-app--wide">
         ${_testSubmitted ? `
           <div class="test-submitted-banner glass-card">
             <span>🏁 Test Submitted</span>
           </div>
         ` : ''}
 
-        <!-- Top bar: back button + deck title + score + stats -->
-        <div class="quiz-topbar glass-card">
-          <div class="quiz-topbar-left">
-            <button class="btn btn-ghost" id="btn-back-to-decks" style="padding:6px 14px;">
-              ⬅ Back to Decks
-            </button>
-            <div>
-              <h2 class="section-header" style="margin-bottom:0;">${_esc(deckTitle)}</h2>
+        <!-- Wide play layout: main content + navigator sidebar -->
+        <div class="quiz-play-layout">
+          <!-- LEFT COLUMN: Topbar + Questions -->
+          <div class="quiz-play-main">
+            <!-- Top bar: back button + deck title + score + stats -->
+            <div class="quiz-topbar glass-card">
+              <div class="quiz-topbar-left">
+                <button class="btn btn-ghost" id="btn-back-to-decks" style="padding:6px 14px;">
+                  ⬅ Back to Decks
+                </button>
+                <div>
+                  <h2 class="section-header" style="margin-bottom:0;">${_esc(deckTitle)}</h2>
+                </div>
+                <span class="quiz-badge quiz-badge-live">${_testSubmitted ? 'Submitted' : (_testMode ? 'Test' : 'Live')}</span>
+              </div>
+              <div class="quiz-topbar-right">
+                ${_testMode ? `
+                <!-- Test Mode: Circular Timer Ring (replaces Correct/Incorrect stats) -->
+                <div class="quiz-timer-ring-wrapper" id="hub-timer-ring-wrapper">
+                  <div class="quiz-timer-ring">
+                    <svg width="56" height="56" viewBox="0 0 56 56" class="quiz-timer-ring-svg">
+                      <!-- Background track -->
+                      <circle cx="28" cy="28" r="24" fill="none"
+                              stroke="rgba(255,255,255,0.06)" stroke-width="4"/>
+                      <!-- Progress ring -->
+                      <circle cx="28" cy="28" r="24" fill="none"
+                              stroke="var(--accent-primary)"
+                              stroke-width="4" stroke-linecap="round"
+                              stroke-dasharray="${2 * Math.PI * 24}"
+                              stroke-dashoffset="0"
+                              class="quiz-timer-ring-progress"
+                              id="quiz-timer-ring-progress"
+                              style="transition: stroke-dashoffset 0.5s var(--ease-out-expo), stroke 0.3s var(--ease-out-expo);"/>
+                    </svg>
+                    <span class="quiz-timer-ring-text" id="quiz-timer-ring-text">${_formatTime(_testTimeRemaining)}</span>
+                  </div>
+                  <span class="quiz-timer-ring-label">Time Remaining</span>
+                </div>
+                ` : `
+                <!-- Practice Mode: Correct/Incorrect Stats -->
+                <div class="quiz-stats" id="hub-live-stats">
+                  <div class="quiz-stat correct">
+                    <span class="quiz-stat-icon">✓</span>
+                    <span>Correct</span>
+                    <span class="quiz-stat-count" id="hub-live-correct">${correctCount}</span>
+                  </div>
+                  <div class="quiz-stat incorrect">
+                    <span class="quiz-stat-icon">✗</span>
+                    <span>Incorrect</span>
+                    <span class="quiz-stat-count" id="hub-live-wrong">${_getWrongCount()}</span>
+                  </div>
+                </div>
+                `}
+                <!-- Score ring -->
+                <div class="quiz-score-display ${allAnswered ? 'score-complete' : ''}">
+                  <div class="quiz-score-ring">
+                    <svg width="52" height="52" viewBox="0 0 52 52">
+                      <circle cx="26" cy="26" r="22" fill="none"
+                              stroke="rgba(255,255,255,0.06)" stroke-width="4"/>
+                      <circle cx="26" cy="26" r="22" fill="none"
+                              stroke="${allAnswered ? 'var(--success)' : 'var(--accent-primary)'}"
+                              stroke-width="4" stroke-linecap="round"
+                              stroke-dasharray="${2 * Math.PI * 22}"
+                              stroke-dashoffset="${2 * Math.PI * 22 * (1 - (answeredCount / Math.max(totalQuestions, 1)))}"
+                              style="transition: stroke-dashoffset 0.5s var(--ease-out-expo);"/>
+                    </svg>
+                    <span class="quiz-score-text">${correctCount}/${totalQuestions}</span>
+                  </div>
+                  <span class="quiz-score-label">${answeredCount} of ${totalQuestions} answered</span>
+                </div>
+              </div>
             </div>
-            <span class="quiz-badge quiz-badge-live">${_testSubmitted ? 'Submitted' : (_testMode ? 'Test' : 'Live')}</span>
+
+            <!-- Questions scroll area -->
+            <div class="quiz-sections-container">
+              ${sectionsHtml}
+            </div>
           </div>
-          <div class="quiz-topbar-right">
-            ${_testMode ? `
-            <!-- Test Mode: Circular Timer Ring (replaces Correct/Incorrect stats) -->
-            <div class="quiz-timer-ring-wrapper" id="hub-timer-ring-wrapper">
-              <div class="quiz-timer-ring">
-                <svg width="56" height="56" viewBox="0 0 56 56" class="quiz-timer-ring-svg">
-                  <!-- Background track -->
-                  <circle cx="28" cy="28" r="24" fill="none"
-                          stroke="rgba(255,255,255,0.06)" stroke-width="4"/>
-                  <!-- Progress ring -->
-                  <circle cx="28" cy="28" r="24" fill="none"
-                          stroke="var(--accent-primary)"
-                          stroke-width="4" stroke-linecap="round"
-                          stroke-dasharray="${2 * Math.PI * 24}"
-                          stroke-dashoffset="0"
-                          class="quiz-timer-ring-progress"
-                          id="quiz-timer-ring-progress"
-                          style="transition: stroke-dashoffset 0.5s var(--ease-out-expo), stroke 0.3s var(--ease-out-expo);"/>
-                </svg>
-                <span class="quiz-timer-ring-text" id="quiz-timer-ring-text">${_formatTime(_testTimeRemaining)}</span>
-              </div>
-              <span class="quiz-timer-ring-label">Time Remaining</span>
+
+          <!-- RIGHT COLUMN: Desktop Question Navigator Sidebar (sticky) -->
+          <aside class="quiz-navigator" id="quiz-navigator" aria-label="Question Navigator">
+            <div class="quiz-navigator-header">
+              <h3 class="quiz-navigator-title">Navigator</h3>
+              <button class="quiz-navigator-close" id="quiz-navigator-close" aria-label="Close navigator">&times;</button>
             </div>
-            ` : `
-            <!-- Practice Mode: Correct/Incorrect Stats -->
-            <div class="quiz-stats" id="hub-live-stats">
-              <div class="quiz-stat correct">
-                <span class="quiz-stat-icon">✓</span>
-                <span>Correct</span>
-                <span class="quiz-stat-count" id="hub-live-correct">${correctCount}</span>
-              </div>
-              <div class="quiz-stat incorrect">
-                <span class="quiz-stat-icon">✗</span>
-                <span>Incorrect</span>
-                <span class="quiz-stat-count" id="hub-live-wrong">${_getWrongCount()}</span>
-              </div>
+            <div class="quiz-navigator-content">
+              ${navigatorHtml}
             </div>
-            `}
-            <!-- Score ring -->
-            <div class="quiz-score-display ${allAnswered ? 'score-complete' : ''}">
-              <div class="quiz-score-ring">
-                <svg width="52" height="52" viewBox="0 0 52 52">
-                  <circle cx="26" cy="26" r="22" fill="none"
-                          stroke="rgba(255,255,255,0.06)" stroke-width="4"/>
-                  <circle cx="26" cy="26" r="22" fill="none"
-                          stroke="${allAnswered ? 'var(--success)' : 'var(--accent-primary)'}"
-                          stroke-width="4" stroke-linecap="round"
-                          stroke-dasharray="${2 * Math.PI * 22}"
-                          stroke-dashoffset="${2 * Math.PI * 22 * (1 - (answeredCount / Math.max(totalQuestions, 1)))}"
-                          style="transition: stroke-dashoffset 0.5s var(--ease-out-expo);"/>
-                </svg>
-                <span class="quiz-score-text">${correctCount}/${totalQuestions}</span>
-              </div>
-              <span class="quiz-score-label">${answeredCount} of ${totalQuestions} answered</span>
-            </div>
-          </div>
+          </aside>
         </div>
 
-        <!-- Questions scroll area -->
-        <div class="quiz-sections-container">
-          ${sectionsHtml}
+        <!-- Mobile FAB to open navigator -->
+        <button class="quiz-nav-fab" id="quiz-nav-fab" aria-label="Open Question Navigator" title="Question Navigator">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <rect x="3" y="3" width="6" height="6" rx="1" stroke="currentColor" stroke-width="2"/>
+            <rect x="12" y="3" width="6" height="6" rx="1" stroke="currentColor" stroke-width="2"/>
+            <rect x="3" y="12" width="6" height="6" rx="1" stroke="currentColor" stroke-width="2"/>
+            <rect x="12" y="12" width="6" height="6" rx="1" stroke="currentColor" stroke-width="2"/>
+          </svg>
+        </button>
+
+        <!-- Mobile Navigator Modal (glassmorphism) -->
+        <div class="quiz-nav-modal-overlay" id="quiz-nav-modal-overlay" style="display:none;" aria-hidden="true">
+          <div class="quiz-nav-modal glass-card" role="dialog" aria-modal="true" aria-labelledby="nav-modal-title">
+            <div class="quiz-nav-modal-header">
+              <h3 id="nav-modal-title">Question Navigator</h3>
+              <button class="quiz-nav-modal-close" id="quiz-nav-modal-close" aria-label="Close navigator">&times;</button>
+            </div>
+            <div class="quiz-nav-modal-content">
+              ${navigatorModalHtml}
+            </div>
+          </div>
         </div>
 
         <!-- Bottom actions -->
@@ -1569,6 +1644,9 @@ D. Local Councils`;
       _renderApp();
     });
 
+    // --- Navigator events ---
+    _bindNavigatorEvents();
+
     // Option clicks — skip if user was highlighting text
     _container.querySelectorAll('.quiz-option:not([disabled])').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -1631,6 +1709,170 @@ D. Local Councils`;
   }
 
   /* ==========================================================
+     QUESTION NAVIGATOR HELPERS
+     ========================================================== */
+
+  /**
+   * Build the navigator HTML with continuous global numbering across sections.
+   * @param {Array} sections - The quiz sections
+   * @param {string} [idPrefix='nav'] - Prefix for button IDs (e.g., 'nav' for desktop, 'nav-modal' for mobile)
+   * @returns {string} HTML for the navigator
+   */
+  function _buildNavigatorHtml(sections, idPrefix = 'nav') {
+    let globalIndex = 1;
+    let html = '';
+
+    sections.forEach(function (section, si) {
+      const sectionTitle = section.title || `Section ${si + 1}`;
+      html += `
+        <div class="quiz-nav-section">
+          <h4 class="quiz-nav-section-title">${_esc(sectionTitle)}</h4>
+          <div class="quiz-nav-grid" data-section="${si}">`;
+
+      section.questions.forEach(function (q, qi) {
+        const key = `${si}-${qi}`;
+        let stateClass = 'nav-unanswered';
+        let ariaLabel = `Question ${globalIndex}, unanswered`;
+
+        if (_answeredMap[key]) {
+          if (_testMode && !_testSubmitted) {
+            // Test mode: answered but not submitted = yellow/gold
+            stateClass = 'nav-yellow';
+            ariaLabel = `Question ${globalIndex}, answered (not submitted)`;
+          } else if (_answeredMap[key] === 'correct') {
+            stateClass = 'nav-correct';
+            ariaLabel = `Question ${globalIndex}, correct`;
+          } else if (_answeredMap[key] === 'incorrect') {
+            stateClass = 'nav-incorrect';
+            ariaLabel = `Question ${globalIndex}, incorrect`;
+          } else {
+            // 'revealed' state
+            stateClass = 'nav-revealed';
+            ariaLabel = `Question ${globalIndex}, revealed`;
+          }
+        }
+
+        html += `
+          <button
+            class="quiz-nav-btn ${stateClass}"
+            id="${idPrefix}-btn-${si}-${qi}"
+            data-si="${si}"
+            data-qi="${qi}"
+            data-global="${globalIndex}"
+            aria-label="${ariaLabel}"
+            title="${ariaLabel}"
+          >${globalIndex}</button>
+        `;
+        globalIndex++;
+      });
+
+      html += `
+          </div>
+        </div>
+      `;
+    });
+
+    return html;
+  }
+
+  /**
+   * Bind navigator events (click to scroll, mobile FAB/modal toggle).
+   */
+  function _bindNavigatorEvents() {
+    if (!_container) return;
+
+    // Desktop navigator: click button to scroll to question
+    // Only target buttons in the desktop sidebar (not modal)
+    const desktopNav = _container.querySelector('#quiz-navigator');
+    if (desktopNav) {
+      desktopNav.querySelectorAll('.quiz-nav-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const si = parseInt(btn.dataset.si, 10);
+          const qi = parseInt(btn.dataset.qi, 10);
+          const card = document.getElementById(`q-card-${si}-${qi}`);
+          if (card) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        });
+      });
+    }
+
+    // Desktop navigator close button
+    const navClose = _container.querySelector('#quiz-navigator-close');
+    if (navClose) {
+      navClose.addEventListener('click', () => {
+        const nav = _container.querySelector('#quiz-navigator');
+        if (nav) nav.classList.add('quiz-navigator--collapsed');
+      });
+    }
+
+    // Mobile FAB: open modal
+    const fab = _container.querySelector('#quiz-nav-fab');
+    if (fab) {
+      fab.addEventListener('click', () => {
+        const overlay = _container.querySelector('#quiz-nav-modal-overlay');
+        const modal = _container.querySelector('#quiz-nav-modal');
+        if (overlay) {
+          overlay.style.display = 'flex';
+          overlay.setAttribute('aria-hidden', 'false');
+          // Re-bind modal nav buttons (they're fresh DOM)
+          _bindModalNavigatorEvents();
+          // Focus trap: focus first button
+          setTimeout(() => {
+            const firstBtn = modal?.querySelector('.quiz-nav-btn');
+            if (firstBtn) firstBtn.focus();
+          }, 50);
+        }
+      });
+    }
+
+    // Mobile modal close
+    const modalClose = _container.querySelector('#quiz-nav-modal-close');
+    const modalOverlay = _container.querySelector('#quiz-nav-modal-overlay');
+    if (modalClose && modalOverlay) {
+      modalClose.addEventListener('click', () => {
+        modalOverlay.style.display = 'none';
+        modalOverlay.setAttribute('aria-hidden', 'true');
+      });
+    }
+    if (modalOverlay) {
+      modalOverlay.addEventListener('click', (e) => {
+        if (e.target === modalOverlay) {
+          modalOverlay.style.display = 'none';
+          modalOverlay.setAttribute('aria-hidden', 'true');
+        }
+      });
+    }
+  }
+
+  /**
+   * Bind navigator button events inside the mobile modal.
+   * Called after modal opens since DOM is fresh.
+   */
+  function _bindModalNavigatorEvents() {
+    if (!_container) return;
+    const modal = _container.querySelector('#quiz-nav-modal');
+    if (!modal) return;
+
+    modal.querySelectorAll('.quiz-nav-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const si = parseInt(btn.dataset.si, 10);
+        const qi = parseInt(btn.dataset.qi, 10);
+        const card = document.getElementById(`q-card-${si}-${qi}`);
+        if (card) {
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        // Close modal on mobile after selection
+        const modalOverlay = _container.querySelector('#quiz-nav-modal-overlay');
+        if (modalOverlay) {
+          modalOverlay.style.display = 'none';
+          modalOverlay.setAttribute('aria-hidden', 'true');
+        }
+      });
+    });
+  }
+
+  /* ==========================================================
      HANDLE OPTION CLICK
      ========================================================== */
 
@@ -1655,6 +1897,9 @@ D. Local Councils`;
     if (correctEl) correctEl.textContent = _getCorrectCount();
     if (wrongEl) wrongEl.textContent = _getWrongCount();
 
+    // --- Update navigator button state immediately (no full re-render needed) ---
+    _updateNavigatorBtn(sectionIdx, questionIdx);
+
     // Save practice progress after every answer
     if (!_testMode && _currentDeck) {
       _savePracticeProgress({
@@ -1667,7 +1912,7 @@ D. Local Councils`;
       });
     }
 
-    // Re-render to reflect the change
+    // Re-render to reflect the change (question card visual state)
     _renderPlayMode();
 
     // Scroll to the answered card smoothly
@@ -1677,6 +1922,49 @@ D. Local Councils`;
         card.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }, 100);
+  }
+
+  /**
+   * Update a single navigator button's visual state based on current answer state.
+   * Called after each answer for immediate feedback without full re-render.
+   * @param {number} sectionIdx
+   * @param {number} questionIdx
+   */
+  function _updateNavigatorBtn(sectionIdx, questionIdx) {
+    const btn = document.getElementById(`nav-btn-${sectionIdx}-${questionIdx}`);
+    const modalBtn = document.getElementById(`nav-modal-btn-${sectionIdx}-${questionIdx}`);
+    const key = `${sectionIdx}-${questionIdx}`;
+
+    [btn, modalBtn].forEach(b => {
+      if (!b) return;
+
+      // Remove all state classes
+      b.classList.remove('nav-unanswered', 'nav-yellow', 'nav-correct', 'nav-incorrect', 'nav-revealed');
+
+      // Determine new state class
+      let stateClass = 'nav-unanswered';
+      let ariaLabel = `Question ${b.dataset.global}, unanswered`;
+
+      if (_answeredMap[key]) {
+        if (_testMode && !_testSubmitted) {
+          stateClass = 'nav-yellow';
+          ariaLabel = `Question ${b.dataset.global}, answered (not submitted)`;
+        } else if (_answeredMap[key] === 'correct') {
+          stateClass = 'nav-correct';
+          ariaLabel = `Question ${b.dataset.global}, correct`;
+        } else if (_answeredMap[key] === 'incorrect') {
+          stateClass = 'nav-incorrect';
+          ariaLabel = `Question ${b.dataset.global}, incorrect`;
+        } else {
+          stateClass = 'nav-revealed';
+          ariaLabel = `Question ${b.dataset.global}, revealed`;
+        }
+      }
+
+      b.classList.add(stateClass);
+      b.setAttribute('aria-label', ariaLabel);
+      b.title = ariaLabel;
+    });
   }
 
   /**
@@ -1730,6 +2018,15 @@ D. Local Councils`;
       _stopTestTimer();
     }
     _renderPlayMode();
+
+    // After re-render, update all navigator buttons to reflect 'revealed' state
+    if (_quizData) {
+      _quizData.sections.forEach(function (section, si) {
+        section.questions.forEach(function (q, qi) {
+          _updateNavigatorBtn(si, qi);
+        });
+      });
+    }
   }
 
   /* ==========================================================
