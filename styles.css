@@ -18985,6 +18985,424 @@ body.theme-optimized .quiz-nav-modal-overlay {
 }
 
 /* ============================================================
+   CYBER-HEATMAP HEADER BAR — Premium Glassmorphism Redesign
+   ============================================================ */
+
+/* ── Header Container ── */
+.hub-cf-heatmap-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  margin: 0 0 16px;               /* breathing room before grid */
+  border-bottom: 1px solid var(--glass-border);
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--bg-elevated) 50%, transparent) 0%,
+    color-mix(in srgb, var(--bg-elevated) 20%, transparent) 100%
+  );
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  flex-wrap: wrap;
+  gap: 12px;
+  position: relative;
+}
+
+/* Subtle top accent line */
+.hub-cf-heatmap-header::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent,
+    color-mix(in srgb, var(--accent-primary) 40%, transparent),
+    transparent
+  );
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+/* ── Month Label ── */
+.hub-cf-heatmap-month {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+/* ── Limit Pill (Glassmorphism) ── */
+.heatmap-limit-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 9999px;
+  padding: 6px 16px;
+  cursor: pointer;
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  background: rgba(0, 240, 255, 0.05);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: all var(--duration-fast) var(--ease-out-expo);
+  white-space: nowrap;
+}
+
+.heatmap-limit-pill:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+/* Pill Typography */
+.heatmap-limit-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.heatmap-limit-value {
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--accent-primary);
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
+}
+
+.heatmap-limit-unit {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* Pencil Icon */
+.heatmap-limit-icon {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  transition: opacity var(--duration-fast);
+  line-height: 1;
+}
+
+/* Hover State — Premium Glow */
+.heatmap-limit-pill:hover,
+.heatmap-limit-pill:focus {
+  background: rgba(0, 240, 255, 0.12);
+  border-color: rgba(0, 240, 255, 0.5);
+  box-shadow:
+    0 0 16px rgba(0, 240, 255, 0.15),
+    0 2px 8px rgba(0, 0, 0, 0.2);
+  transform: translateY(-1px);
+}
+
+.heatmap-limit-pill:hover .heatmap-limit-icon,
+.heatmap-limit-pill:focus .heatmap-limit-icon {
+  opacity: 1;
+}
+
+.heatmap-limit-pill:hover .heatmap-limit-value {
+  text-shadow: 0 0 12px rgba(0, 240, 255, 0.6);
+}
+
+/* Active/Pressed */
+.heatmap-limit-pill:active {
+  transform: translateY(0) scale(0.98);
+  transition-duration: 50ms;
+}
+
+/* ── Optimize Mode (body.theme-optimized) — Sharp Flat Fallback ── */
+body.theme-optimized .hub-cf-heatmap-header {
+  background: transparent !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--text-muted) 20%, transparent);
+}
+
+body.theme-optimized .hub-cf-heatmap-header::before {
+  display: none;
+}
+
+body.theme-optimized .heatmap-limit-pill {
+  background: transparent !important;
+  border: 1px solid #00FF41 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+  transition: border-color var(--duration-fast), background var(--duration-fast);
+}
+
+body.theme-optimized .heatmap-limit-pill:hover,
+body.theme-optimized .heatmap-limit-pill:focus {
+  background: rgba(0, 255, 65, 0.08) !important;
+  border-color: #00FF41 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body.theme-optimized .heatmap-limit-value {
+  color: #00FF41 !important;
+  text-shadow: none !important;
+}
+
+body.theme-optimized .heatmap-limit-label,
+body.theme-optimized .heatmap-limit-unit {
+  color: #00FF41 !important;
+}
+
+body.theme-optimized .heatmap-limit-icon {
+  opacity: 1 !important;
+  color: #00FF41;
+}
+
+body.theme-optimized .heatmap-limit-pill:hover .heatmap-limit-value {
+  text-shadow: none !important;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .hub-cf-heatmap-header {
+    padding: 12px 16px;
+    margin-bottom: 12px;
+  }
+
+  .hub-cf-heatmap-month {
+    font-size: 1rem;
+  }
+
+  .heatmap-limit-pill {
+    padding: 5px 12px;
+    gap: 4px;
+  }
+
+  .heatmap-limit-value {
+    font-size: 0.75rem;
+  }
+
+  .heatmap-limit-label,
+  .heatmap-limit-unit {
+    font-size: 0.6rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .hub-cf-heatmap-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .heatmap-limit-pill {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ============================================================
+   HEATMAP TOOLTIP — "Note" hiện khi di chuột vào ô ngày
+   ------------------------------------------------------------
+   - Tooltip được JS gắn trực tiếp vào <body> (portal) và dùng
+     position: fixed. Nhờ vậy transform / backdrop-filter của
+     .glass-card (thẻ cha) không còn làm lệch tọa độ nữa.
+   - JS tính vị trí theo getBoundingClientRect() của ô ngày:
+       + mặc định nằm TRÊN ô, căn giữa theo ô
+       + tự lật xuống DƯỚI nếu phía trên không đủ chỗ
+       + tự dịch ngang để không tràn khỏi màn hình
+   - JS chỉ set 3 thứ: left/top, data-placement, data-level
+     và biến --tt-arrow-x (vị trí mũi tên). Mọi thứ khác là CSS.
+   ============================================================ */
+
+#hub-cf-heatmap-tooltip.hub-cf-heatmap-tooltip {
+  --tt-accent: var(--accent-primary, #00f0ff);
+  --tt-arrow-x: 50%;
+  --tt-shift: 6px;               /* hướng trượt khi hiện (đổi dấu khi lật xuống dưới) */
+
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9990;                 /* trên header/sidebar, dưới modal & toast (9999+) */
+  box-sizing: border-box;
+  width: max-content;
+  min-width: 210px;
+  max-width: min(300px, calc(100vw - 16px));
+  padding: 0;
+  pointer-events: none;
+
+  background: color-mix(in srgb, var(--bg-elevated, var(--bg-surface, #14161c)) 95%, transparent);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12));
+  border-radius: 12px;
+  box-shadow:
+    inset 0 2px 0 var(--tt-accent),               /* vạch màu theo mức chi tiêu */
+    0 14px 36px rgba(0, 0, 0, 0.45),
+    0 2px 8px rgba(0, 0, 0, 0.25);
+
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  text-align: left;
+
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(var(--tt-shift)) scale(0.97);
+  transform-origin: var(--tt-arrow-x) 100%;
+  transition:
+    opacity 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    transform 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    visibility 0s linear 150ms;                   /* ẩn hẳn sau khi fade xong */
+}
+
+#hub-cf-heatmap-tooltip.hub-cf-heatmap-tooltip--visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+  transition-delay: 0s;
+}
+
+/* ── Lật xuống dưới ô ngày (khi sát mép trên màn hình) ── */
+#hub-cf-heatmap-tooltip[data-placement="bottom"] {
+  --tt-shift: -6px;
+  transform-origin: var(--tt-arrow-x) 0;
+}
+
+/* ── Màu nhấn theo mức chi tiêu (khớp màu ô heatmap) ── */
+#hub-cf-heatmap-tooltip[data-level="1"] { --tt-accent: #ffb300; }
+#hub-cf-heatmap-tooltip[data-level="2"],
+#hub-cf-heatmap-tooltip[data-level="3"] { --tt-accent: var(--danger, #ff5252); }
+
+/* ── Mũi tên ── */
+#hub-cf-heatmap-tooltip.hub-cf-heatmap-tooltip::before {
+  content: '';
+  position: absolute;
+  left: var(--tt-arrow-x);
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  background: color-mix(in srgb, var(--bg-elevated, var(--bg-surface, #14161c)) 95%, transparent);
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12));
+  transform: rotate(45deg);
+}
+
+/* Tooltip nằm trên ô → mũi tên ở đáy, chỉ xuống */
+#hub-cf-heatmap-tooltip[data-placement="top"]::before {
+  bottom: -6px;
+  border-top-color: transparent;
+  border-left-color: transparent;
+}
+
+/* Tooltip nằm dưới ô → mũi tên ở đỉnh, chỉ lên */
+#hub-cf-heatmap-tooltip[data-placement="bottom"]::before {
+  top: -6px;
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+}
+
+/* ── Header: ngày + huy hiệu trạng thái ── */
+.hub-cf-heatmap-tooltip-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--glass-border, #fff) 70%, transparent);
+}
+
+.hub-cf-heatmap-tooltip-date {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.74rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+
+.hub-cf-heatmap-tooltip-badge {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--tt-accent) 38%, transparent);
+  background: color-mix(in srgb, var(--tt-accent) 14%, transparent);
+  color: var(--tt-accent);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* ── Body: các dòng "nhãn — giá trị" ── */
+.hub-cf-heatmap-tooltip-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px 12px;
+}
+
+.hub-cf-heatmap-tooltip-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.hub-cf-heatmap-tooltip-label {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.hub-cf-heatmap-tooltip-value {
+  min-width: 0;
+  text-align: right;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.hub-cf-heatmap-tooltip-value--amount {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.86rem;
+  color: var(--tt-accent);
+}
+
+.hub-cf-heatmap-tooltip-value small {
+  margin-left: 4px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.hub-cf-heatmap-tooltip-empty {
+  font-size: 0.76rem;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+/* ── Mobile ── */
+@media (max-width: 480px) {
+  #hub-cf-heatmap-tooltip.hub-cf-heatmap-tooltip {
+    min-width: 180px;
+    font-size: 0.74rem;
+  }
+  .hub-cf-heatmap-tooltip-head { padding: 10px 12px 8px; }
+  .hub-cf-heatmap-tooltip-body { padding: 8px 12px 10px; }
+}
+
+/* ── Tôn trọng "giảm chuyển động" ── */
+@media (prefers-reduced-motion: reduce) {
+  #hub-cf-heatmap-tooltip.hub-cf-heatmap-tooltip {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* ============================================================
    QUIZ — WIDE PLAY LAYOUT (2-column with Navigator)
    ============================================================ */
 
@@ -19506,4 +19924,217 @@ body.theme-optimized .quiz-nav-modal-overlay {
   background: #000 !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+}
+
+/* ============================================================
+   CYBER-HEATMAP HEADER BAR — Premium Glassmorphism Redesign
+   ============================================================ */
+
+/* ── Header Container ── */
+.hub-cf-heatmap-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  margin: 0 0 16px;               /* breathing room before grid */
+  border-bottom: 1px solid var(--glass-border);
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--bg-elevated) 50%, transparent) 0%,
+    color-mix(in srgb, var(--bg-elevated) 20%, transparent) 100%
+  );
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  flex-wrap: wrap;
+  gap: 12px;
+  position: relative;
+}
+
+/* Subtle top accent line */
+.hub-cf-heatmap-header::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent,
+    color-mix(in srgb, var(--accent-primary) 40%, transparent),
+    transparent
+  );
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+/* ── Month Label ── */
+.hub-cf-heatmap-month {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+/* ── Limit Pill (Glassmorphism) ── */
+.heatmap-limit-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 9999px;
+  padding: 6px 16px;
+  cursor: pointer;
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  background: rgba(0, 240, 255, 0.05);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: all var(--duration-fast) var(--ease-out-expo);
+  white-space: nowrap;
+}
+
+.heatmap-limit-pill:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+/* Pill Typography */
+.heatmap-limit-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.heatmap-limit-value {
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--accent-primary);
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
+}
+
+.heatmap-limit-unit {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* Pencil Icon */
+.heatmap-limit-icon {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  transition: opacity var(--duration-fast);
+  line-height: 1;
+}
+
+/* Hover State — Premium Glow */
+.heatmap-limit-pill:hover,
+.heatmap-limit-pill:focus {
+  background: rgba(0, 240, 255, 0.12);
+  border-color: rgba(0, 240, 255, 0.5);
+  box-shadow:
+    0 0 16px rgba(0, 240, 255, 0.15),
+    0 2px 8px rgba(0, 0, 0, 0.2);
+  transform: translateY(-1px);
+}
+
+.heatmap-limit-pill:hover .heatmap-limit-icon,
+.heatmap-limit-pill:focus .heatmap-limit-icon {
+  opacity: 1;
+}
+
+.heatmap-limit-pill:hover .heatmap-limit-value {
+  text-shadow: 0 0 12px rgba(0, 240, 255, 0.6);
+}
+
+/* Active/Pressed */
+.heatmap-limit-pill:active {
+  transform: translateY(0) scale(0.98);
+  transition-duration: 50ms;
+}
+
+/* ── Optimize Mode (body.theme-optimized) — Sharp Flat Fallback ── */
+body.theme-optimized .hub-cf-heatmap-header {
+  background: transparent !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--text-muted) 20%, transparent);
+}
+
+body.theme-optimized .hub-cf-heatmap-header::before {
+  display: none;
+}
+
+body.theme-optimized .heatmap-limit-pill {
+  background: transparent !important;
+  border: 1px solid #00FF41 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+  transition: border-color var(--duration-fast), background var(--duration-fast);
+}
+
+body.theme-optimized .heatmap-limit-pill:hover,
+body.theme-optimized .heatmap-limit-pill:focus {
+  background: rgba(0, 255, 65, 0.08) !important;
+  border-color: #00FF41 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body.theme-optimized .heatmap-limit-value {
+  color: #00FF41 !important;
+  text-shadow: none !important;
+}
+
+body.theme-optimized .heatmap-limit-label,
+body.theme-optimized .heatmap-limit-unit {
+  color: #00FF41 !important;
+}
+
+body.theme-optimized .heatmap-limit-icon {
+  opacity: 1 !important;
+  color: #00FF41;
+}
+
+body.theme-optimized .heatmap-limit-pill:hover .heatmap-limit-value {
+  text-shadow: none !important;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .hub-cf-heatmap-header {
+    padding: 12px 16px;
+    margin-bottom: 12px;
+  }
+
+  .hub-cf-heatmap-month {
+    font-size: 1rem;
+  }
+
+  .heatmap-limit-pill {
+    padding: 5px 12px;
+    gap: 4px;
+  }
+
+  .heatmap-limit-value {
+    font-size: 0.75rem;
+  }
+
+  .heatmap-limit-label,
+  .heatmap-limit-unit {
+    font-size: 0.6rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .hub-cf-heatmap-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .heatmap-limit-pill {
+    width: 100%;
+    justify-content: center;
+  }
 }

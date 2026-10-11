@@ -108,6 +108,17 @@ const cashflowModule = (function () {
       chartDay:         'Day',
       chartMonth:       'Month',
       chartYear:        'Year',
+      viewChart:        'Chart',
+      viewHeatmap:      'Heatmap',
+      heatmapDailyLimit: 'Limit:',
+      heatmapPerDay:    '/ day',
+      heatmapLevel0:    'Safe',
+      heatmapLevel1:    'Under 50%',
+      heatmapLevel2:    '50-100%',
+      heatmapLevel3:    'Over Limit',
+      heatmapTotalSpent: 'Total Spent:',
+      heatmapTopCategory: 'Top Category:',
+      heatmapNoExpense: 'No expenses',
 
       // Action bar
       addTx:            'Add Transaction',
@@ -204,6 +215,17 @@ const cashflowModule = (function () {
       chartDay:         'Ngày',
       chartMonth:       'Tháng',
       chartYear:        'Năm',
+      viewChart:        'Biểu đồ',
+      viewHeatmap:      'Heatmap',
+      heatmapDailyLimit: 'Hạn mức:',
+      heatmapPerDay:    '/ ngày',
+      heatmapLevel0:    'An toàn',
+      heatmapLevel1:    'Dưới 50%',
+      heatmapLevel2:    '50-100%',
+      heatmapLevel3:    'Vượt hạn',
+      heatmapTotalSpent: 'Tổng chi:',
+      heatmapTopCategory: 'Hạng mục chính:',
+      heatmapNoExpense: 'Không chi tiêu',
 
       // Action bar
       addTx:            'Thêm Giao Dịch',
@@ -425,7 +447,8 @@ const cashflowModule = (function () {
     savingsBalance: 0,
     initBank: 0,
     initCash: 0,
-    budgets: {}                // Category budget limits: { categoryId: amount }
+    budgets: {},                // Category budget limits: { categoryId: amount }
+    dailyLimits: {}             // Daily expense limits per month: { "YYYY-MM": amount }
   };
 
   // ═══════════════════════════════════════════════════════════════
@@ -450,6 +473,7 @@ const cashflowModule = (function () {
   let _modal         = null;
   let _chart         = null;
   let _chartFilter   = 'month';  // 'day' | 'picker' | 'month' | 'year'
+  let _heatmapView   = 'chart';  // 'chart' | 'heatmap'
 
   // ── Bound handlers for cleanup ──
   let _boundKeydown = null;
@@ -549,6 +573,7 @@ const cashflowModule = (function () {
     _cashFlowMeta.initBank = meta.initBank;
     _cashFlowMeta.initCash = meta.initCash;
     _cashFlowMeta.budgets = meta.budgets || {};
+    _cashFlowMeta.dailyLimits = meta.dailyLimits || {};
 
     // ── 3. Initialize state based on transaction load result ──
     if (loaded && Array.isArray(loaded.transactions)) {
@@ -704,6 +729,12 @@ const cashflowModule = (function () {
   function _qs(sel) {
     if (!_container) return null;
     return _container.querySelector(sel);
+  }
+
+  /** Query selector all shortcut */
+  function _qsAll(sel) {
+    if (!_container) return [];
+    return Array.from(_container.querySelectorAll(sel));
   }
 
   function _setText(sel, text) {
@@ -2357,6 +2388,439 @@ function _restoreAIState() {
   border-color: var(--primary, #00e676) !important;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary, #00e676) 25%, transparent);
 }
+
+/* ============================================================
+   CYBERPUNK HEATMAP — Calendar View
+   ============================================================ */
+
+/* View Toggle */
+.hub-cf-view-toggle {
+  display: inline-flex;
+  background: color-mix(in srgb, var(--bg-elevated) 80%, transparent);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: 2px;
+  gap: 2px;
+}
+
+.hub-cf-view-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all 180ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  white-space: nowrap;
+}
+
+.hub-cf-view-toggle-btn:hover {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+}
+
+.hub-cf-view-toggle-btn.active {
+  color: var(--bg-deep);
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--accent-primary) 40%, transparent);
+}
+
+.hub-cf-view-toggle-btn:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.hub-cf-view-toggle-icon {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+/* Heatmap Container */
+.hub-cf-heatmap-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.hub-cf-heatmap-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  margin: -16px -16px 16px -16px;
+  border-bottom: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--bg-elevated) 60%, transparent);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.hub-cf-heatmap-month {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.hub-cf-heatmap-limit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 30%, transparent);
+  border-radius: var(--radius-md);
+}
+
+.hub-cf-heatmap-limit-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hub-cf-heatmap-limit-value {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--accent-primary) 60%, transparent);
+}
+
+.hub-cf-heatmap-limit-unit {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.hub-cf-heatmap-edit-limit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  margin-left: 4px;
+}
+
+.hub-cf-heatmap-edit-limit:hover {
+  color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+  transform: scale(1.1);
+}
+
+.hub-cf-heatmap-edit-limit:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+/* Heatmap Grid */
+.hub-cf-heatmap-grid {
+  padding: 0 8px 16px;
+  position: relative;  /* Positioning context for tooltip */
+}
+
+.hub-cf-heatmap-day-headers {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.hub-cf-heatmap-day-header {
+  text-align: center;
+  font-size: 0.65rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 6px 0;
+}
+
+.hub-cf-heatmap-cells {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+/* Heatmap Cells */
+.hub-cf-heatmap-cell {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  position: relative;
+  min-height: 44px;
+  padding: 4px 2px;
+  box-sizing: border-box;
+}
+
+.hub-cf-heatmap-cell:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+  z-index: 10;
+}
+
+.hub-cf-heatmap-cell--empty {
+  background: transparent;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Level 0: Safe / Energy Conserved — Dark bg, glowing accent border */
+.hub-cf-heatmap-cell--level-0 {
+  background: color-mix(in srgb, var(--bg-surface) 90%, transparent);
+  border: 1.5px solid var(--accent-primary);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent-primary) 20%, transparent),
+    0 0 8px color-mix(in srgb, var(--accent-primary) 15%, transparent);
+}
+
+.hub-cf-heatmap-cell--level-0:hover {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent-primary) 40%, transparent),
+    0 0 16px color-mix(in srgb, var(--accent-primary) 30%, transparent);
+  transform: scale(1.05);
+}
+
+/* Level 1: Under 50% — Dim Amber/Orange */
+.hub-cf-heatmap-cell--level-1 {
+  background: linear-gradient(145deg,
+    color-mix(in srgb, #ffb300 15%, var(--bg-surface)),
+    color-mix(in srgb, #ffb300 8%, var(--bg-surface))
+  );
+  border: 1px solid color-mix(in srgb, #ffb300 30%, transparent);
+}
+
+.hub-cf-heatmap-cell--level-1:hover {
+  box-shadow: 0 0 12px color-mix(in srgb, #ffb300 40%, transparent);
+  transform: scale(1.05);
+  border-color: color-mix(in srgb, #ffb300 50%, transparent);
+}
+
+/* Level 2: 50-100% — Red/Warning */
+.hub-cf-heatmap-cell--level-2 {
+  background: linear-gradient(145deg,
+    color-mix(in srgb, var(--danger) 20%, var(--bg-surface)),
+    color-mix(in srgb, var(--danger) 10%, var(--bg-surface))
+  );
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+}
+
+.hub-cf-heatmap-cell--level-2:hover {
+  box-shadow: 0 0 14px color-mix(in srgb, var(--danger) 45%, transparent);
+  transform: scale(1.05);
+  border-color: color-mix(in srgb, var(--danger) 60%, transparent);
+}
+
+/* Level 3: Over Limit — Neon danger + pulse animation */
+.hub-cf-heatmap-cell--level-3 {
+  background: linear-gradient(145deg,
+    color-mix(in srgb, var(--danger) 30%, var(--bg-surface)),
+    color-mix(in srgb, var(--danger) 18%, var(--bg-surface))
+  );
+  border: 2px solid var(--danger);
+  box-shadow:
+    0 0 16px color-mix(in srgb, var(--danger) 50%, transparent),
+    inset 0 0 24px color-mix(in srgb, var(--danger) 15%, transparent);
+  animation: cfHeatmapPulse 2s ease-in-out infinite;
+}
+
+@keyframes cfHeatmapPulse {
+  0%, 100% {
+    box-shadow:
+      0 0 16px color-mix(in srgb, var(--danger) 50%, transparent),
+      inset 0 0 24px color-mix(in srgb, var(--danger) 15%, transparent);
+    border-color: var(--danger);
+  }
+  50% {
+    box-shadow:
+      0 0 28px color-mix(in srgb, var(--danger) 70%, transparent),
+      inset 0 0 32px color-mix(in srgb, var(--danger) 25%, transparent);
+    border-color: color-mix(in srgb, var(--danger) 80%, #fff);
+  }
+}
+
+.hub-cf-heatmap-cell--level-3:hover {
+  animation: none;
+  transform: scale(1.05);
+  box-shadow:
+    0 0 32px color-mix(in srgb, var(--danger) 80%, transparent),
+    inset 0 0 40px color-mix(in srgb, var(--danger) 30%, transparent);
+}
+
+/* Today indicator */
+.hub-cf-heatmap-cell--today {
+  position: relative;
+}
+
+.hub-cf-heatmap-cell--today::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  background: var(--accent-primary);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--accent-primary);
+  animation: cfTodayPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes cfTodayPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.8); }
+}
+
+/* Selected cell (clicked for filtering) */
+.hub-cf-heatmap-cell--selected {
+  outline: 2px solid var(--accent-secondary);
+  outline-offset: -2px;
+  box-shadow:
+    0 0 0 2px var(--accent-secondary),
+    0 0 20px color-mix(in srgb, var(--accent-secondary) 40%, transparent) !important;
+}
+
+.hub-cf-heatmap-cell-day {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1;
+  z-index: 1;
+}
+
+.hub-cf-heatmap-cell--level-0 .hub-cf-heatmap-cell-day { color: var(--accent-primary); }
+.hub-cf-heatmap-cell--level-1 .hub-cf-heatmap-cell-day { color: #ffb300; }
+.hub-cf-heatmap-cell--level-2 .hub-cf-heatmap-cell-day { color: var(--danger); }
+.hub-cf-heatmap-cell--level-3 .hub-cf-heatmap-cell-day { color: #fff; text-shadow: 0 0 4px var(--danger); }
+
+.hub-cf-heatmap-cell-amount {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-top: 2px;
+  line-height: 1;
+  opacity: 0.8;
+}
+
+.hub-cf-heatmap-cell--level-3 .hub-cf-heatmap-cell-amount { color: color-mix(in srgb, #fff 80%, var(--danger)); }
+
+/* Heatmap Legend */
+.hub-cf-heatmap-legend {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  padding: 16px;
+  flex-wrap: wrap;
+}
+
+.hub-cf-heatmap-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.hub-cf-heatmap-legend-color {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  border: 1px solid var(--glass-border);
+}
+
+.hub-cf-heatmap-legend-level-0 {
+  background: color-mix(in srgb, var(--bg-surface) 90%, transparent);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent-primary) 20%, transparent);
+}
+
+.hub-cf-heatmap-legend-level-1 {
+  background: linear-gradient(145deg, color-mix(in srgb, #ffb300 15%, var(--bg-surface)), color-mix(in srgb, #ffb300 8%, var(--bg-surface)));
+  border-color: color-mix(in srgb, #ffb300 30%, transparent);
+}
+
+.hub-cf-heatmap-legend-level-2 {
+  background: linear-gradient(145deg, color-mix(in srgb, var(--danger) 20%, var(--bg-surface)), color-mix(in srgb, var(--danger) 10%, var(--bg-surface)));
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+}
+
+.hub-cf-heatmap-legend-level-3 {
+  background: linear-gradient(145deg, color-mix(in srgb, var(--danger) 30%, var(--bg-surface)), color-mix(in srgb, var(--danger) 18%, var(--bg-surface)));
+  border-color: var(--danger);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--danger) 40%, transparent);
+  animation: cfHeatmapPulse 2s ease-in-out infinite;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .hub-cf-heatmap-cell {
+    min-height: 36px;
+    padding: 2px 1px;
+  }
+
+  .hub-cf-heatmap-day-header {
+    font-size: 0.55rem;
+    padding: 4px 0;
+  }
+
+  .hub-cf-heatmap-cell-day {
+    font-size: 0.75rem;
+  }
+
+  .hub-cf-heatmap-cell-amount {
+    font-size: 0.5rem;
+  }
+
+  .hub-cf-heatmap-limit {
+    padding: 4px 8px;
+    gap: 6px;
+  }
+
+  .hub-cf-heatmap-limit-value {
+    font-size: 0.8rem;
+  }
+
+  .hub-cf-view-toggle-btn {
+    padding: 6px 10px;
+    font-size: 0.7rem;
+    gap: 4px;
+  }
+
+  .hub-cf-heatmap-legend {
+    gap: 16px;
+  }
+
+  .hub-cf-heatmap-legend-item {
+    font-size: 0.62rem;
+  }
+
+  .hub-cf-heatmap-legend-color {
+    width: 12px;
+    height: 12px;
+  }
+}
 `;
         document.head.appendChild(styleEl);
       }
@@ -2464,19 +2928,68 @@ function _restoreAIState() {
 
     </div>
   </div>
-<!-- ═══ REAL-TIME CHART ═══ -->
+<!-- ═══ REAL-TIME CHART / HEATMAP ═══ -->
     <div class="hub-cf-chart-section glass-card">
       <div class="hub-cf-chart-header">
         <h4 class="hub-cf-chart-title" data-i18n="chartTitle">${_t('chartTitle')}</h4>
+
+        <!-- View Toggle: Chart / Heatmap -->
+        <div class="hub-cf-view-toggle" role="group" aria-label="${_escHtml('View Mode')}">
+          <button class="hub-cf-view-toggle-btn active" data-view="chart" aria-pressed="true" title="${_escHtml('Chart View')}">
+            <span class="hub-cf-view-toggle-icon">📊</span>
+            <span class="hub-cf-view-toggle-label" data-i18n="viewChart">${_t('viewChart')}</span>
+          </button>
+          <button class="hub-cf-view-toggle-btn" data-view="heatmap" aria-pressed="false" title="${_escHtml('Heatmap View')}">
+            <span class="hub-cf-view-toggle-icon">🔲</span>
+            <span class="hub-cf-view-toggle-label" data-i18n="viewHeatmap">${_t('viewHeatmap')}</span>
+          </button>
+        </div>
+
         <select class="hub-cf-chart-filter" id="hub-cf-chart-filter">
           <option value="day" data-i18n="chartDay">${_t('chartDay')}</option>
           <option value="month" selected data-i18n="chartMonth">${_t('chartMonth')}</option>
           <option value="year" data-i18n="chartYear">${_t('chartYear')}</option>
         </select>
       </div>
-      <div class="hub-cf-chart-canvas-wrap">
+
+      <!-- Chart View -->
+      <div class="hub-cf-chart-canvas-wrap" id="hub-cf-chart-view" style="display: block;">
         <canvas id="hub-cf-chart-canvas"></canvas>
       </div>
+
+      <!-- Heatmap View -->
+      <div class="hub-cf-heatmap-wrap" id="hub-cf-heatmap-view" style="display: none;">
+        <div class="hub-cf-heatmap-header">
+          <span class="hub-cf-heatmap-month" id="hub-cf-heatmap-month-label"></span>
+          <div class="heatmap-limit-pill" id="hub-cf-heatmap-limit-pill" tabindex="0" role="button" aria-label="${_escHtml('Edit Daily Limit')}" title="${_escHtml('Set daily expense limit for this month')}">
+            <span class="heatmap-limit-label" data-i18n="heatmapDailyLimit">${_t('heatmapDailyLimit')}</span>
+            <span class="heatmap-limit-value" id="hub-cf-heatmap-limit-value">500.0k</span>
+            <span class="heatmap-limit-unit" data-i18n="heatmapPerDay">${_t('heatmapPerDay')}</span>
+            <span class="heatmap-limit-icon" aria-hidden="true">✏️</span>
+          </div>
+        </div>
+        <div class="hub-cf-heatmap-grid" id="hub-cf-heatmap-grid" role="grid" aria-label="${_escHtml('Expense heatmap calendar')}"></div>
+        <!-- Tooltip "Note" của heatmap được tạo động và gắn vào <body> (xem _getHeatmapTooltip) -->
+        <div class="hub-cf-heatmap-legend" id="hub-cf-heatmap-legend" aria-hidden="true">
+          <div class="hub-cf-heatmap-legend-item">
+            <span class="hub-cf-heatmap-legend-color hub-cf-heatmap-legend-level-0"></span>
+            <span data-i18n="heatmapLevel0">${_t('heatmapLevel0')}</span>
+          </div>
+          <div class="hub-cf-heatmap-legend-item">
+            <span class="hub-cf-heatmap-legend-color hub-cf-heatmap-legend-level-1"></span>
+            <span data-i18n="heatmapLevel1">${_t('heatmapLevel1')}</span>
+          </div>
+          <div class="hub-cf-heatmap-legend-item">
+            <span class="hub-cf-heatmap-legend-color hub-cf-heatmap-legend-level-2"></span>
+            <span data-i18n="heatmapLevel2">${_t('heatmapLevel2')}</span>
+          </div>
+          <div class="hub-cf-heatmap-legend-item">
+            <span class="hub-cf-heatmap-legend-color hub-cf-heatmap-legend-level-3"></span>
+            <span data-i18n="heatmapLevel3">${_t('heatmapLevel3')}</span>
+          </div>
+        </div>
+
+              </div>
     </div>
 
     <!-- ═══ ACTION BAR ═══ -->
@@ -2945,6 +3458,7 @@ function _restoreAIState() {
         _boundKeydown = null;
       }
       _destroyChart();
+      _removeHeatmapTooltip();
       _container = null;
     }
   };
@@ -2958,6 +3472,7 @@ function _restoreAIState() {
     _refreshLedger();
     _refreshDebtSummary();
     _refreshDebtLedger();
+    _refreshHeatmap();
   }
 
   /**
@@ -4003,6 +4518,9 @@ function _restoreAIState() {
         _updateChart();
       });
     }
+
+    // Initialize heatmap toggle
+    _initHeatmapToggle();
 
     // ── Segmented Tab Switcher: Ledger ↔ Stats ──
     var ledgerTab = _qs('#hub-cf-tab-ledger');
@@ -5399,6 +5917,467 @@ function _restoreAIState() {
     if (_chart) {
       _chart.destroy();
       _chart = null;
+    }
+  }
+
+  // ============================================================
+  //   HEATMAP VIEW — Cyberpunk Calendar Heatmap
+  // ============================================================
+
+  /**
+   * Compact VND formatting for heatmap cells (e.g., "500k", "1.2M", "50")
+   */
+  function _formatCompactVND(amount) {
+    const n = Number(amount) || 0;
+    const abs = Math.abs(n);
+    if (abs >= 1e9) return (abs / 1e9).toFixed(1) + 'B';
+    if (abs >= 1e6) return (abs / 1e6).toFixed(1) + 'M';
+    if (abs >= 1e3) return (abs / 1e3).toFixed(1) + 'k';
+    return Math.round(abs).toLocaleString('vi-VN');
+  }
+
+  /**
+   * Initialize heatmap view toggle
+   */
+  function _initHeatmapToggle() {
+    const chartView = _qs('#hub-cf-chart-view');
+    const heatmapView = _qs('#hub-cf-heatmap-view');
+    const toggleBtns = _qsAll('.hub-cf-view-toggle-btn');
+
+    if (!chartView || !heatmapView || !toggleBtns.length) return;
+
+    toggleBtns.forEach(btn => {
+      btn.addEventListener('click', function() {
+        const view = this.dataset.view;
+        if (view === _heatmapView) return;
+
+        _heatmapView = view;
+
+        // Update toggle buttons
+        toggleBtns.forEach(b => {
+          const isActive = b.dataset.view === view;
+          b.classList.toggle('active', isActive);
+          b.setAttribute('aria-pressed', isActive);
+        });
+
+        // Show/hide views
+        chartView.style.display = view === 'chart' ? 'block' : 'none';
+        heatmapView.style.display = view === 'heatmap' ? 'block' : 'none';
+        _hideHeatmapTooltip();
+
+        // Render heatmap if switching to it
+        if (view === 'heatmap') {
+          _renderHeatmap();
+        } else {
+          _updateChart();
+        }
+      });
+    });
+
+    // Initialize daily limit editor
+    const editLimitBtn = _qs('#hub-cf-heatmap-limit-pill');
+    if (editLimitBtn) {
+      editLimitBtn.addEventListener('click', _setDailyLimit);
+      editLimitBtn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          _setDailyLimit();
+        }
+      });
+    }
+  }
+
+  /**
+   * Render the cyberpunk heatmap for the current month
+   */
+  function _renderHeatmap() {
+    const grid = _qs('#hub-cf-heatmap-grid');
+    const monthLabel = _qs('#hub-cf-heatmap-month-label');
+    const limitValue = _qs('#hub-cf-heatmap-limit-value');
+
+    if (!grid || !monthLabel || !limitValue) return;
+
+    // Get current month/year
+    const year = _currentMonth.year;
+    const month = _currentMonth.month; // 1-12
+
+    // Update month label
+    const months = _getCFLang() === 'vi'
+      ? ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12']
+      : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    monthLabel.textContent = `${months[month - 1]} ${year}`;
+
+    // Get daily limit for this month
+    const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+    const dailyLimit = _cashFlowMeta.dailyLimits && _cashFlowMeta.dailyLimits[monthKey]
+      ? _cashFlowMeta.dailyLimits[monthKey]
+      : 500000; // Default 500k VND
+
+    limitValue.textContent = _formatCompactVND(dailyLimit);
+
+    // Get expense data for each day of the month
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const firstDayOfWeek = new Date(year, month - 1, 1).getDay(); // 0 = Sunday
+
+    // Calculate daily expenses
+    const dailyExpenses = {};
+    const dailyTopCategories = {};
+
+    const monthTxs = _getMonthTransactions(year, month);
+    monthTxs.forEach(tx => {
+      if (tx.type !== 'expense') return;
+      const day = tx.day;
+      if (!dailyExpenses[day]) dailyExpenses[day] = 0;
+      dailyExpenses[day] += tx.amount || 0;
+
+      // Track top category per day
+      if (!dailyTopCategories[day]) dailyTopCategories[day] = {};
+      const cat = tx.category;
+      dailyTopCategories[day][cat] = (dailyTopCategories[day][cat] || 0) + (tx.amount || 0);
+    });
+
+    // Find top category for each day
+    const dayTopCategory = {};
+    Object.keys(dailyTopCategories).forEach(day => {
+      const cats = dailyTopCategories[day];
+      let topCat = null, topAmt = 0;
+      Object.entries(cats).forEach(([catId, amt]) => {
+        if (amt > topAmt) { topAmt = amt; topCat = catId; }
+      });
+      if (topCat) dayTopCategory[day] = { id: topCat, amount: topAmt };
+    });
+
+    // Build heatmap grid
+    let html = '';
+
+    // Day headers (Mon-Sun)
+    const dayHeaders = _getCFLang() === 'vi'
+      ? ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
+      : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+    html += '<div class="hub-cf-heatmap-day-headers">';
+    dayHeaders.forEach(d => {
+      html += `<div class="hub-cf-heatmap-day-header">${d}</div>`;
+    });
+    html += '</div>';
+
+    html += '<div class="hub-cf-heatmap-cells" role="grid">';
+
+    // Empty cells before first day (adjust for Monday start)
+    const mondayStart = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
+    for (let i = 0; i < mondayStart; i++) {
+      html += '<div class="hub-cf-heatmap-cell hub-cf-heatmap-cell--empty" aria-hidden="true"></div>';
+    }
+
+    // Day cells
+    for (let day = 1; day <= daysInMonth; day++) {
+      const spent = dailyExpenses[day] || 0;
+      const ratio = dailyLimit > 0 ? spent / dailyLimit : 0;
+      let level = 0;
+
+      if (spent === 0) level = 0;
+      else if (ratio < 0.5) level = 1;
+      else if (ratio < 1.0) level = 2;
+      else level = 3;
+
+      const topCat = dayTopCategory[day];
+      const topCatName = topCat ? _categoryDisplayName(topCat.id, 'expense') : '';
+      const topCatAmt = topCat ? _formatCompactVND(topCat.amount) : '';
+
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const isToday = dateStr === _todayISO();
+
+      html += `<div class="hub-cf-heatmap-cell hub-cf-heatmap-cell--level-${level} ${isToday ? 'hub-cf-heatmap-cell--today' : ''}"
+                  data-day="${day}"
+                  data-date="${dateStr}"
+                  data-spent="${spent}"
+                  data-limit="${dailyLimit}"
+                  data-level="${level}"
+                  data-top-category="${_escHtml(topCatName)}"
+                  data-top-category-amt="${_escHtml(topCatAmt)}"
+                  role="gridcell"
+                  tabindex="0"
+                  aria-label="${_escHtml(`${day}/${month}: ${_formatVND(spent)} spent`)}">`;
+      html += `<span class="hub-cf-heatmap-cell-day">${day}</span>`;
+      if (spent > 0) {
+        html += `<span class="hub-cf-heatmap-cell-amount">${_formatCompactVND(spent)}</span>`;
+      }
+      html += '</div>';
+    }
+
+    html += '</div>';
+    grid.innerHTML = html;
+
+    // Bind click events for filtering
+    _bindHeatmapCellEvents();
+
+    // Bind hover events for tooltip
+    _bindHeatmapTooltipEvents();
+  }
+
+  /**
+   * Bind click events on heatmap cells to filter ledger
+   */
+  function _bindHeatmapCellEvents() {
+    const cells = _qsAll('.hub-cf-heatmap-cell:not(.hub-cf-heatmap-cell--empty)');
+    cells.forEach(cell => {
+      cell.addEventListener('click', function() {
+        const day = parseInt(this.dataset.day, 10);
+        if (!day) return;
+
+        // Update filter state
+        _txTableState.date.from = day;
+        _txTableState.date.to = day;
+
+        // Visual feedback
+        cells.forEach(c => c.classList.remove('hub-cf-heatmap-cell--selected'));
+        this.classList.add('hub-cf-heatmap-cell--selected');
+
+        // Refresh ledger
+        _refreshTransactions();
+
+        // Scroll to ledger
+        const ledger = _qs('.hub-cf-ledger');
+        if (ledger) ledger.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+
+      // Keyboard support
+      cell.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          this.click();
+        }
+      });
+    });
+  }
+
+  // ============================================================
+  //   HEATMAP TOOLTIP ("Note" khi di chuột vào ô ngày)
+  //   ------------------------------------------------------------
+  //   - Gắn thẳng vào <body> + position: fixed  →  không bị ảnh hưởng
+  //     bởi transform / backdrop-filter của .glass-card phía trên.
+  //   - Luôn hiện TRÊN ô ngày, căn giữa theo ô. Tự lật xuống dưới nếu
+  //     sát mép trên, tự dịch ngang nếu sát mép trái/phải màn hình.
+  //   - Style nằm hoàn toàn trong styles.css (khối "HEATMAP TOOLTIP").
+  // ============================================================
+
+  var HEATMAP_TOOLTIP_ID = 'hub-cf-heatmap-tooltip';
+  var _heatmapTooltipCell = null;          // ô đang được hiển thị tooltip
+  var _heatmapTooltipGlobalBound = false;  // listener toàn cục chỉ bind 1 lần
+
+  /** Lấy (hoặc tạo mới) phần tử tooltip trên <body>. */
+  function _getHeatmapTooltip() {
+    var el = document.getElementById(HEATMAP_TOOLTIP_ID);
+    if (!el) {
+      el = document.createElement('div');
+      el.id = HEATMAP_TOOLTIP_ID;
+      el.className = 'hub-cf-heatmap-tooltip';
+      el.setAttribute('role', 'tooltip');
+      el.setAttribute('data-placement', 'top');
+      el.setAttribute('data-level', '0');
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+
+  /** Ẩn tooltip (giữ lại phần tử để lần sau dùng lại). */
+  function _hideHeatmapTooltip() {
+    var tooltip = document.getElementById(HEATMAP_TOOLTIP_ID);
+    if (tooltip) tooltip.classList.remove('hub-cf-heatmap-tooltip--visible');
+    if (_heatmapTooltipCell) {
+      _heatmapTooltipCell.removeAttribute('aria-describedby');
+      _heatmapTooltipCell = null;
+    }
+  }
+
+  /** Gỡ hẳn tooltip khỏi DOM (gọi khi rời module CashFlow). */
+  function _removeHeatmapTooltip() {
+    _hideHeatmapTooltip();
+    var tooltip = document.getElementById(HEATMAP_TOOLTIP_ID);
+    if (tooltip && tooltip.parentNode) tooltip.parentNode.removeChild(tooltip);
+  }
+
+  /** Dựng nội dung tooltip từ data-* của ô ngày. */
+  function _buildHeatmapTooltipHTML(cell) {
+    var spent     = parseInt(cell.dataset.spent, 10) || 0;
+    var level     = parseInt(cell.dataset.level, 10) || 0;
+    var topCat    = cell.dataset.topCategory || '';
+    var topCatAmt = cell.dataset.topCategoryAmt || '';
+    var lang      = _getCFLang();
+
+    var dateObj = new Date(cell.dataset.date + 'T00:00:00');
+    var formattedDate = dateObj.toLocaleDateString(lang === 'vi' ? 'vi-VN' : 'en-US', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+    });
+
+    var html = '';
+    html += '<div class="hub-cf-heatmap-tooltip-head">';
+    html +=   '<span class="hub-cf-heatmap-tooltip-date">' + _escHtml(formattedDate) + '</span>';
+    html +=   '<span class="hub-cf-heatmap-tooltip-badge">' + _escHtml(_t('heatmapLevel' + level)) + '</span>';
+    html += '</div>';
+    html += '<div class="hub-cf-heatmap-tooltip-body">';
+
+    if (spent > 0) {
+      html += '<div class="hub-cf-heatmap-tooltip-row">';
+      html +=   '<span class="hub-cf-heatmap-tooltip-label">' + _escHtml(_t('heatmapTotalSpent')) + '</span>';
+      html +=   '<strong class="hub-cf-heatmap-tooltip-value hub-cf-heatmap-tooltip-value--amount">' + _escHtml(_formatVND(spent)) + '</strong>';
+      html += '</div>';
+
+      if (topCat) {
+        html += '<div class="hub-cf-heatmap-tooltip-row">';
+        html +=   '<span class="hub-cf-heatmap-tooltip-label">' + _escHtml(_t('heatmapTopCategory')) + '</span>';
+        html +=   '<span class="hub-cf-heatmap-tooltip-value">' + _escHtml(topCat) +
+                    (topCatAmt ? '<small>(' + _escHtml(topCatAmt) + ')</small>' : '') + '</span>';
+        html += '</div>';
+      }
+    } else {
+      html += '<div class="hub-cf-heatmap-tooltip-empty">' + _escHtml(_t('heatmapNoExpense')) + '</div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  /**
+   * Đặt tooltip nằm TRÊN ô ngày (tọa độ viewport, vì tooltip là position: fixed).
+   * Lật xuống dưới nếu phía trên không đủ chỗ; kẹp ngang trong màn hình;
+   * mũi tên luôn chỉ đúng vào tâm ô dù tooltip bị dịch.
+   */
+  function _positionHeatmapTooltip(tooltip, cell) {
+    var GAP       = 10;  // khoảng cách ô ↔ tooltip (đã tính phần mũi tên)
+    var MARGIN    = 8;   // cách mép màn hình tối thiểu
+    var ARROW_PAD = 14;  // mũi tên không sát góc bo tròn
+
+    // Đưa về góc (0,0) trước khi đo: phần tử fixed có left lớn sẽ bị co chiều rộng
+    tooltip.style.left = '0px';
+    tooltip.style.top  = '0px';
+
+    var cellRect = cell.getBoundingClientRect();
+    var tipW = tooltip.offsetWidth;
+    var tipH = tooltip.offsetHeight;
+    var vw   = document.documentElement.clientWidth;
+
+    // Ngang: căn giữa theo ô, kẹp trong màn hình
+    var centerX = cellRect.left + cellRect.width / 2;
+    var left = Math.max(MARGIN, Math.min(centerX - tipW / 2, vw - tipW - MARGIN));
+
+    // Dọc: mặc định phía trên ô; thiếu chỗ thì lật xuống dưới
+    var placement = 'top';
+    var top = cellRect.top - tipH - GAP;
+    if (top < MARGIN) {
+      placement = 'bottom';
+      top = cellRect.bottom + GAP;
+    }
+
+    // Mũi tên: trỏ vào tâm ô, nhưng không vượt ra ngoài góc bo của tooltip
+    var arrowX = Math.max(ARROW_PAD, Math.min(centerX - left, tipW - ARROW_PAD));
+
+    tooltip.style.left = Math.round(left) + 'px';
+    tooltip.style.top  = Math.round(top) + 'px';
+    tooltip.style.setProperty('--tt-arrow-x', Math.round(arrowX) + 'px');
+    tooltip.setAttribute('data-placement', placement);
+  }
+
+  /** Hiện tooltip cho một ô ngày. */
+  function _showHeatmapTooltip(cell) {
+    if (!cell || !cell.dataset.day) return;
+
+    var tooltip = _getHeatmapTooltip();
+
+    if (_heatmapTooltipCell && _heatmapTooltipCell !== cell) {
+      _heatmapTooltipCell.removeAttribute('aria-describedby');
+    }
+    _heatmapTooltipCell = cell;
+
+    tooltip.setAttribute('data-level', String(parseInt(cell.dataset.level, 10) || 0));
+    tooltip.innerHTML = _buildHeatmapTooltipHTML(cell);
+    _positionHeatmapTooltip(tooltip, cell);
+
+    cell.setAttribute('aria-describedby', HEATMAP_TOOLTIP_ID);
+    tooltip.classList.add('hub-cf-heatmap-tooltip--visible');
+  }
+
+  /** Listener toàn cục (bind 1 lần): tọa độ fixed sẽ cũ khi cuộn / đổi cỡ cửa sổ → ẩn đi. */
+  function _bindHeatmapTooltipGlobalListeners() {
+    if (_heatmapTooltipGlobalBound) return;
+    _heatmapTooltipGlobalBound = true;
+
+    window.addEventListener('scroll', _hideHeatmapTooltip, { passive: true, capture: true });
+    window.addEventListener('resize', _hideHeatmapTooltip);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') _hideHeatmapTooltip();
+    });
+  }
+
+  /**
+   * Gắn sự kiện hover / focus cho các ô ngày của heatmap.
+   * Được gọi sau mỗi lần _renderHeatmap() (ô cũ đã bị thay bằng ô mới).
+   */
+  function _bindHeatmapTooltipEvents() {
+    // Grid vừa được render lại → ô đang hover (nếu có) đã bị gỡ khỏi DOM
+    _hideHeatmapTooltip();
+    _bindHeatmapTooltipGlobalListeners();
+
+    _qsAll('.hub-cf-heatmap-cell:not(.hub-cf-heatmap-cell--empty)').forEach(function (cell) {
+      cell.addEventListener('mouseenter', function () { _showHeatmapTooltip(this); });
+      cell.addEventListener('mouseleave', _hideHeatmapTooltip);
+      // Hỗ trợ bàn phím (ô có tabindex="0")
+      cell.addEventListener('focus', function () { _showHeatmapTooltip(this); });
+      cell.addEventListener('blur', _hideHeatmapTooltip);
+    });
+  }
+
+  /**
+   * Prompt user to set daily expense limit for current month
+   */
+  function _setDailyLimit() {
+    const lang = _getCFLang();
+    const monthKey = `${_currentMonth.year}-${String(_currentMonth.month).padStart(2, '0')}`;
+    const currentLimit = _cashFlowMeta.dailyLimits && _cashFlowMeta.dailyLimits[monthKey]
+      ? _cashFlowMeta.dailyLimits[monthKey]
+      : 500000;
+
+    const promptMsg = lang === 'vi'
+      ? `Nhập hạn mức chi tiêu mỗi ngày cho ${_currentMonth.month}/${_currentMonth.year} (VND):`
+      : `Set daily expense limit for ${_currentMonth.month}/${_currentMonth.year} (VND):`;
+
+    const currentVal = currentLimit.toLocaleString('vi-VN');
+    const raw = prompt(promptMsg, currentVal);
+
+    if (raw === null) return; // User cancelled
+
+    const clean = String(raw).replace(/[\s,.]/g, '');
+    const newLimit = parseInt(clean, 10);
+
+    if (isNaN(newLimit) || newLimit < 0) {
+      _showToast(lang === 'vi' ? '❌ Số tiền không hợp lệ' : '❌ Invalid amount');
+      return;
+    }
+
+    // Initialize dailyLimits object if needed
+    if (!_cashFlowMeta.dailyLimits) {
+      _cashFlowMeta.dailyLimits = {};
+    }
+
+    _cashFlowMeta.dailyLimits[monthKey] = newLimit;
+
+    // Persist
+    _debouncedPersistMeta();
+
+    // Re-render heatmap
+    _renderHeatmap();
+
+    _showToast(lang === 'vi'
+      ? `✅ Hạn mức hàng ngày: ${_formatVND(newLimit)}`
+      : `✅ Daily limit: ${_formatVND(newLimit)}`);
+  }
+
+  /**
+   * Re-render heatmap when month changes (call from month nav handlers)
+   */
+  function _refreshHeatmap() {
+    if (_heatmapView === 'heatmap') {
+      _renderHeatmap();
     }
   }
 
