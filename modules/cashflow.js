@@ -119,6 +119,13 @@ const cashflowModule = (function () {
       heatmapTotalSpent: 'Total Spent:',
       heatmapTopCategory: 'Top Category:',
       heatmapNoExpense: 'No expenses',
+      heatmapPrevMonth: 'Previous month',
+      heatmapNextMonth: 'Next month',
+      heatmapThisMonth: 'This month',
+      heatmapPickMonth: 'Pick a month',
+      heatmapPrevYear:  'Previous year',
+      heatmapNextYear:  'Next year',
+      heatmapHasData:   'Has expenses',
 
       // Action bar
       addTx:            'Add Transaction',
@@ -226,6 +233,13 @@ const cashflowModule = (function () {
       heatmapTotalSpent: 'Tổng chi:',
       heatmapTopCategory: 'Hạng mục chính:',
       heatmapNoExpense: 'Không chi tiêu',
+      heatmapPrevMonth: 'Tháng trước',
+      heatmapNextMonth: 'Tháng sau',
+      heatmapThisMonth: 'Tháng này',
+      heatmapPickMonth: 'Chọn tháng',
+      heatmapPrevYear:  'Năm trước',
+      heatmapNextYear:  'Năm sau',
+      heatmapHasData:   'Có chi tiêu',
 
       // Action bar
       addTx:            'Thêm Giao Dịch',
@@ -2960,7 +2974,20 @@ function _restoreAIState() {
       <!-- Heatmap View -->
       <div class="hub-cf-heatmap-wrap" id="hub-cf-heatmap-view" style="display: none;">
         <div class="hub-cf-heatmap-header">
-          <span class="hub-cf-heatmap-month" id="hub-cf-heatmap-month-label"></span>
+          <div class="hub-cf-heatmap-nav" role="group" aria-label="${_escHtml(_t('heatmapPickMonth'))}">
+            <button type="button" class="hub-cf-heatmap-nav-btn" id="hub-cf-heatmap-prev" aria-label="${_escHtml(_t('heatmapPrevMonth'))}" title="${_escHtml(_t('heatmapPrevMonth'))}">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </button>
+            <button type="button" class="hub-cf-heatmap-month-btn" id="hub-cf-heatmap-month-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="hub-cf-heatmap-picker" title="${_escHtml(_t('heatmapPickMonth'))}">
+              <span class="hub-cf-heatmap-month" id="hub-cf-heatmap-month-label"></span>
+              <svg class="hub-cf-heatmap-month-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+            <button type="button" class="hub-cf-heatmap-nav-btn" id="hub-cf-heatmap-next" aria-label="${_escHtml(_t('heatmapNextMonth'))}" title="${_escHtml(_t('heatmapNextMonth'))}">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </button>
+            <button type="button" class="hub-cf-heatmap-today" id="hub-cf-heatmap-today" data-i18n="heatmapThisMonth" hidden>${_t('heatmapThisMonth')}</button>
+            <div class="hub-cf-heatmap-picker" id="hub-cf-heatmap-picker" role="dialog" aria-label="${_escHtml(_t('heatmapPickMonth'))}" hidden></div>
+          </div>
           <div class="heatmap-limit-pill" id="hub-cf-heatmap-limit-pill" tabindex="0" role="button" aria-label="${_escHtml('Edit Daily Limit')}" title="${_escHtml('Set daily expense limit for this month')}">
             <span class="heatmap-limit-label" data-i18n="heatmapDailyLimit">${_t('heatmapDailyLimit')}</span>
             <span class="heatmap-limit-value" id="hub-cf-heatmap-limit-value">500.0k</span>
@@ -3459,6 +3486,10 @@ function _restoreAIState() {
       }
       _destroyChart();
       _removeHeatmapTooltip();
+      if (_boundHeatmapPickerOutside) {
+        document.removeEventListener('pointerdown', _boundHeatmapPickerOutside);
+        _boundHeatmapPickerOutside = null;
+      }
       _container = null;
     }
   };
@@ -3514,6 +3545,7 @@ function _restoreAIState() {
     // ── Re-render dynamic sections that contain language-dependent strings ──
     _refreshLedger();
     _updateChart();
+    _refreshHeatmap();
     _updateDebtLanguage();
   }
 
@@ -4489,24 +4521,10 @@ function _restoreAIState() {
     const prevBtn = _qs('#hub-cf-month-prev');
     const nextBtn = _qs('#hub-cf-month-next');
     if (prevBtn) {
-      prevBtn.addEventListener('click', function () {
-        _currentMonth.month -= 1;
-        if (_currentMonth.month < 1) {
-          _currentMonth.month = 12;
-          _currentMonth.year -= 1;
-        }
-        _renderAllViews();
-      });
+      prevBtn.addEventListener('click', function () { _shiftMonth(-1); });
     }
     if (nextBtn) {
-      nextBtn.addEventListener('click', function () {
-        _currentMonth.month += 1;
-        if (_currentMonth.month > 12) {
-          _currentMonth.month = 1;
-          _currentMonth.year += 1;
-        }
-        _renderAllViews();
-      });
+      nextBtn.addEventListener('click', function () { _shiftMonth(1); });
     }
 
     // Chart filter change — re-render dashboard totals + chart
@@ -4555,6 +4573,7 @@ function _restoreAIState() {
     // Escape key to close modals
     _boundKeydown = function (e) {
       if (e.key === 'Escape') {
+        _closeHeatmapPicker(true);
         _closeModal();
         _closeDebtModal();
         _closeDebtHistoryModal();
@@ -5936,6 +5955,189 @@ function _restoreAIState() {
     return Math.round(abs).toLocaleString('vi-VN');
   }
 
+  // ============================================================
+  //   HEATMAP — ĐIỀU HƯỚNG THÁNG (xem lại tháng quá khứ)
+  //   ------------------------------------------------------------
+  //   Heatmap, bảng giao dịch và các thẻ tổng kết cùng dùng chung
+  //   _currentMonth, nên đổi tháng ở đâu thì tất cả đều đổi theo.
+  //   Mọi cách đổi tháng đều đi qua _goToMonth().
+  // ============================================================
+
+  var _heatmapPickerYear = null;   // năm đang hiển thị trong bộ chọn
+  var _heatmapLastKey = null;      // YYYYMM của lần render trước (để biết có đổi tháng không)
+  var _heatmapNavDir = 0;          // +1 tiến / -1 lùi (hướng hiệu ứng trượt)
+  var _boundHeatmapPickerOutside = null;
+
+  function _heatmapMonthNames(short) {
+    if (_getCFLang() === 'vi') {
+      return short
+        ? ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12']
+        : ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
+    }
+    return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  }
+
+  /** Chuyển tới một tháng bất kỳ (tự chuẩn hóa tháng 0 / 13...). */
+  function _goToMonth(year, month) {
+    var d = new Date(year, month - 1, 1);
+    var y = d.getFullYear();
+    var m = d.getMonth() + 1;
+    if (y === _currentMonth.year && m === _currentMonth.month) return;
+
+    _heatmapNavDir = (y * 12 + m) > (_currentMonth.year * 12 + _currentMonth.month) ? 1 : -1;
+
+    // Bộ lọc "đúng 1 ngày" do click ô heatmap tạo ra sẽ vô nghĩa ở tháng khác → bỏ
+    var df = _txTableState.date;
+    if (df.from !== null && df.from === df.to) { df.from = null; df.to = null; }
+
+    _currentMonth.year = y;
+    _currentMonth.month = m;
+    _renderAllViews();
+  }
+
+  /** Tiến / lùi n tháng so với tháng đang xem. */
+  function _shiftMonth(delta) {
+    _goToMonth(_currentMonth.year, _currentMonth.month + delta);
+  }
+
+  /** Đồng bộ trạng thái nút: hiện "Tháng này" khi đang xem tháng khác. */
+  function _syncHeatmapNav() {
+    var todayBtn = _qs('#hub-cf-heatmap-today');
+    if (todayBtn) {
+      var now = _currentYearMonth();
+      todayBtn.hidden = (now.year === _currentMonth.year && now.month === _currentMonth.month);
+      todayBtn.textContent = _t('heatmapThisMonth');
+    }
+    var prev = _qs('#hub-cf-heatmap-prev');
+    var next = _qs('#hub-cf-heatmap-next');
+    var pick = _qs('#hub-cf-heatmap-month-btn');
+    if (prev) { prev.title = _t('heatmapPrevMonth'); prev.setAttribute('aria-label', _t('heatmapPrevMonth')); }
+    if (next) { next.title = _t('heatmapNextMonth'); next.setAttribute('aria-label', _t('heatmapNextMonth')); }
+    if (pick) { pick.title = _t('heatmapPickMonth'); }
+
+    var picker = _qs('#hub-cf-heatmap-picker');
+    if (picker && !picker.hidden) _renderHeatmapPicker();
+  }
+
+  /** Vẽ bộ chọn tháng: lưới 12 tháng + bước chuyển năm. */
+  function _renderHeatmapPicker() {
+    var picker = _qs('#hub-cf-heatmap-picker');
+    if (!picker) return;
+
+    var year = _heatmapPickerYear !== null ? _heatmapPickerYear : _currentMonth.year;
+    var now = _currentYearMonth();
+    var names = _heatmapMonthNames(true);
+
+    // Tháng nào trong năm này có chi tiêu → chấm nhỏ
+    var hasData = {};
+    ((_data && _data.transactions) || []).forEach(function (tx) {
+      if (tx.type === 'expense' && tx.year === year) hasData[tx.month] = true;
+    });
+
+    var html = '';
+    html += '<div class="hub-cf-heatmap-picker-year">';
+    html +=   '<button type="button" class="hub-cf-heatmap-nav-btn" data-year-step="-1" aria-label="' + _escHtml(_t('heatmapPrevYear')) + '" title="' + _escHtml(_t('heatmapPrevYear')) + '">' +
+                '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg></button>';
+    html +=   '<span class="hub-cf-heatmap-picker-year-label">' + year + '</span>';
+    html +=   '<button type="button" class="hub-cf-heatmap-nav-btn" data-year-step="1" aria-label="' + _escHtml(_t('heatmapNextYear')) + '" title="' + _escHtml(_t('heatmapNextYear')) + '">' +
+                '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg></button>';
+    html += '</div>';
+
+    html += '<div class="hub-cf-heatmap-picker-grid" role="group">';
+    for (var m = 1; m <= 12; m++) {
+      var cls = 'hub-cf-heatmap-picker-month';
+      var selected = (year === _currentMonth.year && m === _currentMonth.month);
+      if (selected) cls += ' is-selected';
+      if (year === now.year && m === now.month) cls += ' is-now';
+      if (hasData[m]) cls += ' has-data';
+      html += '<button type="button" class="' + cls + '" data-month="' + m + '" aria-pressed="' + selected + '">' + names[m - 1] + '</button>';
+    }
+    html += '</div>';
+
+    html += '<div class="hub-cf-heatmap-picker-legend"><span class="hub-cf-heatmap-picker-dot" aria-hidden="true"></span>' +
+              _escHtml(_t('heatmapHasData')) + '</div>';
+
+    picker.innerHTML = html;
+  }
+
+  function _openHeatmapPicker() {
+    var picker = _qs('#hub-cf-heatmap-picker');
+    var btn = _qs('#hub-cf-heatmap-month-btn');
+    if (!picker || !btn) return;
+    _hideHeatmapTooltip();
+    _heatmapPickerYear = _currentMonth.year;
+    _renderHeatmapPicker();
+    picker.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+  }
+
+  function _closeHeatmapPicker(refocus) {
+    var picker = document.getElementById('hub-cf-heatmap-picker');
+    if (!picker || picker.hidden) return;
+    picker.hidden = true;
+    var btn = document.getElementById('hub-cf-heatmap-month-btn');
+    if (btn) {
+      btn.setAttribute('aria-expanded', 'false');
+      if (refocus) btn.focus();
+    }
+  }
+
+  /** Gắn sự kiện cho cụm điều hướng trong header heatmap. */
+  function _bindHeatmapNav() {
+    var prev = _qs('#hub-cf-heatmap-prev');
+    var next = _qs('#hub-cf-heatmap-next');
+    var pick = _qs('#hub-cf-heatmap-month-btn');
+    var today = _qs('#hub-cf-heatmap-today');
+    var picker = _qs('#hub-cf-heatmap-picker');
+
+    if (prev) prev.addEventListener('click', function () { _shiftMonth(-1); });
+    if (next) next.addEventListener('click', function () { _shiftMonth(1); });
+
+    if (today) {
+      today.addEventListener('click', function () {
+        var now = _currentYearMonth();
+        _goToMonth(now.year, now.month);
+        _closeHeatmapPicker();
+      });
+    }
+
+    if (pick && picker) {
+      pick.addEventListener('click', function () {
+        if (picker.hidden) _openHeatmapPicker(); else _closeHeatmapPicker();
+      });
+
+      // Ủy quyền sự kiện cho các nút bên trong bộ chọn (nội dung được vẽ lại liên tục)
+      picker.addEventListener('click', function (e) {
+        var stepBtn = e.target.closest('[data-year-step]');
+        if (stepBtn) {
+          _heatmapPickerYear = (_heatmapPickerYear !== null ? _heatmapPickerYear : _currentMonth.year) +
+                               parseInt(stepBtn.getAttribute('data-year-step'), 10);
+          _renderHeatmapPicker();
+          return;
+        }
+        var monthBtn = e.target.closest('[data-month]');
+        if (monthBtn) {
+          var y = _heatmapPickerYear !== null ? _heatmapPickerYear : _currentMonth.year;
+          _goToMonth(y, parseInt(monthBtn.getAttribute('data-month'), 10));
+          _closeHeatmapPicker(true);
+        }
+      });
+    }
+
+    // Bấm ra ngoài thì đóng bộ chọn (listener toàn cục: gỡ bản cũ trước khi gắn bản mới)
+    if (_boundHeatmapPickerOutside) {
+      document.removeEventListener('pointerdown', _boundHeatmapPickerOutside);
+    }
+    _boundHeatmapPickerOutside = function (e) {
+      var pk = document.getElementById('hub-cf-heatmap-picker');
+      if (!pk || pk.hidden) return;
+      var btn = document.getElementById('hub-cf-heatmap-month-btn');
+      if (pk.contains(e.target) || (btn && btn.contains(e.target))) return;
+      _closeHeatmapPicker();
+    };
+    document.addEventListener('pointerdown', _boundHeatmapPickerOutside);
+  }
+
   /**
    * Initialize heatmap view toggle
    */
@@ -5974,6 +6176,9 @@ function _restoreAIState() {
       });
     });
 
+    // Month navigation + month picker inside the heatmap header
+    _bindHeatmapNav();
+
     // Initialize daily limit editor
     const editLimitBtn = _qs('#hub-cf-heatmap-limit-pill');
     if (editLimitBtn) {
@@ -6002,10 +6207,9 @@ function _restoreAIState() {
     const month = _currentMonth.month; // 1-12
 
     // Update month label
-    const months = _getCFLang() === 'vi'
-      ? ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12']
-      : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const months = _heatmapMonthNames(false);
     monthLabel.textContent = `${months[month - 1]} ${year}`;
+    _syncHeatmapNav();
 
     // Get daily limit for this month
     const monthKey = `${year}-${String(month).padStart(2, '0')}`;
@@ -6107,6 +6311,17 @@ function _restoreAIState() {
 
     html += '</div>';
     grid.innerHTML = html;
+
+    // Hiệu ứng trượt nhẹ khi đổi tháng (trượt theo hướng đang điều hướng)
+    var monthKey2 = year * 100 + month;
+    if (_heatmapLastKey !== null && _heatmapLastKey !== monthKey2 && _heatmapNavDir) {
+      grid.setAttribute('data-dir', _heatmapNavDir > 0 ? 'next' : 'prev');
+      grid.classList.remove('is-switching');
+      void grid.offsetWidth; // restart animation
+      grid.classList.add('is-switching');
+    }
+    _heatmapLastKey = monthKey2;
+    _heatmapNavDir = 0;
 
     // Bind click events for filtering
     _bindHeatmapCellEvents();
@@ -6378,6 +6593,8 @@ function _restoreAIState() {
   function _refreshHeatmap() {
     if (_heatmapView === 'heatmap') {
       _renderHeatmap();
+    } else {
+      _heatmapNavDir = 0; // heatmap đang ẩn → không giữ hướng trượt cũ
     }
   }
 
