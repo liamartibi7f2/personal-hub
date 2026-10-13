@@ -3,9 +3,9 @@
    CashFlow (Wallet.OS) — Personal Finance Tracker
    Data model mirrors "CashDuck Tracking.xlsx":
      - Monthly Summary with net worth, income & expense breakdowns
-     - Income categories: Lương, Kinh doanh/đầu tư, Thu nhập bị động, Thu nhập khác
+     - Income categories: Lương, Kinh doanh/đầu tư, Lãi & đầu tư, Thu nhập bị động, Trợ cấp, Thu nhập khác
      - Expense categories: Nhà ở, Ăn uống, Di chuyển, Tiêu dùng thiết yếu,
-       Tiêu dùng khác, Doodad, Cho đi, Phát triển bản thân, Chi phí khác
+       Tiêu dùng khác, Giải trí (id: doodad), Cho đi, Phát triển bản thân, Sức khỏe, Chi phí khác
      - Balance snapshots (Tiền mặt + Thẻ ngân hàng + Tiết kiệm + Đầu tư + Cho mượn - Nợ)
      - Export to .xlsx for end-of-month reporting
    ============================================================ */
@@ -20,9 +20,11 @@ const cashflowModule = (function () {
   const INCOME_CATEGORIES = [
     { id: 'luong',             name: 'Lương',                nameVI: 'Lương' },
     { id: 'kinh-doanh',        name: 'Kinh doanh, đầu tư',   nameVI: 'Kinh doanh, đầu tư' },
+    { id: 'lai-dau-tu',        name: '📈 Lãi & đầu tư',      nameVI: '📈 Lãi & đầu tư' },
     { id: 'thu-nhap-bi-dong',  name: 'Thu nhập bị động',     nameVI: 'Thu nhập bị động' },
+    { id: 'tro-cap',           name: '🎁 Trợ cấp',           nameVI: '🎁 Trợ cấp' },
     { id: 'thu-nhap-khac',     name: 'Thu nhập khác',        nameVI: 'Thu nhập khác' },
-    { id: 'tiet-kiem',         name: '🐷 Tiết kiệm',         nameVI: '🐷 Tiết kiệm' }
+    { id: 'tiet-kiem',         name: '🐷 Rút từ tiết kiệm',  nameVI: '🐷 Rút từ tiết kiệm' }   // id giữ nguyên: dữ liệu cũ lưu theo id
   ];
 
   const EXPENSE_CATEGORIES = [
@@ -31,11 +33,12 @@ const cashflowModule = (function () {
     { id: 'di-chuyen',               name: '🛵 Di chuyển',             nameVI: '🛵 Di chuyển' },
     { id: 'tieu-dung-thiet-yeu',     name: '🛒 Tiêu dùng thiết yếu',    nameVI: '🛒 Tiêu dùng thiết yếu' },
     { id: 'tieu-dung-khac',          name: '🛍️ Tiêu dùng khác',         nameVI: '🛍️ Tiêu dùng khác' },
-    { id: 'doodad',                  name: '🎮 Doodad',                nameVI: '🎮 Doodad' },
+    { id: 'doodad',                  name: '🎮 Giải trí',              nameVI: '🎮 Giải trí' },   // trước là "Doodad" (id giữ nguyên)
     { id: 'cho-di',                  name: '❤️ Cho đi',                nameVI: '❤️ Cho đi' },
     { id: 'phat-trien-ban-than',     name: '📚 Phát triển bản thân',    nameVI: '📚 Phát triển bản thân' },
+    { id: 'suc-khoe',                name: '🩺 Sức khỏe',              nameVI: '🩺 Sức khỏe' },
     { id: 'chi-phi-khac',            name: '🏷️ Chi phí khác',           nameVI: '🏷️ Chi phí khác' },
-    { id: 'tiet-kiem',               name: '🐷 Tiết kiệm',             nameVI: '🐷 Tiết kiệm' }
+    { id: 'tiet-kiem',               name: '🐷 Chuyển vào tiết kiệm',  nameVI: '🐷 Chuyển vào tiết kiệm' }   // id giữ nguyên
   ];
 
   // ── Balance account types ──
@@ -73,6 +76,8 @@ const cashflowModule = (function () {
     'Lương':                    '💰 Lương',
     'Kinh doanh, đầu tư':       '📈 Kinh doanh, đầu tư',
     'Thu nhập bị động':         '💎 Thu nhập bị động',
+    'Trợ cấp':                  '🎁 Trợ cấp',
+    'Lãi & đầu tư':             '📈 Lãi & đầu tư',
     'Thu nhập khác':            '💵 Thu nhập khác',
     'Tiết kiệm':                '🐷 Tiết kiệm'
   };
@@ -696,6 +701,63 @@ const cashflowModule = (function () {
     }
   }
 
+
+  // ============================================================
+  //   CATEGORY NORMALIZER — nhận diện tên danh mục cũ (không xoá dữ liệu)
+  //   Giao dịch nhập tay lưu theo MÃ (vd 'doodad'); giao dịch nhập từ Excel
+  //   có thể lưu theo NHÃN (vd '🎮 Doodad', 'Nhà ở'). Hàm này đổi nhãn đã biết
+  //   (tên hiện tại + tên cũ, không phân biệt emoji / dấu / hoa-thường) về đúng
+  //   mã. Nhãn lạ được GIỮ NGUYÊN. Giá trị gốc được lưu ở tx.categoryLegacy.
+  // ============================================================
+  var _CATEGORY_LEGACY_ALIASES = {
+    expense: { 'doodad': 'doodad', 'tiet kiem': 'tiet-kiem', 'chuyen vao tiet kiem': 'tiet-kiem' },
+    income:  { 'tiet kiem': 'tiet-kiem', 'rut tu tiet kiem': 'tiet-kiem' }
+  };
+
+  function _catKey(str) {
+    return String(str == null ? '' : str)
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd')
+      .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  }
+
+  function _buildCategoryLookup(list, type) {
+    var map = {};
+    list.forEach(function (c) {
+      map[c.id] = c.id;                       // mã hiện tại
+      map[_catKey(c.id)] = c.id;
+      map[_catKey(c.name)] = c.id;            // tên hiện tại
+      map[_catKey(c.nameVI)] = c.id;
+    });
+    var extra = _CATEGORY_LEGACY_ALIASES[type] || {};
+    Object.keys(extra).forEach(function (k) { map[k] = extra[k]; });   // tên cũ
+    return map;
+  }
+
+  var _catLookupExpense = null, _catLookupIncome = null;
+
+  /** @returns {number} số giao dịch được chuẩn hóa */
+  function _normalizeCategories(txs) {
+    if (!Array.isArray(txs)) return 0;
+    if (!_catLookupExpense) _catLookupExpense = _buildCategoryLookup(EXPENSE_CATEGORIES, 'expense');
+    if (!_catLookupIncome)  _catLookupIncome  = _buildCategoryLookup(INCOME_CATEGORIES, 'income');
+    var changed = 0;
+    txs.forEach(function (tx) {
+      if (!tx || typeof tx.category !== 'string' || !tx.category) return;
+      var raw = tx.category;
+      if (raw === 'thu-no' || raw === 'Thu nợ') return;           // thu hồi nợ: giữ nguyên (logic riêng)
+      var lookup = tx.type === 'income' ? _catLookupIncome : _catLookupExpense;
+      var own = function (k) { return Object.prototype.hasOwnProperty.call(lookup, k) ? lookup[k] : undefined; };
+      if (own(raw) === raw) return;                                // đã là mã hợp lệ
+      var id = own(raw) || own(_catKey(raw));
+      if (id && id !== raw) {
+        if (tx.categoryLegacy === undefined) tx.categoryLegacy = raw;
+        tx.category = id;
+        changed++;
+      }
+    });
+    return changed;
+  }
+
   function _ensureDefault() {
     if (!_data) _data = _defaultData();
     if (!Array.isArray(_data.transactions)) _data.transactions = [];
@@ -707,6 +769,9 @@ const cashflowModule = (function () {
     _data.transactions.forEach(function (tx) {
       if (!tx.source) tx.source = 'uncategorized';
     });
+
+    // 🔑 Đưa nhãn danh mục cũ / từ Excel về đúng mã (không xoá gì, nhãn lạ giữ nguyên)
+    _normalizeCategories(_data.transactions);
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -1097,10 +1162,44 @@ const cashflowModule = (function () {
     return entries;
   }
 
+  // ── Tên hiển thị cho danh mục hệ thống / không có trong danh sách ──
+  // Trước đây trả về nguyên mã thô (vd "thu-no", "unknown"). Giờ luôn có tên đẹp + icon.
+  var _SYSTEM_CATEGORY_NAMES = {
+    'thu-no':  '🤝 Thu nợ',
+    'Thu nợ':  '🤝 Thu nợ',
+    'unknown': '🏷️ Chưa phân loại'
+  };
+  // Đoán icon cho nhãn lạ theo từ khóa (không phân biệt dấu / hoa-thường)
+  var _CATEGORY_ICON_HINTS = [
+    [/y te|suc khoe|thuoc|benh|kham/, '🩺'], [/du lich|chuyen di|ve may bay/, '✈️'], [/hoc|sach|khoa/, '📚'],
+    [/qua|sinh nhat|cuoi/, '🎁'], [/xang|grab|taxi|xe/, '🛵'], [/dien|nuoc|internet|wifi/, '💡'],
+    [/cafe|ca phe|an |uong/, '🍜'], [/lai|co tuc|dau tu|chung khoan|crypto/, '📈'], [/luong|thuong/, '💰']
+  ];
+
+  function _friendlyCategoryName(catId) {
+    if (catId === undefined || catId === null || catId === '') return _SYSTEM_CATEGORY_NAMES['unknown'];
+    var raw = String(catId);
+    if (Object.prototype.hasOwnProperty.call(_SYSTEM_CATEGORY_NAMES, raw)) return _SYSTEM_CATEGORY_NAMES[raw];
+    if (/^\p{Extended_Pictographic}/u.test(raw)) return raw;            // đã có icon → giữ nguyên
+    var text = raw;
+    if (/^[a-z0-9]+(-[a-z0-9]+)*$/.test(raw)) {                            // dạng mã "lai-dau-tu" → "Lai dau tu"
+      text = raw.replace(/-/g, ' ');
+      text = text.charAt(0).toUpperCase() + text.slice(1);
+    }
+    var key = _catKey(text) + ' ', icon = '🏷️';
+    for (var i = 0; i < _CATEGORY_ICON_HINTS.length; i++) {
+      if (_CATEGORY_ICON_HINTS[i][0].test(key)) { icon = _CATEGORY_ICON_HINTS[i][1]; break; }
+    }
+    return icon + ' ' + text;
+  }
+
   /** Lookup category object by id */
   function _lookupCategory(catId, type) {
     const list = type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
-    return list.find(function (c) { return c.id === catId; }) || { id: catId, name: catId, nameVI: catId };
+    var found = list.find(function (c) { return c.id === catId; });
+    if (found) return found;
+    var friendly = _friendlyCategoryName(catId);
+    return { id: catId, name: friendly, nameVI: friendly };
   }
 
   /** Lookup category name for display with emoji mapping for legacy data */
@@ -5147,6 +5246,7 @@ ${_aiShellHTML()}
       }
 
       // ═══ 4. STRICT OVERWRITE: replace entire state & persist ═══
+      _normalizeCategories(importedTxs);
       _data.transactions = importedTxs;
       _isDataLoaded = true;
 
@@ -7306,7 +7406,7 @@ ${_aiShellHTML()}
 
   // Nhóm hạng mục theo quy tắc 50/30/20 (mục tiêu Needs/Wants tự co giãn theo % tiết kiệm)
   var AI_BUCKETS = {
-    needs:  { label: 'Thiết yếu',               cats: ['nha-o', 'an-uong', 'di-chuyen', 'tieu-dung-thiet-yeu'] },
+    needs:  { label: 'Thiết yếu',               cats: ['nha-o', 'an-uong', 'di-chuyen', 'tieu-dung-thiet-yeu', 'suc-khoe'] },
     wants:  { label: 'Mong muốn',               cats: ['tieu-dung-khac', 'doodad', 'cho-di', 'chi-phi-khac'] },
     growth: { label: 'Tiết kiệm & phát triển',  cats: ['tiet-kiem', 'phat-trien-ban-than'] }
   };
