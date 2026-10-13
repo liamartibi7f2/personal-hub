@@ -99,6 +99,13 @@ const cashflowModule = (function () {
       uncategorizedLabel:  'UNCATEGORIZED',
       uncategorizedSub:    'NEEDS REVIEW',
 
+      // Dashboard v2
+      cfdTitle: 'Financial overview', cfdHide: 'Hide balances', cfdShow: 'Show balances',
+      cfdNetWorth: 'Net worth', cfdBank: 'Bank', cfdCash: 'Cash', cfdSavings: 'Savings & investments',
+      cfdCashflow: 'Cash flow', cfdRemaining: 'Remaining', cfdIncome: 'Income', cfdExpense: 'Expenses',
+      cfdSaved: 'Saved', cfdUncategorized: 'Uncategorized', cfdNeedsReview: 'needs review',
+      cfdDebt: 'Pending debts', cfdPeriodDay: 'Last 30 days', cfdMonth: 'Month', cfdYear: 'Year',
+
       // Chart
       chartTitle:       'INCOME VS EXPENSE',
       chartIncome:      'Income',
@@ -212,6 +219,13 @@ const cashflowModule = (function () {
       bankAccountSub:   'SỐ DƯ TÀI KHOẢN',
       uncategorizedLabel:  'CHƯA PHÂN LOẠI',
       uncategorizedSub:    'CẦN XEM XÉT',
+
+      // Dashboard v2
+      cfdTitle: 'Tổng quan tài chính', cfdHide: 'Ẩn số dư', cfdShow: 'Hiện số dư',
+      cfdNetWorth: 'Tài sản ròng', cfdBank: 'Ngân hàng', cfdCash: 'Tiền mặt', cfdSavings: 'Tiết kiệm & đầu tư',
+      cfdCashflow: 'Dòng tiền', cfdRemaining: 'Còn lại', cfdIncome: 'Thu nhập', cfdExpense: 'Chi tiêu',
+      cfdSaved: 'Để dành', cfdUncategorized: 'Chưa phân loại', cfdNeedsReview: 'cần xem xét',
+      cfdDebt: 'Nợ đang chờ thu', cfdPeriodDay: '30 ngày gần nhất', cfdMonth: 'Tháng', cfdYear: 'Năm',
 
       // Chart
       chartTitle:       'THU NHẬP VÀ CHI PHÍ',
@@ -509,7 +523,10 @@ const cashflowModule = (function () {
     lastPrompt: '',                  // Last user query
     abortController: null,           // Active request AbortController
     lastError: null,                 // Last error for retry UI
-    requestId: 0                     // For deduplication
+    requestId: 0,                    // For deduplication
+    tab: 'plan',                     // 'plan' | 'chat' (persisted)
+    userAborted: false,              // User pressed Stop
+    _loadingTimer: null
   };
 
   function _loadAIState() {
@@ -520,6 +537,7 @@ const cashflowModule = (function () {
         _aiState.provider = parsed.provider || 'gemini';
         _aiState.conversationHistory = parsed.conversationHistory || [];
         _aiState.currentResponse = parsed.currentResponse || '';
+        _aiState.tab = parsed.tab === 'chat' ? 'chat' : 'plan';
         // Don't restore isLoading from disk — check in-flight request instead
       }
     } catch (_) {}
@@ -529,8 +547,9 @@ const cashflowModule = (function () {
     try {
       localStorage.setItem('hub_cf_ai_state', JSON.stringify({
         provider: _aiState.provider,
-        conversationHistory: _aiState.conversationHistory,
-        currentResponse: _aiState.currentResponse
+        conversationHistory: _aiState.conversationHistory.slice(-60),
+        currentResponse: _aiState.currentResponse,
+        tab: _aiState.tab
       }));
     } catch (_) {}
   }
@@ -1183,44 +1202,19 @@ const cashflowModule = (function () {
 
 function _restoreAIState() {
   const providerSelect = _qs('#cf-ai-provider');
-  const promptInput = _qs('#cf-ai-prompt');
-  const askBtn = _qs('#cf-ai-ask-btn');
+  if (providerSelect) providerSelect.value = _aiState.provider;
 
-  // Restore provider selection
-  if (providerSelect) {
-    providerSelect.value = _aiState.provider;
-    // Don't add listener here — _bindEvents will handle it
-  }
-
-  // Always render chat history from persistent state
   _renderChatHistory();
+  _renderSpendingPlan();     // cũng cập nhật Insight banner
+  _switchAITab(_aiState.tab);
+  _updateAIStatus();
 
-  // Generate proactive insight
-  _generateAIInsight();
-
+  // Yêu cầu vẫn đang chạy ngầm (người dùng vừa chuyển tab rồi quay lại)
   if (_aiState.isLoading && _aiState.abortController) {
-    // Request still in flight — show loading bubble
-    _showAILoading('Đang phân tích... (tiếp tục ở nền)');
-    if (promptInput) promptInput.disabled = true;
-    if (askBtn) {
-      askBtn.disabled = true;
-      askBtn.innerHTML = '<span class="loading-spinner" style="width:20px;height:20px;border:2.5px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin 1s linear infinite;display:inline-block;"></span>';
-    }
-  } else if (_aiState.lastError) {
-    // Has cached error — show error bubble
-    _showAIError(_aiState.lastError);
-    if (promptInput) promptInput.disabled = false;
-    if (askBtn) {
-      askBtn.disabled = false;
-      askBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>';
-    }
+    _showAILoading('Đang phân tích… (tiếp tục ở nền)');
+    _setAIBusy(true);
   } else {
-    // Default state - UI ready
-    if (promptInput) promptInput.disabled = false;
-    if (askBtn) {
-      askBtn.disabled = false;
-      askBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>';
-    }
+    _setAIBusy(false);
   }
 }
 
@@ -2113,253 +2107,7 @@ function _restoreAIState() {
   right: auto !important;
 }
 
-/* ============================================================
-   AI COPILOT — Glassmorphism Chat Interface (Modern FinTech)
-   ============================================================ */
-
-.hub-cf-ai-advisor {
-  display: flex;
-  flex-direction: column;
-  height: 520px;
-  gap: 16px;
-  position: relative;
-  background: linear-gradient(180deg,
-    rgba(255,255,255,0.02) 0%,
-    transparent 50%,
-    rgba(255,255,255,0.01) 100%);
-  border-radius: 16px;
-  padding: 16px;
-}
-
-/* Proactive Insight Banner */
-.cf-ai-insight-banner {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 14px 16px;
-  background: linear-gradient(135deg,
-    color-mix(in srgb, var(--primary, #00e676) 12%, transparent) 0%,
-    color-mix(in srgb, var(--primary, #00e676) 4%, transparent) 100%);
-  border: 1px solid color-mix(in srgb, var(--primary, #00e676) 25%, transparent);
-  border-left: 3px solid var(--primary, #00e676);
-  border-radius: 12px;
-  font-size: 0.85rem;
-  color: var(--text-primary);
-  animation: slideDown 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow:
-    0 4px 20px rgba(0, 230, 118, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-}
-.cf-ai-insight-icon {
-  font-size: 1.3rem;
-  flex-shrink: 0;
-  margin-top: 2px;
-  filter: drop-shadow(0 2px 4px rgba(0, 230, 118, 0.3));
-}
-.cf-ai-insight-text {
-  flex: 1;
-  line-height: 1.5;
-}
-.cf-ai-insight-text strong {
-  color: var(--primary, #00e676);
-  font-weight: 600;
-}
-
-/* Chat History Area */
-.cf-ai-chat-history {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 8px 4px 16px;
-  scroll-behavior: smooth;
-}
-.cf-ai-chat-history::-webkit-scrollbar { width: 4px; }
-.cf-ai-chat-history::-webkit-scrollbar-track { background: transparent; }
-.cf-ai-chat-history::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, var(--primary, #00e676), rgba(0, 230, 118, 0.4));
-  border-radius: 4px;
-  border: none;
-}
-
-/* Glassmorphism Chat Bubbles */
-.cf-ai-bubble {
-  display: flex;
-  gap: 10px;
-  max-width: 85%;
-  animation: fadeInUp 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-.cf-ai-bubble--user {
-  align-self: flex-end;
-  flex-direction: row-reverse;
-}
-.cf-ai-bubble--system {
-  align-self: flex-start;
-}
-.cf-ai-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: linear-gradient(135deg,
-    rgba(255,255,255,0.08) 0%,
-    rgba(255,255,255,0.02) 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  font-size: 1.1rem;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  box-shadow:
-    0 2px 8px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
-}
-.cf-ai-bubble--user .cf-ai-avatar {
-  background: linear-gradient(135deg,
-    color-mix(in srgb, var(--primary, #00e676) 25%, transparent) 0%,
-    color-mix(in srgb, var(--primary, #00e676) 10%, transparent) 100%);
-  border-color: color-mix(in srgb, var(--primary, #00e676) 40%, transparent);
-}
-.cf-ai-msg {
-  padding: 14px 18px;
-  border-radius: 16px;
-  font-size: 0.9rem;
-  line-height: 1.6;
-  color: var(--text-primary);
-  position: relative;
-  word-wrap: break-word;
-}
-.cf-ai-bubble--system .cf-ai-msg {
-  background: linear-gradient(135deg,
-    rgba(0, 0, 0, 0.5) 0%,
-    rgba(20, 20, 20, 0.6) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-top-left-radius: 6px;
-  box-shadow:
-    0 4px 20px rgba(0, 0, 0, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
-}
-.cf-ai-bubble--user .cf-ai-msg {
-  background: linear-gradient(135deg,
-    color-mix(in srgb, var(--primary, #00e676) 22%, transparent) 0%,
-    color-mix(in srgb, var(--primary, #00e676) 10%, transparent) 100%);
-  border: 1px solid color-mix(in srgb, var(--primary, #00e676) 35%, transparent);
-  border-top-right-radius: 6px;
-  box-shadow:
-    0 4px 20px rgba(0, 230, 118, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
-}
-
-/* Input Section & Quick Prompt Chips */
-.cf-ai-input-section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.cf-ai-quick-prompts {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-  scroll-snap-type: x proximity;
-}
-.cf-ai-quick-prompts::-webkit-scrollbar { display: none; }
-.cf-ai-chip {
-  background: linear-gradient(135deg,
-    rgba(255, 255, 255, 0.06) 0%,
-    rgba(255, 255, 255, 0.02) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: var(--text-primary);
-  padding: 8px 14px;
-  border-radius: 20px;
-  font-size: 0.78rem;
-  font-weight: 500;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  scroll-snap-align: start;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-.cf-ai-chip:hover {
-  background: linear-gradient(135deg,
-    rgba(255, 255, 255, 0.12) 0%,
-    rgba(255, 255, 255, 0.05) 100%);
-  border-color: var(--primary, #00e676);
-  color: var(--primary, #00e676);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 230, 118, 0.2);
-}
-.cf-ai-chip:active {
-  transform: translateY(0) scale(0.98);
-}
-.cf-ai-input-wrapper {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-.cf-ai-main-input {
-  flex: 1;
-  background: linear-gradient(135deg,
-    rgba(0, 0, 0, 0.5) 0%,
-    rgba(20, 20, 20, 0.6) 100%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  border-radius: 24px !important;
-  padding: 14px 20px !important;
-  font-size: 0.9rem !important;
-  color: var(--text-primary) !important;
-  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-.cf-ai-main-input:focus {
-  outline: none !important;
-  border-color: var(--primary, #00e676) !important;
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--primary, #00e676) 25%, transparent),
-    0 8px 30px rgba(0, 230, 118, 0.1) !important;
-}
-.cf-ai-main-input::placeholder {
-  color: var(--text-muted);
-  opacity: 0.7;
-}
-.cf-ai-send-btn {
-  border-radius: 50% !important;
-  width: 48px;
-  height: 48px;
-  padding: 0 !important;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, var(--primary, #00e676) 0%, #00c85a 100%) !important;
-  border: none !important;
-  color: #0d1117 !important;
-  cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  box-shadow:
-    0 4px 16px rgba(0, 230, 118, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-}
-.cf-ai-send-btn:hover {
-  transform: scale(1.05);
-  box-shadow:
-    0 6px 24px rgba(0, 230, 118, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-}
-.cf-ai-send-btn:active {
-  transform: scale(0.96);
-}
-.cf-ai-send-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
-}
-
-/* Animations */
+/* AI Advisor styles live in styles.css (section "AI ADVISOR v2" — .cfx-*) */
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
@@ -2371,36 +2119,6 @@ function _restoreAIState() {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
-}
-
-/* Responsive */
-@media (max-width: 480px) {
-  .cf-ai-bubble { max-width: 92%; }
-  .hub-cf-ai-advisor { height: 480px; padding: 12px; }
-  .cf-ai-msg { padding: 12px 14px; font-size: 0.85rem; }
-  .cf-ai-main-input { padding: 12px 16px !important; font-size: 0.85rem !important; }
-  .cf-ai-send-btn { width: 44px; height: 44px; }
-}
-
-/* Settings button hover */
-.hub-cf-ai-settings-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: var(--primary, #00e676);
-  color: var(--primary, #00e676);
-  transform: rotate(30deg) scale(1.05);
-}
-.hub-cf-ai-settings-btn:active {
-  transform: rotate(30deg) scale(0.95);
-}
-
-/* Provider select styling */
-.hub-cf-ai-select:hover {
-  border-color: var(--primary, #00e676) !important;
-}
-.hub-cf-ai-select:focus {
-  outline: none !important;
-  border-color: var(--primary, #00e676) !important;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary, #00e676) 25%, transparent);
 }
 
 /* ============================================================
@@ -2466,7 +2184,7 @@ function _restoreAIState() {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  margin: -16px -16px 16px -16px;
+  margin: 0 0 16px;               /* margin âm cũ bị .hub-cf-heatmap-wrap (overflow:auto) cắt mất mép trên của nút/pill */
   border-bottom: 1px solid var(--glass-border);
   background: color-mix(in srgb, var(--bg-elevated) 60%, transparent);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
@@ -2846,97 +2564,77 @@ function _restoreAIState() {
 <div class="hub-cf-container">
 
   <!-- ═══ DASHBOARD — Summary Section ═══ -->
-  <div class="hub-cf-dashboard glass-card">
-    <div class="cashflow-summary-grid">
+  <div class="hub-cf-dashboard glass-card cfd-host">
+    <div class="cfd" id="cfd-root">
 
-      <!-- Card 1: Net Worth (Grand Total) — WITH EDIT BUTTON -->
-      <div class="hub-cf-card hub-cf-card--networth">
-        <span class="hub-cf-card-label" data-i18n="netWorthLabel">${_t('netWorthLabel')}</span>
-        <div class="hub-cf-card-value-row">
-          <span class="hub-cf-card-value hub-cf-card-value--networth" id="cf-networth">0 ₫</span>
-          <button class="hub-cf-card-edit-btn" id="btn-edit-networth" data-target="net-worth" title="Chỉnh sửa Tổng Tài Sản" aria-label="Chỉnh sửa Tổng Tài Sản">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-            </svg>
-          </button>
+      <div class="cfd-head">
+        <h3 class="cfd-title" data-i18n="cfdTitle">${_t('cfdTitle')}</h3>
+        <button type="button" class="cfd-hide-btn" id="cfd-hide-btn" aria-pressed="false">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <span id="cfd-hide-label">${_t('cfdHide')}</span>
+        </button>
+      </div>
+
+      <div class="cfd-grid">
+
+        <!-- Assets: Net Worth + allocation (Bank / Cash) + Savings -->
+        <section class="cfd-card" aria-labelledby="cfd-assets-label">
+          <div class="cfd-card-top"><span class="cfd-label" id="cfd-assets-label" data-i18n="cfdNetWorth">${_t('cfdNetWorth')}</span></div>
+          <div class="cfd-hero">
+            <span class="cfd-num cfd-hero-val" id="cf-networth">0 ₫</span>
+            <button type="button" class="hub-cf-card-edit-btn cfd-edit" id="btn-edit-networth" data-target="net-worth" title="Chỉnh sửa Tổng Tài Sản" aria-label="Chỉnh sửa Tổng Tài Sản"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>
+          </div>
+          <div class="cfd-alloc" id="cfd-alloc" aria-hidden="true"><i class="cfd-seg cfd-seg--bank" id="cfd-alloc-bank"></i><i class="cfd-seg cfd-seg--cash" id="cfd-alloc-cash"></i></div>
+          <ul class="cfd-rows">
+            <li class="cfd-row">
+              <span class="cfd-row-name"><i class="cfd-dot cfd-dot--bank" aria-hidden="true"></i><span data-i18n="cfdBank">${_t('cfdBank')}</span></span>
+              <span class="cfd-row-val"><span class="cfd-num" id="cf-bank-balance">0 ₫</span><span class="cfd-pct" id="cfd-pct-bank"></span><button type="button" class="hub-cf-card-edit-btn cfd-edit" id="btn-edit-bank" data-target="bank" title="Edit Bank Account Balance" aria-label="Edit Bank Account Balance"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button></span>
+            </li>
+            <li class="cfd-row">
+              <span class="cfd-row-name"><i class="cfd-dot cfd-dot--cash" aria-hidden="true"></i><span data-i18n="cfdCash">${_t('cfdCash')}</span></span>
+              <span class="cfd-row-val"><span class="cfd-num" id="cf-cash-balance">0 ₫</span><span class="cfd-pct" id="cfd-pct-cash"></span><button type="button" class="hub-cf-card-edit-btn cfd-edit" id="btn-edit-cash" data-target="cash" title="Edit Cash Wallet Balance" aria-label="Edit Cash Wallet Balance"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button></span>
+            </li>
+            <li class="cfd-row cfd-row--memo">
+              <span class="cfd-row-name"><span data-i18n="cfdSavings">${_t('cfdSavings')}</span></span>
+              <span class="cfd-row-val"><span class="cfd-num" id="cf-savings">0 ₫</span><button type="button" class="hub-cf-card-edit-btn cfd-edit" data-target="savings" title="Edit Savings & Investments" aria-label="Edit Savings & Investments"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button></span>
+            </li>
+          </ul>
+        </section>
+
+        <!-- Cash flow: Remaining + Income / Expense -->
+        <section class="cfd-card" aria-labelledby="cfd-flow-label">
+          <div class="cfd-card-top">
+            <span class="cfd-label" id="cfd-flow-label"><span data-i18n="cfdCashflow">${_t('cfdCashflow')}</span><span class="cfd-period" id="cfd-period"></span></span>
+            <span class="cfd-chip" id="cfd-rate" hidden></span>
+          </div>
+          <div class="cfd-sub" data-i18n="cfdRemaining">${_t('cfdRemaining')}</div>
+          <div class="cfd-hero"><span class="cfd-num cfd-hero-val" id="cfd-net">0 ₫</span></div>
+          <div class="cfd-bars">
+            <div class="cfd-bar-row">
+              <div class="cfd-bar-top"><span data-i18n="cfdIncome">${_t('cfdIncome')}</span><span class="cfd-num" id="cf-income">0 ₫</span></div>
+              <div class="cfd-track"><i class="cfd-fill cfd-fill--inc" id="cfd-bar-inc"></i></div>
+            </div>
+            <div class="cfd-bar-row">
+              <div class="cfd-bar-top"><span data-i18n="cfdExpense">${_t('cfdExpense')}</span><span class="cfd-num cfd-neg" id="cf-expense">0 ₫</span></div>
+              <div class="cfd-track"><i class="cfd-fill cfd-fill--exp" id="cfd-bar-exp"></i></div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="cfd-strip">
+        <!-- Uncategorized (logic: .hub-cf-card--has-uncategorized toggled by updateDashboardTotals) -->
+        <div class="cfd-note cfd-unc" id="cf-uncategorized-card">
+          <span class="cfd-note-main">
+            <svg class="cfd-unc-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.3 3.9L2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>
+            <span data-i18n="cfdUncategorized">${_t('cfdUncategorized')}</span>
+          </span>
+          <span class="cfd-note-val"><span class="cfd-num" id="cf-uncategorized-balance">0 ₫</span><span class="cfd-note-hint" data-i18n="cfdNeedsReview">${_t('cfdNeedsReview')}</span></span>
         </div>
-        <span class="hub-cf-card-sub" data-i18n="netWorthSub">${_t('netWorthSub')}</span>
-      </div>
-
-      <!-- Card 2: Savings / Investments -->
-      <div class="hub-cf-card hub-cf-card--savings">
-        <span class="hub-cf-card-label" data-i18n="savingsLabel">${_t('savingsLabel')}</span>
-        <div class="hub-cf-card-value-row">
-          <span class="hub-cf-card-value hub-cf-card-value--savings" id="cf-savings">0 ₫</span>
-          <button class="hub-cf-card-edit-btn" data-target="savings" title="Edit Savings & Investments" aria-label="Edit Savings & Investments">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-            </svg>
-          </button>
-        </div>
-        <span class="hub-cf-card-sub" data-i18n="savingsSub">${_t('savingsSub')}</span>
-      </div>
-
-      <!-- Card 3: CHUYỂN KHOẢN (Bank Balance) -->
-      <div class="hub-cf-card hub-cf-card--source hub-cf-card--bank">
-        <span class="hub-cf-card-label" data-i18n="bankAccountLabel">${_t('bankAccountLabel')}</span>
-        <div class="hub-cf-card-value-row">
-          <span class="hub-cf-card-value hub-cf-card-value--bank" id="cf-bank-balance">0 ₫</span>
-          <button class="hub-cf-card-edit-btn" id="btn-edit-bank" data-target="bank" title="Edit Bank Account Balance" aria-label="Edit Bank Account Balance">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-            </svg>
-          </button>
-        </div>
-        <span class="hub-cf-card-sub" data-i18n="bankAccountSub">${_t('bankAccountSub')}</span>
-      </div>
-
-      <!-- Card 4: TIỀN MẶT (Cash Wallet Balance) -->
-      <div class="hub-cf-card hub-cf-card--source hub-cf-card--cash">
-        <span class="hub-cf-card-label" data-i18n="cashWalletLabel">${_t('cashWalletLabel')}</span>
-        <div class="hub-cf-card-value-row">
-          <span class="hub-cf-card-value hub-cf-card-value--cash" id="cf-cash-balance">0 ₫</span>
-          <button class="hub-cf-card-edit-btn" id="btn-edit-cash" data-target="cash" title="Edit Cash Wallet Balance" aria-label="Edit Cash Wallet Balance">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-            </svg>
-          </button>
-        </div>
-        <span class="hub-cf-card-sub" data-i18n="cashWalletSub">${_t('cashWalletSub')}</span>
-      </div>
-
-      <!-- Card 5: CHƯA PHÂN LOẠI (Uncategorized Balance) -->
-      <div class="hub-cf-card hub-cf-card--source hub-cf-card--uncategorized" id="cf-uncategorized-card">
-        <span class="hub-cf-card-label" data-i18n="uncategorizedLabel">${_t('uncategorizedLabel')}</span>
-        <div class="hub-cf-card-value-row">
-          <span class="hub-cf-card-value hub-cf-card-value--uncategorized" id="cf-uncategorized-balance">0 ₫</span>
-          <span class="hub-cf-card-icon" aria-hidden="true">❓</span>
-        </div>
-        <span class="hub-cf-card-sub" data-i18n="uncategorizedSub">${_t('uncategorizedSub')}</span>
-      </div>
-
-      <!-- Card 6: Income (Monthly) -->
-      <div class="hub-cf-card hub-cf-card--income-monthly">
-        <span class="hub-cf-card-label" data-i18n="incomeLabel">${_t('incomeLabel')}</span>
-        <span class="hub-cf-card-value hub-cf-card-value--income" id="cf-income">0 ₫</span>
-      </div>
-
-      <!-- Card 7: Expense (Monthly) -->
-      <div class="hub-cf-card hub-cf-card--expense-monthly">
-        <span class="hub-cf-card-label" data-i18n="expenseLabel">${_t('expenseLabel')}</span>
-        <span class="hub-cf-card-value hub-cf-card-value--expense" id="cf-expense">0 ₫</span>
-      </div>
-
-      <!-- Card 8: Pocket Debt (Sổ nợ bỏ túi) — Full Width -->
-      <div class="hub-cf-card hub-cf-debt-summary-card hub-cf-debt-summary-card--fullwidth">
-        <span class="hub-cf-card-label" data-i18n="debtSummaryTitle">${_pd_t('debtSummaryTitle')}</span>
-        <div class="hub-cf-card-value-row">
-          <span class="hub-cf-card-value hub-cf-card-value--debt" id="cf-debt-pending">${_formatVNFull(_getTotalPendingDebt())}</span>
-          <span class="hub-cf-card-sub" data-i18n="totalPendingDebt">${_pd_t('totalPendingDebt')}</span>
+        <!-- Pocket Debt -->
+        <div class="cfd-note cfd-debt">
+          <span class="cfd-note-main"><span data-i18n="cfdDebt">${_t('cfdDebt')}</span></span>
+          <span class="cfd-note-val"><span class="cfd-num" id="cf-debt-pending">${_formatVNFull(_getTotalPendingDebt())}</span></span>
         </div>
       </div>
 
@@ -3225,53 +2923,8 @@ function _restoreAIState() {
   </div>
 </div>
 
-<!-- ═══ AI FINANCIAL ADVISOR — PROACTIVE WEALTH COPILOT ═══ -->
-<div class="hub-cf-ai-advisor">
-  <div class="hub-cf-ai-header" style="display: flex; align-items: center; justify-content: space-between; padding: 0 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.06); margin-bottom: 8px;">
-    <h4 class="hub-cf-ai-title" style="font-size: 1.05rem; font-weight: 600; background: linear-gradient(135deg, var(--text-primary) 0%, var(--primary, #00e676) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">🤖 Trợ lý Tài chính AI</h4>
-    <div style="display: flex; align-items: center; gap: 10px;">
-      <select id="cf-ai-provider" class="hub-cf-ai-select" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 6px 12px; font-size: 0.75rem; color: var(--text-primary); cursor: pointer; appearance: none; background-image: url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"%23888\" stroke-width=\"2\"><polyline points=\"6 9 12 15 18 9\"></polyline></svg>'); background-repeat: no-repeat; background-position: right 8px center; padding-right: 32px;">
-        <option value="gemini">Gemini 3.7 Flash</option>
-        <option value="nvidia">Nvidia Nemotron 3 Ultra</option>
-      </select>
-      <button id="cf-ai-settings-btn" class="hub-cf-ai-settings-btn" title="Cài đặt API Key" aria-label="Cài đặt API Key" style="width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94); font-size: 1rem;">⚙️</button>
-    </div>
-  </div>
-
-  <!-- Proactive Insight Banner -->
-  <div class="cf-ai-insight-banner" id="cf-ai-insight-banner" style="display: flex;">
-    <span class="cf-ai-insight-icon">💡</span>
-    <div class="cf-ai-insight-text">
-      <strong>Quick Insight:</strong> <span id="cf-ai-insight-message">Đang phân tích dữ liệu chi tiêu tháng này...</span>
-    </div>
-  </div>
-
-  <!-- Chat History Area -->
-  <div class="cf-ai-chat-history" id="hub-cf-ai-output">
-    <div class="cf-ai-bubble cf-ai-bubble--system">
-      <div class="cf-ai-avatar">🤖</div>
-      <div class="cf-ai-msg">Xin chào Commander. Tôi là Trợ lý Tài chính AI. Bạn muốn phân tích điều gì hôm nay?</div>
-    </div>
-  </div>
-
-  <!-- Quick Prompts & Input Area -->
-  <div class="cf-ai-input-section">
-    <div class="cf-ai-quick-prompts" id="cf-ai-quick-prompts">
-      <button class="cf-ai-chip" data-prompt="Tóm tắt thu chi tháng này">💰 Tóm tắt thu chi tháng này</button>
-      <button class="cf-ai-chip" data-prompt="Khoản chi nào lớn nhất?">🚨 Khoản chi nào lớn nhất?</button>
-      <button class="cf-ai-chip" data-prompt="Gợi ý tiết kiệm">📉 Gợi ý tiết kiệm</button>
-      <button class="cf-ai-chip" data-prompt="Phân tích dòng tiền tiền mặt vs ngân hàng">💸 Dòng tiền Cash vs Bank</button>
-      <button class="cf-ai-chip" data-prompt="Dự báo chi tiêu tháng tới">🔮 Dự báo tháng tới</button>
-    </div>
-
-    <div class="cf-ai-input-wrapper">
-      <input type="text" id="cf-ai-prompt" class="hub-cf-form-input cf-ai-main-input" placeholder="Hỏi về chi tiêu của bạn..." autocomplete="off" data-lpignore="true" data-form-type="other">
-      <button id="cf-ai-ask-btn" class="cf-ai-send-btn" aria-label="Gửi câu hỏi">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-      </button>
-    </div>
-  </div>
-</div>
+<!-- ═══ AI FINANCIAL ADVISOR v2 — Kế hoạch chi tiêu + Hỏi đáp ═══ -->
+${_aiShellHTML()}
 
 <!-- ═══ AI KEY MANAGEMENT MODAL ═══ -->
 <div id="cf-ai-key-modal" class="hub-cf-ai-key-modal" role="dialog" aria-modal="true" aria-label="AI API Key Management" style="display:none;">
@@ -3504,6 +3157,7 @@ function _restoreAIState() {
     _refreshDebtSummary();
     _refreshDebtLedger();
     _refreshHeatmap();
+    _renderSpendingPlan();
   }
 
   /**
@@ -3547,6 +3201,9 @@ function _restoreAIState() {
     _updateChart();
     _refreshHeatmap();
     _updateDebtLanguage();
+    updateDashboardTotals();
+    var _hb = document.getElementById('cfd-hide-label'), _hr = document.getElementById('cfd-root');
+    if (_hb && _hr) _hb.textContent = _hr.classList.contains('cfd--hidden') ? _t('cfdShow') : _t('cfdHide');
   }
 
   // Expose updateCashFlowLanguage as a public module method
@@ -3590,6 +3247,61 @@ function _restoreAIState() {
     return bankBalance + cashBalance + uncategorizedBalance + (_cashFlowMeta.netWorthOffset || 0);
   }
 
+  /** Derived, display-only values for the dashboard (allocation %, remaining, saved rate, bars, period).
+   *  Reads numbers already computed by updateDashboardTotals — never recomputes balances. */
+  function _updateDashboardExtras(m) {
+    function set(id, txt) { var el = document.getElementById(id); if (el) el.textContent = txt; }
+    function pct1(v) { return (Math.round(v * 10) / 10).toString().replace('.', ',') + '%'; }
+
+    var bank = Number(m.bank) || 0, cash = Number(m.cash) || 0;
+    var income = Number(m.income) || 0, expense = Number(m.expense) || 0;
+
+    // Allocation of liquid assets (positive balances only, so the bar is always valid)
+    var posBank = Math.max(bank, 0), posCash = Math.max(cash, 0), pos = posBank + posCash;
+    var wb = pos > 0 ? posBank / pos * 100 : 0;
+    var wc = pos > 0 ? posCash / pos * 100 : 0;
+    var segB = document.getElementById('cfd-alloc-bank'), segC = document.getElementById('cfd-alloc-cash');
+    if (segB) segB.style.width = wb + '%';
+    if (segC) segC.style.width = wc + '%';
+    set('cfd-pct-bank', pos > 0 && bank > 0 ? pct1(wb) : '');
+    set('cfd-pct-cash', pos > 0 && cash > 0 ? pct1(wc) : '');
+
+    // Remaining = Income − Expense (same totals as the cards; savings transfers & debt recovery already excluded)
+    var net = income - expense;
+    var netEl = document.getElementById('cfd-net');
+    if (netEl) {
+      netEl.textContent = (net > 0 ? '+' : '') + _formatVNFull(net);
+      netEl.classList.toggle('cfd-pos', net > 0);
+      netEl.classList.toggle('cfd-neg', net < 0);
+    }
+    var rateEl = document.getElementById('cfd-rate');
+    if (rateEl) {
+      if (income > 0) {
+        rateEl.hidden = false;
+        rateEl.textContent = _t('cfdSaved') + ' ' + pct1(net / income * 100);
+        rateEl.classList.toggle('cfd-chip--neg', net < 0);
+      } else {
+        rateEl.hidden = true;
+      }
+    }
+    var bi = document.getElementById('cfd-bar-inc'), be = document.getElementById('cfd-bar-exp');
+    if (bi) bi.style.width = (income > 0 ? 100 : 0) + '%';
+    if (be) be.style.width = (income > 0 ? Math.min(expense / income * 100, 100) : (expense > 0 ? 100 : 0)) + '%';
+
+    // Period label follows the same window as the totals
+    var label = '';
+    if (_chartFilter === 'day') {
+      label = _t('cfdPeriodDay');
+    } else if (_chartFilter === 'year') {
+      var yr = _currentMonth ? _currentMonth.year : new Date().getFullYear();
+      label = _t('cfdYear') + ' ' + yr;
+    } else {
+      var ymx = _currentMonth || _currentYearMonth();
+      label = _t('cfdMonth') + ' ' + String(ymx.month).padStart(2, '0') + '/' + ymx.year;
+    }
+    set('cfd-period', label ? ' · ' + label : '');
+  }
+
   function updateDashboardTotals() {
     // ═══ GUARD: no data yet ═══
     if (!_data || !_data.transactions) {
@@ -3603,6 +3315,7 @@ function _restoreAIState() {
       // Reset warning state
       const uncCard = document.getElementById('cf-uncategorized-card');
       if (uncCard) uncCard.classList.remove('hub-cf-card--has-uncategorized');
+      _updateDashboardExtras({ bank: 0, cash: 0, income: 0, expense: 0 });
       return;
     }
 
@@ -3726,6 +3439,8 @@ function _restoreAIState() {
         uncCard.classList.remove('hub-cf-card--has-uncategorized');
       }
     }
+
+    _updateDashboardExtras({ bank: bankBalance, cash: cashBalance, income: totalIncome, expense: totalExpense });
   }
 
   /** Calculate savings & investments total */
@@ -4364,8 +4079,28 @@ function _restoreAIState() {
       exportBtn.addEventListener('click', _exportToXlsx);
     }
 
+    // ── Hide balances toggle (display-only, remembered per browser) ──
+    var _cfdHideBtn = _qs('#cfd-hide-btn');
+    var _cfdRoot = _qs('#cfd-root');
+    if (_cfdHideBtn && _cfdRoot) {
+      var _cfdApplyHide = function (on) {
+        _cfdRoot.classList.toggle('cfd--hidden', on);
+        _cfdHideBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        var lbl = document.getElementById('cfd-hide-label');
+        if (lbl) lbl.textContent = on ? _t('cfdShow') : _t('cfdHide');
+      };
+      var _cfdStored = false;
+      try { _cfdStored = localStorage.getItem('hub_cf_hide_balance') === '1'; } catch (_) {}
+      _cfdApplyHide(_cfdStored);
+      _cfdHideBtn.addEventListener('click', function () {
+        var on = !_cfdRoot.classList.contains('cfd--hidden');
+        _cfdApplyHide(on);
+        try { localStorage.setItem('hub_cf_hide_balance', on ? '1' : '0'); } catch (_) {}
+      });
+    }
+
     // ── Edit buttons (Net Worth + Savings) — delegate on dashboard grid ──
-    var summaryGrid = _qs('.cashflow-summary-grid');
+    var summaryGrid = _qs('.cfd');
     if (summaryGrid) {
       summaryGrid.addEventListener('click', function (e) {
         var btn = e.target.closest('.hub-cf-card-edit-btn');
@@ -5393,119 +5128,18 @@ function _restoreAIState() {
       var buffer = await file.arrayBuffer();
       var wb = XLSX.read(new Uint8Array(buffer), { type: 'array' });
 
-      var sheetNames = wb.SheetNames;
-      var importedTxs = [];
-      var skippedSheets = [];
-      var skippedRows = 0;
-
-      // ── 2. Iterate sheets, skip "Summary" ──
-      sheetNames.forEach(function (name) {
-        var lower = String(name).toLowerCase().trim();
-        if (lower === 'summary' || lower === 'tóm tắt') {
-          skippedSheets.push(name);
-          return;
-        }
-
-        // Determine type from sheet name
-        var isIncome = lower.indexOf('income') !== -1 || lower.indexOf('thu') !== -1;
-        var type = isIncome ? 'income' : 'expense';
-
-        var sheet = wb.Sheets[name];
-        var rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-
-        if (rows.length < 2) return; // no data rows
-
-        // ── 3. Parse each data row with strict NaN guard & date string fix ──
-        for (var i = 1; i < rows.length; i++) {
-          var row = rows[i];
-          if (!row || !row.length) continue;
-
-          // Read raw cell values
-          var rawDay     = row[0];
-          var rawMonth   = row[1];
-          var rawDesc    = row[2];
-          var rawCat     = row[3];
-          var rawAmount  = row[4];
-          var rawYear    = row[5];  // optional explicit Year column
-
-          // ── Date fixing: detect DD/MM/YYYY string in column 0 ──
-          var dayVal, monthVal, year;
-          var rawDayStr = typeof rawDay === 'string' ? rawDay : String(rawDay || '');
-
-          if (rawDayStr.indexOf('/') !== -1) {
-            // Cell is a full date string like "31/03/2026" or "31/3/2026"
-            var parts = rawDayStr.split('/');
-            dayVal   = parseInt(parts[0], 10);
-            monthVal = parseInt(parts[1], 10);
-            year     = parseInt(parts[2], 10);
-          } else {
-            // Cell holds plain numeric day (or was parsed as date serial by SheetJS)
-            dayVal   = Number(rawDay);
-            monthVal = Number(rawMonth);
-            // Year from explicit Year column (col 5), or fallback to current view year
-            year = (typeof rawYear === 'number' && rawYear >= 2000 && rawYear <= 2100)
-              ? rawYear
-              : (_currentMonth ? _currentMonth.year : new Date().getFullYear());
-
-            // 🔥 SheetJS date serial fix: if rawDay is a large serial number
-            // (Excel stores dates as days since 1900-01-01), convert it
-            if (dayVal > 31 && dayVal < 150000) {
-              var jsDate = XLSX.SSF.parse_date_code(dayVal);
-              if (jsDate && jsDate.d > 0 && jsDate.m > 0 && jsDate.y > 2000) {
-                dayVal   = jsDate.d;
-                monthVal = jsDate.m;
-                year     = jsDate.y;
-              }
-            }
-          }
-
-          var amount = Number(rawAmount);
-
-          // ═══ STRICT GUARD: reject NaN, <=0, or missing day/month/amount ═══
-          if (isNaN(dayVal)     || dayVal <= 0  || dayVal > 31)     { skippedRows++; continue; }
-          if (isNaN(monthVal)   || monthVal <= 0 || monthVal > 12)  { skippedRows++; continue; }
-          if (isNaN(amount)     || amount <= 0)                     { skippedRows++; continue; }
-          if (isNaN(year)       || year < 2000 || year > 2100)      { skippedRows++; continue; }
-
-          var desc     = String(rawDesc || row['Mô tả'] || '').trim();
-          var category = String(rawCat  || row['Hạng mục'] || '').trim();
-          // Parse source field with defensive checks — unrecognized → "uncategorized"
-          var rawSource = '';
-          try {
-            // Handle both array rows (header=1) and object rows (header row as keys)
-            if (Array.isArray(row)) {
-              // Column index 5 would be 'Nguồn' / 'Source' based on expected layout
-              rawSource = String(row[5] || '').trim().toLowerCase();
-            } else {
-              rawSource = String(row['Nguồn'] || row['Source'] || row['nguon'] || row['source'] || '').trim().toLowerCase();
-            }
-          } catch (_) {
-            rawSource = '';
-          }
-          var source = 'uncategorized'; // Default: unrecognized → uncategorized
-          if (rawSource === 'cash' || rawSource === 'tiền mặt' || rawSource === 'tien mat' || rawSource === 'cash (physical)' || rawSource === 'tiền' || rawSource === 'tien') {
-            source = 'cash';
-          } else if (rawSource === 'bank' || rawSource === 'chuyển khoản' || rawSource === 'chuyen khoan' || rawSource === 'bank transfer' || rawSource === 'tài khoản ngân hàng' || rawSource === 'tai khoan ngan hang' || rawSource === 'ngân hàng' || rawSource === 'ngan hang' || rawSource === 'chuyen') {
-            source = 'bank';
-          } else if (rawSource === 'savings' || rawSource === 'tiết kiệm' || rawSource === 'tiet kiem' || rawSource === 'saving') {
-            source = 'savings';
-          }
-          // Any other value (including empty, 'unknown', 'other', etc.) stays as 'uncategorized'
-
-          importedTxs.push({
-            id: _uid(),
-            type: type,
-            amount: Math.abs(amount),
-            year: year,
-            month: monthVal,
-            day: dayVal,
-            desc: desc || '',
-            category: category || '',
-            source: source,  // NEW
-            createdAt: Date.now()
-          });
-        }
+      // ── 2. Đọc từng sheet → bộ đọc theo TÊN CỘT (hiểu cả file mới và file xuất kiểu cũ) ──
+      var sheetsData = wb.SheetNames.map(function (name) {
+        return { name: name, rows: XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1 }) };
       });
+      var parsed = _parseImportSheets(sheetsData, {
+        defaultYear: _currentMonth ? _currentMonth.year : new Date().getFullYear(),
+        uid: _uid,
+        now: Date.now()
+      });
+      var importedTxs = parsed.transactions;
+      var skippedRows = parsed.skippedRows;
+      var skippedSheets = parsed.skippedSheets;
 
       if (importedTxs.length === 0) {
         _showStatusMsg(_t('importNoRows') + ' ' + skippedRows + ' ' + _t('importRowsInvalid'));
@@ -5540,7 +5174,1067 @@ function _restoreAIState() {
   //   EXPORT TO .XLSX
   // ============================================================
 
+  // ==== XLSX-CORE-BEGIN ====================================================
+  //   XLSX WRITER (không phụ thuộc thư viện) + BỘ DỰNG BÁO CÁO CASHFLOW
+  //   ---------------------------------------------------------------------
+  //   Vì sao tự viết? SheetJS bản miễn phí chỉ ghi được dữ liệu thô, không có
+  //   màu sắc / bảng Excel / định dạng có điều kiện / biểu đồ. Phần này tự dựng
+  //   file .xlsx (OOXML + zip) nên chạy offline, không cần CDN.
+  //   Mọi hàm ở đây là hàm thuần (không đụng DOM) để dễ kiểm thử.
+  // ==========================================================================
+
+  // ── ZIP (store, không nén) ──
+  var _xlCrcTable = null;
+  function _xlCrc32(bytes) {
+    if (!_xlCrcTable) {
+      _xlCrcTable = new Uint32Array(256);
+      for (var n = 0; n < 256; n++) {
+        var c = n;
+        for (var k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        _xlCrcTable[n] = c >>> 0;
+      }
+    }
+    var crc = 0xFFFFFFFF;
+    for (var i = 0; i < bytes.length; i++) crc = _xlCrcTable[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  function _xlZip(entries) {
+    var enc = new TextEncoder();
+    var now = new Date();
+    var dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+    var dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+    var parts = [], central = [], offset = 0, cdSize = 0;
+
+    entries.forEach(function (e) {
+      var name = enc.encode(e.name);
+      var data = typeof e.data === 'string' ? enc.encode(e.data) : e.data;
+      var crc = _xlCrc32(data);
+
+      var lh = new Uint8Array(30 + name.length), lv = new DataView(lh.buffer);
+      lv.setUint32(0, 0x04034b50, true); lv.setUint16(4, 20, true); lv.setUint16(6, 0x0800, true);
+      lv.setUint16(8, 0, true); lv.setUint16(10, dosTime, true); lv.setUint16(12, dosDate, true);
+      lv.setUint32(14, crc, true); lv.setUint32(18, data.length, true); lv.setUint32(22, data.length, true);
+      lv.setUint16(26, name.length, true); lv.setUint16(28, 0, true);
+      lh.set(name, 30);
+      parts.push(lh, data);
+
+      var ch = new Uint8Array(46 + name.length), cv = new DataView(ch.buffer);
+      cv.setUint32(0, 0x02014b50, true); cv.setUint16(4, 20, true); cv.setUint16(6, 20, true);
+      cv.setUint16(8, 0x0800, true); cv.setUint16(10, 0, true); cv.setUint16(12, dosTime, true);
+      cv.setUint16(14, dosDate, true); cv.setUint32(16, crc, true); cv.setUint32(20, data.length, true);
+      cv.setUint32(24, data.length, true); cv.setUint16(28, name.length, true);
+      cv.setUint32(42, offset, true);
+      ch.set(name, 46);
+      central.push(ch);
+
+      offset += lh.length + data.length;
+      cdSize += ch.length;
+    });
+
+    var eocd = new Uint8Array(22), ev = new DataView(eocd.buffer);
+    ev.setUint32(0, 0x06054b50, true);
+    ev.setUint16(8, entries.length, true); ev.setUint16(10, entries.length, true);
+    ev.setUint32(12, cdSize, true); ev.setUint32(16, offset, true);
+
+    var all = parts.concat(central, [eocd]);
+    var total = 0; all.forEach(function (p) { total += p.length; });
+    var out = new Uint8Array(total), pos = 0;
+    all.forEach(function (p) { out.set(p, pos); pos += p.length; });
+    return out;
+  }
+
+  // ── XML helpers ──
+  function _xlEsc(s) {
+    return String(s)
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function _xlColName(n) {              // 1 → A, 27 → AA
+    var s = '';
+    while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
+    return s;
+  }
+  function _xlAddr(r, c) { return _xlColName(c) + r; }
+  function _xlRange(r1, c1, r2, c2) { return _xlAddr(r1, c1) + ':' + _xlAddr(r2, c2); }
+  function _xlSerial(y, m, d) { return Math.round(Date.UTC(y, m - 1, d) / 86400000) + 25569; }   // ngày Excel
+  function _xlFromSerial(n) {
+    var d = new Date(Math.round((n - 25569) * 86400000));
+    return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate() };
+  }
+
+  // ── Style book: dedupe font/fill/border/numFmt/xf ──
+  function _xlStyleBook() {
+    var fonts = [], fills = [], borders = [], nfs = [], xfs = [], dxfs = [];
+    var fm = {}, flm = {}, bm = {}, nm = {}, xm = {}, dm = {};
+    function put(arr, map, key, xml) { if (map[key] === undefined) { map[key] = arr.length; arr.push(xml); } return map[key]; }
+    function rgb(c) { return 'FF' + String(c).replace('#', '').toUpperCase(); }
+
+    function fontXml(f) {
+      f = f || {};
+      return '<font>' + (f.b ? '<b/>' : '') + (f.i ? '<i/>' : '') + (f.u ? '<u/>' : '') +
+        '<sz val="' + (f.sz || 10) + '"/><color rgb="' + rgb(f.color || '1F2937') + '"/>' +
+        '<name val="' + (f.name || 'Arial') + '"/><family val="2"/></font>';
+    }
+    function fillXml(c) {
+      return '<fill><patternFill patternType="solid"><fgColor rgb="' + rgb(c) + '"/><bgColor indexed="64"/></patternFill></fill>';
+    }
+    function borderXml(b) {
+      function side(tag, s) { return s ? '<' + tag + ' style="' + s[0] + '"><color rgb="' + rgb(s[1]) + '"/></' + tag + '>' : '<' + tag + '/>'; }
+      b = b || {};
+      return '<border>' + side('left', b.l) + side('right', b.r) + side('top', b.t) + side('bottom', b.b) + '<diagonal/></border>';
+    }
+
+    // vị trí 0 bắt buộc là mặc định
+    put(fonts, fm, JSON.stringify({}), fontXml({}));
+    put(fills, flm, 'none', '<fill><patternFill patternType="none"/></fill>');
+    put(fills, flm, 'gray125', '<fill><patternFill patternType="gray125"/></fill>');
+    put(borders, bm, '{}', borderXml({}));
+    xfs.push('<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'); xm['{}'] = 0;
+
+    return {
+      /** Đăng ký 1 kiểu ô, trả về chỉ số xf */
+      xf: function (o) {
+        o = o || {};
+        var key = JSON.stringify(o);
+        if (xm[key] !== undefined) return xm[key];
+        var fontId = put(fonts, fm, JSON.stringify(o.font || {}), fontXml(o.font));
+        var fillId = o.fill ? put(fills, flm, 'f' + o.fill, fillXml(o.fill)) : 0;
+        var borderId = o.border ? put(borders, bm, JSON.stringify(o.border), borderXml(o.border)) : 0;
+        var numFmtId = 0;
+        if (o.fmt) {
+          if (nm[o.fmt] === undefined) { nm[o.fmt] = 164 + nfs.length; nfs.push({ id: 164 + nfs.length, code: o.fmt }); }
+          numFmtId = nm[o.fmt];
+        }
+        var al = o.al ? '<alignment' +
+          (o.al.h ? ' horizontal="' + o.al.h + '"' : '') + (o.al.v ? ' vertical="' + o.al.v + '"' : '') +
+          (o.al.wrap ? ' wrapText="1"' : '') + (o.al.indent ? ' indent="' + o.al.indent + '"' : '') + '/>' : '';
+        var xml = '<xf numFmtId="' + numFmtId + '" fontId="' + fontId + '" fillId="' + fillId + '" borderId="' + borderId +
+          '" xfId="0"' + (numFmtId ? ' applyNumberFormat="1"' : '') + ' applyFont="1"' + (fillId ? ' applyFill="1"' : '') +
+          (borderId ? ' applyBorder="1"' : '') + (al ? ' applyAlignment="1">' + al + '</xf>' : '/>');
+        xfs.push(xml);
+        xm[key] = xfs.length - 1;
+        return xm[key];
+      },
+      /** Kiểu cho định dạng có điều kiện (dxf) */
+      dxf: function (o) {
+        var key = JSON.stringify(o);
+        if (dm[key] !== undefined) return dm[key];
+        var xml = '<dxf>' +
+          (o.font ? '<font>' + (o.font.b ? '<b/>' : '') + (o.font.i ? '<i/>' : '') + (o.font.color ? '<color rgb="' + rgb(o.font.color) + '"/>' : '') + '</font>' : '') +
+          (o.fill ? '<fill><patternFill patternType="solid"><fgColor rgb="' + rgb(o.fill) + '"/><bgColor rgb="' + rgb(o.fill) + '"/></patternFill></fill>' : '') +
+          '</dxf>';
+        dxfs.push(xml);
+        dm[key] = dxfs.length - 1;
+        return dm[key];
+      },
+      toXml: function () {
+        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+          '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+          (nfs.length ? '<numFmts count="' + nfs.length + '">' + nfs.map(function (n) { return '<numFmt numFmtId="' + n.id + '" formatCode="' + _xlEsc(n.code) + '"/>'; }).join('') + '</numFmts>' : '') +
+          '<fonts count="' + fonts.length + '">' + fonts.join('') + '</fonts>' +
+          '<fills count="' + fills.length + '">' + fills.join('') + '</fills>' +
+          '<borders count="' + borders.length + '">' + borders.join('') + '</borders>' +
+          '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+          '<cellXfs count="' + xfs.length + '">' + xfs.join('') + '</cellXfs>' +
+          '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
+          '<dxfs count="' + dxfs.length + '">' + dxfs.join('') + '</dxfs>' +
+          '<tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/>' +
+          '</styleSheet>';
+      }
+    };
+  }
+
+  // ── Shared strings ──
+  function _xlSharedStrings() {
+    var list = [], map = {}, count = 0;
+    return {
+      idx: function (s) {
+        s = String(s); count++;
+        if (map[s] === undefined) { map[s] = list.length; list.push(s); }
+        return map[s];
+      },
+      toXml: function () {
+        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+          '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="' + count + '" uniqueCount="' + list.length + '">' +
+          list.map(function (s) {
+            var sp = /^\s|\s$|\n/.test(s) ? ' xml:space="preserve"' : '';
+            return '<si><t' + sp + '>' + _xlEsc(s) + '</t></si>';
+          }).join('') + '</sst>';
+      }
+    };
+  }
+
+  // ── Sheet model ──
+  function _xlSheet(name) {
+    return {
+      name: name, rows: {}, merges: [], cols: [], rowHt: {}, cf: [], dv: [], tables: [], links: [], charts: [],
+      freeze: null, breaks: [], grid: true, tab: null, landscape: false, fit: false, titles: null, selected: false, zoom: 100,
+      /** v: number | string | {f: 'công thức', v: kết quả đã tính} | null */
+      put: function (r, c, v, s) {
+        (this.rows[r] = this.rows[r] || {})[c] = { v: v, s: s || 0 };
+      },
+      /** Tô style cho cả vùng (kể cả vùng gộp) để viền/màu nền hiện đủ */
+      fillRange: function (r1, c1, r2, c2, s) {
+        for (var r = r1; r <= r2; r++) for (var c = c1; c <= c2; c++) {
+          if (!(this.rows[r] && this.rows[r][c])) this.put(r, c, null, s);
+        }
+      },
+      merge: function (r1, c1, r2, c2) { this.merges.push(_xlRange(r1, c1, r2, c2)); },
+      width: function (c, w) { this.cols.push({ min: c, max: c, w: w }); },
+      height: function (r, h) { this.rowHt[r] = h; }
+    };
+  }
+
+  function _xlSheetXml(ws, sst, relIds) {
+    var rowNums = Object.keys(ws.rows).map(Number).sort(function (a, b) { return a - b; });
+    var maxR = 1, maxC = 1;
+    var sd = '';
+    rowNums.forEach(function (r) {
+      var cols = Object.keys(ws.rows[r]).map(Number).sort(function (a, b) { return a - b; });
+      if (r > maxR) maxR = r;
+      var ht = ws.rowHt[r] ? ' ht="' + ws.rowHt[r] + '" customHeight="1"' : '';
+      sd += '<row r="' + r + '"' + ht + '>';
+      cols.forEach(function (c) {
+        if (c > maxC) maxC = c;
+        var cell = ws.rows[r][c], v = cell.v, a = _xlAddr(r, c), s = cell.s ? ' s="' + cell.s + '"' : '';
+        if (v === null || v === undefined || v === '') sd += '<c r="' + a + '"' + s + '/>';
+        else if (typeof v === 'number') sd += '<c r="' + a + '"' + s + '><v>' + (isFinite(v) ? v : 0) + '</v></c>';
+        else if (typeof v === 'string') sd += '<c r="' + a + '"' + s + ' t="s"><v>' + sst.idx(v) + '</v></c>';
+        else if (v && v.f !== undefined) {
+          var isStr = typeof v.v === 'string';
+          sd += '<c r="' + a + '"' + s + (isStr ? ' t="str"' : '') + '><f>' + _xlEsc(v.f) + '</f>' +
+            (v.v === undefined || v.v === null ? '' : '<v>' + (isStr ? _xlEsc(v.v) : (isFinite(v.v) ? v.v : 0)) + '</v>') + '</c>';
+        }
+      });
+      sd += '</row>';
+    });
+    ws.cols.forEach(function (c) { if (c.max > maxC) maxC = c.max; });
+
+    var x = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">';
+    x += '<sheetPr>' + (ws.tab ? '<tabColor rgb="FF' + ws.tab + '"/>' : '') + (ws.fit ? '<pageSetUpPr fitToPage="1"/>' : '') + '</sheetPr>';
+    x += '<dimension ref="A1:' + _xlAddr(maxR, maxC) + '"/>';
+    x += '<sheetViews><sheetView workbookViewId="0"' + (ws.grid ? '' : ' showGridLines="0"') + (ws.selected ? ' tabSelected="1"' : '') +
+      (ws.zoom !== 100 ? ' zoomScale="' + ws.zoom + '" zoomScaleNormal="' + ws.zoom + '"' : '') + '>';
+    if (ws.freeze) {
+      var fr = ws.freeze;   // {row, col}  → số dòng/cột cố định
+      var tl = _xlAddr(fr.row + 1, (fr.col || 0) + 1);
+      x += '<pane ' + (fr.col ? 'xSplit="' + fr.col + '" ' : '') + 'ySplit="' + fr.row + '" topLeftCell="' + tl + '" activePane="' + (fr.col ? 'bottomRight' : 'bottomLeft') + '" state="frozen"/>' +
+        '<selection pane="' + (fr.col ? 'bottomRight' : 'bottomLeft') + '" activeCell="' + tl + '" sqref="' + tl + '"/>';
+    }
+    x += '</sheetView></sheetViews>';
+    x += '<sheetFormatPr defaultRowHeight="15"/>';
+    if (ws.cols.length) {
+      x += '<cols>' + ws.cols.slice().sort(function (a, b) { return a.min - b.min; }).map(function (c) {
+        return '<col min="' + c.min + '" max="' + c.max + '" width="' + c.w + '" customWidth="1"/>';
+      }).join('') + '</cols>';
+    }
+    x += '<sheetData>' + sd + '</sheetData>';
+    if (ws.merges.length) x += '<mergeCells count="' + ws.merges.length + '">' + ws.merges.map(function (m) { return '<mergeCell ref="' + m + '"/>'; }).join('') + '</mergeCells>';
+
+    var prio = 1;
+    ws.cf.forEach(function (g) {
+      x += '<conditionalFormatting sqref="' + g.ref + '">';
+      g.rules.forEach(function (r) {
+        if (r.type === 'dataBar') {
+          x += '<cfRule type="dataBar" priority="' + (prio++) + '"><dataBar><cfvo type="num" val="0"/><cfvo type="max"/><color rgb="FF' + r.color + '"/></dataBar></cfRule>';
+        } else if (r.type === 'expression') {
+          x += '<cfRule type="expression" dxfId="' + r.dxf + '" priority="' + (prio++) + '"><formula>' + _xlEsc(r.formula) + '</formula></cfRule>';
+        }
+      });
+      x += '</conditionalFormatting>';
+    });
+
+    if (ws.dv.length) {
+      x += '<dataValidations count="' + ws.dv.length + '">' + ws.dv.map(function (d) {
+        return '<dataValidation type="list" allowBlank="1" showInputMessage="1" showErrorMessage="1"' +
+          (d.title ? ' errorTitle="' + _xlEsc(d.title) + '"' : '') + (d.error ? ' error="' + _xlEsc(d.error) + '"' : '') +
+          (d.prompt ? ' promptTitle="' + _xlEsc(d.promptTitle || '') + '" prompt="' + _xlEsc(d.prompt) + '"' : '') +
+          ' sqref="' + d.ref + '"><formula1>' + _xlEsc(d.list) + '</formula1></dataValidation>';
+      }).join('') + '</dataValidations>';
+    }
+    if (ws.links.length) {
+      x += '<hyperlinks>' + ws.links.map(function (l) {
+        return '<hyperlink ref="' + l.ref + '" location="' + _xlEsc(l.loc) + '" display="' + _xlEsc(l.text) + '"/>';
+      }).join('') + '</hyperlinks>';
+    }
+    x += '<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/>';
+    x += '<pageSetup paperSize="9" orientation="' + (ws.landscape ? 'landscape' : 'portrait') + '"' + (ws.fit ? ' fitToWidth="1" fitToHeight="0"' : '') + '/>';
+    x += '<headerFooter><oddFooter>&amp;L&amp;8CashFlow&amp;C&amp;8&amp;A&amp;R&amp;8Trang &amp;P / &amp;N</oddFooter></headerFooter>';
+    if (ws.breaks && ws.breaks.length) x += '<rowBreaks count="' + ws.breaks.length + '" manualBreakCount="' + ws.breaks.length + '">' + ws.breaks.map(function (b) { return '<brk id="' + b + '" max="16383" man="1"/>'; }).join('') + '</rowBreaks>';
+    if (relIds.drawing) x += '<drawing r:id="' + relIds.drawing + '"/>';
+    if (ws.tables.length) x += '<tableParts count="' + ws.tables.length + '">' + relIds.tables.map(function (id) { return '<tablePart r:id="' + id + '"/>'; }).join('') + '</tableParts>';
+    x += '</worksheet>';
+    return x;
+  }
+
+  // ── Biểu đồ cột / thanh (OOXML chart) ──
+  function _xlChartXml(spec) {
+    function txPr(sz, color, bold) {
+      return '<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="' + sz + '" b="' + (bold ? 1 : 0) + '"><a:solidFill><a:srgbClr val="' + color +
+        '"/></a:solidFill><a:latin typeface="Arial"/></a:defRPr></a:pPr><a:endParaRPr lang="vi-VN"/></a:p></c:txPr>';
+    }
+    function numCache(arr, fmt) {
+      return '<c:numCache><c:formatCode>' + _xlEsc(fmt || 'General') + '</c:formatCode><c:ptCount val="' + arr.length + '"/>' +
+        arr.map(function (v, i) { return '<c:pt idx="' + i + '"><c:v>' + v + '</c:v></c:pt>'; }).join('') + '</c:numCache>';
+    }
+    function strCache(arr) {
+      return '<c:strCache><c:ptCount val="' + arr.length + '"/>' +
+        arr.map(function (v, i) { return '<c:pt idx="' + i + '"><c:v>' + _xlEsc(v) + '</c:v></c:pt>'; }).join('') + '</c:strCache>';
+    }
+    var horizontal = spec.dir === 'bar';
+    var grid = '<c:majorGridlines><c:spPr><a:ln w="6350"><a:solidFill><a:srgbClr val="E5E9F0"/></a:solidFill></a:ln></c:spPr></c:majorGridlines>';
+
+    var sers = spec.series.map(function (s, i) {
+      var dl = spec.labels
+        ? '<c:dLbls><c:numFmt formatCode="' + _xlEsc(spec.labelFmt || '#,##0') + '" sourceLinked="0"/><c:spPr><a:noFill/><a:ln><a:noFill/></a:ln></c:spPr>' +
+          txPr(800, '5F6B7A', false) + '<c:dLblPos val="outEnd"/><c:showLegendKey val="0"/><c:showVal val="1"/><c:showCatName val="0"/>' +
+          '<c:showSerName val="0"/><c:showPercent val="0"/><c:showBubbleSize val="0"/></c:dLbls>'
+        : '';
+      return '<c:ser><c:idx val="' + i + '"/><c:order val="' + i + '"/>' +
+        '<c:tx><c:strRef><c:f>' + _xlEsc(s.nameRef) + '</c:f>' + strCache([s.name]) + '</c:strRef></c:tx>' +
+        '<c:spPr><a:solidFill><a:srgbClr val="' + s.color + '"/></a:solidFill></c:spPr><c:invertIfNegative val="0"/>' + dl +
+        '<c:cat>' + (spec.catNum
+          ? '<c:numRef><c:f>' + _xlEsc(spec.catRef) + '</c:f>' + numCache(spec.cats, spec.catFmt) + '</c:numRef>'
+          : '<c:strRef><c:f>' + _xlEsc(spec.catRef) + '</c:f>' + strCache(spec.cats) + '</c:strRef>') + '</c:cat>' +
+        '<c:val><c:numRef><c:f>' + _xlEsc(s.valRef) + '</c:f>' + numCache(s.vals, '#,##0') + '</c:numRef></c:val></c:ser>';
+    }).join('');
+
+    var catAx = '<c:catAx><c:axId val="500001"/><c:scaling><c:orientation val="' + (horizontal ? 'maxMin' : 'minMax') + '"/></c:scaling><c:delete val="0"/>' +
+      '<c:axPos val="' + (horizontal ? 'l' : 'b') + '"/>' +
+      (spec.catAxFmt ? '<c:numFmt formatCode="' + _xlEsc(spec.catAxFmt) + '" sourceLinked="0"/>' : '<c:numFmt formatCode="General" sourceLinked="1"/>') +
+      '<c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/>' +
+      '<c:spPr><a:ln w="6350"><a:solidFill><a:srgbClr val="C9D0DA"/></a:solidFill></a:ln></c:spPr>' + txPr(900, '5F6B7A', false) +
+      '<c:crossAx val="500002"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:noMultiLvlLbl val="0"/></c:catAx>';
+    var valAx = '<c:valAx><c:axId val="500002"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="' + (horizontal ? 1 : 0) + '"/>' +
+      '<c:axPos val="' + (horizontal ? 'b' : 'l') + '"/>' + (horizontal ? '' : grid) +
+      '<c:numFmt formatCode="' + _xlEsc(spec.valFmt || '#,##0') + '" sourceLinked="0"/>' +
+      '<c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/>' +
+      '<c:spPr><a:ln><a:noFill/></a:ln></c:spPr>' + txPr(900, '5F6B7A', false) +
+      '<c:crossAx val="500001"/><c:crosses val="' + (horizontal ? 'max' : 'autoZero') + '"/><c:crossBetween val="between"/></c:valAx>';
+
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+      '<c:roundedCorners val="0"/><c:chart>' +
+      '<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1100" b="1"/></a:pPr><a:r><a:rPr lang="vi-VN" sz="1100" b="1"><a:solidFill><a:srgbClr val="1F2A44"/></a:solidFill><a:latin typeface="Arial"/></a:rPr><a:t>' +
+      _xlEsc(spec.title) + '</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title><c:autoTitleDeleted val="0"/>' +
+      '<c:plotArea><c:layout/><c:barChart><c:barDir val="' + (horizontal ? 'bar' : 'col') + '"/><c:grouping val="clustered"/><c:varyColors val="0"/>' + sers +
+      '<c:gapWidth val="' + (spec.gap || 60) + '"/><c:axId val="500001"/><c:axId val="500002"/></c:barChart>' + catAx + valAx + '</c:plotArea>' +
+      (spec.legend ? '<c:legend><c:legendPos val="b"/><c:overlay val="0"/>' + txPr(900, '5F6B7A', false) + '</c:legend>' : '') +
+      '<c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart>' +
+      '<c:spPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:ln w="9525"><a:solidFill><a:srgbClr val="D9DEE5"/></a:solidFill></a:ln></c:spPr>' +
+      '</c:chartSpace>';
+  }
+
+  // ── Đóng gói thành file .xlsx ──
+  function _xlPackage(sheets, sb, sst, names, meta) {
+    var NS_R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    var files = [], overrides = [], tableN = 0, chartN = 0, drawN = 0;
+    function relXml(list) {
+      return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        list.map(function (r) { return '<Relationship Id="' + r.id + '" Type="' + NS_R + '/' + r.type + '" Target="' + r.target + '"/>'; }).join('') + '</Relationships>';
+    }
+
+    sheets.forEach(function (ws, i) {
+      var n = i + 1, rels = [], ids = { tables: [] }, rid = 1;
+
+      if (ws.charts.length) {
+        drawN++;
+        ids.drawing = 'rId' + rid;
+        rels.push({ id: 'rId' + rid++, type: 'drawing', target: '../drawings/drawing' + drawN + '.xml' });
+        var drels = [], dx = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+          '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">';
+        ws.charts.forEach(function (ch, k) {
+          chartN++;
+          drels.push({ id: 'rId' + (k + 1), type: 'chart', target: '../charts/chart' + chartN + '.xml' });
+          files.push({ name: 'xl/charts/chart' + chartN + '.xml', data: ch.xml });
+          overrides.push(['/xl/charts/chart' + chartN + '.xml', 'application/vnd.openxmlformats-officedocument.drawingml.chart+xml']);
+          dx += '<xdr:twoCellAnchor editAs="oneCell"><xdr:from><xdr:col>' + ch.from.c + '</xdr:col><xdr:colOff>' + (ch.from.dx || 0) + '</xdr:colOff><xdr:row>' + ch.from.r +
+            '</xdr:row><xdr:rowOff>' + (ch.from.dy || 0) + '</xdr:rowOff></xdr:from><xdr:to><xdr:col>' + ch.to.c + '</xdr:col><xdr:colOff>' + (ch.to.dx || 0) +
+            '</xdr:colOff><xdr:row>' + ch.to.r + '</xdr:row><xdr:rowOff>' + (ch.to.dy || 0) + '</xdr:rowOff></xdr:to>' +
+            '<xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="' + (k + 2) + '" name="Biểu đồ ' + (k + 1) + '"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr>' +
+            '<xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">' +
+            '<c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="' + NS_R + '" r:id="rId' + (k + 1) + '"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor>';
+        });
+        dx += '</xdr:wsDr>';
+        files.push({ name: 'xl/drawings/drawing' + drawN + '.xml', data: dx });
+        files.push({ name: 'xl/drawings/_rels/drawing' + drawN + '.xml.rels', data: relXml(drels) });
+        overrides.push(['/xl/drawings/drawing' + drawN + '.xml', 'application/vnd.openxmlformats-officedocument.drawing+xml']);
+      }
+
+      ws.tables.forEach(function (t) {
+        tableN++;
+        ids.tables.push('rId' + rid);
+        rels.push({ id: 'rId' + rid++, type: 'table', target: '../tables/table' + tableN + '.xml' });
+        files.push({
+          name: 'xl/tables/table' + tableN + '.xml',
+          data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" id="' + tableN +
+            '" name="' + t.name + '" displayName="' + t.name + '" ref="' + t.ref + '" totalsRowShown="0"><autoFilter ref="' + t.ref + '"/>' +
+            '<tableColumns count="' + t.cols.length + '">' + t.cols.map(function (c, k) { return '<tableColumn id="' + (k + 1) + '" name="' + _xlEsc(c) + '"/>'; }).join('') +
+            '</tableColumns><tableStyleInfo showFirstColumn="0" showLastColumn="0" showRowStripes="0" showColumnStripes="0"/></table>'
+        });
+        overrides.push(['/xl/tables/table' + tableN + '.xml', 'application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml']);
+      });
+
+      files.push({ name: 'xl/worksheets/sheet' + n + '.xml', data: _xlSheetXml(ws, sst, ids) });
+      if (rels.length) files.push({ name: 'xl/worksheets/_rels/sheet' + n + '.xml.rels', data: relXml(rels) });
+      overrides.push(['/xl/worksheets/sheet' + n + '.xml', 'application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml']);
+    });
+
+    var wbRels = sheets.map(function (ws, i) { return { id: 'rId' + (i + 1), type: 'worksheet', target: 'worksheets/sheet' + (i + 1) + '.xml' }; });
+    wbRels.push({ id: 'rId' + (sheets.length + 1), type: 'styles', target: 'styles.xml' });
+    wbRels.push({ id: 'rId' + (sheets.length + 2), type: 'sharedStrings', target: 'sharedStrings.xml' });
+
+    var wb = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="' + NS_R + '">' +
+      '<workbookPr/><bookViews><workbookView xWindow="0" yWindow="0" windowWidth="28800" windowHeight="16000" activeTab="0"/></bookViews><sheets>' +
+      sheets.map(function (ws, i) { return '<sheet name="' + _xlEsc(ws.name) + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>'; }).join('') + '</sheets>' +
+      (names.length ? '<definedNames>' + names.map(function (nm) {
+        return '<definedName name="' + nm.name + '"' + (nm.sheet !== undefined ? ' localSheetId="' + nm.sheet + '"' : '') + '>' + _xlEsc(nm.ref) + '</definedName>';
+      }).join('') + '</definedNames>' : '') +
+      '<calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>';
+
+    var iso = (meta.created || new Date()).toISOString().replace(/\.\d+Z$/, 'Z');
+    var all = [
+      { name: '[Content_Types].xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>' +
+        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+        '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+        '<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>' +
+        '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>' +
+        '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>' +
+        overrides.map(function (o) { return '<Override PartName="' + o[0] + '" ContentType="' + o[1] + '"/>'; }).join('') + '</Types>' },
+      { name: '_rels/.rels', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="' + NS_R + '/officeDocument" Target="xl/workbook.xml"/>' +
+        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>' +
+        '<Relationship Id="rId3" Type="' + NS_R + '/extended-properties" Target="docProps/app.xml"/></Relationships>' },
+      { name: 'docProps/core.xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" ' +
+        'xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">' +
+        '<dc:title>' + _xlEsc(meta.title || 'CashFlow') + '</dc:title><dc:creator>CashFlow</dc:creator>' +
+        '<dcterms:created xsi:type="dcterms:W3CDTF">' + iso + '</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">' + iso + '</dcterms:modified></cp:coreProperties>' },
+      { name: 'docProps/app.xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>CashFlow</Application></Properties>' },
+      { name: 'xl/workbook.xml', data: wb },
+      { name: 'xl/_rels/workbook.xml.rels', data: relXml(wbRels) }
+    ].concat(files);
+    all.push({ name: 'xl/styles.xml', data: sb.toXml() });
+    all.push({ name: 'xl/sharedStrings.xml', data: sst.toXml() });   // phải ghi sau cùng: các sheet đã nạp chuỗi xong
+    return _xlZip(all);
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //   BỘ DỰNG BÁO CÁO CASHFLOW
+  //   snap = {
+  //     rows:  [{y,m,d,type:'income'|'expense',cat,desc,src,amount,rep}],
+  //     debts: [{name,amount,borrowed:{y,m,d}|null,due:{y,m,d}|null,paid,note}],
+  //     expenseCats:[nhãn], incomeCats:[nhãn], allCats:[{type,label}],
+  //     budgets:{nhãn: số tiền/tháng}, balances:{...},
+  //     viewYear, viewMonth, exportedAt: Date
+  //   }
+  // ══════════════════════════════════════════════════════════════
+  function _buildCashflowXlsx(snap) {
+    var sb = _xlStyleBook(), sst = _xlSharedStrings();
+    var C = { navy: '1F2A44', ink: '1F2937', muted: '6B7686', line: 'D9DEE5', bg: 'F4F6F9', green: '12805C', greenL: 'E3F4EC', red: 'C0392B', redL: 'FBE9E7',
+      amber: 'B7791F', amberL: 'FFF4D6', blue: '0000FF', input: 'FFF8DC', white: 'FFFFFF', teal: '0E7C86' };
+    var F_VND = '#,##0" ₫";[Red]-#,##0" ₫";"–"', F_NUM = '#,##0;[Red]-#,##0;"–"', F_PCT = '0.0%;[Red]-0.0%;"–"';
+    var F_DATE = 'dd/mm/yyyy', F_MONTH = '"Tháng "0', F_INT = '#,##0;-#,##0;"–"';
+    var LAST = 10000, FIRST = 5;                                   // vùng dữ liệu của sheet Giao dịch
+    var SRC = ['Tiền mặt', 'Chuyển khoản', 'Tiết kiệm', 'Chưa phân loại'];
+
+    var exp = snap.exportedAt || new Date();
+    var todaySerial = _xlSerial(exp.getFullYear(), exp.getMonth() + 1, exp.getDate());
+    var VY = snap.viewYear || exp.getFullYear(), VM = snap.viewMonth || (exp.getMonth() + 1);
+
+    // ── dữ liệu đã chuẩn hóa ──
+    var data = (snap.rows || []).map(function (r, i) {
+      return { s: _xlSerial(r.y, r.m, r.d), type: r.type === 'income' ? 'Thu nhập' : 'Chi phí', cat: r.cat, desc: r.desc || '', src: r.src,
+        amount: Math.abs(Number(r.amount) || 0), rep: !!r.rep, ord: i };
+    });
+    data.sort(function (a, b) { return (b.s - a.s) || (a.ord - b.ord); });
+    var N = data.length;
+
+    function calc(type, rep, cat, lo, hi, src) {
+      var sum = 0, n = 0;
+      data.forEach(function (d) {
+        if (d.type !== type) return;
+        if (rep && !d.rep) return;
+        if (cat !== null && cat !== undefined && d.cat !== cat) return;
+        if (src !== null && src !== undefined && d.src !== src) return;
+        if (d.s < lo || d.s > hi) return;
+        sum += d.amount; n++;
+      });
+      return { sum: sum, n: n };
+    }
+
+    // ── tạo style dùng chung ──
+    var thin = ['thin', C.line];
+    var X = {
+      title: sb.xf({ font: { b: 1, sz: 20, color: C.white }, fill: C.navy, al: { h: 'left', v: 'center', indent: 1 } }),
+      sub: sb.xf({ font: { sz: 10, color: 'C8D0E0' }, fill: C.navy, al: { h: 'left', v: 'center', indent: 1 } }),
+      lbl: sb.xf({ font: { b: 1, sz: 9, color: C.muted }, al: { h: 'right', v: 'center' } }),
+      inp: sb.xf({ font: { b: 1, sz: 11, color: C.blue }, fill: C.input, border: { l: ['thin', 'E0B84C'], r: ['thin', 'E0B84C'], t: ['thin', 'E0B84C'], b: ['thin', 'E0B84C'] }, al: { h: 'center', v: 'center' } }),
+      dateBox: sb.xf({ font: { b: 1, sz: 10 }, fill: C.bg, fmt: F_DATE, border: { b: thin }, al: { h: 'center', v: 'center' } }),
+      hint: sb.xf({ font: { i: 1, sz: 9, color: C.muted }, al: { h: 'left', v: 'center', indent: 1 } }),
+      sec: sb.xf({ font: { b: 1, sz: 11, color: C.navy }, border: { b: ['medium', C.teal] }, al: { h: 'left', v: 'center' } }),
+      th: sb.xf({ font: { b: 1, sz: 9, color: C.white }, fill: C.navy, al: { h: 'center', v: 'center', wrap: 1 } }),
+      thL: sb.xf({ font: { b: 1, sz: 9, color: C.white }, fill: C.navy, al: { h: 'left', v: 'center', indent: 1 } }),
+      tdL: sb.xf({ font: { sz: 10 }, border: { b: thin }, al: { h: 'left', v: 'center', indent: 1 } }),
+      tdMonth: sb.xf({ font: { sz: 10 }, border: { b: thin }, fmt: F_MONTH, al: { h: 'left', v: 'center', indent: 1 } }),
+      tdN: sb.xf({ font: { sz: 10 }, border: { b: thin }, fmt: F_NUM, al: { h: 'right', v: 'center' } }),
+      tdI: sb.xf({ font: { sz: 10 }, border: { b: thin }, fmt: F_INT, al: { h: 'right', v: 'center' } }),
+      tdP: sb.xf({ font: { sz: 10 }, border: { b: thin }, fmt: F_PCT, al: { h: 'right', v: 'center' } }),
+      tdIn: sb.xf({ font: { sz: 10, color: C.blue }, fill: C.input, border: { b: thin }, fmt: F_NUM, al: { h: 'right', v: 'center' } }),
+      totL: sb.xf({ font: { b: 1, sz: 10, color: C.navy }, fill: C.bg, border: { t: ['thin', C.navy], b: ['thin', C.navy] }, al: { h: 'left', v: 'center', indent: 1 } }),
+      totN: sb.xf({ font: { b: 1, sz: 10, color: C.navy }, fill: C.bg, border: { t: ['thin', C.navy], b: ['thin', C.navy] }, fmt: F_NUM, al: { h: 'right', v: 'center' } }),
+      totI: sb.xf({ font: { b: 1, sz: 10, color: C.navy }, fill: C.bg, border: { t: ['thin', C.navy], b: ['thin', C.navy] }, fmt: F_INT, al: { h: 'right', v: 'center' } }),
+      totP: sb.xf({ font: { b: 1, sz: 10, color: C.navy }, fill: C.bg, border: { t: ['thin', C.navy], b: ['thin', C.navy] }, fmt: F_PCT, al: { h: 'right', v: 'center' } }),
+      note: sb.xf({ font: { sz: 9, color: C.muted }, al: { h: 'left', v: 'top', wrap: 1, indent: 1 } })
+    };
+    function cardStyles(accent) {
+      return {
+        lab: sb.xf({ font: { b: 1, sz: 9, color: C.muted }, fill: C.bg, border: { t: ['medium', accent] }, al: { h: 'left', v: 'center', indent: 1 } }),
+        val: function (fmt) { return sb.xf({ font: { b: 1, sz: 20, color: accent }, fill: C.bg, fmt: fmt, al: { h: 'left', v: 'center', indent: 1 } }); },
+        sub: sb.xf({ font: { i: 1, sz: 9, color: C.muted }, fill: C.bg, al: { h: 'left', v: 'center', indent: 1 } })
+      };
+    }
+
+    // ══════════════ SHEET 1: TỔNG QUAN ══════════════
+    var ws1 = _xlSheet('Tổng quan');
+    ws1.breaks = [30]; ws1.grid = false; ws1.tab = C.navy; ws1.landscape = true; ws1.fit = true; ws1.selected = true;
+    ws1.width(1, 2); for (var ci = 2; ci <= 13; ci++) ws1.width(ci, 15); ws1.width(14, 2);
+
+    var minS = N ? data[data.length - 1].s : todaySerial, maxS = N ? data[0].s : todaySerial;
+    function ddmmyyyy(sn) { var q = _xlFromSerial(sn); return ('0' + q.d).slice(-2) + '/' + ('0' + q.m).slice(-2) + '/' + q.y; }
+
+    ws1.put(1, 2, 'CASHFLOW · BÁO CÁO TÀI CHÍNH CÁ NHÂN', X.title); ws1.fillRange(1, 2, 1, 13, X.title); ws1.merge(1, 2, 1, 13); ws1.height(1, 42);
+    ws1.put(2, 2, 'Xuất ngày ' + ddmmyyyy(todaySerial) + '  ·  ' + N + ' giao dịch  ·  dữ liệu từ ' + ddmmyyyy(minS) + ' đến ' + ddmmyyyy(maxS), X.sub);
+    ws1.fillRange(2, 2, 2, 13, X.sub); ws1.merge(2, 2, 2, 13); ws1.height(2, 22);
+    ws1.height(3, 8);
+
+    // Bộ chọn kỳ (ô vàng)
+    ws1.put(4, 2, 'NĂM', X.lbl); ws1.put(4, 3, VY, X.inp);
+    ws1.put(4, 4, 'THÁNG', X.lbl); ws1.put(4, 5, VM, X.inp);
+    var fromS = _xlSerial(VY, VM, 1), toS = _xlSerial(VY, VM + 1, 1) - 1;
+    ws1.put(4, 6, 'TỪ NGÀY', X.lbl);
+    ws1.put(4, 7, { f: 'DATE($C$4,IF($E$4="Cả năm",1,$E$4),1)', v: fromS }, X.dateBox);
+    ws1.put(4, 8, 'ĐẾN NGÀY', X.lbl);
+    ws1.put(4, 9, { f: 'EDATE($G$4,IF($E$4="Cả năm",12,1))-1', v: toS }, X.dateBox);
+    ws1.put(4, 10, '◂ Đổi ô vàng (Năm / Tháng) để xem kỳ khác — mọi số liệu bên dưới tự cập nhật', X.hint); ws1.fillRange(4, 10, 4, 13, X.hint); ws1.merge(4, 10, 4, 13);
+    ws1.height(4, 26); ws1.height(5, 8);
+    var years = {}; years[VY] = 1; data.forEach(function (d) { years[_xlFromSerial(d.s).y] = 1; });
+    var yearList = Object.keys(years).map(Number).sort().join(',');
+    ws1.dv.push({ ref: 'C4', list: '"' + yearList + '"', title: 'Năm không hợp lệ', error: 'Chọn một năm trong danh sách.', promptTitle: 'Năm', prompt: 'Chọn năm cần xem.' });
+    ws1.dv.push({ ref: 'E4', list: '"Cả năm,1,2,3,4,5,6,7,8,9,10,11,12"', title: 'Tháng không hợp lệ', error: 'Chọn "Cả năm" hoặc một tháng từ 1 đến 12.', promptTitle: 'Tháng', prompt: 'Chọn "Cả năm" hoặc tháng 1–12.' });
+
+    var PERIOD = 'GD_Ngay,">="&$G$4,GD_Ngay,"<="&$I$4';
+    function sumF(type, rep, catRef) {
+      return 'SUMIFS(GD_SoTien,GD_Loai,"' + type + '"' + (rep ? ',GD_TinhBC,"<>Không"' : '') + (catRef ? ',GD_HangMuc,' + catRef : '') + ',' + PERIOD + ')';
+    }
+    function cntF(type, rep, catRef) {
+      return 'COUNTIFS(GD_Loai,"' + type + '"' + (rep ? ',GD_TinhBC,"<>Không"' : '') + (catRef ? ',GD_HangMuc,' + catRef : '') + ',' + PERIOD + ')';
+    }
+    var pInc = calc('Thu nhập', true, null, fromS, toS), pExp = calc('Chi phí', true, null, fromS, toS);
+    var pNet = pInc.sum - pExp.sum, pRate = pInc.sum ? pNet / pInc.sum : 0;
+
+    function card(r, c1, c2, label, valObj, fmt, accent, subObj) {
+      var cs = cardStyles(accent);
+      ws1.put(r, c1, label, cs.lab); ws1.fillRange(r, c1, r, c2, cs.lab); ws1.merge(r, c1, r, c2);
+      ws1.put(r + 1, c1, valObj, cs.val(fmt)); ws1.fillRange(r + 1, c1, r + 2, c2, cs.val(fmt)); ws1.merge(r + 1, c1, r + 2, c2);
+      ws1.put(r + 3, c1, subObj, cs.sub); ws1.fillRange(r + 3, c1, r + 3, c2, cs.sub); ws1.merge(r + 3, c1, r + 3, c2);
+    }
+    card(6, 2, 4, 'THU NHẬP', { f: sumF('Thu nhập', true), v: pInc.sum }, F_VND, C.green,
+      { f: cntF('Thu nhập', true) + '&" giao dịch"', v: pInc.n + ' giao dịch' });
+    card(6, 5, 7, 'CHI PHÍ', { f: sumF('Chi phí', true), v: pExp.sum }, F_VND, C.red,
+      { f: cntF('Chi phí', true) + '&" giao dịch"', v: pExp.n + ' giao dịch' });
+    card(6, 8, 10, 'CHÊNH LỆCH (THU − CHI)', { f: 'B7-E7', v: pNet }, F_VND, C.teal,
+      { f: 'IF(H7>=0,"Thu lớn hơn chi","Chi vượt thu")', v: pNet >= 0 ? 'Thu lớn hơn chi' : 'Chi vượt thu' });
+    card(6, 11, 13, 'TỶ LỆ TIẾT KIỆM', { f: 'IF(B7=0,0,H7/B7)', v: pRate }, F_PCT, C.amber, 'Chênh lệch ÷ Thu nhập');
+    ws1.height(6, 20); ws1.height(7, 22); ws1.height(8, 22); ws1.height(9, 18); ws1.height(10, 10);
+    var dxGreenF = sb.dxf({ font: { b: 1, color: C.green } }), dxRedF = sb.dxf({ font: { b: 1, color: C.red } });
+    ws1.cf.push({ ref: 'H7', rules: [{ type: 'expression', dxf: dxRedF, formula: '$H$7<0' }, { type: 'expression', dxf: dxGreenF, formula: '$H$7>0' }] });
+
+    // Số dư tại thời điểm xuất (ảnh chụp)
+    var bal = snap.balances || {};
+    ws1.put(11, 2, 'SỐ DƯ TẠI THỜI ĐIỂM XUẤT   ·   ảnh chụp từ ứng dụng, không tự cập nhật   ·   Tài sản ròng = Ngân hàng + Tiền mặt + Chưa phân loại', X.sec);
+    ws1.fillRange(11, 2, 11, 13, X.sec); ws1.merge(11, 2, 11, 13); ws1.height(11, 24);
+    var balItems = [['TÀI SẢN RÒNG', bal.netWorth, C.navy], ['TIẾT KIỆM / ĐẦU TƯ', bal.savings, C.amber], ['NGÂN HÀNG', bal.bank, C.teal],
+      ['TIỀN MẶT', bal.cash, C.green], ['CHƯA PHÂN LOẠI', bal.uncategorized, C.muted], ['NỢ CHO VAY (CHỜ THU)', bal.pendingDebt, C.red]];
+    var balLab = sb.xf({ font: { b: 1, sz: 8, color: C.muted }, fill: C.bg, al: { h: 'left', v: 'center', indent: 1 } });
+    balItems.forEach(function (it, k) {
+      var c1 = 2 + k * 2, c2 = c1 + 1;
+      var vs = sb.xf({ font: { b: 1, sz: 13, color: it[2] }, fill: C.bg, fmt: F_VND, border: { b: ['medium', it[2]] }, al: { h: 'left', v: 'center', indent: 1 } });
+      ws1.put(12, c1, it[0], balLab); ws1.fillRange(12, c1, 12, c2, balLab); ws1.merge(12, c1, 12, c2);
+      ws1.put(13, c1, Number(it[1]) || 0, vs); ws1.fillRange(13, c1, 13, c2, vs); ws1.merge(13, c1, 13, c2);
+    });
+    ws1.height(12, 18); ws1.height(13, 28); ws1.height(14, 12);
+
+    // Bảng theo tháng
+    var R_M0 = 17;                                   // hàng tháng 1
+    ws1.put(15, 2, { f: '"DÒNG TIỀN THEO THÁNG  ·  "&$C$4', v: 'DÒNG TIỀN THEO THÁNG  ·  ' + VY }, X.sec);
+    ws1.fillRange(15, 2, 15, 7, X.sec); ws1.merge(15, 2, 15, 7); ws1.height(15, 24);
+    ['Tháng', 'Thu nhập', 'Chi phí', 'Chênh lệch', 'Tiết kiệm %', 'Lũy kế'].forEach(function (h, k) { ws1.put(16, 2 + k, h, k === 0 ? X.thL : X.th); });
+    ws1.height(16, 22);
+    var mInc = [], mExp = [], cum = 0, tInc = 0, tExp = 0;
+    for (var m = 1; m <= 12; m++) {
+      var r = R_M0 + m - 1, lo = _xlSerial(VY, m, 1), hi = _xlSerial(VY, m + 1, 1) - 1;
+      var mi = calc('Thu nhập', true, null, lo, hi).sum, me = calc('Chi phí', true, null, lo, hi).sum, mn = mi - me;
+      cum += mn; tInc += mi; tExp += me; mInc.push(mi); mExp.push(me);
+      var dr = 'GD_Ngay,">="&DATE($C$4,$B' + r + ',1),GD_Ngay,"<"&DATE($C$4,$B' + r + '+1,1)';
+      ws1.put(r, 2, m, X.tdMonth);
+      ws1.put(r, 3, { f: 'SUMIFS(GD_SoTien,GD_Loai,"Thu nhập",GD_TinhBC,"<>Không",' + dr + ')', v: mi }, X.tdN);
+      ws1.put(r, 4, { f: 'SUMIFS(GD_SoTien,GD_Loai,"Chi phí",GD_TinhBC,"<>Không",' + dr + ')', v: me }, X.tdN);
+      ws1.put(r, 5, { f: 'C' + r + '-D' + r, v: mn }, X.tdN);
+      ws1.put(r, 6, { f: 'IF(C' + r + '=0,0,E' + r + '/C' + r + ')', v: mi ? mn / mi : 0 }, X.tdP);
+      ws1.put(r, 7, { f: r === R_M0 ? 'E' + r : 'G' + (r - 1) + '+E' + r, v: cum }, X.tdN);
+      ws1.height(r, 20);
+    }
+    var R_MT = R_M0 + 12;                            // hàng tổng = 29
+    ws1.put(R_MT, 2, 'Cả năm', X.totL);
+    ws1.put(R_MT, 3, { f: 'SUM(C' + R_M0 + ':C' + (R_MT - 1) + ')', v: tInc }, X.totN);
+    ws1.put(R_MT, 4, { f: 'SUM(D' + R_M0 + ':D' + (R_MT - 1) + ')', v: tExp }, X.totN);
+    ws1.put(R_MT, 5, { f: 'C' + R_MT + '-D' + R_MT, v: tInc - tExp }, X.totN);
+    ws1.put(R_MT, 6, { f: 'IF(C' + R_MT + '=0,0,E' + R_MT + '/C' + R_MT + ')', v: tInc ? (tInc - tExp) / tInc : 0 }, X.totP);
+    ws1.put(R_MT, 7, null, X.totN); ws1.height(R_MT, 22);
+    var dxPos = sb.dxf({ font: { color: C.green } });
+    ws1.cf.push({ ref: 'C' + R_M0 + ':C' + (R_MT - 1), rules: [{ type: 'dataBar', color: 'A8DCC5' }] });
+    ws1.cf.push({ ref: 'D' + R_M0 + ':D' + (R_MT - 1), rules: [{ type: 'dataBar', color: 'F2B5AD' }] });
+    ws1.cf.push({ ref: 'E' + R_M0 + ':E' + R_MT, rules: [{ type: 'expression', dxf: dxPos, formula: 'E' + R_M0 + '>0' }] });
+
+    // Chi phí theo hạng mục
+    var periodTxt = VM ? 'tháng ' + VM + '/' + VY : 'cả năm ' + VY;
+    var PTXT_F = 'IF($E$4="Cả năm","cả năm "&$C$4,"tháng "&$E$4&"/"&$C$4)';
+    var R_E0 = 33, expCats = snap.expenseCats || [], nE = expCats.length, R_EX = R_E0 + nE, R_ET = R_EX + 1;
+    ws1.put(31, 2, { f: '"CHI PHÍ THEO HẠNG MỤC  ·  "&' + PTXT_F, v: 'CHI PHÍ THEO HẠNG MỤC  ·  ' + periodTxt }, X.sec);
+    ws1.fillRange(31, 2, 31, 7, X.sec); ws1.merge(31, 2, 31, 7); ws1.height(31, 24);
+    ws1.put(32, 2, 'Hạng mục', X.thL); ws1.fillRange(32, 2, 32, 3, X.thL); ws1.merge(32, 2, 32, 3);
+    ['Số tiền', '% tổng chi', 'Ngân sách / tháng', '% ngân sách kỳ'].forEach(function (h, k) { ws1.put(32, 4 + k, h, X.th); });
+    ws1.height(32, 28);
+    var eVals = [], eSum = 0, monthsInPeriod = 12;      // mặc định mô phỏng tháng đang chọn → 1
+    monthsInPeriod = VM ? 1 : 12;
+    expCats.forEach(function (lab, k) {
+      var r = R_E0 + k, v = calc('Chi phí', true, lab, fromS, toS).sum, bud = (snap.budgets || {})[lab];
+      eVals.push(v); eSum += v;
+      ws1.put(r, 2, lab, X.tdL); ws1.fillRange(r, 2, r, 3, X.tdL); ws1.merge(r, 2, r, 3);
+      ws1.put(r, 4, { f: sumF('Chi phí', true, '$B' + r), v: v }, X.tdN);
+      ws1.put(r, 5, { f: 'IF($D$' + R_ET + '=0,0,D' + r + '/$D$' + R_ET + ')', v: pExp.sum ? v / pExp.sum : 0 }, X.tdP);
+      ws1.put(r, 6, bud ? Number(bud) : null, X.tdIn);
+      ws1.put(r, 7, { f: 'IF(OR(F' + r + '="",F' + r + '=0),"",D' + r + '/(F' + r + '*IF($E$4="Cả năm",12,1)))', v: bud ? v / (Number(bud) * monthsInPeriod) : '' }, X.tdP);
+      ws1.height(r, 20);
+    });
+    var restE = pExp.sum - eSum;
+    ws1.put(R_EX, 2, 'Khác (chưa xếp hạng mục)', X.tdL); ws1.fillRange(R_EX, 2, R_EX, 3, X.tdL); ws1.merge(R_EX, 2, R_EX, 3);
+    ws1.put(R_EX, 4, { f: 'E7-SUM(D' + R_E0 + ':D' + (R_EX - 1) + ')', v: restE }, X.tdN);
+    ws1.put(R_EX, 5, { f: 'IF($D$' + R_ET + '=0,0,D' + R_EX + '/$D$' + R_ET + ')', v: pExp.sum ? restE / pExp.sum : 0 }, X.tdP);
+    ws1.put(R_EX, 6, null, X.tdN); ws1.put(R_EX, 7, null, X.tdN); ws1.height(R_EX, 20);
+    ws1.put(R_ET, 2, 'Tổng chi phí', X.totL); ws1.fillRange(R_ET, 2, R_ET, 3, X.totL); ws1.merge(R_ET, 2, R_ET, 3);
+    ws1.put(R_ET, 4, { f: 'SUM(D' + R_E0 + ':D' + R_EX + ')', v: pExp.sum }, X.totN);
+    ws1.put(R_ET, 5, { f: 'SUM(E' + R_E0 + ':E' + R_EX + ')', v: pExp.sum ? 1 : 0 }, X.totP);
+    ws1.put(R_ET, 6, null, X.totN); ws1.put(R_ET, 7, null, X.totN); ws1.height(R_ET, 22);
+    var dxOver = sb.dxf({ font: { b: 1, color: C.red }, fill: C.redL }), dxWarn = sb.dxf({ font: { b: 1, color: C.amber }, fill: C.amberL }), dxOk = sb.dxf({ font: { color: C.green } });
+    var gRef = 'G' + R_E0 + ':G' + (R_EX - 1);
+    ws1.cf.push({ ref: gRef, rules: [
+      { type: 'expression', dxf: dxOver, formula: 'AND(ISNUMBER(G' + R_E0 + '),G' + R_E0 + '>1)' },
+      { type: 'expression', dxf: dxWarn, formula: 'AND(ISNUMBER(G' + R_E0 + '),G' + R_E0 + '>0.85)' },
+      { type: 'expression', dxf: dxOk, formula: 'AND(ISNUMBER(G' + R_E0 + '),G' + R_E0 + '<=0.85)' }] });
+    ws1.cf.push({ ref: 'D' + R_E0 + ':D' + (R_EX - 1), rules: [{ type: 'dataBar', color: 'F2B5AD' }] });
+
+    // Thu nhập theo hạng mục  |  Theo nguồn tiền
+    var R_I_T = R_ET + 2, R_I_H = R_I_T + 1, R_I0 = R_I_H + 1, incCats = snap.incomeCats || [], nI = incCats.length, R_IX = R_I0 + nI, R_IT = R_IX + 1;
+    ws1.put(R_I_T, 2, { f: '"THU NHẬP THEO HẠNG MỤC  ·  "&' + PTXT_F, v: 'THU NHẬP THEO HẠNG MỤC  ·  ' + periodTxt }, X.sec);
+    ws1.fillRange(R_I_T, 2, R_I_T, 7, X.sec); ws1.merge(R_I_T, 2, R_I_T, 7); ws1.height(R_I_T, 24);
+    ws1.put(R_I_H, 2, 'Hạng mục', X.thL); ws1.fillRange(R_I_H, 2, R_I_H, 3, X.thL); ws1.merge(R_I_H, 2, R_I_H, 3);
+    ['Số tiền', '% tổng thu', 'Số giao dịch', 'Trung bình / GD'].forEach(function (h, k) { ws1.put(R_I_H, 4 + k, h, X.th); });
+    ws1.height(R_I_H, 28);
+    var iSum = 0, iCnt = 0;
+    incCats.forEach(function (lab, k) {
+      var r = R_I0 + k, cc = calc('Thu nhập', true, lab, fromS, toS);
+      iSum += cc.sum; iCnt += cc.n;
+      ws1.put(r, 2, lab, X.tdL); ws1.fillRange(r, 2, r, 3, X.tdL); ws1.merge(r, 2, r, 3);
+      ws1.put(r, 4, { f: sumF('Thu nhập', true, '$B' + r), v: cc.sum }, X.tdN);
+      ws1.put(r, 5, { f: 'IF($D$' + R_IT + '=0,0,D' + r + '/$D$' + R_IT + ')', v: pInc.sum ? cc.sum / pInc.sum : 0 }, X.tdP);
+      ws1.put(r, 6, { f: cntF('Thu nhập', true, '$B' + r), v: cc.n }, X.tdI);
+      ws1.put(r, 7, { f: 'IF(F' + r + '=0,0,D' + r + '/F' + r + ')', v: cc.n ? cc.sum / cc.n : 0 }, X.tdN);
+      ws1.height(r, 20);
+    });
+    var restI = pInc.sum - iSum, restIn = pInc.n - iCnt;
+    ws1.put(R_IX, 2, 'Khác (chưa xếp hạng mục)', X.tdL); ws1.fillRange(R_IX, 2, R_IX, 3, X.tdL); ws1.merge(R_IX, 2, R_IX, 3);
+    ws1.put(R_IX, 4, { f: 'B7-SUM(D' + R_I0 + ':D' + (R_IX - 1) + ')', v: restI }, X.tdN);
+    ws1.put(R_IX, 5, { f: 'IF($D$' + R_IT + '=0,0,D' + R_IX + '/$D$' + R_IT + ')', v: pInc.sum ? restI / pInc.sum : 0 }, X.tdP);
+    ws1.put(R_IX, 6, { f: 'COUNTIFS(GD_Loai,"Thu nhập",GD_TinhBC,"<>Không",' + PERIOD + ')-SUM(F' + R_I0 + ':F' + (R_IX - 1) + ')', v: restIn }, X.tdI);
+    ws1.put(R_IX, 7, { f: 'IF(F' + R_IX + '=0,0,D' + R_IX + '/F' + R_IX + ')', v: restIn ? restI / restIn : 0 }, X.tdN); ws1.height(R_IX, 20);
+    ws1.put(R_IT, 2, 'Tổng thu nhập', X.totL); ws1.fillRange(R_IT, 2, R_IT, 3, X.totL); ws1.merge(R_IT, 2, R_IT, 3);
+    ws1.put(R_IT, 4, { f: 'SUM(D' + R_I0 + ':D' + R_IX + ')', v: pInc.sum }, X.totN);
+    ws1.put(R_IT, 5, { f: 'SUM(E' + R_I0 + ':E' + R_IX + ')', v: pInc.sum ? 1 : 0 }, X.totP);
+    ws1.put(R_IT, 6, { f: 'SUM(F' + R_I0 + ':F' + R_IX + ')', v: pInc.n }, X.totI);
+    ws1.put(R_IT, 7, { f: 'IF(F' + R_IT + '=0,0,D' + R_IT + '/F' + R_IT + ')', v: pInc.n ? pInc.sum / pInc.n : 0 }, X.totN); ws1.height(R_IT, 22);
+
+    // Theo nguồn tiền (gồm cả chuyển nội bộ)
+    ws1.put(R_I_T, 9, { f: '"BIẾN ĐỘNG THEO NGUỒN TIỀN  ·  "&' + PTXT_F, v: 'BIẾN ĐỘNG THEO NGUỒN TIỀN  ·  ' + periodTxt }, X.sec);
+    ws1.fillRange(R_I_T, 9, R_I_T, 13, X.sec); ws1.merge(R_I_T, 9, R_I_T, 13);
+    ws1.put(R_I_H, 9, 'Nguồn tiền', X.thL);
+    ['Thu nhập', 'Chi phí', 'Chênh lệch', 'Số giao dịch'].forEach(function (h, k) { ws1.put(R_I_H, 10 + k, h, X.th); });
+    var sTI = 0, sTE = 0, sTN = 0;
+    SRC.forEach(function (sname, k) {
+      var r = R_I0 + k, a = calc('Thu nhập', false, null, fromS, toS, sname), b = calc('Chi phí', false, null, fromS, toS, sname);
+      sTI += a.sum; sTE += b.sum; sTN += a.n + b.n;
+      var base = 'GD_Nguon,$I' + r + ',' + PERIOD;
+      ws1.put(r, 9, sname, X.tdL);
+      ws1.put(r, 10, { f: 'SUMIFS(GD_SoTien,GD_Loai,"Thu nhập",' + base + ')', v: a.sum }, X.tdN);
+      ws1.put(r, 11, { f: 'SUMIFS(GD_SoTien,GD_Loai,"Chi phí",' + base + ')', v: b.sum }, X.tdN);
+      ws1.put(r, 12, { f: 'J' + r + '-K' + r, v: a.sum - b.sum }, X.tdN);
+      ws1.put(r, 13, { f: 'COUNTIFS(' + base + ')', v: a.n + b.n }, X.tdI);
+    });
+    var R_ST = R_I0 + SRC.length;
+    ws1.put(R_ST, 9, 'Tổng cộng', X.totL);
+    ws1.put(R_ST, 10, { f: 'SUM(J' + R_I0 + ':J' + (R_ST - 1) + ')', v: sTI }, X.totN);
+    ws1.put(R_ST, 11, { f: 'SUM(K' + R_I0 + ':K' + (R_ST - 1) + ')', v: sTE }, X.totN);
+    ws1.put(R_ST, 12, { f: 'J' + R_ST + '-K' + R_ST, v: sTI - sTE }, X.totN);
+    ws1.put(R_ST, 13, { f: 'SUM(M' + R_I0 + ':M' + (R_ST - 1) + ')', v: sTN }, X.totI); ws1.height(R_ST, 22);
+    ws1.put(R_ST + 1, 9, 'Tính mọi giao dịch, kể cả chuyển tiết kiệm nội bộ và thu hồi nợ.', X.hint);
+    ws1.fillRange(R_ST + 1, 9, R_ST + 1, 13, X.hint); ws1.merge(R_ST + 1, 9, R_ST + 1, 13);
+    ws1.cf.push({ ref: 'L' + R_I0 + ':L' + R_ST, rules: [{ type: 'expression', dxf: dxPos, formula: 'L' + R_I0 + '>0' }] });
+
+    // Ghi chú
+    var R_N = Math.max(R_IT, R_ST + 1) + 2;
+    ws1.put(R_N, 2, 'GHI CHÚ', X.sec); ws1.fillRange(R_N, 2, R_N, 13, X.sec); ws1.merge(R_N, 2, R_N, 13); ws1.height(R_N, 22);
+    [
+      '•  Thu nhập / Chi phí chỉ tính các giao dịch có cột «Tính báo cáo» khác "Không" (loại trừ chuyển tiền tiết kiệm nội bộ và thu hồi nợ) — giống cách ứng dụng tính.',
+      '•  Mọi số liệu là công thức: sửa, thêm, xóa dòng ở sheet «Giao dịch» (hoặc đổi Năm / Tháng ở ô vàng phía trên) là báo cáo và biểu đồ tự cập nhật.',
+      '•  Ô nền vàng, chữ xanh là ô nhập liệu (Năm, Tháng, Ngân sách / tháng). Ô «% ngân sách kỳ» chuyển vàng khi dùng trên 85% và đỏ khi vượt ngân sách.',
+      '•  Có thể nhập lại chính file này vào ứng dụng bằng nút Nhập Excel — ứng dụng đọc sheet «Giao dịch».'
+    ].forEach(function (t, k) { var r = R_N + 1 + k; ws1.put(r, 2, t, X.note); ws1.fillRange(r, 2, r, 13, X.note); ws1.merge(r, 2, r, 13); ws1.height(r, 28); });
+
+    // Biểu đồ
+    var QT = "'Tổng quan'!";
+    ws1.charts.push({
+      from: { c: 7, r: 14, dx: 60000 }, to: { c: 13, r: R_MT },
+      xml: _xlChartXml({ title: 'Thu – Chi theo tháng', dir: 'col', legend: true, gap: 70, catNum: true, catRef: QT + '$B$' + R_M0 + ':$B$' + (R_MT - 1),
+        cats: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], catFmt: F_MONTH, catAxFmt: '"T"0', valFmt: '[>=1000000]#,##0.0,,"tr";[>=1000]#,##0,"k";0',
+        series: [
+          { name: 'Thu nhập', nameRef: QT + '$C$16', color: '1E9E6A', valRef: QT + '$C$' + R_M0 + ':$C$' + (R_MT - 1), vals: mInc },
+          { name: 'Chi phí', nameRef: QT + '$D$16', color: 'D6564A', valRef: QT + '$D$' + R_M0 + ':$D$' + (R_MT - 1), vals: mExp }] })
+    });
+    ws1.charts.push({
+      from: { c: 7, r: 30, dx: 60000 }, to: { c: 13, r: R_ET },
+      xml: _xlChartXml({ title: 'Chi phí theo hạng mục', dir: 'bar', legend: false, gap: 45, labels: true, labelFmt: '[>=1000000]#,##0.0,,"tr";[>=1000]#,##0,"k";0',
+        catNum: false, catRef: QT + '$B$' + R_E0 + ':$B$' + (R_EX - 1), cats: expCats,
+        series: [{ name: 'Số tiền', nameRef: QT + '$D$32', color: 'D6564A', valRef: QT + '$D$' + R_E0 + ':$D$' + (R_EX - 1), vals: eVals }] })
+    });
+
+    // ══════════════ SHEET 2: GIAO DỊCH ══════════════
+    var ws2 = _xlSheet('Giao dịch');
+    ws2.tab = C.teal; ws2.landscape = true; ws2.fit = true; ws2.freeze = { row: 4 }; ws2.titles = '$4:$4';
+    [13, 13, 28, 46, 17, 18, 15].forEach(function (w, k) { ws2.width(k + 1, w); });
+    var tTitle = sb.xf({ font: { b: 1, sz: 14, color: C.white }, fill: C.navy, al: { h: 'left', v: 'center', indent: 1 } });
+    ws2.put(1, 1, 'DANH SÁCH GIAO DỊCH', tTitle); ws2.fillRange(1, 1, 1, 7, tTitle); ws2.merge(1, 1, 1, 7); ws2.height(1, 32);
+    var infoL = sb.xf({ font: { b: 1, sz: 9, color: C.muted }, fill: C.bg, al: { h: 'left', v: 'center', indent: 1 } });
+    var infoR = sb.xf({ font: { b: 1, sz: 9, color: C.muted }, fill: C.bg, al: { h: 'right', v: 'center' } });
+    var infoCnt = sb.xf({ font: { b: 1, sz: 11, color: C.navy }, fill: C.bg, fmt: '#,##0" giao dịch"', al: { h: 'left', v: 'center' } });
+    var infoSum = sb.xf({ font: { b: 1, sz: 11, color: C.navy }, fill: C.bg, fmt: F_VND, al: { h: 'left', v: 'center' } });
+    var totalAmt = 0; data.forEach(function (d) { totalAmt += d.amount; });
+    ws2.put(2, 1, 'Đang hiển thị', infoL); ws2.put(2, 2, null, infoL); ws2.merge(2, 1, 2, 2);
+    ws2.put(2, 3, { f: 'SUBTOTAL(102,F' + FIRST + ':F' + LAST + ')', v: N }, infoCnt);
+    ws2.put(2, 4, 'Tổng giá trị theo bộ lọc (Thu + Chi)', infoR);
+    ws2.put(2, 5, { f: 'SUBTOTAL(109,F' + FIRST + ':F' + LAST + ')', v: totalAmt }, infoSum); ws2.merge(2, 5, 2, 6);
+    ws2.put(2, 6, null, infoSum); ws2.put(2, 7, null, infoL); ws2.height(2, 24);
+    ws2.put(3, 1, 'Mẹo: bấm mũi tên ở tiêu đề cột để lọc / sắp xếp (lọc Loại = Chi phí để xem tổng chi). Thêm giao dịch bằng cách nhập dòng mới ngay dưới bảng.', X.hint);
+    ws2.fillRange(3, 1, 3, 7, X.hint); ws2.merge(3, 1, 3, 7); ws2.height(3, 20);
+
+    var H2 = ['Ngày', 'Loại', 'Hạng mục', 'Mô tả', 'Nguồn', 'Số tiền', 'Tính báo cáo'];
+    var th2 = sb.xf({ font: { b: 1, sz: 10, color: C.white }, fill: C.navy, al: { h: 'center', v: 'center' } });
+    H2.forEach(function (h, k) { ws2.put(4, k + 1, h, th2); }); ws2.height(4, 26);
+    var s2 = {
+      date: sb.xf({ font: { sz: 10 }, fmt: F_DATE, al: { h: 'center', v: 'center' } }),
+      type: sb.xf({ font: { sz: 10 }, al: { h: 'center', v: 'center' } }),
+      txt: sb.xf({ font: { sz: 10 }, al: { h: 'left', v: 'center', indent: 1 } }),
+      amt: sb.xf({ font: { sz: 10, b: 1 }, fmt: F_VND, al: { h: 'right', v: 'center' } }),
+      rep: sb.xf({ font: { sz: 10 }, al: { h: 'center', v: 'center' } })
+    };
+    data.forEach(function (d, i) {
+      var r = FIRST + i;
+      ws2.put(r, 1, d.s, s2.date); ws2.put(r, 2, d.type, s2.type); ws2.put(r, 3, d.cat, s2.txt); ws2.put(r, 4, d.desc, s2.txt);
+      ws2.put(r, 5, d.src, s2.txt); ws2.put(r, 6, d.amount, s2.amt); ws2.put(r, 7, d.rep ? 'Có' : 'Không', s2.rep);
+    });
+    ws2.tables.push({ name: 'tblGiaoDich', ref: _xlRange(4, 1, 3 + Math.max(N, 1) + 1, 7), cols: H2 });
+    var catRows = (snap.allCats || []).length;
+    ws2.dv.push({ ref: 'B' + FIRST + ':B' + LAST, list: '"Thu nhập,Chi phí"', title: 'Loại không hợp lệ', error: 'Chọn Thu nhập hoặc Chi phí.' });
+    ws2.dv.push({ ref: 'C' + FIRST + ':C' + LAST, list: "'Danh mục'!$B$4:$B$" + (3 + Math.max(catRows, 1)), title: 'Hạng mục', error: 'Chọn hạng mục trong danh sách (xem sheet Danh mục).' });
+    ws2.dv.push({ ref: 'E' + FIRST + ':E' + LAST, list: '"' + SRC.join(',') + '"', title: 'Nguồn tiền', error: 'Chọn nguồn tiền trong danh sách.' });
+    ws2.dv.push({ ref: 'G' + FIRST + ':G' + LAST, list: '"Có,Không"', title: 'Tính báo cáo', error: 'Chọn Có hoặc Không.' });
+    ws2.cf.push({ ref: 'F' + FIRST + ':F' + LAST, rules: [
+      { type: 'expression', dxf: sb.dxf({ font: { b: 1, color: C.green } }), formula: '$B' + FIRST + '="Thu nhập"' },
+      { type: 'expression', dxf: sb.dxf({ font: { b: 1, color: C.red } }), formula: '$B' + FIRST + '="Chi phí"' }] });
+    ws2.cf.push({ ref: 'B' + FIRST + ':B' + LAST, rules: [
+      { type: 'expression', dxf: sb.dxf({ font: { b: 1, color: C.green }, fill: C.greenL }), formula: '$B' + FIRST + '="Thu nhập"' },
+      { type: 'expression', dxf: sb.dxf({ font: { b: 1, color: C.red }, fill: C.redL }), formula: '$B' + FIRST + '="Chi phí"' }] });
+    ws2.cf.push({ ref: 'G' + FIRST + ':G' + LAST, rules: [{ type: 'expression', dxf: sb.dxf({ font: { i: 1, color: '9AA4B2' } }), formula: '$G' + FIRST + '="Không"' }] });
+    ws2.cf.push({ ref: 'A' + FIRST + ':G' + LAST, rules: [{ type: 'expression', dxf: sb.dxf({ fill: 'F6F8FB' }), formula: 'AND($A' + FIRST + '<>"",MOD(ROW(),2)=0)' }] });
+
+    var sheets = [ws1, ws2];
+
+    // ══════════════ SHEET 3: CÔNG NỢ (nếu có) ══════════════
+    var debts = snap.debts || [];
+    if (debts.length) {
+      var ws3 = _xlSheet('Công nợ');
+      ws3.tab = C.amber; ws3.landscape = true; ws3.fit = true; ws3.freeze = { row: 4 }; ws3.titles = '$4:$4';
+      [24, 17, 14, 14, 12, 14, 14, 44].forEach(function (w, k) { ws3.width(k + 1, w); });
+      ws3.put(1, 1, 'CÔNG NỢ — TIỀN CHO MƯỢN', tTitle); ws3.fillRange(1, 1, 1, 8, tTitle); ws3.merge(1, 1, 1, 8); ws3.height(1, 32);
+      var pending = 0; debts.forEach(function (d) { if (!d.paid) pending += Number(d.amount) || 0; });
+      ws3.put(2, 1, 'Tổng nợ đang chờ thu', infoL); ws3.put(2, 2, { f: 'SUMIFS(B5:B1000,E5:E1000,"<>Có")', v: pending }, infoSum); ws3.fillRange(2, 3, 2, 8, infoL); ws3.height(2, 24);
+      ws3.put(3, 1, 'Cột «Trạng thái» và «Còn lại (ngày)» tự tính theo ngày hôm nay. Đổi cột «Đã trả» thành Có khi đã thu hồi.', X.hint);
+      ws3.fillRange(3, 1, 3, 8, X.hint); ws3.merge(3, 1, 3, 8); ws3.height(3, 20);
+      var H3 = ['Người mượn', 'Số tiền', 'Ngày mượn', 'Hẹn trả', 'Đã trả', 'Trạng thái', 'Còn lại (ngày)', 'Ghi chú'];
+      H3.forEach(function (h, k) { ws3.put(4, k + 1, h, th2); }); ws3.height(4, 26);
+      var sn = function (o) { return o ? _xlSerial(o.y, o.m, o.d) : null; };
+      debts.forEach(function (d, i) {
+        var r = FIRST + i, due = sn(d.due), st = d.paid ? 'Đã trả' : (due !== null && due < todaySerial ? 'Quá hạn' : 'Đang chờ');
+        ws3.put(r, 1, d.name || '', s2.txt); ws3.put(r, 2, Number(d.amount) || 0, s2.amt);
+        ws3.put(r, 3, sn(d.borrowed), s2.date); ws3.put(r, 4, due, s2.date); ws3.put(r, 5, d.paid ? 'Có' : 'Không', s2.rep);
+        ws3.put(r, 6, { f: 'IF(E' + r + '="Có","Đã trả",IF(D' + r + '="","Đang chờ",IF(D' + r + '<TODAY(),"Quá hạn","Đang chờ")))', v: st }, s2.rep);
+        ws3.put(r, 7, { f: 'IF(OR(E' + r + '="Có",D' + r + '=""),"",D' + r + '-TODAY())', v: (d.paid || due === null) ? '' : due - todaySerial }, sb.xf({ font: { sz: 10 }, fmt: '0;[Red]-0', al: { h: 'center', v: 'center' } }));
+        ws3.put(r, 8, d.note || '', s2.txt);
+      });
+      ws3.tables.push({ name: 'tblCongNo', ref: _xlRange(4, 1, 4 + debts.length, 8), cols: H3 });
+      ws3.dv.push({ ref: 'E' + FIRST + ':E1000', list: '"Có,Không"', title: 'Đã trả', error: 'Chọn Có hoặc Không.' });
+      ws3.cf.push({ ref: 'F' + FIRST + ':F1000', rules: [
+        { type: 'expression', dxf: sb.dxf({ font: { b: 1, color: C.red }, fill: C.redL }), formula: '$F' + FIRST + '="Quá hạn"' },
+        { type: 'expression', dxf: sb.dxf({ font: { b: 1, color: C.amber }, fill: C.amberL }), formula: '$F' + FIRST + '="Đang chờ"' },
+        { type: 'expression', dxf: sb.dxf({ font: { b: 1, color: C.green }, fill: C.greenL }), formula: '$F' + FIRST + '="Đã trả"' }] });
+      ws3.cf.push({ ref: 'A' + FIRST + ':H1000', rules: [{ type: 'expression', dxf: sb.dxf({ fill: 'F6F8FB' }), formula: 'AND($A' + FIRST + '<>"",MOD(ROW(),2)=0)' }] });
+      sheets.push(ws3);
+    }
+
+    // ══════════════ SHEET: DANH MỤC ══════════════
+    var ws4 = _xlSheet('Danh mục');
+    ws4.tab = '9AA4B2'; ws4.fit = true;
+    [12, 34, 3, 20, 3, 16].forEach(function (w, k) { ws4.width(k + 1, w); });
+    ws4.put(1, 1, 'DANH MỤC & HƯỚNG DẪN', tTitle); ws4.fillRange(1, 1, 1, 6, tTitle); ws4.merge(1, 1, 1, 6); ws4.height(1, 32);
+    ws4.put(3, 1, 'Loại', th2); ws4.put(3, 2, 'Hạng mục', th2); ws4.put(3, 4, 'Nguồn tiền', th2); ws4.put(3, 6, 'Tính báo cáo', th2);
+    (snap.allCats || []).forEach(function (c, k) { ws4.put(4 + k, 1, c.type, s2.txt); ws4.put(4 + k, 2, c.label, s2.txt); });
+    SRC.forEach(function (sname, k) { ws4.put(4 + k, 4, sname, s2.txt); });
+    ws4.put(4, 6, 'Có', s2.txt); ws4.put(5, 6, 'Không', s2.txt);
+    var R_G = 4 + Math.max((snap.allCats || []).length, SRC.length) + 1;
+    ws4.put(R_G, 1, 'CÁCH DÙNG', X.sec); ws4.fillRange(R_G, 1, R_G, 6, X.sec); ws4.merge(R_G, 1, R_G, 6); ws4.height(R_G, 24);
+    [
+      '•  Các cột Loại, Hạng mục, Nguồn, Tính báo cáo ở sheet «Giao dịch» có danh sách chọn lấy từ trang này.',
+      '•  Hạng mục lạ (không có trong danh sách) vẫn được giữ nguyên khi nhập lại vào ứng dụng, nhưng báo cáo Tổng quan sẽ xếp vào dòng «Khác».',
+      '•  «Tính báo cáo = Không» dành cho chuyển tiền tiết kiệm nội bộ và thu hồi nợ — không phải thu nhập hay chi phí thật.',
+      '•  Công thức dùng các tên vùng GD_Ngay, GD_Loai, GD_HangMuc, GD_Nguon, GD_SoTien, GD_TinhBC (xem Formulas ▸ Name Manager), phủ đến dòng ' + LAST + '.'
+    ].forEach(function (t, k) { var r = R_G + 1 + k; ws4.put(r, 1, t, X.note); ws4.fillRange(r, 1, r, 6, X.note); ws4.merge(r, 1, r, 6); ws4.height(r, 30); });
+
+    sheets.push(ws4);
+
+    var colLetter = { Ngay: 'A', Loai: 'B', HangMuc: 'C', Nguon: 'E', SoTien: 'F', TinhBC: 'G' };
+    var names = Object.keys(colLetter).map(function (k) {
+      return { name: 'GD_' + k, ref: "'Giao dịch'!$" + colLetter[k] + '$' + FIRST + ':$' + colLetter[k] + '$' + LAST };
+    });
+    names.push({ name: '_xlnm.Print_Titles', sheet: 1, ref: "'Giao dịch'!$4:$4" });
+    if (debts.length) names.push({ name: '_xlnm.Print_Titles', sheet: 2, ref: "'Công nợ'!$4:$4" });
+
+    return _xlPackage(sheets, sb, sst, names, { created: exp, title: 'CashFlow — Báo cáo tài chính' });
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  //   NHẬP FILE EXCEL — đọc theo TÊN CỘT (không theo vị trí)
+  //   Hiểu: file mới (sheet «Giao dịch») và file xuất kiểu cũ
+  //   (sheet Expenses / Income, không có cột Năm).
+  //   sheets = [{ name, rows: [[ô, ô, ...], ...] }]  (kết quả sheet_to_json header:1)
+  //   ctx    = { defaultYear, uid(), now }
+  // ══════════════════════════════════════════════════════════════
+  function _xlNorm(s) {
+    return String(s === null || s === undefined ? '' : s)
+      .replace(/[đĐ]/g, 'd').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  /** Ô ngày → {y,m,d} hoặc null. Hiểu: số seri Excel, "dd/mm/yyyy", "yyyy-mm-dd". */
+  function _xlParseDate(v) {
+    if (typeof v === 'number') {
+      if (v > 36526 && v < 73051) return _xlFromSerial(Math.floor(v));
+      return null;
+    }
+    if (typeof v === 'string') {
+      var s = v.trim(), m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
+      if (m) return { d: +m[1], m: +m[2], y: +m[3] };
+      m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (m) return { y: +m[1], m: +m[2], d: +m[3] };
+    }
+    return null;
+  }
+
+  function _xlParseAmount(v) {
+    if (typeof v === 'number') return Math.abs(v);
+    if (typeof v === 'string') {
+      var digits = v.replace(/[^\d]/g, '');
+      return digits ? Number(digits) : NaN;
+    }
+    return NaN;
+  }
+
+  function _xlParseSource(v) {
+    var s = _xlNorm(v);
+    if (/(^| )(cash|tien mat|tien)( |$)/.test(s)) return 'cash';
+    if (/bank|chuyen|ngan hang/.test(s)) return 'bank';
+    if (/saving|tiet kiem/.test(s)) return 'savings';
+    return 'uncategorized';
+  }
+
+  var _XL_SKIP_SHEETS = ['tong quan', 'summary', 'tom tat', 'danh muc', 'cong no', 'huong dan'];
+
+  function _parseImportSheets(sheets, ctx) {
+    var out = [], skippedRows = 0, skippedSheets = [];
+
+    sheets.forEach(function (sh) {
+      var nm = _xlNorm(sh.name), rows = sh.rows || [];
+      if (_XL_SKIP_SHEETS.indexOf(nm) !== -1) { skippedSheets.push(sh.name); return; }
+
+      // Tìm dòng tiêu đề: dòng đầu tiên (trong 15 dòng đầu) có cột «Số tiền» / «Amount»
+      var hi = -1;
+      for (var i = 0; i < Math.min(rows.length, 15); i++) {
+        var cells = (rows[i] || []).map(_xlNorm);
+        if (cells.indexOf('so tien') !== -1 || cells.indexOf('amount') !== -1) { hi = i; break; }
+      }
+      if (hi < 0) { if (rows.length > 1) skippedSheets.push(sh.name); return; }
+
+      var head = rows[hi].map(_xlNorm);
+      function find(list) { for (var k = 0; k < list.length; k++) { var ix = head.indexOf(list[k]); if (ix !== -1) return ix; } return -1; }
+      var col = {
+        date: find(['ngay', 'date', 'ngay giao dich']), month: find(['thang', 'month']), year: find(['nam', 'year']),
+        type: find(['loai', 'type']), desc: find(['mo ta', 'description', 'noi dung']), cat: find(['hang muc', 'category']),
+        src: find(['nguon', 'source', 'nguon tien']), amt: find(['so tien', 'amount'])
+      };
+      var sheetIsIncome = nm.indexOf('income') !== -1 || /(^| )thu( |$)/.test(nm);
+
+      for (var r = hi + 1; r < rows.length; r++) {
+        var row = rows[r];
+        if (!row || !row.length) continue;
+        var blank = true;
+        for (var q = 0; q < row.length; q++) { if (row[q] !== null && row[q] !== undefined && String(row[q]).trim() !== '') { blank = false; break; } }
+        if (blank) continue;
+
+        // Ngày
+        var dv = col.date >= 0 ? row[col.date] : undefined, day, month, year, dt = _xlParseDate(dv);
+        if (dt) { day = dt.d; month = dt.m; year = dt.y; }
+        else if (typeof dv === 'number' && dv >= 1 && dv <= 31) {
+          day = dv; month = col.month >= 0 ? Number(row[col.month]) : NaN;
+          year = col.year >= 0 ? Number(row[col.year]) : NaN;
+          if (!(year >= 2000 && year <= 2100)) year = ctx.defaultYear;
+        } else { skippedRows++; continue; }
+
+        var amount = col.amt >= 0 ? _xlParseAmount(row[col.amt]) : NaN;
+        if (!(day >= 1 && day <= 31) || !(month >= 1 && month <= 12) || !(year >= 2000 && year <= 2100) || !(amount > 0)) { skippedRows++; continue; }
+
+        // Loại: ưu tiên cột «Loại», nếu không có thì theo tên sheet
+        var type = sheetIsIncome ? 'income' : 'expense';
+        if (col.type >= 0 && row[col.type] !== undefined && String(row[col.type]).trim() !== '') {
+          var tn = _xlNorm(row[col.type]);
+          type = (tn.indexOf('thu') === 0 || tn.indexOf('income') === 0) ? 'income' : 'expense';
+        }
+
+        var category = col.cat >= 0 ? String(row[col.cat] === undefined || row[col.cat] === null ? '' : row[col.cat]).trim() : '';
+        // «🤝 Thu nợ» ở file Excel ↔ mã 'thu-no' trong ứng dụng (ứng dụng loại khoản này khỏi Thu nhập)
+        if (type === 'income' && _xlNorm(category) === 'thu no') category = 'thu-no';
+
+        out.push({
+          id: ctx.uid(), type: type, amount: Math.abs(amount), year: year, month: month, day: day,
+          desc: col.desc >= 0 ? String(row[col.desc] === undefined || row[col.desc] === null ? '' : row[col.desc]).trim() : '',
+          category: category, source: col.src >= 0 ? _xlParseSource(row[col.src]) : 'uncategorized', createdAt: ctx.now
+        });
+      }
+    });
+
+    return { transactions: out, skippedRows: skippedRows, skippedSheets: skippedSheets };
+  }
+  // ==== XLSX-CORE-END ======================================================
+
+
+  /** Gom dữ liệu ứng dụng thành "snapshot" thuần để bộ dựng báo cáo xử lý */
+  function _collectExportSnapshot() {
+    var SRC_VI = { cash: 'Tiền mặt', bank: 'Chuyển khoản', savings: 'Tiết kiệm' };
+    function iso(s) {
+      var m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s || '');
+      return m ? { y: +m[1], m: +m[2], d: +m[3] } : null;
+    }
+    function catLabel(tx) {
+      var c = tx.category;
+      if (tx.type === 'income' && (c === 'thu-no' || c === 'Thu nợ')) return '🤝 Thu nợ';
+      return _categoryDisplayName(c, tx.type);
+    }
+    // Cùng quy tắc với thẻ tổng kết của ứng dụng: chuyển tiết kiệm & thu hồi nợ không phải thu/chi thật
+    function reported(tx) {
+      var isSavings = tx.source === 'savings' || tx.category === 'tiet-kiem' || tx.category === 'Tiết kiệm' || tx.category === '🐷 Tiết kiệm';
+      var isDebtRecovery = tx.category === 'thu-no' || tx.category === 'Thu nợ';
+      return !isSavings && !(tx.type === 'income' && isDebtRecovery);
+    }
+    var fallbackYear = _currentMonth ? _currentMonth.year : new Date().getFullYear();
+    var rows = _data.transactions.filter(function (tx) { return tx.type === 'income' || tx.type === 'expense'; }).map(function (tx) {
+      return { y: tx.year || fallbackYear, m: tx.month || 1, d: tx.day || 1, type: tx.type, cat: catLabel(tx), desc: tx.desc || '',
+        src: SRC_VI[tx.source] || 'Chưa phân loại', amount: tx.amount || 0, rep: reported(tx) };
+    });
+
+    var expenseCats = [], incomeCats = [], budgets = {}, allCats = [], seen = {};
+    var bud = (_cashFlowMeta && _cashFlowMeta.budgets) || {};
+    EXPENSE_CATEGORIES.forEach(function (c) {
+      var label = _categoryDisplayName(c.id, 'expense');
+      allCats.push({ type: 'Chi phí', label: label });
+      if (c.id === 'tiet-kiem') return;
+      expenseCats.push(label);
+      var b = bud[c.id] || bud[label] || bud[c.name];
+      if (b > 0) budgets[label] = b;
+    });
+    INCOME_CATEGORIES.forEach(function (c) {
+      var label = _categoryDisplayName(c.id, 'income');
+      if (c.id !== 'tiet-kiem') { incomeCats.push(label); allCats.push({ type: 'Thu nhập', label: label }); }
+    });
+    allCats.push({ type: 'Thu nhập', label: '🤝 Thu nợ' });
+
+    _ensureDebtData();
+    var debts = _data.debts.map(function (d) {
+      return { name: d.debtorName, amount: d.amount, borrowed: iso(d.dateBorrowed), due: iso(d.expectedReturnDate),
+        paid: _getDebtStatus(d) === 'paid', note: d.note || '' };
+    });
+
+    return {
+      rows: rows, debts: debts, expenseCats: expenseCats, incomeCats: incomeCats, allCats: allCats, budgets: budgets,
+      balances: { netWorth: _computeLiveNetWorth(), savings: _calcSavingsBalance(), bank: _calcBankBalance(),
+        cash: _calcCashBalance(), uncategorized: _calcUncategorizedBalance(), pendingDebt: _getTotalPendingDebt() },
+      viewYear: _currentMonth ? _currentMonth.year : fallbackYear,
+      viewMonth: _currentMonth ? _currentMonth.month : (new Date().getMonth() + 1),
+      exportedAt: new Date()
+    };
+  }
+
+  /** Xuất báo cáo Excel đầy đủ (4 sheet, công thức, biểu đồ). Lỗi → quay về bản xuất cơ bản. */
   function _exportToXlsx() {
+    if (!_data || !_data.transactions || _data.transactions.length === 0) {
+      var statusEl = document.getElementById('hub-cf-status-msg');
+      if (!statusEl) return;
+      statusEl.textContent = 'No transactions to export.';
+      statusEl.style.color = 'var(--danger)';
+      statusEl.style.display = 'block';
+      setTimeout(function () { if (statusEl) statusEl.style.display = 'none'; }, 2500);
+      return;
+    }
+    try {
+      var bytes = _buildCashflowXlsx(_collectExportSnapshot());
+      var blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      var now = new Date();
+      var ts = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'CashFlow_Export_' + ts + '.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+    } catch (e) {
+      console.error('[CashFlow] Rich Excel export failed, using basic export:', e);
+      _exportToXlsxBasic();
+    }
+  }
+
+
+  /** Bản xuất cơ bản (SheetJS) — dự phòng khi bản đầy đủ gặp lỗi */
+  function _exportToXlsxBasic() {
     if (!_data || !_data.transactions || _data.transactions.length === 0) {
       var statusEl = document.getElementById('hub-cf-status-msg');
       if (!statusEl) return;
@@ -6599,721 +7293,1233 @@ function _restoreAIState() {
   }
 
   // ============================================================
-  //   AI FINANCIAL ADVISOR
+  //   AI FINANCIAL ADVISOR v2
+  //   ① Kế hoạch chi tiêu — tính ngay tại máy (tức thì, số liệu chính xác)
+  //   ② Hỏi đáp AI — có trí nhớ hội thoại + ngữ cảnh tài chính đầy đủ
   // ============================================================
 
-  /**
-   * Get API key for a provider from localStorage
-   * @param {string} provider - 'gemini' or 'nvidia'
-   * @returns {string|null} API key or null if not found
-   */
-  function _getAIKey(provider) {
-    const storageKey = provider === 'gemini' ? 'gemini_api_key' : 'nvidia_api_key';
-    return localStorage.getItem(storageKey);
+  var AI_ADDRESS = 'Thiếu gia';                 // Cách AI xưng hô với bạn — đổi tại đây
+  var AI_HISTORY_TURNS = 8;                     // Số tin nhắn gần nhất gửi kèm làm "trí nhớ"
+  var AI_MAX_STORED = 60;                       // Số tin nhắn tối đa lưu lại
+  var AI_TARGET_RATE_KEY = 'hub_cf_ai_target_rate';
+  var AI_DEFAULT_TARGET_RATE = 20;              // Mục tiêu tiết kiệm mặc định (% thu nhập)
+
+  // Nhóm hạng mục theo quy tắc 50/30/20 (mục tiêu Needs/Wants tự co giãn theo % tiết kiệm)
+  var AI_BUCKETS = {
+    needs:  { label: 'Thiết yếu',               cats: ['nha-o', 'an-uong', 'di-chuyen', 'tieu-dung-thiet-yeu'] },
+    wants:  { label: 'Mong muốn',               cats: ['tieu-dung-khac', 'doodad', 'cho-di', 'chi-phi-khac'] },
+    growth: { label: 'Tiết kiệm & phát triển',  cats: ['tiet-kiem', 'phat-trien-ban-than'] }
+  };
+
+  var AI_PROMPTS = {
+    summary:  'Tóm tắt thu chi tháng này và chỉ ra điều đáng chú ý nhất.',
+    plan:     'Hãy lập kế hoạch chi tiêu chi tiết cho tháng sau dựa trên dữ liệu thu chi của tôi: ngân sách từng hạng mục, quy tắc chi tiêu và việc cần làm trong 7 ngày đầu.',
+    cut:      'Tôi nên cắt giảm những khoản nào để đạt mục tiêu tiết kiệm? Cho tôi số tiền cụ thể cho từng khoản.',
+    forecast: 'Dự báo chi tiêu và số tiền để dành được đến cuối tháng này, và cho tôi biết cần điều chỉnh gì.',
+    cash:     'Phân tích dòng tiền mặt và ngân hàng của tôi. Tôi nên giữ bao nhiêu tiền mặt?',
+    savings:  'Tôi đang có một khoản tiền tiết kiệm. Tôi nên làm gì để nó phát huy hiệu quả và không bị tiêu hao dần?'
+  };
+
+  var AI_STATUS_STEPS = ['Đọc dữ liệu giao dịch…', 'Đối chiếu với ngân sách…', 'Soạn khuyến nghị…'];
+
+  var AI_ICON = {
+    spark:   '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>',
+    user:    '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>',
+    send:    '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>',
+    stop:    '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg>',
+    plus:    '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+    key:     '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M10.8 12.2L20 3M16 7l3 3"/></svg>',
+    copy:    '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>',
+    refresh: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>',
+    plan:    '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
+    chat:    '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-5.4A8 8 0 1 1 21 12z"/></svg>',
+    info:    '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>',
+    ok:      '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/></svg>',
+    warn:    '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/></svg>',
+    danger:  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5h.01"/></svg>'
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  //  Tiện ích nhỏ
+  // ─────────────────────────────────────────────────────────────
+
+  function _aiGetTargetRate() {
+    try {
+      var v = parseInt(localStorage.getItem(AI_TARGET_RATE_KEY), 10);
+      if (v >= 5 && v <= 80) return v;
+    } catch (_) {}
+    return AI_DEFAULT_TARGET_RATE;
   }
 
-  /**
-   * Get financial context from current month's transactions
-   * Returns compressed JSON string with Date, Category, Amount, Note
-   * Includes pre-calculated categoryTotals to prevent AI math hallucinations
-   * Includes manual balances: netWorth (computed live) and savings (manual override)
-   * @returns {string} JSON string of transaction data and balances
-   */
-  function _getFinancialContext() {
-    if (!_data || !_data.transactions || _data.transactions.length === 0) {
-      return JSON.stringify({
-        transactions: [],
-        message: 'Chưa có dữ liệu giao dịch.',
-        categoryTotals: { income: {}, expense: {} },
-        balances: {
-          netWorth: _computeLiveNetWorth(),
-          savings: _cashFlowMeta.savingsBalance || 0,
-          cashBalance: _calcCashBalance(),
-          bankBalance: _calcBankBalance(),
-          uncategorizedBalance: _calcUncategorizedBalance()
-        }
-      });
-    }
+  function _aiSetTargetRate(v) {
+    try { localStorage.setItem(AI_TARGET_RATE_KEY, String(v)); } catch (_) {}
+  }
 
-    // Get transactions for current viewing month
-    const ym = _currentMonth || _currentYearMonth();
-    const monthTxs = _getMonthTransactions(ym.year, ym.month);
+  function _aiShiftMonth(ym, delta) {
+    var d = new Date(ym.year, ym.month - 1 + delta, 1);
+    return { year: d.getFullYear(), month: d.getMonth() + 1 };
+  }
 
-    // If no transactions in current month, use all transactions (capped at 100)
-    const txs = monthTxs.length > 0 ? monthTxs : _getAllTransactionsSorted().slice(0, 100);
+  function _aiClamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
 
-    // Pre-calculate category totals on the client side (EXACT math)
-    const categoryTotals = { income: {}, expense: {} };
-    txs.forEach(tx => {
-      const type = tx.type === 'income' ? 'income' : 'expense';
-      const catName = _categoryDisplayName(tx.category, tx.type);
-      categoryTotals[type][catName] = (categoryTotals[type][catName] || 0) + (tx.amount || 0);
-    });
+  function _aiTime(ts) {
+    try {
+      return new Date(ts || Date.now()).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    } catch (_) { return ''; }
+  }
 
-    // Compress data to essential fields only
-    const compressed = txs.map(tx => ({
-      d: _formatDate(tx.day, tx.month, tx.year),  // Date
-      c: _categoryDisplayName(tx.category, tx.type), // Category
-      a: tx.amount,                                // Amount
-      t: tx.type === 'expense' ? '-' : '+',        // Type indicator
-      n: tx.desc || '',                             // Note
-      s: tx.source || 'bank'                        // Source (NEW)
-    }));
-
-    return JSON.stringify({
-      month: `${ym.month}/${ym.year}`,
-      transactions: compressed,
-      summary: {
-        income: _getMonthlyIncome(ym.year, ym.month),
-        expense: _getMonthlyExpense(ym.year, ym.month)
-      },
-      categoryTotals: categoryTotals,
-      balances: {
-        netWorth: _computeLiveNetWorth(),
-        savings: _cashFlowMeta.savingsBalance || 0,
-        cashBalance: _calcCashBalance(),   // NEW
-        bankBalance: _calcBankBalance()    // NEW
+  /** Tổng hợp một tháng: thu nhập thật (không tính rút tiết kiệm), chi tiêu thật (không tính chuyển vào tiết kiệm). */
+  function _aiMonthAgg(year, month) {
+    var txs = _getMonthTransactions(year, month);
+    var agg = { income: 0, spent: 0, saved: 0, byCat: {}, count: txs.length };
+    txs.forEach(function (tx) {
+      var amt = Number(tx.amount) || 0;
+      if (tx.type === 'income') {
+        if (tx.category !== 'tiet-kiem') agg.income += amt;
+      } else if (tx.category === 'tiet-kiem') {
+        agg.saved += amt;
+      } else {
+        agg.spent += amt;
+        agg.byCat[tx.category] = (agg.byCat[tx.category] || 0) + amt;
       }
     });
+    return agg;
   }
 
-  /**
-   * Render markdown-like text to a system chat bubble
-   * @param {string} text - Text content to render
-   */
-  function _renderAIResponse(text) {
-    const output = _qs('#hub-cf-ai-output');
-    if (!output) return;
+  // ─────────────────────────────────────────────────────────────
+  //  ENGINE: Kế hoạch chi tiêu (không cần AI)
+  // ─────────────────────────────────────────────────────────────
 
-    // Simple markdown-ish rendering: **bold**, *italic*, `code`, line breaks
-    let html = _escHtml(text)
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      .replace(/`(.+?)`/g, '<code style="background:rgba(0,240,255,0.1);padding:1px 4px;border-radius:3px;font-family:var(--font-mono);">$1</code>')
-      .replace(/\n/g, '<br>');
+  function _computeSpendingPlan() {
+    if (!_data || !_data.transactions) return null;
 
-    // Replace the last system bubble (loading) or append new one
-    const bubbles = output.querySelectorAll('.cf-ai-bubble--system');
-    if (bubbles.length > 0) {
-      const lastBubble = bubbles[bubbles.length - 1];
-      const msgEl = lastBubble.querySelector('.cf-ai-msg');
-      if (msgEl && msgEl.textContent === 'Đang phân tích...') {
-        msgEl.innerHTML = html;
-        output.scrollTop = output.scrollHeight;
-        return;
-      }
-    }
-    // Append new system bubble
-    _appendAIChatBubble(text, 'system');
-  }
+    var ym = _currentMonth || _currentYearMonth();
+    var now = new Date();
+    var nowIdx = now.getFullYear() * 12 + now.getMonth();
+    var viewIdx = ym.year * 12 + (ym.month - 1);
+    var isCurrent = viewIdx === nowIdx;
+    var isFuture = viewIdx > nowIdx;
+    var daysInMonth = new Date(ym.year, ym.month, 0).getDate();
+    var daysElapsed = isCurrent ? now.getDate() : (isFuture ? 0 : daysInMonth);
+    var remainingDays = isCurrent ? (daysInMonth - now.getDate() + 1) : 0; // gồm cả hôm nay
 
-  /**
-   * Show loading state as a system chat bubble
-   * @param {string} message - Optional loading message
-   */
-  function _showAILoading(message = 'Đang phân tích...') {
-    _appendAIChatBubble(message, 'system');
-  }
+    var cur = _aiMonthAgg(ym.year, ym.month);
+    var prev = _aiMonthAgg(_aiShiftMonth(ym, -1).year, _aiShiftMonth(ym, -1).month);
 
-  /**
-   * Show error as a system chat bubble
-   * @param {string} message - Error message
-   */
-  function _showAIError(message) {
-    const output = _qs('#hub-cf-ai-output');
-    if (!output) return;
+    // Thu nhập nền: tháng này nếu đã có, nếu chưa → trung bình 3 tháng gần nhất có thu nhập
+    var hist = [1, 2, 3].map(function (k) {
+      var s = _aiShiftMonth(ym, -k);
+      return _aiMonthAgg(s.year, s.month).income;
+    }).filter(function (v) { return v > 0; });
+    var avgIncome = hist.length ? hist.reduce(function (a, b) { return a + b; }, 0) / hist.length : 0;
+    var incomeIsEstimate = cur.income <= 0 && avgIncome > 0;
+    var incomeBase = cur.income > 0 ? cur.income : avgIncome;
 
-    // Remove loading bubble if exists
-    const bubbles = output.querySelectorAll('.cf-ai-bubble--system');
-    if (bubbles.length > 0) {
-      const lastBubble = bubbles[bubbles.length - 1];
-      const msgEl = lastBubble.querySelector('.cf-ai-msg');
-      if (msgEl && msgEl.textContent === 'Đang phân tích...') {
-        lastBubble.remove();
-      }
-    }
+    var targetRate = _aiGetTargetRate();
+    var spendCap = incomeBase * (1 - targetRate / 100);
+    var remaining = spendCap - cur.spent;
+    var safePerDay = remainingDays > 0 ? Math.max(0, remaining) / remainingDays : 0;
+    // Dự báo: khoản cố định (nhà ở) trả một lần nên không nhân theo ngày; phần còn lại ngoại suy theo tốc độ chi/ngày
+    var fixedSpent = cur.byCat['nha-o'] || 0;
+    var burn = daysElapsed > 0 ? (cur.spent - fixedSpent) / daysElapsed : 0;
+    var projectedSpend = isCurrent ? cur.spent + burn * (daysInMonth - daysElapsed) : cur.spent;
+    var projectedSavings = incomeBase - projectedSpend;
+    var savingsRate = cur.income > 0 ? ((cur.income - cur.spent) / cur.income) * 100 : null;
 
-    _appendAIChatBubble(`⚠️ ${_escHtml(message)}`, 'system');
-  }
-
-  /**
-   * Render full chat history from conversationHistory state
-   */
-  function _renderChatHistory() {
-    const output = _qs('#hub-cf-ai-output');
-    if (!output) return;
-
-    // Clear existing except welcome message
-    output.innerHTML = '';
-
-    // Add welcome bubble
-    _appendAIChatBubble('Xin chào Commander. Tôi là Trợ lý Tài chính AI. Bạn muốn phân tích điều gì hôm nay?', 'system');
-
-    // Render conversation history
-    _aiState.conversationHistory.forEach(function(msg) {
-      _appendAIChatBubble(msg.content, msg.role);
+    // Phân bổ 50/30/20 (Needs/Wants co giãn theo mục tiêu tiết kiệm, tỷ lệ 5:3)
+    var rest = 100 - targetRate;
+    var needsTarget = Math.round(rest * 0.625);
+    var targets = { needs: needsTarget, wants: rest - needsTarget, growth: targetRate };
+    var buckets = {};
+    ['needs', 'wants'].forEach(function (k) {
+      var amt = 0;
+      AI_BUCKETS[k].cats.forEach(function (c) { amt += cur.byCat[c] || 0; });
+      buckets[k] = { label: AI_BUCKETS[k].label, amount: amt, pct: incomeBase > 0 ? (amt / incomeBase) * 100 : null, target: targets[k] };
     });
-
-    output.scrollTop = output.scrollHeight;
-  }
-
-  /**
-   * Resilient fetch with timeout, retry, and abort support
-   * @param {string} url
-   * @param {RequestInit} options
-   * @param {Object} config { timeout, maxRetries, retryDelay, keepalive, signal }
-   * @returns {Promise<Response>}
-   */
-  async function _resilientFetch(url, options = {}, config = {}) {
-    const {
-      timeout = 120000,        // 2 min client timeout ( > Vercel 60s )
-      maxRetries = 2,
-      retryDelay = 1000,
-      keepalive = true,
-      signal: externalSignal = null
-    } = config;
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-    // Merge external signal (from caller) with internal timeout signal
-    let mergedSignal = controller.signal;
-    if (externalSignal) {
-      // Create a combined signal that aborts if EITHER aborts
-      const signalAny = AbortSignal.any([controller.signal, externalSignal]);
-      mergedSignal = signalAny;
-    }
-
-    // Merge signal
-    const fetchOptions = {
-      ...options,
-      signal: mergedSignal,
-      keepalive
+    var growthPct = incomeBase > 0 ? _aiClamp(100 - buckets.needs.pct - buckets.wants.pct, 0, 100) : null;
+    buckets.growth = {
+      label: AI_BUCKETS.growth.label,
+      amount: incomeBase > 0 ? Math.max(0, incomeBase - buckets.needs.amount - buckets.wants.amount) : 0,
+      pct: growthPct, target: targets.growth
     };
 
-    let lastError;
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        const response = await fetch(url, fetchOptions);
-        clearTimeout(timeoutId);
-        return response;
-      } catch (err) {
-        clearTimeout(timeoutId);
-        lastError = err;
+    // Hạng mục chi (so sánh tháng trước + ngân sách)
+    var budgets = _cashFlowMeta.budgets || {};
+    var catIds = Object.keys(cur.byCat);
+    var cats = catIds.map(function (id) {
+      var amt = cur.byCat[id];
+      var pv = prev.byCat[id] || 0;
+      var limit = Number(budgets[id]) || 0;
+      var budgetPct = limit > 0 ? (amt / limit) * 100 : null;
+      return {
+        id: id,
+        name: _categoryDisplayName(id, 'expense'),
+        amount: amt,
+        share: cur.spent > 0 ? (amt / cur.spent) * 100 : 0,
+        prev: pv,
+        delta: pv > 0 ? ((amt - pv) / pv) * 100 : null,
+        limit: limit,
+        budgetPct: budgetPct,
+        status: budgetPct === null ? 'none' : (budgetPct > 100 ? 'over' : (budgetPct >= 85 ? 'warn' : 'ok'))
+      };
+    }).sort(function (a, b) { return b.amount - a.amount; });
 
-        // Don't retry on abort or non-network errors
-        if (err.name === 'AbortError' || err.name === 'TypeError') {
-          throw err;
-        }
-
-        if (attempt < maxRetries) {
-          await new Promise(r => setTimeout(r, retryDelay * (attempt + 1)));
-        }
-      }
-    }
-    throw lastError;
-  }
-
-
-  /**
-   * Call Gemini API (Gemini 3.7 Flash)
-   * @param {string} systemPrompt - Complete prompt with context
-   * @param {string} apiKey - Gemini API key
-   * @param {AbortSignal} [signal] - Optional abort signal for cancellation
-   * @returns {Promise<string>} AI response text
-   */
-  async function _callGeminiAPI(systemPrompt, apiKey, signal) {
-    const response = await _resilientFetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{ text: systemPrompt }]
-          }],
-          generationConfig: {
-            maxOutputTokens: 1000,
-            temperature: 0.7
-          }
-        })
-      }, { timeout: 60000, maxRetries: 2, keepalive: true, signal } // 60s timeout for Gemini
-    );
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(`Gemini API error: ${response.status} - ${error.error?.message || response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || 'Không có phản hồi từ AI.';
-  }
-
-  /**
-   * Call Nvidia Nemotron 3 Ultra API via Vercel backend
-   * @param {string} systemPrompt - Complete prompt with context
-   * @param {string} apiKey - Nvidia NIM API key
-   * @returns {Promise<string>} AI response text
-   */
-  async function _callNvidiaAPI(systemPrompt, apiKey) {
-    const response = await fetch('https://personal-hub-rose-xi.vercel.app/api/ask-nvidia', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ apiKey, systemPrompt })
+    // Nợ cần thu hồi
+    var activeDebts = [];
+    try { activeDebts = _getActiveDebts(); } catch (_) {}
+    var debtList = activeDebts.map(function (d) {
+      return {
+        debtor: d.debtorName || '',
+        amount: Number(d.amount) || 0,
+        due: d.expectedReturnDate || '',
+        overdue: _getDebtStatus(d) === 'overdue'
+      };
     });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(`Nvidia API error: ${response.status} - ${error.message || response.statusText}`);
-    }
+    var monthKey = ym.year + '-' + String(ym.month).padStart(2, '0');
+    var dailyLimit = (_cashFlowMeta.dailyLimits && _cashFlowMeta.dailyLimits[monthKey]) || 500000;
 
-    const data = await response.json();
-    return data.response || 'Không có phản hồi từ AI.';
+    return {
+      ym: ym, isCurrent: isCurrent, isFuture: isFuture,
+      daysInMonth: daysInMonth, daysElapsed: daysElapsed, remainingDays: remainingDays,
+      cur: cur, prev: prev,
+      incomeBase: incomeBase, incomeIsEstimate: incomeIsEstimate,
+      targetRate: targetRate, spendCap: spendCap, remaining: remaining,
+      safePerDay: safePerDay, burn: burn,
+      projectedSpend: projectedSpend, projectedSavings: projectedSavings,
+      savingsRate: savingsRate,
+      timePct: daysInMonth > 0 ? (daysElapsed / daysInMonth) * 100 : 0,
+      usedPct: spendCap > 0 ? (cur.spent / spendCap) * 100 : 0,
+      buckets: buckets, cats: cats,
+      debts: { list: debtList, total: debtList.reduce(function (s, d) { return s + d.amount; }, 0), overdue: debtList.filter(function (d) { return d.overdue; }).length },
+      balances: { cash: _calcCashBalance(), bank: _calcBankBalance(), savings: _cashFlowMeta.savingsBalance || 0, netWorth: _computeLiveNetWorth() },
+      dailyLimit: dailyLimit
+    };
   }
 
-  /**
-   * Open AI Key Management Modal
-   */
-  function _openAIKeyModal() {
-    const modal = document.getElementById('cf-ai-key-modal');
-    if (!modal) return;
+  /** Rule-based: các hành động nên làm, xếp theo mức khẩn cấp */
+  function _aiBuildActions(p) {
+    var A = [];
+    var F = _formatVNFull;
 
-    // Load existing keys from localStorage
-    const geminiKey = localStorage.getItem('gemini_api_key') || '';
-    const nvidiaKey = localStorage.getItem('nvidia_api_key') || '';
-
-    document.getElementById('cf-key-gemini').value = geminiKey;
-    document.getElementById('cf-key-nvidia').value = nvidiaKey;
-
-    modal.style.display = 'flex';
-    // Trigger animation
-    requestAnimationFrame(() => {
-      modal.classList.add('hub-cf-ai-key-modal--visible');
-    });
-
-    // Focus first input
-    setTimeout(() => {
-      document.getElementById('cf-key-gemini').focus();
-    }, 150);
-  }
-
-  /**
-   * Close AI Key Management Modal
-   */
-  function _closeAIKeyModal() {
-    const modal = document.getElementById('cf-ai-key-modal');
-    if (!modal) return;
-
-    modal.classList.remove('hub-cf-ai-key-modal--visible');
-    setTimeout(() => {
-      modal.style.display = 'none';
-    }, 300);
-  }
-
-  /**
-   * Save API Keys to localStorage
-   */
-  function _saveAIKeys() {
-    const geminiKey = document.getElementById('cf-key-gemini').value.trim();
-    const nvidiaKey = document.getElementById('cf-key-nvidia').value.trim();
-
-    if (geminiKey) {
-      localStorage.setItem('gemini_api_key', geminiKey);
-    }
-    if (nvidiaKey) {
-      localStorage.setItem('nvidia_api_key', nvidiaKey);
+    if (!p || (p.cur.count === 0 && p.incomeBase <= 0)) {
+      return [{ level: 'info', title: 'Chưa có dữ liệu để lập kế hoạch', body: 'Hãy ghi lại thu nhập và vài khoản chi, mình sẽ tính cần chi và nhắc bạn mỗi ngày.' }];
     }
 
-    _closeAIKeyModal();
-    _showToast('✅ Đã lưu API Keys thành công!');
-  }
-
-  /**
-   * Clear API Keys from localStorage
-   */
-  function _clearAIKeys() {
-    localStorage.removeItem('gemini_api_key');
-    localStorage.removeItem('nvidia_api_key');
-
-    document.getElementById('cf-key-gemini').value = '';
-    document.getElementById('cf-key-nvidia').value = '';
-
-    _showToast('✅ Đã xóa API Keys!');
-  }
-
-  /**
-   * Main AI Ask Handler - bound to #cf-ai-ask-btn click
-   * Supports background execution: continues even if user navigates away
-   */
-  async function _handleAIAdvisorQuery() {
-    const promptInput = document.getElementById('cf-ai-prompt');
-    const providerSelect = document.getElementById('cf-ai-provider');
-    const askBtn = document.getElementById('cf-ai-ask-btn');
-
-    if (!promptInput || !providerSelect || !askBtn) return;
-
-    const userQuery = promptInput.value.trim();
-    if (!userQuery) {
-      _showAIError('Vui lòng nhập câu hỏi.');
-      return;
-    }
-
-    const provider = providerSelect.value; // 'gemini' or 'nvidia'
-    _aiState.provider = provider; // Persist provider choice
-
-    // Check if API key exists
-    const apiKey = _getAIKey(provider);
-    if (!apiKey) {
-      _showAIError('Vui lòng cấu hình API Key trong mục Cài đặt (⚙️) trước khi hỏi.');
-      return;
-    }
-
-    // Abort any previous in-flight request
-    if (_aiState.abortController) {
-      _aiState.abortController.abort();
-    }
-
-    // Create new abort controller for this request
-    _aiState.abortController = new AbortController();
-    const signal = _aiState.abortController.signal;
-    const currentRequestId = ++_aiState.requestId; // Deduplication
-
-    // Update state BEFORE starting background fetch
-    _aiState.isLoading = true;
-    _aiState.lastPrompt = userQuery;
-    _aiState.lastError = null;
-    _aiState.currentResponse = ''; // Clear previous response while loading
-
-    // Disable UI during request (will be restored on re-render if user navigates away)
-    askBtn.disabled = true;
-    askBtn.innerHTML = '<span class="loading-spinner" style="width:20px;height:20px;border:2.5px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin 1s linear infinite;display:inline-block;"></span>';
-    promptInput.disabled = true;
-
-    // Append user bubble IMMEDIATELY
-    _appendAIChatBubble(userQuery, 'user');
-
-    // Add user message to conversation history
-    _aiState.conversationHistory.push({
-      role: 'user',
-      content: userQuery,
-      timestamp: Date.now()
-    });
-
-    // Show loading bubble
-    _showAILoading();
-
-    // Save state immediately for persistence across tab switches
-    _saveAIState();
-
-    // Clear input after sending
-    promptInput.value = '';
-
-    try {
-      // Build system prompt with financial context
-      const context = _getFinancialContext();
-      const systemPrompt = "Bạn là một Quân sư tài chính xuất chúng. Bạn BẮT BUỘC phải luôn xưng hô và gọi tôi là 'Thiếu gia'. " +
-        "NHIỀM VỤ TUYỆT ĐỐI: KHÔNG TỰ TÍNH TOÁN TỔNG HỢP THEO HÀNG MỤC (category totals). " +
-        "BẮT BUỘC PHẢI SỬ DỤNG CHÍNH XÁC CÁC CON SỐ ĐÃ TÍNH SẴN TRONG ĐỐI TƯỢNG 'categoryTotals' (income/expense) ĐỂ TỔNG HỢP TÀI CHÍNH. " +
-        "CHỈ SỬ DỤNG MẢNG 'transactions' ĐỂ PHÂN TÍCH MẪU THÓI QUEN, TẦN SUẤT GIAO DỊCH, VÀ MÔ TẢ CHI TIẾT. " +
-        "NẾU BẠN TỰ TÍNH TOÁN, CON SỐ SẼ SAI (HALLUCINATION). TUÂN THỦ NGHIÊM NGẶT QUY TẮC NÀY. " +
-        "Dựa vào dữ liệu tài chính dưới đây để: Phân tích thói quen tiêu dùng, đưa ra chiến lược quản lý vốn nghiêm ngặt, và tư vấn cách phân bổ dòng tiền tối ưu nhất để gia tăng tài sản. " +
-        "LƯU Ý QUAN TRỌNG: Mỗi giao dịch có trường 's' (source) chỉ 'cash' (Tiền mặt) hoặc 'bank' (Ngân hàng). " +
-        "Hãy phân tích riêng dòng tiền Tiền mặt và Ngân hàng, tư vấn cách quản lý số dư ví tiền mặt và tài khoản ngân hàng. " +
-        "Dữ liệu dòng tiền: " + context;
-
-      // Call appropriate API with abort signal
-      let responseText;
-      if (provider === 'nvidia') {
-        responseText = await _callNvidiaAPI(systemPrompt, apiKey, signal);
+    if (p.incomeBase <= 0) {
+      A.push({ level: 'warn', title: 'Chưa ghi nhận thu nhập', body: 'Thêm thu nhập của tháng này để mình tính cần chi và mục tiêu tiết kiệm.' });
+    } else if (p.isCurrent) {
+      if (p.remaining < 0) {
+        A.push({ level: 'danger', title: 'Đã vượt cần chi ' + F(-p.remaining), body: 'Để giữ mục tiêu tiết kiệm ' + p.targetRate + '%, hãy tạm dừng các khoản "mong muốn" trong ' + p.remainingDays + ' ngày còn lại.', prompt: 'Tôi đã vượt cần chi tháng này. Hãy đưa ra phương án cứu vãn cụ thể cho những ngày còn lại.' });
+      } else if (p.projectedSpend > p.spendCap) {
+        A.push({ level: 'warn', title: 'Đang chi nhanh hơn kế hoạch', body: 'Tốc độ chi (không tính nhà ở) ≈ ' + F(p.burn) + '/ngày, dự báo chạm ' + F(p.projectedSpend) + ' (cần ' + F(p.spendCap) + '). Giữ dưới ' + F(p.safePerDay) + '/ngày để về đích.', prompt: AI_PROMPTS.forecast });
       } else {
-        responseText = await _callGeminiAPI(systemPrompt, apiKey, signal);
+        A.push({ level: 'ok', title: 'Đang đi đúng kế hoạch', body: 'Còn ' + F(p.remaining) + ' trong cần chi — khoảng ' + F(p.safePerDay) + '/ngày cho ' + p.remainingDays + ' ngày còn lại.' });
       }
-
-      // DEDUPLICATION: ignore stale responses from superseded requests
-      if (currentRequestId !== _aiState.requestId) {
-        console.log('[CashFlow AI] Ignoring stale response (superseded by newer request)');
-        return;
-      }
-
-      // Update state with successful response
-      _aiState.isLoading = false;
-      _aiState.currentResponse = responseText;
-      _aiState.lastError = null;
-
-      // Add assistant response to conversation history
-      _aiState.conversationHistory.push({
-        role: 'assistant',
-        content: responseText,
-        timestamp: Date.now()
-      });
-
-      // Persist state
-      _saveAIState();
-
-      // Render AI response bubble (replaces loading bubble)
-      _renderAIResponse(responseText);
-
-    } catch (error) {
-      // DEDUPLICATION: ignore stale errors from superseded requests
-      if (currentRequestId !== _aiState.requestId) {
-        console.log('[CashFlow AI] Ignoring stale error (superseded by newer request)');
-        return;
-      }
-
-      // Don't treat abort as error
-      if (error.name === 'AbortError') {
-        _aiState.isLoading = false;
-        _aiState.currentResponse = 'Yêu cầu đã bị hủy.';
-        _saveAIState();
-        // Remove loading bubble
-        const output = _qs('#hub-cf-ai-output');
-        if (output) {
-          const bubbles = output.querySelectorAll('.cf-ai-bubble--system');
-          if (bubbles.length > 0) {
-            const lastBubble = bubbles[bubbles.length - 1];
-            const msgEl = lastBubble.querySelector('.cf-ai-msg');
-            if (msgEl && msgEl.textContent === 'Đang phân tích...') {
-              lastBubble.remove();
-            }
-          }
-        }
-        return;
-      }
-
-      console.error('[CashFlow AI] Error:', error);
-      _aiState.isLoading = false;
-      _aiState.lastError = error.message;
-      _saveAIState();
-
-      // Show error bubble (replaces loading bubble)
-      _showAIError(`Lỗi: ${error.message}`);
-
-    } finally {
-      // Only re-enable UI if this is still the current request
-      if (currentRequestId === _aiState.requestId) {
-        _aiState.abortController = null;
-
-        // Re-enable UI if elements still exist (user hasn't navigated away)
-        if (askBtn) {
-          askBtn.disabled = false;
-          askBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>';
-        }
-        if (promptInput) {
-          promptInput.disabled = false;
-          promptInput.focus();
-        }
+    } else if (p.savingsRate !== null) {
+      if (p.savingsRate >= p.targetRate) {
+        A.push({ level: 'ok', title: 'Tháng này đạt mục tiêu tiết kiệm', body: 'Tỷ lệ để dành ' + p.savingsRate.toFixed(1) + '% so với mục tiêu ' + p.targetRate + '%.' });
+      } else {
+        A.push({ level: 'warn', title: 'Chưa đạt mục tiêu tiết kiệm', body: 'Tỷ lệ để dành ' + p.savingsRate.toFixed(1) + '% so với mục tiêu ' + p.targetRate + '%.', prompt: AI_PROMPTS.cut });
       }
     }
-  }
 
-  /**
-   * Bind AI Advisor events - called from _bindEvents()
-   */
-  function _bindAIAdvisorEvents() {
-    const askBtn = document.getElementById('cf-ai-ask-btn');
-    const promptInput = document.getElementById('cf-ai-prompt');
-    const providerSelect = document.getElementById('cf-ai-provider');
-    const settingsBtn = document.getElementById('cf-ai-settings-btn');
-    const modalCloseBtn = document.getElementById('cf-key-close');
-    const modalCloseBtnBottom = document.getElementById('cf-key-close-bottom');
-    const saveBtn = document.getElementById('cf-key-save');
-    const clearBtn = document.getElementById('cf-key-clear');
-    const modal = document.getElementById('cf-ai-key-modal');
-
-    if (askBtn) {
-      askBtn.addEventListener('click', _handleAIAdvisorQuery);
+    // Nhóm "mong muốn" vượt mức khuyến nghị
+    var w = p.buckets.wants;
+    if (w.pct !== null && w.pct > w.target + 5) {
+      var wantCats = p.cats.filter(function (c) { return AI_BUCKETS.wants.cats.indexOf(c.id) !== -1; });
+      var big = wantCats[0];
+      var tip = big ? ' Thử giảm 15% "' + big.name + '" ≈ ' + F(big.amount * 0.15) + '.' : '';
+      A.push({ level: 'warn', title: 'Nhóm "Mong muốn" chiếm ' + w.pct.toFixed(0) + '% thu nhập', body: 'Mức khuyến nghị ≤ ' + w.target + '%.' + tip, prompt: AI_PROMPTS.cut });
     }
 
-    if (promptInput) {
-      promptInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          _handleAIAdvisorQuery();
-        }
-      });
-    }
-
-    // Provider change — persist selection
-    if (providerSelect) {
-      providerSelect.addEventListener('change', function() {
-        _aiState.provider = this.value;
-        _saveAIState();
-      });
-    }
-
-    // Settings button opens modal
-    if (settingsBtn) {
-      settingsBtn.addEventListener('click', _openAIKeyModal);
-    }
-
-    // Modal close buttons
-    if (modalCloseBtn) {
-      modalCloseBtn.addEventListener('click', _closeAIKeyModal);
-    }
-    if (modalCloseBtnBottom) {
-      modalCloseBtnBottom.addEventListener('click', _closeAIKeyModal);
-    }
-
-    // Save keys
-    if (saveBtn) {
-      saveBtn.addEventListener('click', _saveAIKeys);
-    }
-
-    // Clear keys
-    if (clearBtn) {
-      clearBtn.addEventListener('click', _clearAIKeys);
-    }
-
-    // Close modal on overlay click
-    if (modal) {
-      modal.addEventListener('click', function(e) {
-        if (e.target === modal) {
-          _closeAIKeyModal();
-        }
-      });
-    }
-
-    // Escape key to close modal
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') {
-        const modal = document.getElementById('cf-ai-key-modal');
-        if (modal && modal.style.display === 'flex') {
-          _closeAIKeyModal();
-        }
-      }
+    // Hạng mục vượt ngân sách
+    p.cats.filter(function (c) { return c.status === 'over'; }).slice(0, 2).forEach(function (c) {
+      A.push({ level: 'danger', title: c.name + ' vượt ngân sách ' + Math.round(c.budgetPct - 100) + '%', body: 'Đã chi ' + F(c.amount) + ' / hạn mức ' + F(c.limit) + '.', prompt: 'Tôi đang chi vượt ngân sách cho hạng mục ' + c.name + '. Nên điều chỉnh thế nào?' });
     });
-  }
 
-  /**
-   * Helper: Append chat bubble to the conversation history
-   * @param {string} text - Message text
-   * @param {'user'|'system'} sender - Message sender
-   */
-  function _appendAIChatBubble(text, sender) {
-    var out = _qs('#hub-cf-ai-output');
-    if (!out) return;
-    var isUser = sender === 'user';
-    var avatar = isUser ? '👤' : '🤖';
-    var bubbleClass = isUser ? 'cf-ai-bubble--user' : 'cf-ai-bubble--system';
+    // Hạng mục tăng mạnh so với tháng trước
+    p.cats.filter(function (c) { return c.delta !== null && c.delta >= 30 && c.share >= 8 && c.status !== 'over'; }).slice(0, 1).forEach(function (c) {
+      A.push({ level: 'warn', title: c.name + ' tăng ' + Math.round(c.delta) + '% so với tháng trước', body: 'Từ ' + F(c.prev) + ' lên ' + F(c.amount) + '.', prompt: 'Vì sao hạng mục ' + c.name + ' của tôi tăng mạnh so với tháng trước và nên xử lý thế nào?' });
+    });
 
-    // Simple markdown rendering for system messages
-    var content = _escHtml(text);
-    if (!isUser) {
-      content = content
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.+?)\*/g, '<em>$1</em>')
-        .replace(/`(.+?)`/g, '<code style="background:rgba(0,240,255,0.1);padding:1px 6px;border-radius:4px;font-family:var(--font-mono);font-size:0.85em;">$1</code>')
-        .replace(/\n/g, '<br>');
+    // Nợ cho mượn
+    if (p.debts.total > 0) {
+      A.push({
+        level: p.debts.overdue > 0 ? 'warn' : 'info',
+        title: p.debts.overdue > 0 ? 'Có ' + p.debts.overdue + ' khoản nợ đã quá hạn' : 'Còn ' + F(p.debts.total) + ' chưa thu hồi',
+        body: 'Tổng đang cho mượn ' + F(p.debts.total) + '. Thu hồi sớm giúp tăng dòng tiền khả dụng.'
+      });
     }
 
-    var html = '<div class="cf-ai-bubble ' + bubbleClass + '">' +
-                 '<div class="cf-ai-avatar">' + avatar + '</div>' +
-                 '<div class="cf-ai-msg">' + content + '</div>' +
-               '</div>';
-    out.insertAdjacentHTML('beforeend', html);
-    out.scrollTop = out.scrollHeight; // Auto-scroll to bottom
+    // Tiền mặt vs ngân hàng
+    if (p.balances.cash > 0 && p.balances.bank > 0) {
+      if (p.balances.cash > p.balances.bank * 2) {
+        A.push({ level: 'info', title: 'Tiền mặt đang nhiều gấp đôi ngân hàng', body: 'Cân nhắc gửi bớt vào tài khoản để an toàn và dễ theo dõi.', prompt: AI_PROMPTS.cash });
+      }
+    }
+
+    var rank = { danger: 0, warn: 1, info: 2, ok: 3 };
+    A.sort(function (a, b) { return rank[a.level] - rank[b.level]; });
+    return A.slice(0, 5);
   }
 
-  /**
-   * Bind Quick Prompt Chips
-   */
-  function _bindAIQuickPrompts() {
-    var chips = document.querySelectorAll('.cf-ai-chip');
-    var input = _qs('#cf-ai-prompt');
-    var btn = _qs('#cf-ai-ask-btn');
+  // ─────────────────────────────────────────────────────────────
+  //  Render: Tab "Kế hoạch chi tiêu"
+  // ─────────────────────────────────────────────────────────────
 
-    chips.forEach(function(chip) {
-      chip.addEventListener('click', function() {
-        var prompt = this.getAttribute('data-prompt') || this.textContent.trim();
-        if (input) input.value = prompt;
-        if (btn) btn.click();
-      });
-    });
+  function _aiTone(level) { return 'is-' + level; }
+
+  function _renderSpendingPlan() {
+    var root = _qs('#cfx-plan');
+    if (!root) return;
+
+    var ym = _currentMonth || _currentYearMonth();
+    var periodEl = _qs('#cfx-ai-period');
+    if (periodEl) periodEl.textContent = 'Tháng ' + ym.month + '/' + ym.year;
+
+    var p = _computeSpendingPlan();
+    if (!p || (p.cur.count === 0 && p.incomeBase <= 0)) {
+      root.innerHTML =
+        '<div class="cfx-empty-plan">' +
+          '<div class="cfx-empty-plan__icon">' + AI_ICON.plan + '</div>' +
+          '<strong>Chưa có dữ liệu cho tháng ' + ym.month + '/' + ym.year + '</strong>' +
+          '<p>Hãy ghi lại thu nhập và vài khoản chi. Kế hoạch chi tiêu sẽ tự động xuất hiện ở đây.</p>' +
+        '</div>';
+      _generateAIInsight();
+      return;
+    }
+
+    var F = _formatVNFull;
+    var e = _escHtml;
+
+    // ── Hero: tiến độ chi tiêu so với cần chi ──
+    var heroTone = p.usedPct > 100 ? 'danger' : ((p.isCurrent && p.usedPct > p.timePct + 10) ? 'warn' : 'ok');
+    var fillW = _aiClamp(p.usedPct, 0, 100).toFixed(1);
+    var tickW = _aiClamp(p.timePct, 0, 100).toFixed(1);
+    var segBtns = [10, 20, 30, 40].map(function (r) {
+      return '<button type="button" class="cfx-seg__btn' + (r === p.targetRate ? ' is-active' : '') + '" data-rate="' + r + '" aria-pressed="' + (r === p.targetRate) + '">' + r + '%</button>';
+    }).join('');
+
+    var hero =
+      '<div class="cfx-hero ' + _aiTone(heroTone) + '">' +
+        '<div class="cfx-hero__top">' +
+          '<div>' +
+            '<div class="cfx-label">cần chi để đạt mục tiêu tiết kiệm</div>' +
+            '<div class="cfx-hero__value">' + (p.spendCap > 0 ? F(p.spendCap) : '—') + '</div>' +
+            '<div class="cfx-hero__sub">' +
+              (p.spendCap > 0
+                ? 'Đã chi <b>' + F(p.cur.spent) + '</b> · ' + (p.remaining >= 0 ? 'còn <b>' + F(p.remaining) + '</b>' : 'vượt <b>' + F(-p.remaining) + '</b>')
+                : 'Thêm thu nhập để tính cần chi') +
+              (p.incomeIsEstimate ? ' · <span class="cfx-muted">thu nhập ước tính (TB 3 tháng)</span>' : '') +
+            '</div>' +
+          '</div>' +
+          '<div class="cfx-seg" role="group" aria-label="Mục tiêu tiết kiệm"><span class="cfx-seg__label">Mục tiêu tiết kiệm</span>' + segBtns + '</div>' +
+        '</div>' +
+        '<div class="cfx-pace" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(_aiClamp(p.usedPct, 0, 100)) + '">' +
+          '<div class="cfx-pace__fill" style="width:' + fillW + '%"></div>' +
+          (p.isCurrent ? '<div class="cfx-pace__tick" style="left:' + tickW + '%" title="Tiến độ thời gian của tháng"></div>' : '') +
+        '</div>' +
+        '<div class="cfx-pace__legend"><span>Đã dùng ' + Math.round(p.usedPct) + '% cần chi</span>' +
+          (p.isCurrent ? '<span>Ngày ' + p.daysElapsed + '/' + p.daysInMonth + ' (' + Math.round(p.timePct) + '% tháng)</span>' : '<span>Tháng đã kết thúc</span>') +
+        '</div>' +
+      '</div>';
+
+    // ── KPI ──
+    var overProj = p.incomeBase > 0 && p.projectedSpend > p.spendCap;
+    var rateOk = p.savingsRate !== null && p.savingsRate >= p.targetRate;
+    var kpis =
+      '<div class="cfx-kpis">' +
+        _aiKpi('Chi an toàn mỗi ngày',
+          (p.isCurrent && p.incomeBase > 0) ? F(p.safePerDay) : '—',
+          p.isCurrent ? (p.remaining >= 0 ? 'Còn ' + p.remainingDays + ' ngày · hạn mức ngày ' + F(p.dailyLimit) : 'Đã vượt cần chi') : 'Chỉ áp dụng tháng hiện tại',
+          (p.isCurrent && p.remaining < 0) ? 'danger' : 'ok') +
+        _aiKpi(p.isCurrent ? 'Dự báo chi cuối tháng' : 'Tổng chi trong tháng',
+          F(p.projectedSpend),
+          p.incomeBase > 0 ? 'cần chi ' + F(p.spendCap) : 'Chưa có thu nhập',
+          overProj ? 'warn' : 'ok') +
+        _aiKpi('Tỷ lệ để dành',
+          p.savingsRate !== null ? p.savingsRate.toFixed(1) + '%' : '—',
+          'Mục tiêu ' + p.targetRate + '%',
+          p.savingsRate === null ? 'info' : (rateOk ? 'ok' : 'warn')) +
+        _aiKpi(p.isCurrent ? 'Dự kiến để dành' : 'Đã để dành',
+          p.incomeBase > 0 ? F(p.projectedSavings) : '—',
+          'Đã chuyển vào tiết kiệm ' + F(p.cur.saved),
+          p.projectedSavings < 0 ? 'danger' : 'ok') +
+      '</div>';
+
+    // ── Phân bổ 50/30/20 ──
+    var allocRows = ['needs', 'wants', 'growth'].map(function (k) {
+      var b = p.buckets[k];
+      var pct = b.pct;
+      var tone = 'info';
+      if (pct !== null) {
+        if (k === 'growth') tone = pct >= b.target ? 'ok' : (pct >= b.target * 0.6 ? 'warn' : 'danger');
+        else tone = pct <= b.target + 3 ? 'ok' : (pct <= b.target + 10 ? 'warn' : 'danger');
+      }
+      return '<div class="cfx-alloc__row">' +
+        '<div class="cfx-alloc__name">' + e(b.label) + '</div>' +
+        '<div class="cfx-alloc__bar ' + _aiTone(tone) + '">' +
+          '<i style="width:' + _aiClamp(pct || 0, 0, 100).toFixed(1) + '%"></i>' +
+          '<b style="left:' + _aiClamp(b.target, 0, 100) + '%" title="Mục tiêu ' + b.target + '%"></b>' +
+        '</div>' +
+        '<div class="cfx-alloc__val"><strong>' + (pct !== null ? pct.toFixed(0) + '%' : '—') + '</strong><span>/ ' + (k === 'growth' ? '≥' : '≤') + b.target + '%</span></div>' +
+      '</div>';
+    }).join('');
+
+    var alloc =
+      '<div class="cfx-card">' +
+        '<div class="cfx-card__head"><h5>Phân bổ thu nhập</h5><span class="cfx-muted">Vạch đứng = mục tiêu</span></div>' +
+        allocRows +
+      '</div>';
+
+    // ── Hạng mục chi ──
+    var catRows = p.cats.slice(0, 6).map(function (c) {
+      var barPct = c.budgetPct !== null ? _aiClamp(c.budgetPct, 0, 100) : _aiClamp(c.share, 0, 100);
+      var tone = c.status === 'over' ? 'danger' : (c.status === 'warn' ? 'warn' : (c.status === 'ok' ? 'ok' : 'info'));
+      var deltaHtml = '<span class="cfx-delta cfx-muted">mới</span>';
+      if (c.delta !== null) {
+        var up = c.delta > 0;
+        deltaHtml = '<span class="cfx-delta ' + (Math.abs(c.delta) < 5 ? 'cfx-muted' : (up ? 'is-up' : 'is-down')) + '">' + (up ? '▲' : '▼') + ' ' + Math.abs(Math.round(c.delta)) + '%</span>';
+      }
+      return '<div class="cfx-cat">' +
+        '<div class="cfx-cat__name" title="' + e(c.name) + '">' + e(c.name) + '</div>' +
+        '<div class="cfx-cat__bar ' + _aiTone(tone) + '"><i style="width:' + barPct.toFixed(1) + '%"></i></div>' +
+        '<div class="cfx-cat__amt">' + F(c.amount) + (c.limit > 0 ? '<small>/ ' + F(c.limit) + '</small>' : '<small>' + Math.round(c.share) + '% tổng chi</small>') + '</div>' +
+        deltaHtml +
+      '</div>';
+    }).join('');
+
+    var cats =
+      '<div class="cfx-card">' +
+        '<div class="cfx-card__head"><h5>Hạng mục chi nhiều nhất</h5><span class="cfx-muted">So với tháng trước</span></div>' +
+        (catRows || '<p class="cfx-muted">Chưa có khoản chi nào trong tháng.</p>') +
+      '</div>';
+
+    // ── Hành động đề xuất ──
+    var actions = _aiBuildActions(p);
+    var actionRows = actions.map(function (a) {
+      return '<div class="cfx-action ' + _aiTone(a.level) + '">' +
+        '<span class="cfx-action__icon">' + AI_ICON[a.level === 'ok' ? 'ok' : a.level] + '</span>' +
+        '<div class="cfx-action__text"><strong>' + e(a.title) + '</strong><span>' + e(a.body) + '</span></div>' +
+        (a.prompt ? '<button type="button" class="cfx-link" data-ai-prompt="' + e(a.prompt) + '">Hỏi AI</button>' : '') +
+      '</div>';
+    }).join('');
+
+    var actionsCard =
+      '<div class="cfx-card cfx-card--wide">' +
+        '<div class="cfx-card__head"><h5>Việc nên làm ngay</h5><span class="cfx-muted">Phân tích tự động</span></div>' +
+        actionRows +
+      '</div>';
+
+    // ── CTA ──
+    var cta =
+      '<div class="cfx-cta">' +
+        '<button type="button" class="cfx-btn cfx-btn--primary" data-ai-prompt="' + e(AI_PROMPTS.plan) + '">' + AI_ICON.spark + '<span>Lập kế hoạch tháng sau với AI</span></button>' +
+        '<button type="button" class="cfx-btn" data-ai-prompt="' + e(AI_PROMPTS.cut) + '"><span>Tìm khoản nên cắt giảm</span></button>' +
+        '<button type="button" class="cfx-btn" data-ai-prompt="' + e(AI_PROMPTS.forecast) + '"><span>Dự báo cuối tháng</span></button>' +
+      '</div>';
+
+    root.innerHTML = hero + kpis + '<div class="cfx-grid">' + alloc + cats + '</div>' + actionsCard + cta;
+    _generateAIInsight();
   }
 
-  /**
-   * Show proactive insight banner
-   * @param {string} message - Insight message
-   */
-  function _showAIInsight(message) {
+  function _aiKpi(label, value, sub, tone) {
+    return '<div class="cfx-kpi ' + _aiTone(tone) + '">' +
+      '<div class="cfx-label">' + _escHtml(label) + '</div>' +
+      '<div class="cfx-kpi__value">' + _escHtml(value) + '</div>' +
+      '<div class="cfx-kpi__sub">' + _escHtml(sub) + '</div>' +
+    '</div>';
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  Insight banner (luôn hiển thị phía trên, theo mức độ khẩn cấp)
+  // ─────────────────────────────────────────────────────────────
+
+  function _showAIInsight(message, level) {
     var banner = _qs('#cf-ai-insight-banner');
     var msgEl = _qs('#cf-ai-insight-message');
-    if (banner && msgEl) {
-      msgEl.textContent = message;
-      banner.style.display = 'flex';
-    }
+    if (!banner || !msgEl) return;
+    level = level || 'info';
+    msgEl.textContent = message;
+    banner.dataset.level = level;
+    var icon = _qs('#cf-ai-insight-icon');
+    if (icon) icon.innerHTML = AI_ICON[level] || AI_ICON.info;
+    banner.style.display = 'flex';
   }
 
-  /**
-   * Hide proactive insight banner
-   */
   function _hideAIInsight() {
     var banner = _qs('#cf-ai-insight-banner');
     if (banner) banner.style.display = 'none';
   }
 
-  /**
-   * Generate proactive financial insights based on current data
-   */
   function _generateAIInsight() {
-    if (!_data || !_data.transactions || _data.transactions.length === 0) {
-      _showAIInsight('Chưa có dữ liệu giao dịch. Hãy thêm giao dịch đầu tiên để tôi có thể phân tích cho bạn.');
+    var p = _computeSpendingPlan();
+    if (!p || (p.cur.count === 0 && p.incomeBase <= 0)) {
+      _showAIInsight('Chưa có dữ liệu tháng này. Ghi vài khoản thu chi để mình lập kế hoạch cho bạn.', 'info');
       return;
     }
+    var top = _aiBuildActions(p)[0];
+    if (top) _showAIInsight(top.title + '. ' + top.body, top.level);
+  }
 
+  // ─────────────────────────────────────────────────────────────
+  //  Ngữ cảnh gửi cho AI
+  // ─────────────────────────────────────────────────────────────
+
+  function _getAIKey(provider) {
+    var storageKey = provider === 'gemini' ? 'gemini_api_key' : 'nvidia_api_key';
+    try { return localStorage.getItem(storageKey); } catch (_) { return null; }
+  }
+
+  function _getFinancialContext() {
     var ym = _currentMonth || _currentYearMonth();
-    var monthTxs = _getMonthTransactions(ym.year, ym.month);
+    var plan = _computeSpendingPlan();
+    var balances = {
+      netWorth: _computeLiveNetWorth(),
+      savings: _cashFlowMeta.savingsBalance || 0,
+      cashBalance: _calcCashBalance(),
+      bankBalance: _calcBankBalance()
+    };
 
-    if (monthTxs.length === 0) {
-      _showAIInsight('Tháng này chưa có giao dịch nào. Bạn có thể nhập dữ liệu hoặc chuyển sang tháng khác để tôi phân tích.');
+    if (!_data || !_data.transactions || _data.transactions.length === 0 || !plan) {
+      return JSON.stringify({ month: ym.month + '/' + ym.year, message: 'Chưa có dữ liệu giao dịch.', balances: balances });
+    }
+
+    var monthTxs = _getMonthTransactions(ym.year, ym.month);
+    var txs = (monthTxs.length > 0 ? monthTxs : _getAllTransactionsSorted().slice(0, 100)).slice()
+      .sort(function (a, b) { return (b.day || 0) - (a.day || 0); })
+      .slice(0, 80);
+
+    // Tổng theo hạng mục tính sẵn để AI không phải cộng
+    var categoryTotals = { income: {}, expense: {} };
+    monthTxs.forEach(function (tx) {
+      var type = tx.type === 'income' ? 'income' : 'expense';
+      var name = _categoryDisplayName(tx.category, tx.type);
+      categoryTotals[type][name] = (categoryTotals[type][name] || 0) + (tx.amount || 0);
+    });
+
+    var budgets = {};
+    Object.keys(_cashFlowMeta.budgets || {}).forEach(function (id) {
+      if (_cashFlowMeta.budgets[id] > 0) budgets[_categoryDisplayName(id, 'expense')] = _cashFlowMeta.budgets[id];
+    });
+
+    var prevByCat = {};
+    Object.keys(plan.prev.byCat).forEach(function (id) { prevByCat[_categoryDisplayName(id, 'expense')] = plan.prev.byCat[id]; });
+
+    var R = Math.round;
+    return JSON.stringify({
+      month: ym.month + '/' + ym.year,
+      currency: 'VND',
+      plan: {
+        incomeThisMonth: R(plan.cur.income),
+        incomeUsedForPlanning: R(plan.incomeBase),
+        incomeIsEstimateFromLast3Months: plan.incomeIsEstimate,
+        spentThisMonth: R(plan.cur.spent),
+        movedToSavingsThisMonth: R(plan.cur.saved),
+        savingsRatePct: plan.savingsRate === null ? null : +plan.savingsRate.toFixed(1),
+        targetSavingsRatePct: plan.targetRate,
+        spendCap: R(plan.spendCap),
+        remainingUnderCap: R(plan.remaining),
+        daysInMonth: plan.daysInMonth,
+        remainingDays: plan.remainingDays,
+        burnRatePerDay: R(plan.burn),
+        projectedMonthEndSpend: R(plan.projectedSpend),
+        projectedMonthEndSaving: R(plan.projectedSavings),
+        safeToSpendPerDay: R(plan.safePerDay),
+        dailyLimitSetByUser: plan.dailyLimit,
+        allocationPctOfIncome: {
+          needs:  { actual: plan.buckets.needs.pct === null ? null : +plan.buckets.needs.pct.toFixed(1), target: plan.buckets.needs.target },
+          wants:  { actual: plan.buckets.wants.pct === null ? null : +plan.buckets.wants.pct.toFixed(1), target: plan.buckets.wants.target },
+          savingsAndGrowth: { actual: plan.buckets.growth.pct === null ? null : +plan.buckets.growth.pct.toFixed(1), target: plan.buckets.growth.target }
+        }
+      },
+      categoryTotals: categoryTotals,
+      categoryBudgets: budgets,
+      previousMonth: { income: R(plan.prev.income), spent: R(plan.prev.spent), spentByCategory: prevByCat },
+      debtsToCollect: plan.debts.list.map(function (d) { return { debtor: d.debtor, amount: d.amount, dueDate: d.due, overdue: d.overdue }; }),
+      balances: balances,
+      transactions: txs.map(function (tx) {
+        return {
+          d: _formatDate(tx.day, tx.month, tx.year),
+          c: _categoryDisplayName(tx.category, tx.type),
+          a: tx.amount,
+          t: tx.type === 'expense' ? '-' : '+',
+          n: tx.desc || '',
+          s: tx.source || 'bank'
+        };
+      })
+    });
+  }
+
+  function _aiSystemInstruction() {
+    return 'Bạn là "Quân sư tài chính cá nhân" của ' + AI_ADDRESS + ': cố vấn lập kế hoạch chi tiêu thực chiến, thẳng thắn, tinh gọn. ' +
+      'Luôn xưng hô với người dùng là "' + AI_ADDRESS + '" và trả lời bằng tiếng Việt.\n\n' +
+      'NGUYÊN TẮC SỐ LIỆU\n' +
+      '1. Chỉ dùng số liệu trong khối DỮ LIỆU. KHÔNG tự cộng/trừ để tạo ra con số tổng hợp mới: dùng đúng giá trị có sẵn trong plan, categoryTotals, previousMonth, balances. Phép tính đơn giản để minh hoạ (ví dụ giảm 15% một hạng mục) được phép nhưng phải ghi rõ là ước tính (≈).\n' +
+      '2. Định dạng tiền kiểu Việt Nam: 1.250.000 ₫. Không bịa giao dịch, hạng mục hay số dư không có trong dữ liệu; thiếu dữ liệu thì nói rõ.\n' +
+      '3. plan.targetSavingsRatePct là mục tiêu tiết kiệm người dùng đã chọn; plan.spendCap là cần chi để đạt mục tiêu đó. Mọi kế hoạch ngân sách phải nằm trong spendCap.\n' +
+      '4. Giao dịch có trường s: "cash" (tiền mặt) hoặc "bank" (ngân hàng). Chỉ phân tích riêng hai nguồn này khi liên quan.\n\n' +
+      'CÁCH TRẢ LỜI\n' +
+      '- Chào hỏi/xã giao ("hello", "cảm ơn"…): đáp 1–2 câu thân thiện rồi gợi ý 2–3 việc bạn có thể làm. KHÔNG đổ số liệu khi chưa được hỏi.\n' +
+      '- Câu hỏi mơ hồ: nêu ngắn gọn cách bạn hiểu rồi vẫn trả lời luôn; chỉ hỏi lại tối đa 1 câu ở cuối.\n' +
+      '- Câu hỏi kiến thức tài chính chung: giải thích ngắn gọn, gắn với tình hình thực tế của người dùng nếu liên quan.\n' +
+      '- Mở đầu bằng kết luận 1 câu. Sau đó là các ý chính dạng gạch đầu dòng; mỗi ý có con số cụ thể và hành động cụ thể (làm gì, bao nhiêu, khi nào). Tối đa khoảng 220 từ, trừ khi được yêu cầu lập kế hoạch.\n' +
+      '- Yêu cầu lập kế hoạch chi tiêu/ngân sách/tháng sau: trả lời theo cấu trúc (1) Hiện trạng 2–3 dòng; (2) Bảng markdown ngân sách đề xuất với các cột Hạng mục | Tháng này | Đề xuất | Ghi chú, tổng đề xuất không vượt plan.spendCap; (3) 3 quy tắc chi tiêu; (4) Việc cần làm trong 7 ngày tới.\n' +
+      '- Thứ tự ưu tiên khi tối ưu: khoản thiết yếu → thu hồi/trả nợ → quỹ khẩn cấp (3–6 tháng chi thiết yếu) → tiết kiệm/đầu tư → mong muốn. Không khuyên mã cổ phiếu/coin cụ thể.\n' +
+      '- Giọng văn tôn trọng, không phán xét. Dùng **in đậm** cho con số then chốt, không dùng emoji tràn lan.';
+  }
+
+  /** Lấy các tin nhắn gần nhất làm "trí nhớ" (bỏ tin cuối vì đó là câu hỏi hiện tại) */
+  function _aiBuildHistory() {
+    var h = _aiState.conversationHistory.slice(0, -1).slice(-AI_HISTORY_TURNS);
+    var out = [];
+    h.forEach(function (m) {
+      var role = m.role === 'user' ? 'user' : 'assistant';
+      var text = String(m.content || '').slice(0, 1500);
+      if (!text) return;
+      if (out.length && out[out.length - 1].role === role) out[out.length - 1].text += '\n' + text; // gộp tin liền nhau cùng vai trò
+      else out.push({ role: role, text: text });
+    });
+    while (out.length && out[0].role !== 'user') out.shift(); // Gemini yêu cầu bắt đầu bằng user
+    return out;
+  }
+
+  function _aiBuildRequest(userQuery) {
+    var system = _aiSystemInstruction();
+    var context = _getFinancialContext();
+    var history = _aiBuildHistory();
+    var transcript = history.map(function (m) { return (m.role === 'user' ? 'NGƯỜI DÙNG: ' : 'TRỢ LÝ: ') + m.text; }).join('\n');
+    var flat = system + '\n\n=== DỮ LIỆU TÀI CHÍNH (JSON) ===\n' + context +
+      (transcript ? '\n\n=== HỘI THOẠI TRƯỚC ĐÓ ===\n' + transcript : '') +
+      '\n\n=== CÂU HỎI MỚI CỦA NGƯỜI DÙNG ===\n' + userQuery;
+    return { system: system, context: context, history: history, user: userQuery, flat: flat };
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  Gọi API
+  // ─────────────────────────────────────────────────────────────
+
+  /** fetch có timeout + retry + hỗ trợ huỷ */
+  async function _resilientFetch(url, options, config) {
+    options = options || {};
+    config = config || {};
+    var timeout = config.timeout || 120000;
+    var maxRetries = config.maxRetries === undefined ? 2 : config.maxRetries;
+    var retryDelay = config.retryDelay || 1000;
+    var externalSignal = config.signal || null;
+
+    var lastError;
+    for (var attempt = 0; attempt <= maxRetries; attempt++) {
+      var controller = new AbortController();
+      var timeoutId = setTimeout(function () { controller.abort(); }, timeout);
+      var signal = controller.signal;
+      if (externalSignal) {
+        signal = (typeof AbortSignal.any === 'function') ? AbortSignal.any([controller.signal, externalSignal]) : externalSignal;
+      }
+      try {
+        var response = await fetch(url, Object.assign({}, options, { signal: signal, keepalive: false }));
+        clearTimeout(timeoutId);
+        return response;
+      } catch (err) {
+        clearTimeout(timeoutId);
+        lastError = err;
+        if (err.name === 'AbortError' || err.name === 'TypeError') throw err;
+        if (attempt < maxRetries) await new Promise(function (r) { setTimeout(r, retryDelay * (attempt + 1)); });
+      }
+    }
+    throw lastError;
+  }
+
+  /** Gemini: dùng systemInstruction + hội thoại nhiều lượt đúng chuẩn */
+  async function _callGeminiAPI(req, apiKey, signal) {
+    var contents = req.history.concat([{ role: 'user', text: req.user }]).map(function (m) {
+      return { role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.text }] };
+    });
+
+    var response = await _resilientFetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=' + encodeURIComponent(apiKey),
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: req.system + '\n\n=== DỮ LIỆU TÀI CHÍNH (JSON) ===\n' + req.context }] },
+          contents: contents,
+          generationConfig: { maxOutputTokens: 2048, temperature: 0.6 }
+        })
+      },
+      { timeout: 60000, maxRetries: 2, signal: signal }
+    );
+
+    if (!response.ok) {
+      var error = await response.json().catch(function () { return {}; });
+      throw new Error('Gemini API error: ' + response.status + ' - ' + ((error.error && error.error.message) || response.statusText));
+    }
+
+    var data = await response.json();
+    var cand = data.candidates && data.candidates[0];
+    var text = cand && cand.content && cand.content.parts ? cand.content.parts.map(function (p) { return p.text || ''; }).join('') : '';
+    if (!text && data.promptFeedback && data.promptFeedback.blockReason) {
+      throw new Error('Yêu cầu bị chặn bởi bộ lọc an toàn (' + data.promptFeedback.blockReason + ').');
+    }
+    return text || 'Không có phản hồi từ AI.';
+  }
+
+  /** Nvidia Nemotron qua backend Vercel (backend chỉ nhận 1 chuỗi → gộp ngữ cảnh + lịch sử vào đó) */
+  async function _callNvidiaAPI(req, apiKey, signal) {
+    var response = await _resilientFetch('https://personal-hub-rose-xi.vercel.app/api/ask-nvidia', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey: apiKey, systemPrompt: req.flat })
+    }, { timeout: 120000, maxRetries: 1, signal: signal });
+
+    if (!response.ok) {
+      var error = await response.json().catch(function () { return {}; });
+      throw new Error('Nvidia API error: ' + response.status + ' - ' + (error.message || response.statusText));
+    }
+    var data = await response.json();
+    return data.response || 'Không có phản hồi từ AI.';
+  }
+
+  function _aiFriendlyError(err) {
+    var msg = String((err && err.message) || err || '');
+    if (/401|403|API key|api_key|permission|unauthor/i.test(msg)) return 'API key không hợp lệ hoặc đã hết hạn. Mở Cài đặt (biểu tượng chìa khoá) để kiểm tra lại.';
+    if (/429|quota|rate/i.test(msg)) return 'Đã chạm giới hạn truy cập của dịch vụ AI. Hãy thử lại sau ít phút hoặc đổi mô hình.';
+    if (/Failed to fetch|NetworkError|TypeError/i.test(msg)) return 'Không kết nối được tới dịch vụ AI. Kiểm tra mạng rồi thử lại.';
+    if (err && err.name === 'AbortError') return 'Yêu cầu quá thời gian chờ. Hãy thử lại.';
+    return msg || 'Đã xảy ra lỗi không xác định.';
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  Markdown renderer (an toàn: escape trước, rồi mới dựng thẻ)
+  // ─────────────────────────────────────────────────────────────
+
+  function _aiInline(s) {
+    return s
+      .replace(/(-?\d[\d.,]*\s?(?:₫|VND|VNĐ|vnđ|đ(?![a-zà-ỹ])))/g, '<span class="cfx-num">$1</span>')
+      .replace(/(\d+(?:[.,]\d+)?\s?%)/g, '<span class="cfx-num">$1</span>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?!\*)/g, '$1<em>$2</em>');
+  }
+
+  function _aiMarkdown(raw) {
+    var lines = _escHtml(String(raw || '')).replace(/\r/g, '').split('\n');
+    var html = '';
+    var i = 0;
+    var para = [];
+    var listType = null;
+
+    function flushPara() { if (para.length) { html += '<p>' + para.join('<br>') + '</p>'; para = []; } }
+    function closeList() { if (listType) { html += '</' + listType + '>'; listType = null; } }
+    function isTableSep(l) { return /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(l || ''); }
+    function cells(l) { return l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(function (c) { return c.trim(); }); }
+
+    while (i < lines.length) {
+      var line = lines[i];
+      var m;
+
+      if (!line.trim()) { flushPara(); closeList(); i++; continue; }
+
+      // Bảng
+      if (/^\s*\|.*\|\s*$/.test(line) && isTableSep(lines[i + 1])) {
+        flushPara(); closeList();
+        var head = cells(line);
+        i += 2;
+        var rows = [];
+        while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) { rows.push(cells(lines[i])); i++; }
+        html += '<div class="cfx-table-wrap"><table><thead><tr>' + head.map(function (c) { return '<th>' + _aiInline(c) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+          rows.map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + _aiInline(c) + '</td>'; }).join('') + '</tr>'; }).join('') +
+          '</tbody></table></div>';
+        continue;
+      }
+
+      if ((m = line.match(/^\s{0,3}(#{1,4})\s+(.*)$/))) { flushPara(); closeList(); html += '<div class="cfx-md-h cfx-md-h--' + m[1].length + '">' + _aiInline(m[2]) + '</div>'; i++; continue; }
+      if (/^\s*([-*_])\1{2,}\s*$/.test(line)) { flushPara(); closeList(); html += '<hr>'; i++; continue; }
+      if ((m = line.match(/^\s*&gt;\s?(.*)$/))) { flushPara(); closeList(); html += '<blockquote>' + _aiInline(m[1]) + '</blockquote>'; i++; continue; }
+
+      if ((m = line.match(/^\s*[-*•]\s+(.*)$/))) {
+        flushPara();
+        if (listType !== 'ul') { closeList(); html += '<ul>'; listType = 'ul'; }
+        html += '<li>' + _aiInline(m[1]) + '</li>'; i++; continue;
+      }
+      if ((m = line.match(/^\s*(\d+)[.)]\s+(.*)$/))) {
+        flushPara();
+        if (listType !== 'ol') { closeList(); html += '<ol>'; listType = 'ol'; }
+        html += '<li>' + _aiInline(m[2]) + '</li>'; i++; continue;
+      }
+
+      closeList();
+      para.push(_aiInline(line.trim()));
+      i++;
+    }
+    flushPara(); closeList();
+    return html;
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  Khung giao diện (HTML shell) — được chèn vào render()
+  // ─────────────────────────────────────────────────────────────
+
+  function _aiShellHTML() {
+    var chips = [
+      ['Tóm tắt tháng này', AI_PROMPTS.summary],
+      ['Lập kế hoạch tháng sau', AI_PROMPTS.plan],
+      ['Cắt giảm ở đâu?', AI_PROMPTS.cut],
+      ['Dự báo cuối tháng', AI_PROMPTS.forecast],
+      ['Tiền mặt vs Ngân hàng', AI_PROMPTS.cash],
+      ['Quản lý tiền tiết kiệm', AI_PROMPTS.savings]
+    ].map(function (c) {
+      return '<button type="button" class="cf-ai-chip cfx-chip" data-ai-prompt="' + _escHtml(c[1]) + '">' + _escHtml(c[0]) + '</button>';
+    }).join('');
+
+    return '' +
+    '<section class="cfx-ai" id="cfx-ai" aria-label="Trợ lý tài chính AI">' +
+      '<header class="cfx-ai__head">' +
+        '<div class="cfx-ai__brand">' +
+          '<div class="cfx-ai__logo">' + AI_ICON.spark + '</div>' +
+          '<div class="cfx-ai__titles">' +
+            '<h4>AI Financial Advisor</h4>' +
+            '<p><span class="cfx-ai__dot" id="cfx-ai-dot"></span><span id="cfx-ai-status">Sẵn sàng</span><span class="cfx-sep">·</span><span id="cfx-ai-period"></span></p>' +
+          '</div>' +
+        '</div>' +
+        '<div class="cfx-ai__tools">' +
+          '<select id="cf-ai-provider" class="cfx-select" aria-label="Chọn mô hình AI">' +
+            '<option value="gemini">Gemini 3.7 Flash</option>' +
+            '<option value="nvidia">Nvidia Nemotron 3 Ultra</option>' +
+          '</select>' +
+          '<button type="button" id="cfx-ai-new" class="cfx-iconbtn" title="Cuộc trò chuyện mới" aria-label="Cuộc trò chuyện mới">' + AI_ICON.plus + '</button>' +
+          '<button type="button" id="cf-ai-settings-btn" class="cfx-iconbtn" title="Cài đặt API Key" aria-label="Cài đặt API Key">' + AI_ICON.key + '</button>' +
+        '</div>' +
+      '</header>' +
+
+      '<div class="cfx-insight" id="cf-ai-insight-banner" data-level="info" role="status">' +
+        '<span class="cfx-insight__icon" id="cf-ai-insight-icon">' + AI_ICON.info + '</span>' +
+        '<div class="cfx-insight__text"><span class="cfx-insight__tag">Insight</span><span id="cf-ai-insight-message">Đang phân tích dữ liệu chi tiêu tháng này…</span></div>' +
+      '</div>' +
+
+      '<div class="cfx-tabs" role="tablist" aria-label="Chế độ">' +
+        '<button type="button" role="tab" class="cfx-tab" data-tab="plan" id="cfx-tab-plan" aria-controls="cfx-panel-plan">' + AI_ICON.plan + '<span>Kế hoạch chi tiêu</span></button>' +
+        '<button type="button" role="tab" class="cfx-tab" data-tab="chat" id="cfx-tab-chat" aria-controls="cfx-panel-chat">' + AI_ICON.chat + '<span>Hỏi đáp AI</span></button>' +
+      '</div>' +
+
+      '<div class="cfx-panel" id="cfx-panel-plan" role="tabpanel" aria-labelledby="cfx-tab-plan">' +
+        '<div id="cfx-plan"></div>' +
+      '</div>' +
+
+      '<div class="cfx-panel cfx-chat" id="cfx-panel-chat" role="tabpanel" aria-labelledby="cfx-tab-chat" hidden>' +
+        '<div class="cfx-chat__scroll" id="hub-cf-ai-output" aria-live="polite"></div>' +
+        '<div class="cfx-chat__composer">' +
+          '<div class="cfx-chips" id="cf-ai-quick-prompts">' + chips + '</div>' +
+          '<div class="cfx-input">' +
+            '<textarea id="cf-ai-prompt" class="cfx-input__field" rows="1" maxlength="1500" placeholder="Hỏi về chi tiêu, ngân sách, cách tiết kiệm…" autocomplete="off" data-lpignore="true" data-form-type="other" aria-label="Câu hỏi cho trợ lý AI"></textarea>' +
+            '<button type="button" id="cf-ai-ask-btn" class="cfx-send" aria-label="Gửi câu hỏi" title="Gửi (Enter)">' + AI_ICON.send + '</button>' +
+          '</div>' +
+          '<div class="cfx-hint">Enter để gửi · Shift+Enter xuống dòng · AI đọc dữ liệu của tháng đang xem</div>' +
+        '</div>' +
+      '</div>' +
+    '</section>';
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  Chat UI
+  // ─────────────────────────────────────────────────────────────
+
+  function _aiEmptyStateHTML() {
+    var ym = _currentMonth || _currentYearMonth();
+    var tiles = [
+      ['Lập kế hoạch tháng sau', 'Ngân sách từng hạng mục + việc cần làm tuần đầu', AI_PROMPTS.plan],
+      ['Cắt giảm ở đâu?', 'Số tiền cụ thể cho từng khoản nên giảm', AI_PROMPTS.cut],
+      ['Dự báo cuối tháng', 'Chi bao nhiêu, để dành được bao nhiêu', AI_PROMPTS.forecast],
+      ['Quản lý tiền tiết kiệm', 'Giữ và làm tiền tiết kiệm sinh lời', AI_PROMPTS.savings]
+    ].map(function (t) {
+      return '<button type="button" class="cfx-tile" data-ai-prompt="' + _escHtml(t[2]) + '"><strong>' + _escHtml(t[0]) + '</strong><span>' + _escHtml(t[1]) + '</span></button>';
+    }).join('');
+
+    return '<div class="cfx-empty">' +
+      '<div class="cfx-empty__logo">' + AI_ICON.spark + '</div>' +
+      '<h5>Xin chào ' + _escHtml(AI_ADDRESS) + '</h5>' +
+      '<p>Mình đã đọc dữ liệu tháng ' + ym.month + '/' + ym.year + ' của bạn. Hỏi gì cũng được, hoặc chọn một gợi ý:</p>' +
+      '<div class="cfx-tiles">' + tiles + '</div>' +
+    '</div>';
+  }
+
+  function _appendAIChatBubble(text, sender, opts) {
+    var out = _qs('#hub-cf-ai-output');
+    if (!out) return null;
+    opts = opts || {};
+    var isUser = sender === 'user';
+    var empty = out.querySelector('.cfx-empty');
+    if (empty) empty.remove();
+
+    if (!isUser) { // chỉ tin AI mới nhất giữ nút "Tạo lại"
+      Array.prototype.forEach.call(out.querySelectorAll('[data-act="regen"]'), function (b) { b.remove(); });
+    }
+
+    var content = isUser ? '<p>' + _escHtml(text).replace(/\n/g, '<br>') + '</p>' : _aiMarkdown(text);
+    var actions = '';
+    if (!isUser && !opts.noActions) {
+      actions = '<div class="cfx-msg__actions">' +
+        '<button type="button" data-act="copy">' + AI_ICON.copy + '<span>Sao chép</span></button>' +
+        (opts.isError ? '' : '<button type="button" data-act="regen">' + AI_ICON.refresh + '<span>Tạo lại</span></button>') +
+      '</div>';
+    }
+    if (opts.isError) {
+      actions = '<div class="cfx-msg__actions"><button type="button" data-act="regen">' + AI_ICON.refresh + '<span>Thử lại</span></button></div>';
+    }
+
+    var html =
+      '<div class="cfx-msg ' + (isUser ? 'cfx-msg--user' : 'cfx-msg--ai') + (opts.isError ? ' cfx-msg--error' : '') + '">' +
+        '<div class="cfx-msg__avatar">' + (isUser ? AI_ICON.user : AI_ICON.spark) + '</div>' +
+        '<div class="cfx-msg__body">' +
+          '<div class="cfx-msg__meta"><span>' + (isUser ? 'Bạn' : 'Advisor') + '</span><time>' + _aiTime(opts.time) + '</time></div>' +
+          '<div class="cfx-msg__bubble cfx-md">' + content + '</div>' +
+          actions +
+        '</div>' +
+      '</div>';
+    out.insertAdjacentHTML('beforeend', html);
+    out.scrollTop = out.scrollHeight;
+    return out.lastElementChild;
+  }
+
+  function _showAILoading(message) {
+    var out = _qs('#hub-cf-ai-output');
+    if (!out) return;
+    _clearAILoading();
+    var empty = out.querySelector('.cfx-empty');
+    if (empty) empty.remove();
+
+    out.insertAdjacentHTML('beforeend',
+      '<div class="cfx-msg cfx-msg--ai" data-loading="1">' +
+        '<div class="cfx-msg__avatar">' + AI_ICON.spark + '</div>' +
+        '<div class="cfx-msg__body">' +
+          '<div class="cfx-msg__meta"><span>Advisor</span></div>' +
+          '<div class="cfx-msg__bubble cfx-typing"><span class="cfx-typing__dots"><i></i><i></i><i></i></span><span class="cfx-typing__text">' + _escHtml(message || AI_STATUS_STEPS[0]) + '</span></div>' +
+        '</div>' +
+      '</div>');
+    out.scrollTop = out.scrollHeight;
+
+    var step = 0;
+    _aiState._loadingTimer = setInterval(function () {
+      var t = _qs('.cfx-typing__text');
+      if (!t) return;
+      step = (step + 1) % AI_STATUS_STEPS.length;
+      t.textContent = AI_STATUS_STEPS[step];
+    }, 2200);
+  }
+
+  function _clearAILoading() {
+    if (_aiState._loadingTimer) { clearInterval(_aiState._loadingTimer); _aiState._loadingTimer = null; }
+    var out = _qs('#hub-cf-ai-output');
+    if (!out) return;
+    Array.prototype.forEach.call(out.querySelectorAll('[data-loading]'), function (el) { el.remove(); });
+  }
+
+  function _renderAIResponse(text) {
+    _clearAILoading();
+    _appendAIChatBubble(text, 'assistant', { time: Date.now() });
+  }
+
+  function _showAIError(message) {
+    _clearAILoading();
+    _appendAIChatBubble(message, 'assistant', { isError: true, time: Date.now() });
+  }
+
+  function _renderChatHistory() {
+    var out = _qs('#hub-cf-ai-output');
+    if (!out) return;
+    out.innerHTML = '';
+    if (!_aiState.conversationHistory.length) {
+      out.innerHTML = _aiEmptyStateHTML();
+      return;
+    }
+    _aiState.conversationHistory.forEach(function (msg) {
+      _appendAIChatBubble(msg.content, msg.role === 'user' ? 'user' : 'assistant', { time: msg.timestamp });
+    });
+    out.scrollTop = out.scrollHeight;
+  }
+
+  function _setAIBusy(busy) {
+    var btn = _qs('#cf-ai-ask-btn');
+    var root = _qs('#cfx-ai');
+    if (root) root.classList.toggle('is-busy', !!busy);
+    if (btn) {
+      btn.innerHTML = busy ? AI_ICON.stop : AI_ICON.send;
+      btn.title = busy ? 'Dừng' : 'Gửi (Enter)';
+      btn.setAttribute('aria-label', busy ? 'Dừng phản hồi' : 'Gửi câu hỏi');
+    }
+    var status = _qs('#cfx-ai-status');
+    if (status) status.textContent = busy ? 'Đang phân tích…' : _aiReadyLabel();
+  }
+
+  function _aiReadyLabel() {
+    return _getAIKey(_aiState.provider) ? 'Sẵn sàng' : 'Chưa có API key';
+  }
+
+  function _updateAIStatus() {
+    var dot = _qs('#cfx-ai-dot');
+    var hasKey = !!_getAIKey(_aiState.provider);
+    if (dot) dot.classList.toggle('is-off', !hasKey);
+    var status = _qs('#cfx-ai-status');
+    if (status && !_aiState.isLoading) status.textContent = _aiReadyLabel();
+  }
+
+  function _switchAITab(tab) {
+    if (tab !== 'plan' && tab !== 'chat') tab = 'plan';
+    _aiState.tab = tab;
+    ['plan', 'chat'].forEach(function (t) {
+      var btn = _qs('#cfx-tab-' + t);
+      var panel = _qs('#cfx-panel-' + t);
+      if (btn) { btn.classList.toggle('is-active', t === tab); btn.setAttribute('aria-selected', String(t === tab)); btn.tabIndex = t === tab ? 0 : -1; }
+      if (panel) panel.hidden = t !== tab;
+    });
+    if (tab === 'chat') {
+      var out = _qs('#hub-cf-ai-output');
+      if (out) out.scrollTop = out.scrollHeight;
+    }
+    _saveAIState();
+  }
+
+  function _autoGrowPrompt() {
+    var el = _qs('#cf-ai-prompt');
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 140) + 'px';
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  Luồng hỏi đáp chính
+  // ─────────────────────────────────────────────────────────────
+
+  function _abortAIRequest() {
+    if (_aiState.abortController) _aiState.abortController.abort();
+  }
+
+  function _aiRegenerate() {
+    if (_aiState.isLoading) return;
+    var h = _aiState.conversationHistory;
+    if (h.length && h[h.length - 1].role !== 'user') h.pop();
+    var last = h.length && h[h.length - 1].role === 'user' ? h.pop() : null;
+    if (!last) return;
+    _saveAIState();
+    _renderChatHistory();
+    _handleAIAdvisorQuery(last.content);
+  }
+
+  async function _handleAIAdvisorQuery(forcedText) {
+    var promptInput = _qs('#cf-ai-prompt');
+    var providerSelect = _qs('#cf-ai-provider');
+    if (!promptInput || !providerSelect) return;
+    if (_aiState.isLoading) return;
+
+    var userQuery = (typeof forcedText === 'string' ? forcedText : promptInput.value).trim();
+    if (!userQuery) return;
+
+    _switchAITab('chat');
+
+    var provider = providerSelect.value;
+    _aiState.provider = provider;
+
+    var apiKey = _getAIKey(provider);
+    if (!apiKey) {
+      _appendAIChatBubble(userQuery, 'user', { time: Date.now() });
+      _showAIError('Chưa có API key cho mô hình này. Mở Cài đặt (biểu tượng chìa khoá phía trên) để nhập key rồi hỏi lại.');
+      _aiState.conversationHistory.push({ role: 'user', content: userQuery, timestamp: Date.now() });
+      _saveAIState();
+      promptInput.value = '';
+      _autoGrowPrompt();
       return;
     }
 
-    var income = monthTxs.filter(t => t.type === 'income').reduce((s, t) => s + (t.amount || 0), 0);
-    var expense = monthTxs.filter(t => t.type === 'expense').reduce((s, t) => s + (t.amount || 0), 0);
-    var net = income - expense;
-    var savingsRate = income > 0 ? ((net / income) * 100).toFixed(1) : 0;
+    _aiState.abortController = new AbortController();
+    var signal = _aiState.abortController.signal;
+    var requestId = ++_aiState.requestId;
 
-    // Find top expense category
-    var expenseByCat = {};
-    monthTxs.filter(t => t.type === 'expense').forEach(t => {
-      var cat = _categoryDisplayName(t.category, 'expense');
-      expenseByCat[cat] = (expenseByCat[cat] || 0) + (t.amount || 0);
-    });
-    var topExpense = Object.entries(expenseByCat).sort((a, b) => b[1] - a[1])[0];
+    _aiState.isLoading = true;
+    _aiState.lastPrompt = userQuery;
+    _aiState.lastError = null;
+    _setAIBusy(true);
 
-    // Check cash vs bank balance
-    var cashBalance = _calcCashBalance();
-    var bankBalance = _calcBankBalance();
+    _appendAIChatBubble(userQuery, 'user', { time: Date.now() });
+    _aiState.conversationHistory.push({ role: 'user', content: userQuery, timestamp: Date.now() });
+    _saveAIState();
+    promptInput.value = '';
+    _autoGrowPrompt();
+    _showAILoading();
 
-    var insights = [];
+    try {
+      var req = _aiBuildRequest(userQuery);
+      var responseText = provider === 'nvidia'
+        ? await _callNvidiaAPI(req, apiKey, signal)
+        : await _callGeminiAPI(req, apiKey, signal);
 
-    if (net < 0) {
-      insights.push('⚠️ Tháng này bạn chi tiêu hơn thu nhập ' + _formatVND(Math.abs(net)) + '. Cân nhắc cắt giảm chi phí không cần thiết.');
-    } else if (savingsRate < 20) {
-      insights.push('💡 Tỷ lệ tiết kiệm ' + savingsRate + '% đang thấp. Mục tiêu khuyến nghị: 20%+ thu nhập.');
-    } else {
-      insights.push('✅ Tuyệt vời! Tỷ lệ tiết kiệm ' + savingsRate + '% đạt tiêu chuẩn tài chính lành mạnh.');
+      if (requestId !== _aiState.requestId) return;
+
+      _aiState.currentResponse = responseText;
+      _aiState.conversationHistory.push({ role: 'assistant', content: responseText, timestamp: Date.now() });
+      _saveAIState();
+      _renderAIResponse(responseText);
+
+    } catch (error) {
+      if (requestId !== _aiState.requestId) return;
+
+      if (error && error.name === 'AbortError' && signal.aborted && _aiState.userAborted) {
+        _clearAILoading();
+        _showToast('Đã dừng phản hồi');
+      } else {
+        console.error('[CashFlow AI] Error:', error);
+        _aiState.lastError = _aiFriendlyError(error);
+        _showAIError(_aiState.lastError);
+      }
+    } finally {
+      if (requestId === _aiState.requestId) {
+        _aiState.isLoading = false;
+        _aiState.abortController = null;
+        _aiState.userAborted = false;
+        _clearAILoading();
+        _setAIBusy(false);
+        var inp = _qs('#cf-ai-prompt');
+        if (inp) inp.focus();
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  Key modal
+  // ─────────────────────────────────────────────────────────────
+
+  function _openAIKeyModal() {
+    var modal = document.getElementById('cf-ai-key-modal');
+    if (!modal) return;
+    document.getElementById('cf-key-gemini').value = localStorage.getItem('gemini_api_key') || '';
+    document.getElementById('cf-key-nvidia').value = localStorage.getItem('nvidia_api_key') || '';
+    modal.style.display = 'flex';
+    requestAnimationFrame(function () { modal.classList.add('hub-cf-ai-key-modal--visible'); });
+    setTimeout(function () { var el = document.getElementById('cf-key-gemini'); if (el) el.focus(); }, 150);
+  }
+
+  function _closeAIKeyModal() {
+    var modal = document.getElementById('cf-ai-key-modal');
+    if (!modal) return;
+    modal.classList.remove('hub-cf-ai-key-modal--visible');
+    setTimeout(function () { modal.style.display = 'none'; }, 300);
+  }
+
+  function _saveAIKeys() {
+    var geminiKey = document.getElementById('cf-key-gemini').value.trim();
+    var nvidiaKey = document.getElementById('cf-key-nvidia').value.trim();
+    if (geminiKey) localStorage.setItem('gemini_api_key', geminiKey);
+    if (nvidiaKey) localStorage.setItem('nvidia_api_key', nvidiaKey);
+    _closeAIKeyModal();
+    _updateAIStatus();
+    _showToast('✅ Đã lưu API Keys thành công!');
+  }
+
+  function _clearAIKeys() {
+    localStorage.removeItem('gemini_api_key');
+    localStorage.removeItem('nvidia_api_key');
+    document.getElementById('cf-key-gemini').value = '';
+    document.getElementById('cf-key-nvidia').value = '';
+    _updateAIStatus();
+    _showToast('✅ Đã xóa API Keys!');
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  Gắn sự kiện (event delegation trên #cfx-ai)
+  // ─────────────────────────────────────────────────────────────
+
+  var _aiEscBound = false;
+
+  function _bindAIAdvisorEvents() {
+    var root = document.getElementById('cfx-ai');
+    var modal = document.getElementById('cf-ai-key-modal');
+
+    if (root && !root.dataset.bound) {
+      root.dataset.bound = '1';
+
+      root.addEventListener('click', function (e) {
+        var t = e.target;
+
+        var tabBtn = t.closest('.cfx-tab');
+        if (tabBtn) { _switchAITab(tabBtn.dataset.tab); return; }
+
+        var rateBtn = t.closest('[data-rate]');
+        if (rateBtn) { _aiSetTargetRate(parseInt(rateBtn.dataset.rate, 10)); _renderSpendingPlan(); return; }
+
+        var promptBtn = t.closest('[data-ai-prompt]');
+        if (promptBtn) { _handleAIAdvisorQuery(promptBtn.getAttribute('data-ai-prompt')); return; }
+
+        var actBtn = t.closest('[data-act]');
+        if (actBtn) {
+          var act = actBtn.dataset.act;
+          if (act === 'regen') { _aiRegenerate(); return; }
+          if (act === 'copy') {
+            var bubble = actBtn.closest('.cfx-msg__body').querySelector('.cfx-msg__bubble');
+            var txt = bubble ? bubble.innerText : '';
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(txt).then(function () { _showToast('Đã sao chép'); }, function () { _showToast('Không sao chép được'); });
+            }
+            return;
+          }
+        }
+
+        if (t.closest('#cfx-ai-new')) {
+          if (_aiState.isLoading) { _aiState.userAborted = true; _abortAIRequest(); }
+          _aiState.conversationHistory = [];
+          _aiState.currentResponse = '';
+          _aiState.lastError = null;
+          _saveAIState();
+          _renderChatHistory();
+          _showToast('Đã bắt đầu cuộc trò chuyện mới');
+          return;
+        }
+
+        if (t.closest('#cf-ai-settings-btn')) { _openAIKeyModal(); return; }
+
+        if (t.closest('#cf-ai-ask-btn')) {
+          if (_aiState.isLoading) { _aiState.userAborted = true; _abortAIRequest(); }
+          else _handleAIAdvisorQuery();
+        }
+      });
+
+      root.addEventListener('keydown', function (e) {
+        if (e.target && e.target.id === 'cf-ai-prompt' && e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
+          e.preventDefault();
+          _handleAIAdvisorQuery();
+        }
+      });
+
+      root.addEventListener('input', function (e) {
+        if (e.target && e.target.id === 'cf-ai-prompt') _autoGrowPrompt();
+      });
+
+      root.addEventListener('change', function (e) {
+        if (e.target && e.target.id === 'cf-ai-provider') {
+          _aiState.provider = e.target.value;
+          _saveAIState();
+          _updateAIStatus();
+        }
+      });
     }
 
-    if (topExpense) {
-      var pct = ((topExpense[1] / expense) * 100).toFixed(1);
-      insights.push('📊 Khoản chi lớn nhất: ' + topExpense[0] + ' (' + _formatVND(topExpense[1]) + ', ' + pct + '% tổng chi).');
+    if (modal && !modal.dataset.bound) {
+      modal.dataset.bound = '1';
+      var on = function (id, fn) { var el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
+      on('cf-key-close', _closeAIKeyModal);
+      on('cf-key-close-bottom', _closeAIKeyModal);
+      on('cf-key-save', _saveAIKeys);
+      on('cf-key-clear', _clearAIKeys);
+      modal.addEventListener('click', function (e) { if (e.target === modal) _closeAIKeyModal(); });
     }
 
-    if (cashBalance > bankBalance * 2) {
-      insights.push('💵 Tiền mặt (' + _formatVND(cashBalance) + ') gấp đôi ngân hàng. Cân nhắc chuyển khoản để an toàn hơn.');
-    } else if (bankBalance > cashBalance * 5) {
-      insights.push('🏦 Ngân hàng chiếm đa số. Giữ tiền mặt đủ chi tiêu hàng ngày (~3-5M) để tối ưu dòng tiền.');
+    if (!_aiEscBound) {
+      _aiEscBound = true;
+      document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        var m = document.getElementById('cf-ai-key-modal');
+        if (m && m.style.display === 'flex') _closeAIKeyModal();
+      });
     }
-
-    // Randomly pick one insight to show
-    var insight = insights[Math.floor(Math.random() * insights.length)];
-    _showAIInsight(insight);
   }
 
   // ═══════════════════════════════════════════════════════════════
