@@ -217,6 +217,27 @@ const cashflowModule = (function () {
       chartYear:           'Year',
       viewChart:           'Chart',
       viewHeatmap:         'Heatmap',
+      cfcDay:              'Day',
+      cfcPeriods:          '{n} periods',
+      cfcTotalIn:          'Total income',
+      cfcTotalOut:         'Total expense',
+      cfcNetFlow:          'Net cash flow',
+      cfcLatest:           'Latest period',
+      cfcLastExpense:      'Spent in {label}',
+      cfcAvgPerPeriod:     'avg {v} / period',
+      cfcPeak:             'Peak {label} · {v}',
+      cfcSavingsRate:      'Savings rate {v}',
+      cfcVsPrev:           'vs previous',
+      cfcOngoing:          'in progress',
+      cfcNet:              'Net',
+      cfcAvgExpense:       'Avg expense',
+      cfcCash:             'Cash',
+      cfcBank:             'Bank',
+      cfcRate:             'Savings rate',
+      cfcEmptyTitle:       'No data to chart yet',
+      cfcEmptyHint:        'Add a few transactions and your trend will appear here.',
+      cfcHint:             'Click a legend item to show or hide it · highlighted column = period you are viewing',
+      cfcAria:             'Income versus expense chart, {n} periods',
       heatmapDailyLimit:   'Limit:',
       heatmapPerDay:       '/ day',
       heatmapLevel0:       'Safe',
@@ -466,6 +487,27 @@ const cashflowModule = (function () {
       chartYear:           'Năm',
       viewChart:           'Biểu đồ',
       viewHeatmap:         'Lịch nhiệt',
+      cfcDay:              'Ngày',
+      cfcPeriods:          '{n} kỳ',
+      cfcTotalIn:          'Tổng thu',
+      cfcTotalOut:         'Tổng chi',
+      cfcNetFlow:          'Dòng tiền ròng',
+      cfcLatest:           'Kỳ gần nhất',
+      cfcLastExpense:      'Đã chi {label}',
+      cfcAvgPerPeriod:     'TB {v} / kỳ',
+      cfcPeak:             'Cao nhất {label} · {v}',
+      cfcSavingsRate:      'Tỷ lệ để dành {v}',
+      cfcVsPrev:           'so với kỳ trước',
+      cfcOngoing:          'đang diễn ra',
+      cfcNet:              'Ròng',
+      cfcAvgExpense:       'Chi trung bình',
+      cfcCash:             'Tiền mặt',
+      cfcBank:             'Ngân hàng',
+      cfcRate:             'Tỷ lệ để dành',
+      cfcEmptyTitle:       'Chưa có dữ liệu để vẽ biểu đồ',
+      cfcEmptyHint:        'Hãy thêm vài giao dịch, xu hướng thu chi sẽ hiện ở đây.',
+      cfcHint:             'Bấm vào chú giải để ẩn/hiện · cột sáng = kỳ bạn đang xem',
+      cfcAria:             'Biểu đồ thu nhập và chi phí, {n} kỳ',
       heatmapDailyLimit:   'Hạn mức:',
       heatmapPerDay:       '/ ngày',
       heatmapLevel0:       'An toàn',
@@ -2502,13 +2544,14 @@ function _restoreAIState() {
 
 .hub-cf-view-toggle-btn:hover {
   color: var(--text-primary);
-  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+  background: color-mix(in srgb, var(--primary, var(--accent-primary)) 10%, transparent);
 }
 
 .hub-cf-view-toggle-btn.active {
-  color: var(--bg-deep);
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-  box-shadow: 0 2px 12px color-mix(in srgb, var(--accent-primary) 40%, transparent);
+  color: var(--bg-deep, #0a0a0f);
+  background: var(--primary, var(--accent-primary));
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--primary, var(--accent-primary)) 40%, transparent);
+  font-weight: 700;
 }
 
 .hub-cf-view-toggle-btn:focus-visible {
@@ -3008,31 +3051,44 @@ function _restoreAIState() {
   </div>
 
   <!-- ═══ REAL-TIME CHART / HEATMAP ═══ -->
-  <div class="hub-cf-chart-section glass-card">
-    <div class="hub-cf-chart-header">
-      <h4 class="hub-cf-chart-title" data-i18n="chartTitle">${_t('chartTitle')}</h4>
+  <div class="hub-cf-chart-section glass-card cfc">
+    <div class="hub-cf-chart-header cfc-head">
+      <div class="cfc-titles">
+        <h4 class="hub-cf-chart-title" data-i18n="chartTitle">${_t('chartTitle')}</h4>
+        <p class="cfc-sub" id="cfc-sub"></p>
+      </div>
 
       <div class="hub-cf-view-toggle" role="group" aria-label="View Mode">
-        <button class="hub-cf-view-toggle-btn active" data-view="chart" aria-pressed="true">
-          <span class="hub-cf-view-toggle-icon">📊</span>
+        <button type="button" class="hub-cf-view-toggle-btn active" data-view="chart" aria-pressed="true">
+          <svg class="hub-cf-view-toggle-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
           <span class="hub-cf-view-toggle-label" data-i18n="viewChart">${_t('viewChart')}</span>
         </button>
-        <button class="hub-cf-view-toggle-btn" data-view="heatmap" aria-pressed="false">
-          <span class="hub-cf-view-toggle-icon">🔲</span>
+        <button type="button" class="hub-cf-view-toggle-btn" data-view="heatmap" aria-pressed="false">
+          <svg class="hub-cf-view-toggle-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
           <span class="hub-cf-view-toggle-label" data-i18n="viewHeatmap">${_t('viewHeatmap')}</span>
         </button>
       </div>
 
-      <select class="hub-cf-chart-filter" id="hub-cf-chart-filter">
-        <option value="day" data-i18n="chartDay">${_t('chartDay')}</option>
-        <option value="month" selected data-i18n="chartMonth">${_t('chartMonth')}</option>
-        <option value="year" data-i18n="chartYear">${_t('chartYear')}</option>
+      <select class="hub-cf-chart-filter" id="hub-cf-chart-filter" aria-label="${_escHtml(_t('chartTitle'))}">
+        <option value="day" ${_chartFilter === 'day' ? 'selected' : ''} data-i18n="chartDay">${_t('chartDay')}</option>
+        <option value="month" ${_chartFilter === 'month' ? 'selected' : ''} data-i18n="chartMonth">${_t('chartMonth')}</option>
+        <option value="year" ${_chartFilter === 'year' ? 'selected' : ''} data-i18n="chartYear">${_t('chartYear')}</option>
       </select>
     </div>
 
     <!-- Chart View -->
-    <div class="hub-cf-chart-canvas-wrap" id="hub-cf-chart-view" style="display: block;">
-      <canvas id="hub-cf-chart-canvas"></canvas>
+    <div class="hub-cf-chart-canvas-wrap cfc-view" id="hub-cf-chart-view" style="display: block;">
+      <div class="cfc-kpis" id="cfc-kpis"></div>
+      <div class="cfc-legend" id="cfc-legend" role="group" aria-label="Legend"></div>
+      <div class="cfc-canvas-box">
+        <canvas id="hub-cf-chart-canvas" role="img"></canvas>
+        <div class="cfc-empty" id="cfc-empty" hidden>
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+          <strong data-i18n="cfcEmptyTitle">${_t('cfcEmptyTitle')}</strong>
+          <span data-i18n="cfcEmptyHint">${_t('cfcEmptyHint')}</span>
+        </div>
+      </div>
+      <p class="cfc-hint" id="cfc-hint"></p>
     </div>
 
     <!-- Heatmap View -->
@@ -5239,6 +5295,9 @@ ${_aiShellHTML()}
     // Chart filter change — re-render dashboard totals + chart
     var filterEl = _qs('#hub-cf-chart-filter');
     if (filterEl) {
+      // Đồng bộ ô chọn với trạng thái thật (render() dựng lại HTML mỗi lần đổi tab, còn _chartFilter thì giữ nguyên)
+      if (_chartFilter !== 'day' && _chartFilter !== 'month' && _chartFilter !== 'year') _chartFilter = 'month';
+      filterEl.value = _chartFilter;
       filterEl.addEventListener('change', function () {
         _chartFilter = this.value;
         updateDashboardTotals();
@@ -7337,124 +7396,479 @@ ${_aiShellHTML()}
     var ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Get computed CSS variable colors for chart
-    var style = getComputedStyle(document.documentElement);
-    var incomeColor = style.getPropertyValue('--success').trim() || '#00e676';
-    var expenseColor = style.getPropertyValue('--danger').trim() || '#ff5252';
-    var textColor = style.getPropertyValue('--text-primary').trim() || '#e0e0e0';
-    var textMuted = style.getPropertyValue('--text-muted').trim() || '#888';
+    var reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    _cfcPal = _cfcPalette();
+    var mono = _cfcMono();
 
     _chart = new Chart(ctx, {
       type: 'bar',
       data: {
         labels: [],
         datasets: [
-          {
-            label: _t('chartIncome'),
-            data: [],
-            backgroundColor: incomeColor + 'b3',
-            borderColor: incomeColor,
-            borderWidth: 1,
-            borderRadius: 4,
-            borderSkipped: false
+          { // 0 — Thu nhập
+            type: 'bar', label: _t('chartIncome'), data: [], order: 2,
+            backgroundColor: _cfcBarFill('income'), hoverBackgroundColor: function () { return _cfcRgba(_cfcPal.income, 1); },
+            borderWidth: 0, borderRadius: 6, borderSkipped: 'bottom',
+            barPercentage: 0.82, categoryPercentage: 0.72, maxBarThickness: 36
           },
-          {
-            label: _t('chartExpense'),
-            data: [],
-            backgroundColor: expenseColor + 'b3',
-            borderColor: expenseColor,
-            borderWidth: 1,
-            borderRadius: 4,
-            borderSkipped: false
+          { // 1 — Chi phí
+            type: 'bar', label: _t('chartExpense'), data: [], order: 2,
+            backgroundColor: _cfcBarFill('expense'), hoverBackgroundColor: function () { return _cfcRgba(_cfcPal.expense, 1); },
+            borderWidth: 0, borderRadius: 6, borderSkipped: 'bottom',
+            barPercentage: 0.82, categoryPercentage: 0.72, maxBarThickness: 36
+          },
+          { // 2 — Dòng tiền ròng
+            type: 'line', label: _t('cfcNet'), data: [], order: 0,
+            borderWidth: 2, tension: 0, cubicInterpolationMode: 'monotone', fill: false,
+            pointRadius: function (c) { return _cfcPointRadius(c); }, pointHoverRadius: 6, pointBorderWidth: 2, pointHitRadius: 12
+          },
+          { // 3 — Chi trung bình (đường mốc)
+            type: 'line', label: _t('cfcAvgExpense'), data: [], order: 1,
+            borderWidth: 1.25, borderDash: [6, 5], tension: 0, fill: false,
+            pointRadius: 0, pointHoverRadius: 0, pointHitRadius: 0
           }
         ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        interaction: {
-          intersect: false,
-          mode: 'index'
-        },
+        layout: { padding: { top: 22, right: 6, bottom: 0, left: 0 } },
+        animation: { duration: reduceMotion ? 0 : 650, easing: 'easeOutQuart' },
+        interaction: { mode: 'index', intersect: false },
         plugins: {
-          legend: {
-            labels: {
-              color: textColor,
-              usePointStyle: true,
-              padding: 16,
-              font: { size: 12 }
-            }
-          },
+          legend: { display: false },
           tooltip: {
+            padding: 12, cornerRadius: 12, boxPadding: 5, caretSize: 6, caretPadding: 10,
+            displayColors: true, usePointStyle: true,
+            titleFont: { family: mono, size: 11, weight: '700' },
+            bodyFont: { family: mono, size: 11.5 },
+            titleMarginBottom: 8, bodySpacing: 5, footerMarginTop: 8,
+            filter: function (item) { return item.datasetIndex < 3; },
+            itemSort: function (a, b) { return a.datasetIndex - b.datasetIndex; },
             callbacks: {
-              label: function (ctx) {
-                return ctx.dataset.label + ': ' + (ctx.raw || 0).toLocaleString('vi-VN') + ' ₫';
+              title: function (items) {
+                return items.length ? _cfcTitle(items[0].label) : '';
+              },
+              label: function (c) {
+                var v = Number(c.raw) || 0;
+                var txt = c.datasetIndex === 2 ? (v >= 0 ? '+' : '') + _formatVNFull(v) : _formatVNFull(v);
+                return ' ' + c.dataset.label + ': ' + txt;
+              },
+              labelColor: function (c) {
+                var col = c.datasetIndex === 0 ? _cfcPal.income : (c.datasetIndex === 1 ? _cfcPal.expense : _cfcPal.net);
+                return { borderColor: col, backgroundColor: col, borderWidth: 0, borderRadius: 3 };
+              },
+              labelPointStyle: function (c) { return { pointStyle: c.datasetIndex === 2 ? 'rectRot' : 'rectRounded', rotation: 0 }; },
+              afterBody: function (items) {
+                if (!items.length || !_cfcCur) return [];
+                var i = items[0].dataIndex, s = _cfcCur.s, out = [];
+                var inc = s.income[i] || 0, exp = s.expense[i] || 0;
+                if (inc > 0) out.push('');
+                if (inc > 0) out.push(' ' + _t('cfcRate') + ': ' + ((inc - exp) / inc * 100).toFixed(1) + '%');
+                var cin = s.cashIn[i] || 0, cout = s.cashOut[i] || 0, bin = s.bankIn[i] || 0, bout = s.bankOut[i] || 0;
+                if (cin + cout + bin + bout > 0) {
+                  if (inc <= 0) out.push('');
+                  out.push(' ' + _t('cfcCash') + ': +' + _formatCompactVND(cin) + ' / −' + _formatCompactVND(cout));
+                  out.push(' ' + _t('cfcBank') + ': +' + _formatCompactVND(bin) + ' / −' + _formatCompactVND(bout));
+                }
+                return out;
               }
             }
           }
         },
         scales: {
           x: {
-            ticks: {
-              color: textMuted,
-              font: { size: 11 }
-            },
-            grid: {
-              color: 'rgba(128, 128, 128, 0.15)'
-            }
+            grid: { display: false, drawBorder: false },
+            border: { display: false },
+            ticks: { maxRotation: 0, autoSkip: true, font: { family: mono, size: 10 }, padding: 8 }
           },
           y: {
-            ticks: {
-              color: textMuted,
-              font: { size: 11 },
-              callback: function (val) {
-                if (val >= 1e9) return (val / 1e9).toFixed(1) + 'B';
-                if (val >= 1e6) return (val / 1e6).toFixed(1) + 'M';
-                if (val >= 1e3) return (val / 1e3).toFixed(0) + 'k';
-                return val;
-              }
-            },
+            beginAtZero: true, grace: '8%',
             grid: {
-              color: 'rgba(128, 128, 128, 0.15)'
+              drawBorder: false, borderDash: [3, 5],
+              color: function (c) { return c.tick && c.tick.value === 0 ? _cfcRgba(_cfcPal.text, 0.28) : _cfcRgba(_cfcPal.text, 0.07); }
             },
-            beginAtZero: true
+            border: { display: false, dash: [3, 5] },
+            ticks: {
+              maxTicksLimit: 6, padding: 10, font: { family: mono, size: 10 },
+              callback: function (val) { return val === 0 ? '0' : (val < 0 ? '−' : '') + _formatCompactVND(val); }
+            }
           }
         }
-      }
+      },
+      plugins: [_cfcCrosshairPlugin, _cfcMarkersPlugin]
     });
 
+    _cfcBindLegend();
     _updateChart();
+  }
+
+  // ── Chart v2: state ──────────────────────────────────────────
+  var _cfcPal = null;                                   // bảng màu hiện hành (đọc từ theme)
+  var _cfcCur = null;                                   // { s, st, curIdx } của lần vẽ gần nhất
+  var _cfcHidden = { income: false, expense: false, net: false, avg: false };
+  var _cfcKeys = ['income', 'expense', 'net', 'avg'];
+
+  /** Chấm trên đường Ròng: ẩn ở kỳ không có giao dịch hoặc khi quá nhiều điểm */
+  function _cfcPointRadius(c) {
+    if (!_cfcCur) return 3.5;
+    var i = c.dataIndex, s = _cfcCur.s;
+    if (_cfcCur.st.n > 20) return 0;
+    return ((s.income[i] || 0) + (s.expense[i] || 0)) > 0 ? 3.5 : 0;
+  }
+
+  function _cfcMono() {
+    var f = getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim();
+    return f || "'JetBrains Mono', monospace";
+  }
+
+  function _cfcPalette() {
+    var st = getComputedStyle(document.documentElement);
+    function v(name, fb) { return st.getPropertyValue(name).trim() || fb; }
+    return {
+      income: v('--success', '#44ff88'),
+      expense: v('--danger', '#ff4466'),
+      net: v('--warning', '#f5c451'),
+      text: v('--text-primary', '#e8e8ed'),
+      muted: v('--text-muted', '#8b8b9e'),
+      surface: v('--bg-elevated', '#161616'),
+      accent: v('--primary', v('--accent-primary', '#00f0ff'))
+    };
+  }
+
+  var _cfcColorCtx = null;
+  function _cfcRGB(color) {
+    var c = String(color || '').trim(), m;
+    if ((m = c.match(/^#([0-9a-f]{3})$/i))) {
+      return [parseInt(m[1][0] + m[1][0], 16), parseInt(m[1][1] + m[1][1], 16), parseInt(m[1][2] + m[1][2], 16)];
+    }
+    if ((m = c.match(/^#([0-9a-f]{6})/i))) {
+      return [parseInt(m[1].substr(0, 2), 16), parseInt(m[1].substr(2, 2), 16), parseInt(m[1].substr(4, 2), 16)];
+    }
+    if ((m = c.match(/^rgba?\(([^)]+)\)/i))) {
+      var p = m[1].split(/[ ,\/]+/).map(parseFloat);
+      if (p.length >= 3 && !isNaN(p[0])) return [p[0], p[1], p[2]];
+    }
+    try { // hsl(), color-mix(), tên màu… → để trình duyệt chuẩn hoá
+      if (!_cfcColorCtx) { var cv = document.createElement('canvas'); cv.width = cv.height = 1; _cfcColorCtx = cv.getContext('2d'); }
+      if (_cfcColorCtx) {
+        _cfcColorCtx.fillStyle = '#808080'; _cfcColorCtx.fillStyle = c;
+        var s = _cfcColorCtx.fillStyle;
+        if (s !== c && s.charAt(0) === '#') return _cfcRGB(s);
+        if (/^rgb/i.test(s)) return _cfcRGB(s);
+      }
+    } catch (_) {}
+    return [128, 128, 128];
+  }
+
+  function _cfcRgba(color, a) { var c = _cfcRGB(color); return 'rgba(' + Math.round(c[0]) + ',' + Math.round(c[1]) + ',' + Math.round(c[2]) + ',' + a + ')'; }
+
+  /** Nền cột dạng gradient dọc (đậm ở đỉnh, mờ dần xuống chân) */
+  function _cfcBarFill(key) {
+    return function (c) {
+      var chart = c.chart, area = chart.chartArea, col = _cfcPal[key];
+      if (!area) return _cfcRgba(col, 0.75);
+      var g = chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
+      g.addColorStop(0, _cfcRgba(col, 0.95));
+      g.addColorStop(1, _cfcRgba(col, 0.22));
+      return g;
+    };
+  }
+
+  /** Áp màu theo theme hiện tại (gọi mỗi lần cập nhật nên đổi theme là tự đổi màu) */
+  function _cfcApplyTheme() {
+    if (!_chart) return;
+    var P = _cfcPal, ds = _chart.data.datasets, o = _chart.options;
+
+    ds[2].borderColor = P.net;
+    ds[2].backgroundColor = P.net;
+    ds[2].pointBackgroundColor = P.surface;
+    ds[2].pointBorderColor = P.net;
+    ds[2].pointHoverBackgroundColor = P.net;
+    ds[2].pointHoverBorderColor = P.surface;
+    ds[3].borderColor = _cfcRgba(P.expense, 0.75);
+    ds[3].backgroundColor = _cfcRgba(P.expense, 0.75);
+
+    var tip = o.plugins.tooltip;
+    tip.backgroundColor = _cfcRgba(P.surface, 0.97);
+    tip.borderColor = _cfcRgba(P.accent, 0.35);
+    tip.borderWidth = 1;
+    tip.titleColor = P.text;
+    tip.bodyColor = _cfcRgba(P.text, 0.88);
+    tip.footerColor = P.muted;
+
+    o.scales.x.ticks.color = P.muted;
+    o.scales.y.ticks.color = P.muted;
+    o.scales.x.ticks.maxTicksLimit = (_chartFilter === 'day' || _chartFilter === 'month') ? 10 : 24;
+  }
+
+  // ── Chart v2: plugins (vẽ trực tiếp lên canvas) ──────────────
+  var _cfcCrosshairPlugin = {
+    id: 'cfcCrosshair',
+    beforeDatasetsDraw: function (chart) {
+      var tt = chart.tooltip;
+      if (!tt || typeof tt.getActiveElements !== 'function' || !_cfcPal) return;
+      var act = tt.getActiveElements();
+      if (!act.length) return;
+      var a = chart.chartArea, n = chart.data.labels.length;
+      if (!n) return;
+      var w = Math.min((a.right - a.left) / n, 140);
+      var x = chart.scales.x.getPixelForValue(act[0].index);
+      var ctx = chart.ctx;
+      ctx.save();
+      ctx.fillStyle = _cfcRgba(_cfcPal.text, 0.06);
+      ctx.fillRect(x - w / 2, a.top, w, a.bottom - a.top);
+      ctx.restore();
+    }
+  };
+
+  var _cfcMarkersPlugin = {
+    id: 'cfcMarkers',
+    beforeDatasetsDraw: function (chart) { // vệt sáng đánh dấu "kỳ đang xem"
+      if (!_cfcCur || _cfcCur.curIdx < 0 || !_cfcPal) return;
+      var a = chart.chartArea, n = chart.data.labels.length;
+      if (!n) return;
+      var w = Math.min((a.right - a.left) / n, 140);
+      var x = chart.scales.x.getPixelForValue(_cfcCur.curIdx);
+      var ctx = chart.ctx;
+      ctx.save();
+      var g = ctx.createLinearGradient(0, a.top, 0, a.bottom);
+      g.addColorStop(0, _cfcRgba(_cfcPal.accent, 0.14));
+      g.addColorStop(1, _cfcRgba(_cfcPal.accent, 0.02));
+      ctx.fillStyle = g;
+      ctx.fillRect(x - w / 2, a.top, w, a.bottom - a.top);
+      ctx.fillStyle = _cfcPal.accent;       // mũi tên nhỏ phía trên
+      ctx.beginPath();
+      ctx.moveTo(x - 4, a.top - 9); ctx.lineTo(x + 4, a.top - 9); ctx.lineTo(x, a.top - 3); ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    },
+    afterDatasetsDraw: function (chart) { // nhãn "đỉnh chi tiêu"
+      if (!_cfcCur || !_cfcPal) return;
+      var st = _cfcCur.st;
+      if (st.peakIdx < 0 || st.n < 3 || _cfcHidden.expense) return;
+      var meta = chart.getDatasetMeta(1);
+      var bar = meta && meta.data && meta.data[st.peakIdx];
+      if (!bar) return;
+      var incMeta = chart.getDatasetMeta(0);
+      var incBar = (!_cfcHidden.income && incMeta && incMeta.data) ? incMeta.data[st.peakIdx] : null;
+      var topY = incBar ? Math.min(bar.y, incBar.y) : bar.y;
+      var cx = incBar ? (bar.x + incBar.x) / 2 : bar.x;
+      var ctx = chart.ctx, a = chart.chartArea;
+      var text = _formatCompactVND(st.peakVal);
+      ctx.save();
+      ctx.font = '600 10px ' + _cfcMono();
+      var tw = ctx.measureText(text).width, padX = 7, h = 18, w = tw + padX * 2;
+      var x = Math.min(Math.max(cx - w / 2, a.left), a.right - w);
+      var y = Math.max(topY - h - 6, 2);
+      var r = 9;
+      ctx.beginPath();
+      ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+      ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+      ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+      ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r); ctx.closePath();
+      ctx.fillStyle = _cfcRgba(_cfcPal.expense, 0.16);
+      ctx.fill();
+      ctx.strokeStyle = _cfcRgba(_cfcPal.expense, 0.55);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = _cfcPal.expense;
+      ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
+      ctx.fillText(text, x + w / 2, y + h / 2 + 0.5);
+      ctx.restore();
+    }
+  };
+
+  // ── Chart v2: dữ liệu ────────────────────────────────────────
+  var _CFC_KEYS = ['income', 'expense', 'cashIn', 'cashOut', 'bankIn', 'bankOut'];
+
+  function _cfcPad(n) { return String(n).padStart(2, '0'); }
+
+  /** Tháng đang xem có phải tháng hiện tại không (chế độ 'month' = các ngày của đúng tháng này) */
+  function _cfcViewingCurrentMonth() {
+    var ym = _currentMonth || _currentYearMonth(), now = new Date();
+    return ym.year === now.getFullYear() && ym.month === now.getMonth() + 1;
+  }
+
+  /** Lấy dữ liệu từ _dataZoom() rồi lấp các tháng/năm không có giao dịch để trục thời gian liên tục */
+  function _cfcBuildSeries() {
+    var d = _dataZoom();
+    var s = {
+      filter: _chartFilter, labels: d.labels.slice(),
+      income: d.incomeData.slice(), expense: d.expenseData.slice(),
+      cashIn: d.cashIncomeData.slice(), cashOut: d.cashExpenseData.slice(),
+      bankIn: d.bankIncomeData.slice(), bankOut: d.bankExpenseData.slice()
+    };
+    var n = s.labels.length;
+    if (n === 0 || _chartFilter !== 'year') return s;   // 'day' / 'month' là chuỗi ngày liên tục, không cần lấp
+
+    var now = new Date(), idxOf, labelOf, endMin;
+    idxOf = function (l) { return parseInt(l, 10); };
+    labelOf = function (k) { return String(k); };
+    endMin = now.getFullYear();
+
+    var map = {};
+    s.labels.forEach(function (l, i) { map[idxOf(l)] = i; });
+    var first = idxOf(s.labels[0]);
+    var last = Math.max(idxOf(s.labels[n - 1]), endMin);
+    var span = 20;                                       // tối đa 20 năm gần nhất
+    if (last - first + 1 > span) first = last - span + 1;
+
+    var res = { filter: s.filter, labels: [] };
+    _CFC_KEYS.forEach(function (k) { res[k] = []; });
+    for (var k = first; k <= last; k++) {
+      res.labels.push(labelOf(k));
+      var i = map[k];
+      _CFC_KEYS.forEach(function (key) { res[key].push(i === undefined ? 0 : s[key][i]); });
+    }
+    return res;
+  }
+
+  function _cfcStats(s) {
+    var n = s.labels.length;
+    var st = { n: n, totalIn: 0, totalOut: 0, active: 0, peakIdx: -1, peakVal: 0 };
+    s.net = [];
+    for (var i = 0; i < n; i++) {
+      var inc = s.income[i] || 0, exp = s.expense[i] || 0;
+      s.net.push(inc - exp);
+      st.totalIn += inc; st.totalOut += exp;
+      if (inc + exp > 0) st.active++;
+      if (exp > st.peakVal) { st.peakVal = exp; st.peakIdx = i; }
+    }
+    st.net = st.totalIn - st.totalOut;
+    st.rate = st.totalIn > 0 ? (st.net / st.totalIn) * 100 : null;
+    st.avgIn = st.active ? st.totalIn / st.active : 0;
+    st.avgOut = st.active ? st.totalOut / st.active : 0;
+    st.lastOut = n ? (s.expense[n - 1] || 0) : 0;
+    var prevOut = n > 1 ? (s.expense[n - 2] || 0) : 0;
+    st.delta = prevOut > 0 ? ((st.lastOut - prevOut) / prevOut) * 100 : null;
+
+    var now = new Date(), lastLabel = n ? s.labels[n - 1] : '';
+    st.ongoing = s.filter === 'day' ? n > 0
+      : (s.filter === 'year' ? lastLabel === String(now.getFullYear())
+        : (n > 0 && _cfcViewingCurrentMonth()));
+    return st;
+  }
+
+  function _cfcCurrentIndex(s) {
+    if (!s.labels.length) return -1;
+    if (s.filter === 'day') return s.labels.length - 1;
+    var ym = _currentMonth || _currentYearMonth();
+    if (s.filter === 'month') return _cfcViewingCurrentMonth() ? s.labels.length - 1 : -1;   // đánh dấu hôm nay; tháng quá khứ không đánh dấu
+    return s.labels.indexOf(String(ym.year));
+  }
+
+  function _cfcTitle(label) {
+    if (_chartFilter === 'day' || _chartFilter === 'month') return _t('cfcDay') + ' ' + label;   // nhãn là ngày DD/MM
+    return _t('cfdYear') + ' ' + label;
+  }
+
+  function _cfcFill(str, vars) {
+    return String(str).replace(/\{(\w+)\}/g, function (_, k) { return vars[k] !== undefined ? vars[k] : ''; });
+  }
+
+  // ── Chart v2: phần HTML phụ (thống kê, chú giải, tiêu đề phụ) ─
+  function _cfcRenderExtras(s, st, hasData) {
+    var P = _cfcPal, e = _escHtml;
+
+    var sub = _qs('#cfc-sub');
+    if (sub) {
+      var unit = _chartFilter === 'day' ? _t('chartDay') : (_chartFilter === 'year' ? _t('chartYear') : _t('chartMonth'));
+      sub.textContent = hasData
+        ? unit + ' · ' + _cfcFill(_t('cfcPeriods'), { n: st.n }) + ' · ' + s.labels[0] + (st.n > 1 ? ' – ' + s.labels[st.n - 1] : '')
+        : unit;
+    }
+
+    var canvas = _qs('#hub-cf-chart-canvas');
+    if (canvas) canvas.setAttribute('aria-label', hasData ? _cfcFill(_t('cfcAria'), { n: st.n }) : _t('cfcEmptyTitle'));
+
+    var kpis = _qs('#cfc-kpis');
+    if (kpis) {
+      if (!hasData) { kpis.innerHTML = ''; }
+      else {
+        var netPos = st.net >= 0;
+        var delta = '';
+        if (st.delta !== null) {
+          var up = st.delta > 0;
+          delta = '<span class="cfc-delta ' + (Math.abs(st.delta) < 1 ? '' : (up ? 'is-bad' : 'is-good')) + '">' + (up ? '▲' : '▼') + ' ' + Math.abs(Math.round(st.delta)) + '%</span> ' + e(_t('cfcVsPrev'));
+        } else delta = e(_t('cfcLatest'));
+        kpis.innerHTML =
+          _cfcKpi('in', _t('cfcTotalIn'), _formatVNFull(st.totalIn), _cfcFill(_t('cfcAvgPerPeriod'), { v: _formatCompactVND(st.avgIn) }), P.income) +
+          _cfcKpi('out', _t('cfcTotalOut'), _formatVNFull(st.totalOut), st.peakIdx >= 0 ? _cfcFill(_t('cfcPeak'), { label: s.labels[st.peakIdx], v: _formatCompactVND(st.peakVal) }) : '—', P.expense) +
+          _cfcKpi('net', _t('cfcNetFlow'), (netPos ? '+' : '') + _formatVNFull(st.net), st.rate !== null ? _cfcFill(_t('cfcSavingsRate'), { v: st.rate.toFixed(1) + '%' }) : '—', netPos ? P.income : P.expense) +
+          _cfcKpi('last', _cfcFill(_t('cfcLastExpense'), { label: s.labels[st.n - 1] }), _formatVNFull(st.lastOut), delta + (st.ongoing ? ' · <em>' + e(_t('cfcOngoing')) + '</em>' : ''), P.net, true);
+      }
+    }
+
+    var lg = _qs('#cfc-legend');
+    if (lg) {
+      var items = [
+        ['income', _t('chartIncome'), P.income, 'bar'],
+        ['expense', _t('chartExpense'), P.expense, 'bar'],
+        ['net', _t('cfcNet'), P.net, 'line'],
+        ['avg', _t('cfcAvgExpense'), P.expense, 'dash']
+      ];
+      lg.innerHTML = items.map(function (it) {
+        var off = !!_cfcHidden[it[0]];
+        return '<button type="button" class="cfc-chip' + (off ? ' is-off' : '') + '" data-key="' + it[0] + '" aria-pressed="' + (!off) + '">' +
+          '<i class="cfc-swatch cfc-swatch--' + it[3] + '" style="--c:' + e(it[2]) + '"></i><span>' + e(it[1]) + '</span></button>';
+      }).join('');
+    }
+
+    var hint = _qs('#cfc-hint');
+    if (hint) hint.textContent = _t('cfcHint');
+  }
+
+  function _cfcKpi(kind, label, value, sub, color, subIsHtml) {
+    return '<div class="cfc-kpi cfc-kpi--' + kind + '" style="--c:' + _escHtml(color) + '">' +
+      '<span class="cfc-kpi__label">' + _escHtml(label) + '</span>' +
+      '<strong class="cfc-kpi__value">' + _escHtml(value) + '</strong>' +
+      '<span class="cfc-kpi__sub">' + (subIsHtml ? sub : _escHtml(sub)) + '</span>' +
+    '</div>';
+  }
+
+  function _cfcBindLegend() {
+    var lg = _qs('#cfc-legend');
+    if (!lg || lg.dataset.bound) return;
+    lg.dataset.bound = '1';
+    lg.addEventListener('click', function (ev) {
+      var chip = ev.target.closest('.cfc-chip');
+      if (!chip) return;
+      var key = chip.getAttribute('data-key');
+      if (!(key in _cfcHidden)) return;
+      _cfcHidden[key] = !_cfcHidden[key];
+      chip.classList.toggle('is-off', _cfcHidden[key]);
+      chip.setAttribute('aria-pressed', String(!_cfcHidden[key]));
+      if (_chart) {
+        _chart.data.datasets[_cfcKeys.indexOf(key)].hidden = _cfcHidden[key];
+        _chart.update();
+      }
+    });
   }
 
   function _updateChart() {
     if (!_chart || !_chart.canvas) return;
 
-    var data = _dataZoom();
-    _chart.data.labels = data.labels;
-    _chart.data.datasets[0].label = _t('chartIncome');
-    _chart.data.datasets[1].label = _t('chartExpense');
-    _chart.data.datasets[0].data = data.incomeData;
-    _chart.data.datasets[1].data = data.expenseData;
-    // ... giữ nguyên phần còn lại của _updateChart()
+    _cfcPal = _cfcPalette();
+    var s = _cfcBuildSeries();
+    var st = _cfcStats(s);
+    var hasData = st.n > 0 && (st.totalIn + st.totalOut) > 0;
+    _cfcCur = { s: s, st: st, curIdx: _cfcCurrentIndex(s) };
 
-    // Toggle chart type: line for day-level detail, bar for month/year aggregation
-    var isDayView = _chartFilter === 'day';
-    _chart.config.type = isDayView ? 'line' : 'bar';
+    var ds = _chart.data.datasets;
+    _chart.data.labels = s.labels;
+    ds[0].label = _t('chartIncome');     ds[0].data = s.income;
+    ds[1].label = _t('chartExpense');    ds[1].data = s.expense;
+    ds[2].label = _t('cfcNet');          ds[2].data = s.net;
+    ds[3].label = _t('cfcAvgExpense');   ds[3].data = s.labels.map(function () { return st.avgOut; });
+    ds[2].cubicInterpolationMode = st.n > 20 ? 'default' : 'monotone';   // dữ liệu thưa theo ngày → nối thẳng cho dễ đọc
+    for (var i = 0; i < ds.length; i++) ds[i].hidden = !!_cfcHidden[_cfcKeys[i]];
 
-    // Adjust dataset styles per type
-    _chart.data.datasets[0].fill = isDayView ? false : undefined;
-    _chart.data.datasets[1].fill = isDayView ? false : undefined;
-    if (isDayView) {
-      _chart.data.datasets[0].tension = 0.3;
-      _chart.data.datasets[1].tension = 0.3;
-      _chart.data.datasets[0].pointRadius = 3;
-      _chart.data.datasets[1].pointRadius = 3;
-    } else {
-      _chart.data.datasets[0].tension = undefined;
-      _chart.data.datasets[1].tension = undefined;
-      _chart.data.datasets[0].pointRadius = undefined;
-      _chart.data.datasets[1].pointRadius = undefined;
-    }
+    _cfcApplyTheme();
+
+    var empty = _qs('#cfc-empty');
+    if (empty) empty.hidden = hasData;
+    _cfcRenderExtras(s, st, hasData);
 
     _chart.update();
   }
@@ -7526,41 +7940,43 @@ ${_aiShellHTML()}
       });
 
     } else if (_chartFilter === 'month') {
-      var monthMap = {};
-      trans.forEach(function (tx) {
-        var key = String(tx.month).padStart(2, '0') + '/' + tx.year;
-        if (!monthMap[key]) monthMap[key] = { income: 0, expense: 0, cashIncome: 0, cashExpense: 0, bankIncome: 0, bankExpense: 0, uncategorizedIncome: 0, uncategorizedExpense: 0, year: tx.year, month: tx.month };
+      // CHỈ tháng đang xem (cùng _currentMonth với các thẻ tổng kết): từng ngày 01 → hôm nay
+      // (tháng quá khứ: đến hết tháng). Tuyệt đối không lấy ngày/tháng của kỳ trước.
+      var ymM = _currentMonth || _currentYearMonth();
+      var nowM = new Date();
+      var isCurM = ymM.year === nowM.getFullYear() && ymM.month === nowM.getMonth() + 1;
+      var lastDayM = isCurM ? nowM.getDate() : new Date(ymM.year, ymM.month, 0).getDate();
+      var monthTx = trans.filter(function (tx) { return tx.year === ymM.year && tx.month === ymM.month; });
+      monthTx.forEach(function (tx) { if ((tx.day || 1) > lastDayM) lastDayM = Math.min(tx.day, 31); });   // giao dịch ghi trước ngày tương lai vẫn không bị rơi mất
+      var dayBuckets = [];
+      for (var dm = 1; dm <= lastDayM; dm++) {
+        dayBuckets.push({ income: 0, expense: 0, cashIncome: 0, cashExpense: 0, bankIncome: 0, bankExpense: 0, uncategorizedIncome: 0, uncategorizedExpense: 0 });
+      }
+      monthTx.forEach(function (tx) {
+        var b = dayBuckets[(tx.day || 1) - 1];
+        if (!b) return;
         if (tx.type === 'income') {
-          monthMap[key].income += tx.amount;
-          if (tx.source === 'cash') monthMap[key].cashIncome += tx.amount;
-          else if (tx.source === 'bank') monthMap[key].bankIncome += tx.amount;
-          else if (tx.source === 'uncategorized') monthMap[key].uncategorizedIncome += tx.amount;
+          b.income += tx.amount;
+          if (tx.source === 'cash') b.cashIncome += tx.amount;
+          else if (tx.source === 'bank') b.bankIncome += tx.amount;
+          else if (tx.source === 'uncategorized') b.uncategorizedIncome += tx.amount;
         } else {
-          monthMap[key].expense += tx.amount;
-          if (tx.source === 'cash') monthMap[key].cashExpense += tx.amount;
-          else if (tx.source === 'bank') monthMap[key].bankExpense += tx.amount;
-          else if (tx.source === 'uncategorized') monthMap[key].uncategorizedExpense += tx.amount;
+          b.expense += tx.amount;
+          if (tx.source === 'cash') b.cashExpense += tx.amount;
+          else if (tx.source === 'bank') b.bankExpense += tx.amount;
+          else if (tx.source === 'uncategorized') b.uncategorizedExpense += tx.amount;
         }
       });
-
-      var keys = Object.keys(monthMap).sort(function (a, b) {
-        var aParts = a.split('/'), bParts = b.split('/');
-        if (aParts[1] !== bParts[1]) return parseInt(aParts[1]) - parseInt(bParts[1]);
-        return parseInt(aParts[0]) - parseInt(bParts[0]);
-      });
-
-      keys.forEach(function (key) {
-        var m = monthMap[key];
-        var label = String(m.month).padStart(2, '0') + '/' + m.year;
-        labels.push(label);
-        incomeData.push(m.income);
-        expenseData.push(m.expense);
-        cashIncomeData.push(m.cashIncome);
-        cashExpenseData.push(m.cashExpense);
-        bankIncomeData.push(m.bankIncome);
-        bankExpenseData.push(m.bankExpense);
-        uncategorizedIncomeData.push(m.uncategorizedIncome);
-        uncategorizedExpenseData.push(m.uncategorizedExpense);
+      dayBuckets.forEach(function (b, bi) {
+        labels.push(String(bi + 1).padStart(2, '0') + '/' + String(ymM.month).padStart(2, '0'));
+        incomeData.push(b.income);
+        expenseData.push(b.expense);
+        cashIncomeData.push(b.cashIncome);
+        cashExpenseData.push(b.cashExpense);
+        bankIncomeData.push(b.bankIncome);
+        bankExpenseData.push(b.bankExpense);
+        uncategorizedIncomeData.push(b.uncategorizedIncome);
+        uncategorizedExpenseData.push(b.uncategorizedExpense);
       });
 
     } else if (_chartFilter === 'year') {
