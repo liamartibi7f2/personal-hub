@@ -16,42 +16,42 @@ const cashflowModule = (function () {
   // ── Constants ──
   const SAVE_DELAY  = 400;
 
-  // ── Category definitions (mirrors CashDuck Tracking.xlsx) ──
+// ── Category definitions (Bilingual: name = EN, nameVI = VI) ──
   const INCOME_CATEGORIES = [
-    { id: 'luong',             name: 'Lương',                nameVI: 'Lương' },
-    { id: 'kinh-doanh',        name: 'Kinh doanh, đầu tư',   nameVI: 'Kinh doanh, đầu tư' },
-    { id: 'lai-dau-tu',        name: '📈 Lãi & đầu tư',      nameVI: '📈 Lãi & đầu tư' },
-    { id: 'thu-nhap-bi-dong',  name: 'Thu nhập bị động',     nameVI: 'Thu nhập bị động' },
-    { id: 'tro-cap',           name: '🎁 Trợ cấp',           nameVI: '🎁 Trợ cấp' },
-    { id: 'thu-nhap-khac',     name: 'Thu nhập khác',        nameVI: 'Thu nhập khác' },
-    { id: 'tiet-kiem',         name: '🐷 Rút từ tiết kiệm',  nameVI: '🐷 Rút từ tiết kiệm' }   // id giữ nguyên: dữ liệu cũ lưu theo id
+    { id: 'luong',             name: '💰 Salary',                 nameVI: '💰 Lương' },
+    { id: 'kinh-doanh',        name: '📈 Business & Investment',  nameVI: '📈 Kinh doanh, đầu tư' },
+    { id: 'lai-dau-tu',        name: '📈 Interest & Dividends',   nameVI: '📈 Lãi & đầu tư' },
+    { id: 'thu-nhap-bi-dong',  name: '💎 Passive Income',         nameVI: '💎 Thu nhập bị động' },
+    { id: 'tro-cap',           name: '🎁 Allowance & Gifts',      nameVI: '🎁 Trợ cấp' },
+    { id: 'thu-nhap-khac',     name: '💵 Other Income',           nameVI: '💵 Thu nhập khác' },
+    { id: 'tiet-kiem',         name: '🐷 Withdraw from Savings',  nameVI: '🐷 Rút từ tiết kiệm' }
   ];
 
   const EXPENSE_CATEGORIES = [
-    { id: 'nha-o',                   name: '🏠 Nhà ở',                 nameVI: '🏠 Nhà ở' },
-    { id: 'an-uong',                 name: '🍜 Ăn uống',               nameVI: '🍜 Ăn uống' },
-    { id: 'di-chuyen',               name: '🛵 Di chuyển',             nameVI: '🛵 Di chuyển' },
-    { id: 'tieu-dung-thiet-yeu',     name: '🛒 Tiêu dùng thiết yếu',    nameVI: '🛒 Tiêu dùng thiết yếu' },
-    { id: 'tieu-dung-khac',          name: '🛍️ Tiêu dùng khác',         nameVI: '🛍️ Tiêu dùng khác' },
-    { id: 'doodad',                  name: '🎮 Giải trí',              nameVI: '🎮 Giải trí' },   // trước là "Doodad" (id giữ nguyên)
-    { id: 'cho-di',                  name: '❤️ Cho đi',                nameVI: '❤️ Cho đi' },
-    { id: 'phat-trien-ban-than',     name: '📚 Phát triển bản thân',    nameVI: '📚 Phát triển bản thân' },
-    { id: 'suc-khoe',                name: '🩺 Sức khỏe',              nameVI: '🩺 Sức khỏe' },
-    { id: 'chi-phi-khac',            name: '🏷️ Chi phí khác',           nameVI: '🏷️ Chi phí khác' },
-    { id: 'tiet-kiem',               name: '🐷 Chuyển vào tiết kiệm',  nameVI: '🐷 Chuyển vào tiết kiệm' }   // id giữ nguyên
+    { id: 'nha-o',                 name: '🏠 Housing',              nameVI: '🏠 Nhà ở' },
+    { id: 'an-uong',               name: '🍜 Food & Dining',        nameVI: '🍜 Ăn uống' },
+    { id: 'di-chuyen',             name: '🛵 Transportation',       nameVI: '🛵 Di chuyển' },
+    { id: 'tieu-dung-thiet-yeu',   name: '🛒 Essentials',           nameVI: '🛒 Tiêu dùng thiết yếu' },
+    { id: 'tieu-dung-khac',        name: '🛍️ Other Shopping',       nameVI: '🛍️ Tiêu dùng khác' },
+    { id: 'doodad',                name: '🎮 Entertainment',        nameVI: '🎮 Giải trí' },
+    { id: 'cho-di',                name: '❤️ Giving & Charity',     nameVI: '❤️ Cho đi' },
+    { id: 'phat-trien-ban-than',   name: '📚 Self-Development',     nameVI: '📚 Phát triển bản thân' },
+    { id: 'suc-khoe',              name: '🩺 Healthcare',           nameVI: '🩺 Sức khỏe' },
+    { id: 'chi-phi-khac',          name: '🏷️ Other Expenses',       nameVI: '🏷️ Chi phí khác' },
+    { id: 'tiet-kiem',             name: '🐷 Transfer to Savings',  nameVI: '🐷 Chuyển vào tiết kiệm' }
   ];
 
   // ── Balance account types ──
   const BALANCE_ACCOUNTS = [
-    { id: 'tien-mat',       name: 'Tiền mặt',       nameVI: 'Tiền mặt' },
-    { id: 'the-ngan-hang',  name: 'Thẻ ngân hàng',  nameVI: 'Thẻ ngân hàng' },
-    { id: 'tiet-kiem',      name: 'Tiết kiệm',      nameVI: 'Tiết kiệm' },
-    { id: 'dau-tu',         name: 'Đầu tư',         nameVI: 'Đầu tư' },
-    { id: 'cho-muon',       name: 'Cho mượn',       nameVI: 'Cho mượn' },
-    { id: 'no',             name: 'Nợ',             nameVI: 'Nợ' }
+    { id: 'tien-mat',       name: 'Cash',          nameVI: 'Tiền mặt' },
+    { id: 'the-ngan-hang',  name: 'Bank Card',     nameVI: 'Thẻ ngân hàng' },
+    { id: 'tiet-kiem',      name: 'Savings',       nameVI: 'Tiết kiệm' },
+    { id: 'dau-tu',         name: 'Investments',   nameVI: 'Đầu tư' },
+    { id: 'cho-muon',       name: 'Loans Given',   nameVI: 'Cho mượn' },
+    { id: 'no',             name: 'Debts',         nameVI: 'Nợ' }
   ];
 
-  // ── Source types (UPDATED: 3-way categorization) ──
+  // ── Source types (3-way categorization) ──
   const SOURCE_TYPES = [
     { id: 'uncategorized', name: 'Uncategorized', nameVI: 'Chưa phân loại' },
     { id: 'bank',          name: 'Bank Transfer', nameVI: 'Chuyển khoản' },
@@ -59,9 +59,7 @@ const cashflowModule = (function () {
   ];
 
   // ── Category emoji mapping for backward compatibility ──
-  // Maps legacy category names (without emojis) to new emoji-enhanced names
   const CATEGORY_ICONS = {
-    // Expense categories
     'Nhà ở':                    '🏠 Nhà ở',
     'Ăn uống':                  '🍜 Ăn uống',
     'Di chuyển':                '🛵 Di chuyển',
@@ -72,260 +70,515 @@ const cashflowModule = (function () {
     'Phát triển bản thân':      '📚 Phát triển bản thân',
     'Chi phí khác':             '🏷️ Chi phí khác',
     'Tiết kiệm':                '🐷 Tiết kiệm',
-    // Income categories (for future use / completeness)
     'Lương':                    '💰 Lương',
     'Kinh doanh, đầu tư':       '📈 Kinh doanh, đầu tư',
     'Thu nhập bị động':         '💎 Thu nhập bị động',
     'Trợ cấp':                  '🎁 Trợ cấp',
     'Lãi & đầu tư':             '📈 Lãi & đầu tư',
-    'Thu nhập khác':            '💵 Thu nhập khác',
-    'Tiết kiệm':                '🐷 Tiết kiệm'
+    'Thu nhập khác':            '💵 Thu nhập khác'
   };
 
   // ============================================================
-  //   I18N DICTIONARY — All static UI strings for CashFlow
+  //   I18N DICTIONARY — All static & dynamic UI strings
   // ============================================================
 
   var CASHFLOW_I18N = {
     en: {
       // Summary cards
-      netWorthLabel:    'NET WORTH',
-      netWorthSub:      'ALL-TIME NET WORTH',
-      savingsLabel:     'SAVINGS / INVESTMENTS',
-      savingsSub:       'SAVINGS & INVESTMENTS',
-      incomeLabel:      'INCOME',
-      incomeSub:        'TOTAL INCOME',
-      expenseLabel:     'EXPENSE',
-      expenseSub:       'TOTAL EXPENSE',
-      cashWalletLabel:  'CASH WALLET',
-      cashWalletSub:    'PHYSICAL CASH ON HAND',
-      bankAccountLabel: 'BANK ACCOUNT',
-      bankAccountSub:   'DIGITAL / BANK BALANCE',
+      netWorthLabel:       'NET WORTH',
+      netWorthSub:         'ALL-TIME NET WORTH',
+      savingsLabel:        'SAVINGS / INVESTMENTS',
+      savingsSub:          'SAVINGS & INVESTMENTS',
+      incomeLabel:         'INCOME',
+      incomeSub:           'TOTAL INCOME',
+      expenseLabel:        'EXPENSE',
+      expenseSub:          'TOTAL EXPENSE',
+      cashWalletLabel:     'CASH WALLET',
+      cashWalletSub:       'PHYSICAL CASH ON HAND',
+      bankAccountLabel:    'BANK ACCOUNT',
+      bankAccountSub:      'DIGITAL / BANK BALANCE',
       uncategorizedLabel:  'UNCATEGORIZED',
       uncategorizedSub:    'NEEDS REVIEW',
 
       // Dashboard v2
-      cfdTitle: 'Financial overview', cfdHide: 'Hide balances', cfdShow: 'Show balances',
-      cfdNetWorth: 'Net worth', cfdBank: 'Bank', cfdCash: 'Cash', cfdSavings: 'Savings & investments',
-      cfdCashflow: 'Cash flow', cfdRemaining: 'Remaining', cfdIncome: 'Income', cfdExpense: 'Expenses',
-      cfdSaved: 'Saved', cfdUncategorized: 'Uncategorized', cfdNeedsReview: 'needs review',
-      cfdDebt: 'Pending debts', cfdPeriodDay: 'Last 30 days', cfdMonth: 'Month', cfdYear: 'Year',
+      cfdTitle:            'Financial overview',
+      cfdHide:             'Hide balances',
+      cfdShow:             'Show balances',
+      cfdNetWorth:         'Net worth',
+      cfdBank:             'Bank',
+      cfdCash:             'Cash',
+      cfdSavings:          'Savings & investments',
+      cfdCashflow:         'Cash flow',
+      cfdRemaining:        'Remaining',
+      cfdIncome:           'Income',
+      cfdExpense:          'Expenses',
+      cfdSaved:            'Saved',
+      cfdUncategorized:    'Uncategorized',
+      cfdNeedsReview:      'needs review',
+      cfdDebt:             'Pending debts',
+      cfdPeriodDay:        'Last 30 days',
+      cfdMonth:            'Month',
+      cfdYear:             'Year',
+      cfdTrendMore:        'Details',
+      cfdTrendLess:        'Collapse',
+      cfdLast6:            'Last 6 months',
+      cfdTargetLbl:        'Target {t}%',
+      cfdSaveRate6:        'Savings rate, last 6 months',
+      cfdPts:              'pts',
+      cfdVsMonth:          'vs',
+      cfdMonthShort:       'M',
+      cfdVsAvg3:           'vs 3-month average',
+      cfdMeetsTarget:      'Target {t}% reached',
+      cfdBelowTarget:      '{x} pts to reach {t}% target',
+      cfdBest6:            'Best of 6 months',
+      cfdWorst6:           'Lowest of 6 months',
+      cfdNoData:           'Not enough data to compare yet',
+      cfdPartial:          'Estimate up to day {d}, compared over the same days',
+      cfdWhy:              'What changed vs {m} (same period)',
 
-      // Chart
-      chartTitle:       'INCOME VS EXPENSE',
-      chartIncome:      'Income',
-      chartExpense:     'Expense',
-      chartCash:        'Cash Flow',
-      chartBank:        'Bank Flow',
-      chartDay:         'Day',
-      chartMonth:       'Month',
-      chartYear:        'Year',
-      viewChart:        'Chart',
-      viewHeatmap:      'Heatmap',
-      heatmapDailyLimit: 'Limit:',
-      heatmapPerDay:    '/ day',
-      heatmapLevel0:    'Safe',
-      heatmapLevel1:    'Under 50%',
-      heatmapLevel2:    '50-100%',
-      heatmapLevel3:    'Over Limit',
-      heatmapTotalSpent: 'Total Spent:',
-      heatmapTopCategory: 'Top Category:',
-      heatmapNoExpense: 'No expenses',
-      heatmapPrevMonth: 'Previous month',
-      heatmapNextMonth: 'Next month',
-      heatmapThisMonth: 'This month',
-      heatmapPickMonth: 'Pick a month',
-      heatmapPrevYear:  'Previous year',
-      heatmapNextYear:  'Next year',
-      heatmapHasData:   'Has expenses',
+      // Edit balance prompts & toasts
+      editNetWorthTitle:   'Edit Net Worth',
+      editBankTitle:       'Edit Bank Balance',
+      editCashTitle:       'Edit Cash Balance',
+      editSavingsTitle:    'Edit Savings & Investments',
+      promptNetWorth:      'Enter target Net Worth (VND):',
+      promptSavings:       'Enter target Savings / Investments balance (VND):',
+      promptBank:          'Enter target Bank balance (VND):',
+      promptCash:          'Enter target Cash balance (VND):',
+      toastNetWorth:       '✅ Net Worth: ',
+      toastSavings:        '✅ Savings / Investments: ',
+      toastBank:           '✅ Bank Balance: ',
+      toastCash:           '✅ Cash Balance: ',
+      promptBudget:        'Enter maximum monthly budget (VND)\n(Enter 0 to remove budget for this category):',
+      // ── Budget Studio ──
+      bsKind_fixed: 'Fixed',
+      bsKind_flex: 'Flexible',
+      bsKind_goal: 'Goal',
+      bsKindHint_fixed: 'Paid once a month (rent, tuition…). No daily-pace warnings.',
+      bsKindHint_flex: 'Spent steadily through the month (food, shopping…). Warns when you spend faster than the month’s pace.',
+      bsKindHint_goal: 'A level you want to reach (giving, self-development…). Exceeding it is not flagged red.',
+      bsMonth: 'Month {m}/{y}',
+      bsNoteGoalDone: 'Goal reached',
+      bsNoteGoalOver: ' · over by {v}',
+      bsNoteGoalLeft: '{v} short of the goal',
+      bsNoteOver: 'Over budget by {v}',
+      bsNoteFixedPaid: 'Fixed cost · paid in full',
+      bsNoteFixedLeft: 'Fixed cost · {v} left',
+      bsNoteFixedUnpaid: 'Fixed cost · not paid yet',
+      bsNoteNoSpend: 'Nothing spent · safe {v}/day',
+      bsNoteHit: 'Projected to hit the limit on day {d} · safe {v}/day',
+      bsNoteProj: 'Projected month-end ≈ {p} · {l} left ({v}/day)',
+      bsNoteFuture: 'Not started',
+      bsNoteSurplus: '{v} left over',
+      bsSparkAria: 'Category spending over the last 6 months',
+      bsStatCur: 'Spent this month',
+      bsStatAvg: '3-month avg',
+      bsStatPrev: 'Last month',
+      bsSparkCap: 'Last 6 months',
+      bsSparkLimit: ' · dashed line = limit',
+      bsHintType: 'Type 1.4m, 500k or 1,500,000',
+      bsHintBad: 'Can’t read that number — try 1.4m, 500k or 1,500,000',
+      bsPreviewUsed: ' · {p}% of this limit used',
+      bsAddTitle: 'Add budget',
+      bsPickCat: 'Pick a category first',
+      bsInvalid: 'Enter a valid limit (greater than 0)',
+      bsSaved: 'Budget saved for {n}: {v}',
+      bsRemoveConfirm: 'Click again to remove',
+      bsRemove: 'Remove budget',
+      bsRemoved: 'Budget for {n} removed from {m}',
+      bsCategory: 'Category',
+      bsChoose: '— Choose a category —',
+      bsClose: 'Close',
+      bsKicker: 'Budget Studio',
+      bsLimitLabel: 'Monthly limit',
+      bsQAvg: '3-mo avg',
+      bsQPrev: 'Same as last month',
+      bsKindLabel: 'Category type',
+      bsFootNote: 'Applies from {m} and carries over to later months. Earlier months stay unchanged.',
+      bsSetFor: 'Set budget for {n}',
+      bsOverviewKicker: 'Budget {m}',
+      bsDayOf: 'Day {d}/{n} · ',
+      bsLeft: '{v} left',
+      bsOverBy: 'Over by {v}',
+      bsToday: 'Today: day {d}/{n}',
+      bsAddBtn: '＋ Add category budget',
+      bsXferTip: 'Savings transfers and debt recovery are not real income or expenses',
+      bsXferLabel: 'Excluded from income/expense',
+      editBudgetTitle:     'Set budget',
+
+      // Chart & Heatmap
+      chartTitle:          'INCOME VS EXPENSE',
+      chartIncome:         'Income',
+      chartExpense:        'Expense',
+      chartCash:           'Cash Flow',
+      chartBank:           'Bank Flow',
+      chartDay:            'Day',
+      chartMonth:          'Month',
+      chartYear:           'Year',
+      viewChart:           'Chart',
+      viewHeatmap:         'Heatmap',
+      heatmapDailyLimit:   'Limit:',
+      heatmapPerDay:       '/ day',
+      heatmapLevel0:       'Safe',
+      heatmapLevel1:       'Under 50%',
+      heatmapLevel2:       '50-100%',
+      heatmapLevel3:       'Over Limit',
+      heatmapTotalSpent:   'Total Spent:',
+      heatmapTopCategory:  'Top Category:',
+      heatmapNoExpense:    'No expenses',
+      heatmapPrevMonth:    'Previous month',
+      heatmapNextMonth:    'Next month',
+      heatmapThisMonth:    'This month',
+      heatmapPickMonth:    'Pick a month',
+      heatmapPrevYear:     'Previous year',
+      heatmapNextYear:     'Next year',
+      heatmapHasData:      'Has expenses',
 
       // Action bar
-      addTx:            'Add Transaction',
-      importXlsx:       'Import .xlsx',
-      exportXlsx:       'Export to .xlsx',
+      addTx:               'Add Transaction',
+      importXlsx:          'Import .xlsx',
+      exportXlsx:          'Export to .xlsx',
 
       // Ledger
-      categoryToggle:   '📊 Detailed Stats',
-      categoryTitle:    'CATEGORY BREAKDOWN',
-      tabLedger:        'Transaction List',
-      tabStats:         'Category Breakdown',
-      breakdownIncome:  '⬆ Income',
-      breakdownExpense: 'Expense',
+      categoryToggle:      '📊 Detailed Stats',
+      categoryTitle:       'CATEGORY BREAKDOWN',
+      tabLedger:           'Transactions',
+      tabStats:            'Statistics',
+      breakdownIncome:     '⬆ Income',
+      breakdownExpense:    '⬇ Expense',
 
-      // Table
-      thDate:           'Date',
-      thDesc:           'Description',
-      thCat:            'Category',
-      thAmt:            'Amount',
-      labelDateFrom:    'From',
-      labelDateTo:      'To',
-      sortNewest:       'Newest First',
-      sortOldest:       'Oldest First',
-      sortHighest:      'Highest First',
-      sortLowest:       'Lowest First',
-      sortNone:         'No Sort',
-      labelKeyword:     'Keyword',
+      // Table & Filters
+      thDate:              'Date',
+      thDesc:              'Description',
+      thCat:               'Category',
+      thAmt:               'Amount',
+      labelDateFrom:       'From',
+      labelDateTo:         'To',
+      sortNewest:          'Newest First',
+      sortOldest:          'Oldest First',
+      sortHighest:         'Highest First',
+      sortLowest:          'Lowest First',
+      sortNone:            'No Sort',
+      labelKeyword:        'Keyword',
       labelSelectCategories: 'Select Categories',
-      labelMin:         'Min',
-      labelMax:         'Max',
-      placeholderKeyword: 'Search description...',
-      btnClear:         'Clear',
-      btnApply:         'Apply',
-      noCategoryData:   'No category data for this month.',
-      noTxYet:          'No transactions yet.',
-      noTxHint:         'Tap <strong>Add Transaction</strong> to start tracking.',
-      txCount_zero:     '0 entries',
-      txCount_one:      '1 entry',
-      txCount_other:    'entries',
+      labelMin:            'Min (VND)',
+      labelMax:            'Max (VND)',
+      placeholderKeyword:  'Search description...',
+      btnClear:            'Clear',
+      btnApply:            'Apply',
+      noFilterMatch:       'No transactions match the current filter.',
+      noCategoryData:      'No category data for this month.',
+      noTxYet:             'No transactions yet.',
+      noTxHint:            'Tap <strong>Add Transaction</strong> to start tracking.',
+      txCount_zero:        '0 entries',
+      txCount_one:         '1 entry',
+      txCount_other:       'entries',
+      btnEditTx:           'Edit',
+      btnDeleteTx:         'Delete',
 
       // Modal
-      modalTitle:       'New Transaction',
-      modalTitleEdit:   'Edit Transaction',
-      tabExpense:       'Expense',
-      tabIncome:        'Income',
-      labelAmount:      'Amount (VND)',
-      labelDate:        'Date',
-      labelDesc:        'Description',
-      labelCategory:    'Category',
-      labelSource:      'Source',
+      modalTitle:          'New Transaction',
+      modalTitleEdit:      'Edit Transaction',
+      tabExpense:          'Expense',
+      tabIncome:           'Income',
+      labelAmount:         'Amount (VND)',
+      labelDate:           'Date',
+      labelDesc:           'Description',
+      labelCategory:       'Category',
+      labelSource:         'Source',
       sourceUncategorized: 'Uncategorized',
-      sourceCash:       'Cash (Physical)',
-      sourceBank:       'Bank Transfer',
-      sourceSavings:    'Savings',
-      placeholderDesc:  'e.g. Grab, coffee, books...',
-      btnCancel:        'Cancel',
-      btnSave:          'Save',
+      sourceCash:          'Cash (Physical)',
+      sourceBank:          'Bank Transfer',
+      sourceSavings:       'Savings',
+      placeholderDesc:     'e.g. Grab, coffee, books...',
+      btnCancel:           'Cancel',
+      btnSave:             'Save',
 
-      // Import
-      importNoRows:     'No valid rows found in the file (all',
-      importRowsInvalid: 'rows were invalid).',
-      importSuccess:    'Imported',
-      importSuccess1:   'transactions (replaced all existing data).',
-      importSkipped:    'Skipped',
-      importInvalidRows: 'invalid rows.',
+      // Import / Export
+      importNoRows:        'No valid rows found in the file (all',
+      importRowsInvalid:   'rows were invalid).',
+      importSuccess:       'Imported',
+      importSuccess1:      'transactions (replaced all existing data).',
+      importSkipped:       'Skipped',
+      importInvalidRows:   'invalid rows.',
       importSkippedSheets: 'Skipped sheets:',
-      importFailed:     'Import failed — check console for details.',
-      importNotLoaded:  'XLSX library not loaded.'
+      importFailed:        'Import failed — check console for details.',
+      importNotLoaded:     'XLSX library not loaded.',
+      exportEmpty:         'No transactions to export.',
+      exportFailed:        'Export failed — try again.',
+
+      // AI Financial Advisor & Key Modal
+      aiHeaderTitle:          'AI Financial Advisor',
+      aiStatusReady:          'Ready',
+      aiStatusBusy:           'Analyzing…',
+      aiStatusBg:             'Analyzing… (running in background)',
+      aiNewChat:              'New conversation',
+      aiSettingsTitle:        'API Key Settings',
+      aiInsightTag:           'Insight',
+      aiInsightAnalyzing:     'Analyzing this month’s spending data…',
+      aiTabPlan:              'Spending Plan',
+      aiTabChat:              'Ask AI',
+      aiChatPlaceholder:      'Ask about your spending, budget, or savings goals…',
+      aiBtnSend:              'Send',
+      aiBtnStop:              'Stop',
+      aiAskBtn:               'Ask AI',
+      aiKeyModalTitle:        '🔑 AI API Key Management',
+      aiKeyGeminiLabel:       'Gemini API Key',
+      aiKeyGeminiPlaceholder: 'Enter Gemini API Key...',
+      aiKeyNvidiaLabel:       'Nvidia NIM API Key',
+      aiKeyNvidiaPlaceholder: 'Enter Nvidia NIM API Key...',
+      aiKeySave:              'Save Keys',
+      aiKeyClear:             'Clear Keys',
+      aiKeyClose:             'Close'
     },
 
     vi: {
       // Summary cards
-      netWorthLabel:    'TỔNG TÀI SẢN',
-      netWorthSub:      'TÀI SẢN HIỆN CÓ',
-      savingsLabel:     'TIẾT KIỆM / ĐẦU TƯ',
-      savingsSub:       'TIẾT KIỆM & ĐẦU TƯ',
-      incomeLabel:      'THU NHẬP',
-      incomeSub:        'TỔNG THU NHẬP',
-      expenseLabel:     'CHI PHÍ',
-      expenseSub:       'TỔNG CHI PHÍ',
-      cashWalletLabel:  'TIỀN MẶT',
-      cashWalletSub:    'TIỀN MẶT TRONG TAY',
-      bankAccountLabel: 'CHUYỂN KHOẢN',
-      bankAccountSub:   'SỐ DƯ TÀI KHOẢN',
+      netWorthLabel:       'TỔNG TÀI SẢN',
+      netWorthSub:         'TÀI SẢN HIỆN CÓ',
+      savingsLabel:        'TIẾT KIỆM / ĐẦU TƯ',
+      savingsSub:          'TIẾT KIỆM & ĐẦU TƯ',
+      incomeLabel:         'THU NHẬP',
+      incomeSub:           'TỔNG THU NHẬP',
+      expenseLabel:        'CHI PHÍ',
+      expenseSub:          'TỔNG CHI PHÍ',
+      cashWalletLabel:     'TIỀN MẶT',
+      cashWalletSub:       'TIỀN MẶT TRONG TAY',
+      bankAccountLabel:    'CHUYỂN KHOẢN',
+      bankAccountSub:      'SỐ DƯ TÀI KHOẢN',
       uncategorizedLabel:  'CHƯA PHÂN LOẠI',
       uncategorizedSub:    'CẦN XEM XÉT',
 
       // Dashboard v2
-      cfdTitle: 'Tổng quan tài chính', cfdHide: 'Ẩn số dư', cfdShow: 'Hiện số dư',
-      cfdNetWorth: 'Tài sản ròng', cfdBank: 'Ngân hàng', cfdCash: 'Tiền mặt', cfdSavings: 'Tiết kiệm & đầu tư',
-      cfdCashflow: 'Dòng tiền', cfdRemaining: 'Còn lại', cfdIncome: 'Thu nhập', cfdExpense: 'Chi tiêu',
-      cfdSaved: 'Để dành', cfdUncategorized: 'Chưa phân loại', cfdNeedsReview: 'cần xem xét',
-      cfdDebt: 'Nợ đang chờ thu', cfdPeriodDay: '30 ngày gần nhất', cfdMonth: 'Tháng', cfdYear: 'Năm',
+      cfdTitle:            'Tổng quan tài chính',
+      cfdHide:             'Ẩn số dư',
+      cfdShow:             'Hiện số dư',
+      cfdNetWorth:         'Tài sản ròng',
+      cfdBank:             'Ngân hàng',
+      cfdCash:             'Tiền mặt',
+      cfdSavings:          'Tiết kiệm & đầu tư',
+      cfdCashflow:         'Dòng tiền',
+      cfdRemaining:        'Còn lại',
+      cfdIncome:           'Thu nhập',
+      cfdExpense:          'Chi tiêu',
+      cfdSaved:            'Để dành',
+      cfdUncategorized:    'Chưa phân loại',
+      cfdNeedsReview:      'cần xem xét',
+      cfdDebt:             'Nợ đang chờ thu',
+      cfdPeriodDay:        '30 ngày gần nhất',
+      cfdMonth:            'Tháng',
+      cfdYear:             'Năm',
+      cfdTrendMore:        'Chi tiết',
+      cfdTrendLess:        'Thu gọn',
+      cfdLast6:            '6 tháng gần nhất',
+      cfdTargetLbl:        'Mục tiêu {t}%',
+      cfdSaveRate6:        'Tỷ lệ để dành 6 tháng gần nhất',
+      cfdPts:              'điểm',
+      cfdVsMonth:          'so với',
+      cfdMonthShort:       'T',
+      cfdVsAvg3:           'so với trung bình 3 tháng',
+      cfdMeetsTarget:      'Đạt mục tiêu {t}%',
+      cfdBelowTarget:      'Còn thiếu {x} điểm tới mục tiêu {t}%',
+      cfdBest6:            'Cao nhất trong 6 tháng',
+      cfdWorst6:           'Thấp nhất trong 6 tháng',
+      cfdNoData:           'Chưa đủ dữ liệu để so sánh',
+      cfdPartial:          'Tạm tính đến ngày {d}, so sánh cùng số ngày',
+      cfdWhy:              'Vì sao thay đổi so với {m} (cùng kỳ)',
 
-      // Chart
-      chartTitle:       'THU NHẬP VÀ CHI PHÍ',
-      chartIncome:      'Thu Nhập',
-      chartExpense:     'Chi Phí',
-      chartCash:        'Dòng tiền mặt',
-      chartBank:        'Dòng ngân hàng',
-      chartDay:         'Ngày',
-      chartMonth:       'Tháng',
-      chartYear:        'Năm',
-      viewChart:        'Biểu đồ',
-      viewHeatmap:      'Heatmap',
-      heatmapDailyLimit: 'Hạn mức:',
-      heatmapPerDay:    '/ ngày',
-      heatmapLevel0:    'An toàn',
-      heatmapLevel1:    'Dưới 50%',
-      heatmapLevel2:    '50-100%',
-      heatmapLevel3:    'Vượt hạn',
-      heatmapTotalSpent: 'Tổng chi:',
-      heatmapTopCategory: 'Hạng mục chính:',
-      heatmapNoExpense: 'Không chi tiêu',
-      heatmapPrevMonth: 'Tháng trước',
-      heatmapNextMonth: 'Tháng sau',
-      heatmapThisMonth: 'Tháng này',
-      heatmapPickMonth: 'Chọn tháng',
-      heatmapPrevYear:  'Năm trước',
-      heatmapNextYear:  'Năm sau',
-      heatmapHasData:   'Có chi tiêu',
+      // Edit balance prompts & toasts
+      editNetWorthTitle:   'Chỉnh sửa Tổng Tài Sản',
+      editBankTitle:       'Chỉnh sửa số dư Ngân hàng',
+      editCashTitle:       'Chỉnh sửa số dư Tiền mặt',
+      editSavingsTitle:    'Chỉnh sửa Tiết kiệm & Đầu tư',
+      promptNetWorth:      'Nhập Tổng Tài Sản mục tiêu (VND):',
+      promptSavings:       'Nhập số dư Tiết kiệm / Đầu tư mục tiêu (VND):',
+      promptBank:          'Nhập số dư Ngân hàng mục tiêu (VND):',
+      promptCash:          'Nhập số dư Tiền mặt mục tiêu (VND):',
+      toastNetWorth:       '✅ Tổng Tài Sản: ',
+      toastSavings:        '✅ Tiết kiệm / Đầu tư: ',
+      toastBank:           '✅ Số dư Ngân hàng: ',
+      toastCash:           '✅ Số dư Tiền mặt: ',
+      promptBudget:        'Nhập ngân sách tối đa cho tháng (VND)\n(Nhập 0 để xóa ngân sách hạng mục này):',
+      // ── Budget Studio ──
+      bsKind_fixed: 'Cố định',
+      bsKind_flex: 'Linh hoạt',
+      bsKind_goal: 'Mục tiêu',
+      bsKindHint_fixed: 'Trả một lần mỗi tháng (nhà ở, học phí…). Không cảnh báo theo nhịp ngày.',
+      bsKindHint_flex: 'Chi đều theo ngày (ăn uống, mua sắm…). Cảnh báo khi chi nhanh hơn nhịp của tháng.',
+      bsKindHint_goal: 'Mức bạn muốn chạm tới (cho đi, phát triển bản thân…). Vượt mức không bị báo đỏ.',
+      bsMonth: 'Tháng {m}/{y}',
+      bsNoteGoalDone: 'Đạt mục tiêu',
+      bsNoteGoalOver: ' · vượt {v}',
+      bsNoteGoalLeft: 'Còn thiếu {v} để đạt mục tiêu',
+      bsNoteOver: 'Vượt hạn mức {v}',
+      bsNoteFixedPaid: 'Khoản cố định · đã thanh toán đủ',
+      bsNoteFixedLeft: 'Khoản cố định · còn {v}',
+      bsNoteFixedUnpaid: 'Khoản cố định · chưa thanh toán',
+      bsNoteNoSpend: 'Chưa chi · an toàn {v}/ngày',
+      bsNoteHit: 'Dự kiến chạm hạn mức ngày {d} · an toàn {v}/ngày',
+      bsNoteProj: 'Dự kiến cuối tháng ≈ {p} · còn {l} ({v}/ngày)',
+      bsNoteFuture: 'Chưa bắt đầu',
+      bsNoteSurplus: 'Còn dư {v}',
+      bsSparkAria: 'Chi tiêu 6 tháng gần nhất của hạng mục',
+      bsStatCur: 'Đã chi tháng này',
+      bsStatAvg: 'TB 3 tháng trước',
+      bsStatPrev: 'Tháng trước',
+      bsSparkCap: '6 tháng gần nhất',
+      bsSparkLimit: ' · đường đứt = hạn mức',
+      bsHintType: 'Gõ 1.4m, 500k hoặc 1.500.000',
+      bsHintBad: 'Chưa hiểu số này — thử 1.4m, 500k hoặc 1.500.000',
+      bsPreviewUsed: ' · đã dùng {p}% hạn mức này',
+      bsAddTitle: 'Thêm ngân sách',
+      bsPickCat: 'Chọn hạng mục trước',
+      bsInvalid: 'Nhập hạn mức hợp lệ (lớn hơn 0)',
+      bsSaved: 'Đã lưu ngân sách {n}: {v}',
+      bsRemoveConfirm: 'Bấm lại để xóa',
+      bsRemove: 'Xóa ngân sách',
+      bsRemoved: 'Đã xóa ngân sách {n} của {m}',
+      bsCategory: 'Hạng mục',
+      bsChoose: '— Chọn hạng mục —',
+      bsClose: 'Đóng',
+      bsKicker: 'Budget Studio',
+      bsLimitLabel: 'Hạn mức của tháng',
+      bsQAvg: 'TB 3 tháng',
+      bsQPrev: 'Như tháng trước',
+      bsKindLabel: 'Loại hạng mục',
+      bsFootNote: 'Áp dụng từ {m} và tự kế thừa sang các tháng sau. Các tháng trước giữ nguyên.',
+      bsSetFor: 'Đặt ngân sách cho {n}',
+      bsOverviewKicker: 'Ngân sách {m}',
+      bsDayOf: 'Ngày {d}/{n} · ',
+      bsLeft: 'Còn {v}',
+      bsOverBy: 'Vượt {v}',
+      bsToday: 'Hôm nay: ngày {d}/{n}',
+      bsAddBtn: '＋ Thêm ngân sách hạng mục',
+      bsXferTip: 'Chuyển tiết kiệm và thu hồi nợ không phải thu nhập hay chi phí thật',
+      bsXferLabel: 'Không tính vào thu/chi',
+      editBudgetTitle:     'Cài đặt ngân sách',
+
+      // Chart & Heatmap
+      chartTitle:          'THU NHẬP VÀ CHI PHÍ',
+      chartIncome:         'Thu Nhập',
+      chartExpense:        'Chi Phí',
+      chartCash:           'Dòng tiền mặt',
+      chartBank:           'Dòng ngân hàng',
+      chartDay:            'Ngày',
+      chartMonth:          'Tháng',
+      chartYear:           'Năm',
+      viewChart:           'Biểu đồ',
+      viewHeatmap:         'Lịch nhiệt',
+      heatmapDailyLimit:   'Hạn mức:',
+      heatmapPerDay:       '/ ngày',
+      heatmapLevel0:       'An toàn',
+      heatmapLevel1:       'Dưới 50%',
+      heatmapLevel2:       '50-100%',
+      heatmapLevel3:       'Vượt hạn',
+      heatmapTotalSpent:   'Tổng chi:',
+      heatmapTopCategory:  'Hạng mục chính:',
+      heatmapNoExpense:    'Không chi tiêu',
+      heatmapPrevMonth:    'Tháng trước',
+      heatmapNextMonth:    'Tháng sau',
+      heatmapThisMonth:    'Tháng này',
+      heatmapPickMonth:    'Chọn tháng',
+      heatmapPrevYear:     'Năm trước',
+      heatmapNextYear:     'Năm sau',
+      heatmapHasData:      'Có chi tiêu',
 
       // Action bar
-      addTx:            'Thêm Giao Dịch',
-      importXlsx:       'Nhập dữ liệu',
-      exportXlsx:       'Xuất file Excel',
+      addTx:               'Thêm Giao Dịch',
+      importXlsx:          'Nhập dữ liệu',
+      exportXlsx:          'Xuất file Excel',
 
       // Ledger
-      categoryToggle:   '📊 Thống kê chi tiết',
-      categoryTitle:    'HẠNG MỤC CHI TIÊU',
-      tabLedger:        'Lịch sử',
-      tabStats:         'Thống kê',
-      breakdownIncome:  '⬆ Thu Nhập',
-      breakdownExpense: 'Chi Phí',
+      categoryToggle:      '📊 Thống kê chi tiết',
+      categoryTitle:       'HẠNG MỤC CHI TIÊU',
+      tabLedger:           'Lịch sử',
+      tabStats:            'Thống kê',
+      breakdownIncome:     '⬆ Thu Nhập',
+      breakdownExpense:    '⬇ Chi Phí',
 
-      // Table
-      thDate:           'Ngày',
-      thDesc:           'Mô tả',
-      thCat:            'Hạng mục',
-      thAmt:            'Số tiền',
-      labelDateFrom:    'Từ',
-      labelDateTo:      'Đến',
-      sortNewest:       'Mới nhất trước',
-      sortOldest:       'Cũ nhất trước',
-      sortHighest:      'Cao nhất trước',
-      sortLowest:       'Thấp nhất trước',
-      sortNone:         'Không sắp xếp',
-      labelKeyword:     'Từ khóa',
+      // Table & Filters
+      thDate:              'Ngày',
+      thDesc:              'Mô tả',
+      thCat:               'Hạng mục',
+      thAmt:               'Số tiền',
+      labelDateFrom:       'Từ',
+      labelDateTo:         'Đến',
+      sortNewest:          'Mới nhất trước',
+      sortOldest:          'Cũ nhất trước',
+      sortHighest:         'Cao nhất trước',
+      sortLowest:          'Thấp nhất trước',
+      sortNone:            'Không sắp xếp',
+      labelKeyword:        'Từ khóa',
       labelSelectCategories: 'Chọn hạng mục',
-      labelMin:         'Tối thiểu',
-      labelMax:         'Tối đa',
-      placeholderKeyword: 'Tìm kiếm mô tả...',
-      btnClear:         'Xóa bộ lọc',
-      btnApply:         'Áp dụng',
-      noTransData:      'Không có dữ liệu hạng mục trong tháng này.',
-      noTransYet:       'Chưa có giao dịch nào.',
-      noTransHint:      'Nhấn <strong>Thêm Giao Dịch</strong> để bắt đầu theo dõi.',
-      txCount_zero:     '0 mục',
-      txCount_other:    'mục',
+      labelMin:            'Tối thiểu (VND)',
+      labelMax:            'Tối đa (VND)',
+      placeholderKeyword:  'Tìm kiếm mô tả...',
+      btnClear:            'Xóa bộ lọc',
+      btnApply:            'Áp dụng',
+      noFilterMatch:       'Không tìm thấy giao dịch nào khớp với bộ lọc.',
+      noCategoryData:      'Không có dữ liệu hạng mục trong tháng này.',
+      noTxYet:             'Chưa có giao dịch nào.',
+      noTxHint:            'Nhấn <strong>Thêm Giao Dịch</strong> để bắt đầu theo dõi.',
+      txCount_zero:        '0 mục',
+      txCount_one:         '1 mục',
+      txCount_other:       'mục',
+      btnEditTx:           'Chỉnh sửa',
+      btnDeleteTx:         'Xóa',
 
       // Modal
-      modalTitle:       'Thêm Giao Dịch',
-      modalTitleEdit:   'Sửa Giao Dịch',
-      tabExpense:      'Chi Phí',
-      tabIncome:       'Thu Nhập',
-      labelAmount:      'Số tiền (VND)',
-      labelDate:        'Ngày',
-      labelDesc:        'Mô tả',
-      labelCategory:    'Hạng mục',
-      labelSource:      'Nguồn',
+      modalTitle:          'Thêm Giao Dịch',
+      modalTitleEdit:      'Sửa Giao Dịch',
+      tabExpense:          'Chi Phí',
+      tabIncome:           'Thu Nhập',
+      labelAmount:         'Số tiền (VND)',
+      labelDate:           'Ngày',
+      labelDesc:           'Mô tả',
+      labelCategory:       'Hạng mục',
+      labelSource:         'Nguồn',
       sourceUncategorized: 'Chưa phân loại',
-      sourceCash:       'Tiền mặt',
-      sourceBank:       'Chuyển khoản',
-      sourceSavings:    'Tiết kiệm',
-      placeholderDesc:  'VD: Bún bò, Grab, Sách Clean Code...',
-      btnCancel:        'Hủy',
-      btnSave:          'Lưu',
+      sourceCash:          'Tiền mặt',
+      sourceBank:          'Chuyển khoản',
+      sourceSavings:       'Tiết kiệm',
+      placeholderDesc:     'VD: Bún bò, Grab, Sách Clean Code...',
+      btnCancel:           'Hủy',
+      btnSave:             'Lưu',
 
-      // Import
-      importNoRows:     'Không tìm thấy dòng dữ liệu hợp lệ (tất cả',
-      importRowsInvalid: 'dòng không hợp lệ).',
-      importSuccess:    'Đã nhập',
-      importSuccess1:   'giao dịch (đã thay thế toàn bộ dữ liệu cũ).',
-      importSkipped:    'Bỏ qua',
-      importInvalidRows: 'dòng không hợp lệ.',
+      // Import / Export
+      importNoRows:        'Không tìm thấy dòng dữ liệu hợp lệ (tất cả',
+      importRowsInvalid:   'dòng không hợp lệ).',
+      importSuccess:       'Đã nhập',
+      importSuccess1:      'giao dịch (đã thay thế toàn bộ dữ liệu cũ).',
+      importSkipped:       'Bỏ qua',
+      importInvalidRows:   'dòng không hợp lệ.',
       importSkippedSheets: 'Bỏ qua sheet:',
-      importFailed:     'Nhập thất bại — kiểm tra console để biết chi tiết.',
-      importNotLoaded:  'Thư viện XLSX chưa được tải.'
+      importFailed:        'Nhập thất bại — kiểm tra console để biết chi tiết.',
+      importNotLoaded:     'Thư viện XLSX chưa được tải.',
+      exportEmpty:         'Không có giao dịch nào để xuất.',
+      exportFailed:        'Xuất file thất bại — vui lòng thử lại.',
+
+      // AI Financial Advisor & Key Modal
+      aiHeaderTitle:          'Cố vấn Tài chính AI',
+      aiStatusReady:          'Sẵn sàng',
+      aiStatusBusy:           'Đang phân tích…',
+      aiStatusBg:             'Đang phân tích… (tiếp tục ở nền)',
+      aiNewChat:              'Cuộc trò chuyện mới',
+      aiSettingsTitle:        'Cài đặt API Key',
+      aiInsightTag:           'Nhận định',
+      aiInsightAnalyzing:     'Đang phân tích dữ liệu chi tiêu tháng này…',
+      aiTabPlan:              'Kế hoạch chi tiêu',
+      aiTabChat:              'Hỏi đáp AI',
+      aiChatPlaceholder:      'Hỏi về chi tiêu, ngân sách, mục tiêu tiết kiệm…',
+      aiBtnSend:              'Gửi',
+      aiBtnStop:              'Dừng',
+      aiAskBtn:               'Hỏi AI',
+      aiKeyModalTitle:        '🔑 Quản lý AI API Key',
+      aiKeyGeminiLabel:       'Gemini API Key',
+      aiKeyGeminiPlaceholder: 'Nhập Gemini API Key...',
+      aiKeyNvidiaLabel:       'Nvidia NIM API Key',
+      aiKeyNvidiaPlaceholder: 'Nhập Nvidia NIM API Key...',
+      aiKeySave:              'Lưu Keys',
+      aiKeyClear:             'Xóa Keys',
+      aiKeyClose:             'Đóng'
     }
   };
 
@@ -335,106 +588,110 @@ const cashflowModule = (function () {
 
   var POCKET_DEBT_I18N = {
     vi: {
-      debtSummaryTitle:    'SỔ NỢ BỎ TÚI',
-      debtSummarySub:      'Tổng tiền đang cho mượn',
-      totalPendingDebt:    'Tổng nợ đang chờ thu',
-      ledgerTitle:         'DANH SÁCH NỢ',
-      colDebtor:           'Người mượn',
-      colAmount:           'Số tiền',
-      colDateBorrowed:     'Ngày mượn',
-      colExpectedReturn:   'Ngày hẹn trả',
-      colStatus:           'Trạng thái',
-      colActions:          'Thao tác',
-      statusPending:       'Đang chờ',
-      statusPaid:          'Đã trả',
-      statusOverdue:       'Quá hạn',
-      btnMarkPaid:         'Đã trả',
-      btnAddDebt:          'Thêm nợ mới',
-      btnDelete:           'Xóa',
-      modalTitle:          'Thêm khoản nợ mới',
-      labelDebtorName:     'Tên người mượn',
-      labelAmount:         'Số tiền (VND)',
-      labelDateBorrowed:   'Ngày mượn',
-      labelExpectedReturn: 'Ngày hẹn trả',
-      labelNote:           'Ghi chú',
-      placeholderDebtor:   'VD: Anh Minh, Chị Lan...',
-      placeholderAmount:   '0',
-      placeholderNote:     'VD: Mượn tiền ăn trưa, Mượn cấp bách...',
-      btnCancel:           'Hủy',
-      btnSave:             'Lưu',
-      modalTitleEdit:      'Sửa Thông Tin Nợ',
-      confirmMarkPaid:     'Đánh dấu "{name}" đã trả nợ {amount}?',
-      confirmAddToIncome:  'Bạn có muốn thêm khoản nợ này vào Thu nhập CashFlow dưới danh mục "Thu nợ"?',
-      confirmDelete:       'Xóa khoản nợ của "{name}" ({amount})?',
-      toastDebtAdded:      '✅ Đã thêm khoản nợ: {name} - {amount}',
-      toastDebtPaid:       '✅ Đã đánh dấu đã trả: {name} - {amount}',
-      toastDebtDeleted:    '✅ Đã xóa khoản nợ: {name}',
-      toastIncomeAdded:    '✅ Đã thêm vào Thu nhập: Thu nợ từ {name}',
-      toastRecoveryDone:   '✅ Đã thu nợ {amount} vào {wallet}',
-      noDebtsYet:          'Chưa có khoản nợ nào.',
-      noDebtsHint:         'Nhấn <strong>Thêm nợ mới</strong> để bắt đầu theo dõi.',
-      historyTitle:        'LỊCH SỬ ĐÃ TRẢ',
-      toggleHistory:       'Xem lịch sử',
-      emptyHistory:        'Chưa có khoản nợ nào được trả.',
-      btnClose:            'Đóng',
-      // Debt Recovery Modal
-      recoveryTitle:       'THU HỒI NỢ',
-      labelRecoverySource: 'Nguồn nhận tiền',
-      optionCash:          'Tiền mặt (Cash)',
-      optionBank:          'Chuyển khoản (Bank)',
+      debtSummaryTitle:     'SỔ NỢ BỎ TÚI',
+      debtSummarySub:       'Tổng tiền đang cho mượn',
+      totalPendingDebt:     'Tổng nợ đang chờ thu',
+      ledgerTitle:          'DANH SÁCH NỢ',
+      colDebtor:            'Người mượn',
+      colAmount:            'Số tiền',
+      colDateBorrowed:      'Ngày mượn',
+      colExpectedReturn:    'Ngày hẹn trả',
+      colStatus:            'Trạng thái',
+      colActions:           'Thao tác',
+      statusPending:        'Đang chờ',
+      statusPaid:           'Đã trả',
+      statusOverdue:        'Quá hạn',
+      btnMarkPaid:          'Đã trả',
+      btnAddDebt:           'Thêm nợ mới',
+      btnDelete:            'Xóa',
+      btnEdit:              'Chỉnh sửa',
+      modalTitle:           'Thêm khoản nợ mới',
+      labelDebtorName:      'Tên người mượn',
+      labelAmount:          'Số tiền (VND)',
+      labelDateBorrowed:    'Ngày mượn',
+      labelExpectedReturn:  'Ngày hẹn trả',
+      labelNote:            'Ghi chú',
+      placeholderDebtor:    'VD: Anh Minh, Chị Lan...',
+      placeholderAmount:    '0',
+      placeholderNote:      'VD: Mượn tiền ăn trưa, Mượn cấp bách...',
+      btnCancel:            'Hủy',
+      btnSave:              'Lưu',
+      modalTitleEdit:       'Sửa Thông Tin Nợ',
+      confirmMarkPaid:      'Đánh dấu "{name}" đã trả nợ {amount}?',
+      confirmAddToIncome:   'Bạn có muốn thêm khoản nợ này vào Thu nhập CashFlow dưới danh mục "Thu nợ"?',
+      confirmDelete:        'Xóa khoản nợ của "{name}" ({amount})?',
+      toastDebtAdded:       '✅ Đã thêm khoản nợ: {name} - {amount}',
+      toastDebtPaid:        '✅ Đã đánh dấu đã trả: {name} - {amount}',
+      toastDebtDeleted:     '✅ Đã xóa khoản nợ: {name}',
+      toastIncomeAdded:     '✅ Đã thêm vào Thu nhập: Thu nợ từ {name}',
+      toastRecoveryDone:    '✅ Đã thu nợ {amount} vào {wallet}',
+      noDebtsYet:           'Chưa có khoản nợ nào.',
+      noDebtsHint:          'Nhấn <strong>Thêm nợ mới</strong> để bắt đầu theo dõi.',
+      historyTitle:         'LỊCH SỬ ĐÃ TRẢ',
+      toggleHistory:        'Xem lịch sử',
+      emptyHistory:         'Chưa có khoản nợ nào được trả.',
+      btnClose:             'Đóng',
+      metaBorrowed:         'Mượn: ',
+      metaPaid:             'Trả: ',
+      recoveryTitle:        'THU HỒI NỢ',
+      labelRecoverySource:  'Nguồn nhận tiền',
+      optionCash:           'Tiền mặt (Cash)',
+      optionBank:           'Chuyển khoản (Bank)',
       hintRecoveryNoIncome: 'Tiền nợ sẽ được cộng vào ví bạn chọn. Loại này <strong>không tính vào Thu nhập</strong>.',
-      btnConfirm:          'Xác nhận'
+      btnConfirm:           'Xác nhận'
     },
     en: {
-      debtSummaryTitle:    'POCKET DEBT',
-      debtSummarySub:      'Total Money Lent Out',
-      totalPendingDebt:    'Total Pending Debt',
-      ledgerTitle:         'DEBT LEDGER',
-      colDebtor:           'Debtor',
-      colAmount:           'Amount',
-      colDateBorrowed:     'Borrowed Date',
-      colExpectedReturn:   'Expected Return',
-      colStatus:           'Status',
-      colActions:          'Actions',
-      statusPending:       'Pending',
-      statusPaid:          'Paid',
-      statusOverdue:       'Overdue',
-      btnMarkPaid:         'Mark Paid',
-      btnAddDebt:          'Add New Debt',
-      btnDelete:           'Delete',
-      modalTitle:          'Add New Debt',
-      labelDebtorName:     'Debtor Name',
-      labelAmount:         'Amount (VND)',
-      labelDateBorrowed:   'Date Borrowed',
-      labelExpectedReturn: 'Expected Return',
-      labelNote:           'Note',
-      placeholderDebtor:   'e.g. John, Sarah...',
-      placeholderAmount:   '0',
-      placeholderNote:     'e.g. Lunch money, Emergency loan...',
-      btnCancel:           'Cancel',
-      btnSave:             'Save',
-      modalTitleEdit:      'Edit Debt Info',
-      confirmMarkPaid:     'Mark "{name}" as paid ({amount})?',
-      confirmAddToIncome:  'Add this debt to CashFlow Income as "Debt Collection"?',
-      confirmDelete:       'Delete debt from "{name}" ({amount})?',
-      toastDebtAdded:      '✅ Added debt: {name} - {amount}',
-      toastDebtPaid:       '✅ Marked paid: {name} - {amount}',
-      toastDebtDeleted:    '✅ Deleted debt: {name}',
-      toastIncomeAdded:    '✅ Added to Income: Debt collection from {name}',
-      toastRecoveryDone:   '✅ Recovered {amount} into {wallet}',
-      noDebtsYet:          'No debts yet.',
-      noDebtsHint:         'Click <strong>Add New Debt</strong> to start tracking.',
-      historyTitle:        'PAID HISTORY',
-      toggleHistory:       'View History',
-      emptyHistory:        'No paid debts yet.',
-      btnClose:            'Close',
-      // Debt Recovery Modal
-      recoveryTitle:       'DEBT RECOVERY',
-      labelRecoverySource: 'Destination Wallet',
-      optionCash:          'Cash (Physical)',
-      optionBank:          'Bank Transfer',
+      debtSummaryTitle:     'POCKET DEBT',
+      debtSummarySub:       'Total Money Lent Out',
+      totalPendingDebt:     'Total Pending Debt',
+      ledgerTitle:          'DEBT LEDGER',
+      colDebtor:            'Debtor',
+      colAmount:            'Amount',
+      colDateBorrowed:      'Borrowed Date',
+      colExpectedReturn:    'Expected Return',
+      colStatus:            'Status',
+      colActions:           'Actions',
+      statusPending:        'Pending',
+      statusPaid:           'Paid',
+      statusOverdue:        'Overdue',
+      btnMarkPaid:          'Mark Paid',
+      btnAddDebt:           'Add New Debt',
+      btnDelete:            'Delete',
+      btnEdit:              'Edit',
+      modalTitle:           'Add New Debt',
+      labelDebtorName:      'Debtor Name',
+      labelAmount:          'Amount (VND)',
+      labelDateBorrowed:    'Date Borrowed',
+      labelExpectedReturn:  'Expected Return',
+      labelNote:            'Note',
+      placeholderDebtor:    'e.g. John, Sarah...',
+      placeholderAmount:    '0',
+      placeholderNote:      'e.g. Lunch money, Emergency loan...',
+      btnCancel:            'Cancel',
+      btnSave:              'Save',
+      modalTitleEdit:       'Edit Debt Info',
+      confirmMarkPaid:      'Mark "{name}" as paid ({amount})?',
+      confirmAddToIncome:   'Add this debt to CashFlow Income as "Debt Collection"?',
+      confirmDelete:        'Delete debt from "{name}" ({amount})?',
+      toastDebtAdded:       '✅ Added debt: {name} - {amount}',
+      toastDebtPaid:        '✅ Marked paid: {name} - {amount}',
+      toastDebtDeleted:     '✅ Deleted debt: {name}',
+      toastIncomeAdded:     '✅ Added to Income: Debt collection from {name}',
+      toastRecoveryDone:    '✅ Recovered {amount} into {wallet}',
+      noDebtsYet:           'No debts yet.',
+      noDebtsHint:          'Click <strong>Add New Debt</strong> to start tracking.',
+      historyTitle:         'PAID HISTORY',
+      toggleHistory:        'View History',
+      emptyHistory:         'No paid debts yet.',
+      btnClose:             'Close',
+      metaBorrowed:         'Borrowed: ',
+      metaPaid:             'Paid: ',
+      recoveryTitle:        'DEBT RECOVERY',
+      labelRecoverySource:  'Destination Wallet',
+      optionCash:           'Cash (Physical)',
+      optionBank:           'Bank Transfer',
       hintRecoveryNoIncome: 'Money will be added to selected wallet. This does <strong>not count as Income</strong>.',
-      btnConfirm:          'Confirm'
+      btnConfirm:           'Confirm'
     }
   };
 
@@ -444,20 +701,13 @@ const cashflowModule = (function () {
     return dict[key] || (POCKET_DEBT_I18N['vi'][key] || key);
   }
 
-  /**
-   * getCFLang() — Read the current language from global app state or
-   * localStorage. Falls back to 'vi'.
-   */
   function _getCFLang() {
-    // Try global app state first
     if (typeof app !== 'undefined' && app.getLanguage) {
       return app.getLanguage();
     }
-    // Try the canonical setting key (written by app.js backup modal)
     var stored = null;
     try { stored = localStorage.getItem('hub_system_language'); } catch (_) {}
     if (stored === 'en' || stored === 'vi') return stored;
-    // Legacy fallback keys
     try { stored = localStorage.getItem('hubos_lang'); } catch (_) {}
     if (stored === 'en' || stored === 'vi') return stored;
     try { stored = localStorage.getItem('hub_lang'); } catch (_) {}
@@ -465,7 +715,6 @@ const cashflowModule = (function () {
     return 'vi';
   }
 
-  /** Shortcut: get a translated string by key */
   function _t(key) {
     var lang = _getCFLang();
     var dict = CASHFLOW_I18N[lang] || CASHFLOW_I18N['vi'];
@@ -480,7 +729,8 @@ const cashflowModule = (function () {
     savingsBalance: 0,
     initBank: 0,
     initCash: 0,
-    budgets: {},                // Category budget limits: { categoryId: amount }
+    budgets: {},                // (legacy) Category budget limits: { categoryId: amount }
+    budgetPlans: {},            // Monthly budgets: { "YYYY-MM": { categoryId: { limit, kind } } }
     dailyLimits: {}             // Daily expense limits per month: { "YYYY-MM": amount }
   };
 
@@ -611,6 +861,7 @@ const cashflowModule = (function () {
     _cashFlowMeta.initBank = meta.initBank;
     _cashFlowMeta.initCash = meta.initCash;
     _cashFlowMeta.budgets = meta.budgets || {};
+    _cashFlowMeta.budgetPlans = meta.budgetPlans || {};
     _cashFlowMeta.dailyLimits = meta.dailyLimits || {};
 
     // ── 3. Initialize state based on transaction load result ──
@@ -1163,13 +1414,11 @@ const cashflowModule = (function () {
   }
 
   // ── Tên hiển thị cho danh mục hệ thống / không có trong danh sách ──
-  // Trước đây trả về nguyên mã thô (vd "thu-no", "unknown"). Giờ luôn có tên đẹp + icon.
-  var _SYSTEM_CATEGORY_NAMES = {
-    'thu-no':  '🤝 Thu nợ',
-    'Thu nợ':  '🤝 Thu nợ',
-    'unknown': '🏷️ Chưa phân loại'
+var _SYSTEM_CATEGORY_NAMES = {
+    'thu-no':  { en: '🤝 Debt Collection', vi: '🤝 Thu nợ' },
+    'Thu nợ':  { en: '🤝 Debt Collection', vi: '🤝 Thu nợ' },
+    'unknown': { en: '🏷️ Uncategorized',   vi: '🏷️ Chưa phân loại' }
   };
-  // Đoán icon cho nhãn lạ theo từ khóa (không phân biệt dấu / hoa-thường)
   var _CATEGORY_ICON_HINTS = [
     [/y te|suc khoe|thuoc|benh|kham/, '🩺'], [/du lich|chuyen di|ve may bay/, '✈️'], [/hoc|sach|khoa/, '📚'],
     [/qua|sinh nhat|cuoi/, '🎁'], [/xang|grab|taxi|xe/, '🛵'], [/dien|nuoc|internet|wifi/, '💡'],
@@ -1177,12 +1426,17 @@ const cashflowModule = (function () {
   ];
 
   function _friendlyCategoryName(catId) {
-    if (catId === undefined || catId === null || catId === '') return _SYSTEM_CATEGORY_NAMES['unknown'];
+    var lang = _getCFLang();
+    if (catId === undefined || catId === null || catId === '') {
+      return _SYSTEM_CATEGORY_NAMES['unknown'][lang] || _SYSTEM_CATEGORY_NAMES['unknown'].vi;
+    }
     var raw = String(catId);
-    if (Object.prototype.hasOwnProperty.call(_SYSTEM_CATEGORY_NAMES, raw)) return _SYSTEM_CATEGORY_NAMES[raw];
-    if (/^\p{Extended_Pictographic}/u.test(raw)) return raw;            // đã có icon → giữ nguyên
+    if (Object.prototype.hasOwnProperty.call(_SYSTEM_CATEGORY_NAMES, raw)) {
+      return _SYSTEM_CATEGORY_NAMES[raw][lang] || _SYSTEM_CATEGORY_NAMES[raw].vi;
+    }
+    if (/^\p{Extended_Pictographic}/u.test(raw)) return raw;
     var text = raw;
-    if (/^[a-z0-9]+(-[a-z0-9]+)*$/.test(raw)) {                            // dạng mã "lai-dau-tu" → "Lai dau tu"
+    if (/^[a-z0-9]+(-[a-z0-9]+)*$/.test(raw)) {
       text = raw.replace(/-/g, ' ');
       text = text.charAt(0).toUpperCase() + text.slice(1);
     }
@@ -1193,7 +1447,6 @@ const cashflowModule = (function () {
     return icon + ' ' + text;
   }
 
-  /** Lookup category object by id */
   function _lookupCategory(catId, type) {
     const list = type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
     var found = list.find(function (c) { return c.id === catId; });
@@ -1202,17 +1455,13 @@ const cashflowModule = (function () {
     return { id: catId, name: friendly, nameVI: friendly };
   }
 
-  /** Lookup category name for display with emoji mapping for legacy data */
   function _categoryDisplayName(catId, type) {
     var cat = _lookupCategory(catId, type);
-    var displayName = cat.nameVI || cat.name || catId;
-
-    // Backward compatibility: map legacy names (without emojis) to new emoji versions
+    var lang = _getCFLang();
+    var displayName = (lang === 'en' ? cat.name : cat.nameVI) || cat.name || catId;
     if (CATEGORY_ICONS[displayName]) {
       return CATEGORY_ICONS[displayName];
     }
-    // Also check if the name already has an emoji (starts with emoji char)
-    // If not, and it's not in our map, return as-is
     return displayName;
   }
 
@@ -2283,7 +2532,7 @@ function _restoreAIState() {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  margin: 0 0 16px;               /* margin âm cũ bị .hub-cf-heatmap-wrap (overflow:auto) cắt mất mép trên của nút/pill */
+  margin: -16px -16px 16px -16px;
   border-bottom: 1px solid var(--glass-border);
   background: color-mix(in srgb, var(--bg-elevated) 60%, transparent);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
@@ -2656,8 +2905,8 @@ function _restoreAIState() {
         document.head.appendChild(styleEl);
       }
 
-      // ══════════════════════════════════════════
-      // HTML STRUCTURE
+// ══════════════════════════════════════════
+      // HTML STRUCTURE (100% i18n-synced)
       // ══════════════════════════════════════════
       container.innerHTML = `
 <div class="hub-cf-container">
@@ -2681,21 +2930,21 @@ function _restoreAIState() {
           <div class="cfd-card-top"><span class="cfd-label" id="cfd-assets-label" data-i18n="cfdNetWorth">${_t('cfdNetWorth')}</span></div>
           <div class="cfd-hero">
             <span class="cfd-num cfd-hero-val" id="cf-networth">0 ₫</span>
-            <button type="button" class="hub-cf-card-edit-btn cfd-edit" id="btn-edit-networth" data-target="net-worth" title="Chỉnh sửa Tổng Tài Sản" aria-label="Chỉnh sửa Tổng Tài Sản"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>
+            <button type="button" class="hub-cf-card-edit-btn cfd-edit" id="btn-edit-networth" data-target="net-worth" title="${_escHtml(_t('editNetWorthTitle'))}" aria-label="${_escHtml(_t('editNetWorthTitle'))}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>
           </div>
           <div class="cfd-alloc" id="cfd-alloc" aria-hidden="true"><i class="cfd-seg cfd-seg--bank" id="cfd-alloc-bank"></i><i class="cfd-seg cfd-seg--cash" id="cfd-alloc-cash"></i></div>
           <ul class="cfd-rows">
             <li class="cfd-row">
               <span class="cfd-row-name"><i class="cfd-dot cfd-dot--bank" aria-hidden="true"></i><span data-i18n="cfdBank">${_t('cfdBank')}</span></span>
-              <span class="cfd-row-val"><span class="cfd-num" id="cf-bank-balance">0 ₫</span><span class="cfd-pct" id="cfd-pct-bank"></span><button type="button" class="hub-cf-card-edit-btn cfd-edit" id="btn-edit-bank" data-target="bank" title="Edit Bank Account Balance" aria-label="Edit Bank Account Balance"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button></span>
+              <span class="cfd-row-val"><span class="cfd-num" id="cf-bank-balance">0 ₫</span><span class="cfd-pct" id="cfd-pct-bank"></span><button type="button" class="hub-cf-card-edit-btn cfd-edit" id="btn-edit-bank" data-target="bank" title="${_escHtml(_t('editBankTitle'))}" aria-label="${_escHtml(_t('editBankTitle'))}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button></span>
             </li>
             <li class="cfd-row">
               <span class="cfd-row-name"><i class="cfd-dot cfd-dot--cash" aria-hidden="true"></i><span data-i18n="cfdCash">${_t('cfdCash')}</span></span>
-              <span class="cfd-row-val"><span class="cfd-num" id="cf-cash-balance">0 ₫</span><span class="cfd-pct" id="cfd-pct-cash"></span><button type="button" class="hub-cf-card-edit-btn cfd-edit" id="btn-edit-cash" data-target="cash" title="Edit Cash Wallet Balance" aria-label="Edit Cash Wallet Balance"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button></span>
+              <span class="cfd-row-val"><span class="cfd-num" id="cf-cash-balance">0 ₫</span><span class="cfd-pct" id="cfd-pct-cash"></span><button type="button" class="hub-cf-card-edit-btn cfd-edit" id="btn-edit-cash" data-target="cash" title="${_escHtml(_t('editCashTitle'))}" aria-label="${_escHtml(_t('editCashTitle'))}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button></span>
             </li>
             <li class="cfd-row cfd-row--memo">
               <span class="cfd-row-name"><span data-i18n="cfdSavings">${_t('cfdSavings')}</span></span>
-              <span class="cfd-row-val"><span class="cfd-num" id="cf-savings">0 ₫</span><button type="button" class="hub-cf-card-edit-btn cfd-edit" data-target="savings" title="Edit Savings & Investments" aria-label="Edit Savings & Investments"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button></span>
+              <span class="cfd-row-val"><span class="cfd-num" id="cf-savings">0 ₫</span><button type="button" class="hub-cf-card-edit-btn cfd-edit" data-target="savings" title="${_escHtml(_t('editSavingsTitle'))}" aria-label="${_escHtml(_t('editSavingsTitle'))}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button></span>
             </li>
           </ul>
         </section>
@@ -2718,11 +2967,30 @@ function _restoreAIState() {
               <div class="cfd-track"><i class="cfd-fill cfd-fill--exp" id="cfd-bar-exp"></i></div>
             </div>
           </div>
+
+          <!-- Savings-rate trend -->
+          <div class="cfd-trend" id="cfd-trend">
+            <div class="cfd-trend-row">
+              <span class="cfd-chip cfd-chip--tri" id="cfd-trend-chip" hidden></span>
+              <div class="cfd-chart cfd-chart--mini" id="cfd-mini" role="img"></div>
+              <button type="button" class="cfd-more" id="cfd-trend-toggle" aria-expanded="false" aria-controls="cfd-trend-detail">
+                <span id="cfd-trend-toggle-label">${_t('cfdTrendMore')}</span>
+                <svg class="cfd-more-ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+            </div>
+            <div class="cfd-trend-detail" id="cfd-trend-detail" hidden>
+              <div class="cfd-detail-head"><span id="cfd-last6">${_t('cfdLast6')}</span><span class="cfd-target-lbl" id="cfd-target-lbl"></span></div>
+              <div class="cfd-chart cfd-chart--big" id="cfd-bigchart" role="img"></div>
+              <div class="cfd-chips" id="cfd-chips"></div>
+              <div class="cfd-note-line" id="cfd-partial" hidden></div>
+              <div class="cfd-why-title" id="cfd-why-title"></div>
+              <div class="cfd-why" id="cfd-why"></div>
+            </div>
+          </div>
         </section>
       </div>
 
       <div class="cfd-strip">
-        <!-- Uncategorized (logic: .hub-cf-card--has-uncategorized toggled by updateDashboardTotals) -->
         <div class="cfd-note cfd-unc" id="cf-uncategorized-card">
           <span class="cfd-note-main">
             <svg class="cfd-unc-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.3 3.9L2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>
@@ -2730,7 +2998,6 @@ function _restoreAIState() {
           </span>
           <span class="cfd-note-val"><span class="cfd-num" id="cf-uncategorized-balance">0 ₫</span><span class="cfd-note-hint" data-i18n="cfdNeedsReview">${_t('cfdNeedsReview')}</span></span>
         </div>
-        <!-- Pocket Debt -->
         <div class="cfd-note cfd-debt">
           <span class="cfd-note-main"><span data-i18n="cfdDebt">${_t('cfdDebt')}</span></span>
           <span class="cfd-note-val"><span class="cfd-num" id="cf-debt-pending">${_formatVNFull(_getTotalPendingDebt())}</span></span>
@@ -2739,84 +3006,82 @@ function _restoreAIState() {
 
     </div>
   </div>
-<!-- ═══ REAL-TIME CHART / HEATMAP ═══ -->
-    <div class="hub-cf-chart-section glass-card">
-      <div class="hub-cf-chart-header">
-        <h4 class="hub-cf-chart-title" data-i18n="chartTitle">${_t('chartTitle')}</h4>
 
-        <!-- View Toggle: Chart / Heatmap -->
-        <div class="hub-cf-view-toggle" role="group" aria-label="${_escHtml('View Mode')}">
-          <button class="hub-cf-view-toggle-btn active" data-view="chart" aria-pressed="true" title="${_escHtml('Chart View')}">
-            <span class="hub-cf-view-toggle-icon">📊</span>
-            <span class="hub-cf-view-toggle-label" data-i18n="viewChart">${_t('viewChart')}</span>
-          </button>
-          <button class="hub-cf-view-toggle-btn" data-view="heatmap" aria-pressed="false" title="${_escHtml('Heatmap View')}">
-            <span class="hub-cf-view-toggle-icon">🔲</span>
-            <span class="hub-cf-view-toggle-label" data-i18n="viewHeatmap">${_t('viewHeatmap')}</span>
-          </button>
-        </div>
+  <!-- ═══ REAL-TIME CHART / HEATMAP ═══ -->
+  <div class="hub-cf-chart-section glass-card">
+    <div class="hub-cf-chart-header">
+      <h4 class="hub-cf-chart-title" data-i18n="chartTitle">${_t('chartTitle')}</h4>
 
-        <select class="hub-cf-chart-filter" id="hub-cf-chart-filter">
-          <option value="day" data-i18n="chartDay">${_t('chartDay')}</option>
-          <option value="month" selected data-i18n="chartMonth">${_t('chartMonth')}</option>
-          <option value="year" data-i18n="chartYear">${_t('chartYear')}</option>
-        </select>
+      <div class="hub-cf-view-toggle" role="group" aria-label="View Mode">
+        <button class="hub-cf-view-toggle-btn active" data-view="chart" aria-pressed="true">
+          <span class="hub-cf-view-toggle-icon">📊</span>
+          <span class="hub-cf-view-toggle-label" data-i18n="viewChart">${_t('viewChart')}</span>
+        </button>
+        <button class="hub-cf-view-toggle-btn" data-view="heatmap" aria-pressed="false">
+          <span class="hub-cf-view-toggle-icon">🔲</span>
+          <span class="hub-cf-view-toggle-label" data-i18n="viewHeatmap">${_t('viewHeatmap')}</span>
+        </button>
       </div>
 
-      <!-- Chart View -->
-      <div class="hub-cf-chart-canvas-wrap" id="hub-cf-chart-view" style="display: block;">
-        <canvas id="hub-cf-chart-canvas"></canvas>
-      </div>
-
-      <!-- Heatmap View -->
-      <div class="hub-cf-heatmap-wrap" id="hub-cf-heatmap-view" style="display: none;">
-        <div class="hub-cf-heatmap-header">
-          <div class="hub-cf-heatmap-nav" role="group" aria-label="${_escHtml(_t('heatmapPickMonth'))}">
-            <button type="button" class="hub-cf-heatmap-nav-btn" id="hub-cf-heatmap-prev" aria-label="${_escHtml(_t('heatmapPrevMonth'))}" title="${_escHtml(_t('heatmapPrevMonth'))}">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg>
-            </button>
-            <button type="button" class="hub-cf-heatmap-month-btn" id="hub-cf-heatmap-month-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="hub-cf-heatmap-picker" title="${_escHtml(_t('heatmapPickMonth'))}">
-              <span class="hub-cf-heatmap-month" id="hub-cf-heatmap-month-label"></span>
-              <svg class="hub-cf-heatmap-month-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
-            </button>
-            <button type="button" class="hub-cf-heatmap-nav-btn" id="hub-cf-heatmap-next" aria-label="${_escHtml(_t('heatmapNextMonth'))}" title="${_escHtml(_t('heatmapNextMonth'))}">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
-            </button>
-            <button type="button" class="hub-cf-heatmap-today" id="hub-cf-heatmap-today" data-i18n="heatmapThisMonth" hidden>${_t('heatmapThisMonth')}</button>
-            <div class="hub-cf-heatmap-picker" id="hub-cf-heatmap-picker" role="dialog" aria-label="${_escHtml(_t('heatmapPickMonth'))}" hidden></div>
-          </div>
-          <div class="heatmap-limit-pill" id="hub-cf-heatmap-limit-pill" tabindex="0" role="button" aria-label="${_escHtml('Edit Daily Limit')}" title="${_escHtml('Set daily expense limit for this month')}">
-            <span class="heatmap-limit-label" data-i18n="heatmapDailyLimit">${_t('heatmapDailyLimit')}</span>
-            <span class="heatmap-limit-value" id="hub-cf-heatmap-limit-value">500.0k</span>
-            <span class="heatmap-limit-unit" data-i18n="heatmapPerDay">${_t('heatmapPerDay')}</span>
-            <span class="heatmap-limit-icon" aria-hidden="true">✏️</span>
-          </div>
-        </div>
-        <div class="hub-cf-heatmap-grid" id="hub-cf-heatmap-grid" role="grid" aria-label="${_escHtml('Expense heatmap calendar')}"></div>
-        <!-- Tooltip "Note" của heatmap được tạo động và gắn vào <body> (xem _getHeatmapTooltip) -->
-        <div class="hub-cf-heatmap-legend" id="hub-cf-heatmap-legend" aria-hidden="true">
-          <div class="hub-cf-heatmap-legend-item">
-            <span class="hub-cf-heatmap-legend-color hub-cf-heatmap-legend-level-0"></span>
-            <span data-i18n="heatmapLevel0">${_t('heatmapLevel0')}</span>
-          </div>
-          <div class="hub-cf-heatmap-legend-item">
-            <span class="hub-cf-heatmap-legend-color hub-cf-heatmap-legend-level-1"></span>
-            <span data-i18n="heatmapLevel1">${_t('heatmapLevel1')}</span>
-          </div>
-          <div class="hub-cf-heatmap-legend-item">
-            <span class="hub-cf-heatmap-legend-color hub-cf-heatmap-legend-level-2"></span>
-            <span data-i18n="heatmapLevel2">${_t('heatmapLevel2')}</span>
-          </div>
-          <div class="hub-cf-heatmap-legend-item">
-            <span class="hub-cf-heatmap-legend-color hub-cf-heatmap-legend-level-3"></span>
-            <span data-i18n="heatmapLevel3">${_t('heatmapLevel3')}</span>
-          </div>
-        </div>
-
-              </div>
+      <select class="hub-cf-chart-filter" id="hub-cf-chart-filter">
+        <option value="day" data-i18n="chartDay">${_t('chartDay')}</option>
+        <option value="month" selected data-i18n="chartMonth">${_t('chartMonth')}</option>
+        <option value="year" data-i18n="chartYear">${_t('chartYear')}</option>
+      </select>
     </div>
 
-    <!-- ═══ ACTION BAR ═══ -->
+    <!-- Chart View -->
+    <div class="hub-cf-chart-canvas-wrap" id="hub-cf-chart-view" style="display: block;">
+      <canvas id="hub-cf-chart-canvas"></canvas>
+    </div>
+
+    <!-- Heatmap View -->
+    <div class="hub-cf-heatmap-wrap" id="hub-cf-heatmap-view" style="display: none;">
+      <div class="hub-cf-heatmap-header">
+        <div class="hub-cf-heatmap-nav" role="group" aria-label="${_escHtml(_t('heatmapPickMonth'))}">
+          <button type="button" class="hub-cf-heatmap-nav-btn" id="hub-cf-heatmap-prev" aria-label="${_escHtml(_t('heatmapPrevMonth'))}" title="${_escHtml(_t('heatmapPrevMonth'))}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          </button>
+          <button type="button" class="hub-cf-heatmap-month-btn" id="hub-cf-heatmap-month-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="hub-cf-heatmap-picker" title="${_escHtml(_t('heatmapPickMonth'))}">
+            <span class="hub-cf-heatmap-month" id="hub-cf-heatmap-month-label"></span>
+            <svg class="hub-cf-heatmap-month-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </button>
+          <button type="button" class="hub-cf-heatmap-nav-btn" id="hub-cf-heatmap-next" aria-label="${_escHtml(_t('heatmapNextMonth'))}" title="${_escHtml(_t('heatmapNextMonth'))}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+          <button type="button" class="hub-cf-heatmap-today" id="hub-cf-heatmap-today" data-i18n="heatmapThisMonth" hidden>${_t('heatmapThisMonth')}</button>
+          <div class="hub-cf-heatmap-picker" id="hub-cf-heatmap-picker" role="dialog" aria-label="${_escHtml(_t('heatmapPickMonth'))}" hidden></div>
+        </div>
+        <div class="heatmap-limit-pill" id="hub-cf-heatmap-limit-pill" tabindex="0" role="button">
+          <span class="heatmap-limit-label" data-i18n="heatmapDailyLimit">${_t('heatmapDailyLimit')}</span>
+          <span class="heatmap-limit-value" id="hub-cf-heatmap-limit-value">500.0k</span>
+          <span class="heatmap-limit-unit" data-i18n="heatmapPerDay">${_t('heatmapPerDay')}</span>
+          <span class="heatmap-limit-icon" aria-hidden="true">✏️</span>
+        </div>
+      </div>
+      <div class="hub-cf-heatmap-grid" id="hub-cf-heatmap-grid" role="grid"></div>
+      <div class="hub-cf-heatmap-legend" id="hub-cf-heatmap-legend" aria-hidden="true">
+        <div class="hub-cf-heatmap-legend-item">
+          <span class="hub-cf-heatmap-legend-color hub-cf-heatmap-legend-level-0"></span>
+          <span data-i18n="heatmapLevel0">${_t('heatmapLevel0')}</span>
+        </div>
+        <div class="hub-cf-heatmap-legend-item">
+          <span class="hub-cf-heatmap-legend-color hub-cf-heatmap-legend-level-1"></span>
+          <span data-i18n="heatmapLevel1">${_t('heatmapLevel1')}</span>
+        </div>
+        <div class="hub-cf-heatmap-legend-item">
+          <span class="hub-cf-heatmap-legend-color hub-cf-heatmap-legend-level-2"></span>
+          <span data-i18n="heatmapLevel2">${_t('heatmapLevel2')}</span>
+        </div>
+        <div class="hub-cf-heatmap-legend-item">
+          <span class="hub-cf-heatmap-legend-color hub-cf-heatmap-legend-level-3"></span>
+          <span data-i18n="heatmapLevel3">${_t('heatmapLevel3')}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ ACTION BAR ═══ -->
   <div class="hub-cf-action-bar">
     <button class="hub-cf-btn hub-cf-btn--add" id="hub-cf-btn-add">
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -2845,35 +3110,33 @@ function _restoreAIState() {
   <div class="hub-cf-ledger glass-card">
     <div class="hub-cf-ledger-header">
       <div class="hub-cf-month-bar">
-        <button class="hub-cf-month-nav" id="hub-cf-month-prev" title="Previous month" aria-label="Previous month">◀</button>
+        <button class="hub-cf-month-nav" id="hub-cf-month-prev" title="${_escHtml(_t('heatmapPrevMonth'))}" aria-label="${_escHtml(_t('heatmapPrevMonth'))}">◀</button>
         <span class="hub-cf-month-label" id="hub-cf-month-label"></span>
-        <button class="hub-cf-month-nav" id="hub-cf-month-next" title="Next month" aria-label="Next month">▶</button>
+        <button class="hub-cf-month-nav" id="hub-cf-month-next" title="${_escHtml(_t('heatmapNextMonth'))}" aria-label="${_escHtml(_t('heatmapNextMonth'))}">▶</button>
       </div>
       <span class="hub-cf-ledger-count" id="hub-cf-tx-count">${_t('txCount_zero')}</span>
     </div>
 
     <!-- Segmented Tab Switcher -->
-    <div class="hub-cf-tab-switcher" role="tablist" aria-label="${_escHtml('View mode')}">
+    <div class="hub-cf-tab-switcher" role="tablist">
       <button class="hub-cf-tab-switcher-btn" role="tab" data-view="ledger" aria-selected="true" id="hub-cf-tab-ledger">
         <span class="hub-cf-tab-switcher-icon">📋</span>
-        <span class="hub-cf-tab-switcher-label" data-i18n="tabLedger">Lịch sử</span>
+        <span class="hub-cf-tab-switcher-label" data-i18n="tabLedger">${_t('tabLedger')}</span>
       </button>
       <button class="hub-cf-tab-switcher-btn" role="tab" data-view="stats" aria-selected="false" id="hub-cf-tab-stats">
         <span class="hub-cf-tab-switcher-icon">📊</span>
-        <span class="hub-cf-tab-switcher-label" data-i18n="tabStats">Thống kê</span>
+        <span class="hub-cf-tab-switcher-label" data-i18n="tabStats">${_t('tabStats')}</span>
       </button>
     </div>
 
-    <!-- HISTORY VIEW: Empty state + Transaction Table -->
+    <!-- HISTORY VIEW -->
     <div class="hub-cf-view-wrapper" id="hub-cf-history-view">
-      <!-- Empty state -->
       <div class="hub-cf-empty" id="hub-cf-empty-state" style="display:none;">
         <span class="hub-cf-empty-icon">📋</span>
         <p class="hub-cf-empty-text" data-i18n="noTxYet">${_t('noTxYet')}</p>
         <p class="hub-cf-empty-hint" data-i18n="noTxHint">${_t('noTxHint')}</p>
       </div>
 
-      <!-- Transaction Table -->
       <div class="hub-cf-table-wrap" id="hub-cf-table-wrap" style="display:none;">
         <table class="hub-cf-table">
           <thead>
@@ -2881,86 +3144,85 @@ function _restoreAIState() {
               <th class="hub-cf-col--date hub-cf-col-filterable">
                 <div class="hub-cf-th-inner">
                   <span data-i18n="thDate">${_t('thDate')}</span>
-                  <button class="hub-cf-filter-icon" id="btn-filter-date" aria-label="Filter Date" title="Filter by Date">
+                  <button class="hub-cf-filter-icon" id="btn-filter-date" aria-label="Filter Date">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
                   </button>
                 </div>
                 <div class="hub-cf-filter-popover glass" id="popover-filter-date" style="display:none; width: 220px;">
                   <div class="cf-popover-group">
                     <div class="cf-popover-row">
-                      <input type="number" id="filter-date-from" placeholder="${_t('labelDateFrom')}" min="1" max="31" class="cf-input-styled">
+                      <input type="number" id="filter-date-from" data-i18n-placeholder="labelDateFrom" placeholder="${_t('labelDateFrom')}" min="1" max="31" class="cf-input-styled">
                       <span style="color: var(--text-muted);">-</span>
-                      <input type="number" id="filter-date-to" placeholder="${_t('labelDateTo')}" min="1" max="31" class="cf-input-styled">
+                      <input type="number" id="filter-date-to" data-i18n-placeholder="labelDateTo" placeholder="${_t('labelDateTo')}" min="1" max="31" class="cf-input-styled">
                     </div>
                   </div>
                   <div class="cf-popover-group cf-radio-vertical-group" style="margin-top: 8px;">
-                    <label class="cf-radio-label"><input type="radio" name="filter-date-sort" value="desc" checked> ${_t('sortNewest')}</label>
-                    <label class="cf-radio-label"><input type="radio" name="filter-date-sort" value="asc"> ${_t('sortOldest')}</label>
+                    <label class="cf-radio-label"><input type="radio" name="filter-date-sort" value="desc" checked> <span data-i18n="sortNewest">${_t('sortNewest')}</span></label>
+                    <label class="cf-radio-label"><input type="radio" name="filter-date-sort" value="asc"> <span data-i18n="sortOldest">${_t('sortOldest')}</span></label>
                   </div>
                   <div class="cf-popover-actions">
-                    <button id="btn-filter-date-clear" class="hub-cf-modal-btn--cancel" style="padding:4px 12px; font-size:12px;">${_t('btnClear')}</button>
-                    <button id="btn-filter-date-apply" class="hub-cf-modal-btn--save" style="padding:4px 12px; font-size:12px;">${_t('btnApply')}</button>
+                    <button id="btn-filter-date-clear" class="hub-cf-modal-btn--cancel" style="padding:4px 12px; font-size:12px;" data-i18n="btnClear">${_t('btnClear')}</button>
+                    <button id="btn-filter-date-apply" class="hub-cf-modal-btn--save" style="padding:4px 12px; font-size:12px;" data-i18n="btnApply">${_t('btnApply')}</button>
                   </div>
                 </div>
               </th>
               <th class="hub-cf-col--desc hub-cf-col-filterable">
                 <div class="hub-cf-th-inner">
                   <span data-i18n="thDesc">${_t('thDesc')}</span>
-                  <button class="hub-cf-filter-icon" id="btn-filter-desc" aria-label="Filter Description" title="Filter by Description">
+                  <button class="hub-cf-filter-icon" id="btn-filter-desc" aria-label="Filter Description">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
                   </button>
                 </div>
                 <div class="hub-cf-filter-popover glass" id="popover-filter-desc" style="display:none; width: 220px;">
                   <div class="cf-popover-group">
                     <div class="cf-popover-row">
-                      <input type="text" id="filter-desc-keyword" placeholder="${_t('placeholderKeyword')}" class="cf-input-styled">
+                      <input type="text" id="filter-desc-keyword" data-i18n-placeholder="placeholderKeyword" placeholder="${_t('placeholderKeyword')}" class="cf-input-styled">
                     </div>
                   </div>
                   <div class="cf-popover-actions">
-                    <button id="btn-filter-desc-clear" class="hub-cf-modal-btn--cancel" style="padding:4px 12px; font-size:12px;">${_t('btnClear')}</button>
-                    <button id="btn-filter-desc-apply" class="hub-cf-modal-btn--save" style="padding:4px 12px; font-size:12px;">${_t('btnApply')}</button>
+                    <button id="btn-filter-desc-clear" class="hub-cf-modal-btn--cancel" style="padding:4px 12px; font-size:12px;" data-i18n="btnClear">${_t('btnClear')}</button>
+                    <button id="btn-filter-desc-apply" class="hub-cf-modal-btn--save" style="padding:4px 12px; font-size:12px;" data-i18n="btnApply">${_t('btnApply')}</button>
                   </div>
                 </div>
               </th>
               <th class="hub-cf-col--cat hub-cf-col-filterable">
                 <div class="hub-cf-th-inner">
                   <span data-i18n="thCat">${_t('thCat')}</span>
-                  <button class="hub-cf-filter-icon" id="btn-filter-cat" aria-label="Filter Category" title="Filter by Category">
+                  <button class="hub-cf-filter-icon" id="btn-filter-cat" aria-label="Filter Category">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 12 12 17 22 12"></polyline><polyline points="2 17 12 22 22 17"></polyline></svg>
                   </button>
                 </div>
                 <div class="hub-cf-filter-popover glass" id="popover-filter-cat" style="display:none; width: 240px;">
-                  <div class="cf-popover-group" id="filter-cat-list" style="max-height: 200px; overflow-y: auto; padding-right: 4px;">
-                  </div>
+                  <div class="cf-popover-group" id="filter-cat-list" style="max-height: 200px; overflow-y: auto; padding-right: 4px;"></div>
                   <div class="cf-popover-actions">
-                    <button id="btn-filter-cat-clear" class="hub-cf-modal-btn--cancel" style="padding:4px 12px; font-size:12px;">${_t('btnClear')}</button>
-                    <button id="btn-filter-cat-apply" class="hub-cf-modal-btn--save" style="padding:4px 12px; font-size:12px;">${_t('btnApply')}</button>
+                    <button id="btn-filter-cat-clear" class="hub-cf-modal-btn--cancel" style="padding:4px 12px; font-size:12px;" data-i18n="btnClear">${_t('btnClear')}</button>
+                    <button id="btn-filter-cat-apply" class="hub-cf-modal-btn--save" style="padding:4px 12px; font-size:12px;" data-i18n="btnApply">${_t('btnApply')}</button>
                   </div>
                 </div>
               </th>
               <th class="hub-cf-col--amt hub-cf-col-filterable">
                 <div class="hub-cf-th-inner">
                   <span data-i18n="thAmt">${_t('thAmt')}</span>
-                  <button class="hub-cf-filter-icon" id="btn-filter-amt" aria-label="Filter Amount" title="Filter by Amount">
+                  <button class="hub-cf-filter-icon" id="btn-filter-amt" aria-label="Filter Amount">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
                   </button>
                 </div>
                 <div class="hub-cf-filter-popover glass" id="popover-filter-amt" style="display:none; width: 220px;">
                   <div class="cf-popover-group">
                     <div class="cf-popover-row">
-                      <input type="number" id="filter-amt-min" placeholder="${_t('labelMin')} (VND)" min="0" class="cf-input-styled">
+                      <input type="number" id="filter-amt-min" data-i18n-placeholder="labelMin" placeholder="${_t('labelMin')}" min="0" class="cf-input-styled">
                       <span style="color: var(--text-muted);">-</span>
-                      <input type="number" id="filter-amt-max" placeholder="${_t('labelMax')} (VND)" min="0" class="cf-input-styled">
+                      <input type="number" id="filter-amt-max" data-i18n-placeholder="labelMax" placeholder="${_t('labelMax')}" min="0" class="cf-input-styled">
                     </div>
                   </div>
                   <div class="cf-popover-group cf-radio-vertical-group" style="margin-top: 8px;">
-                    <label class="cf-radio-label"><input type="radio" name="sort-amt" value="desc"> ${_t('sortHighest')}</label>
-                    <label class="cf-radio-label"><input type="radio" name="sort-amt" value="asc"> ${_t('sortLowest')}</label>
-                    <label class="cf-radio-label"><input type="radio" name="sort-amt" value="none" checked> ${_t('sortNone')}</label>
+                    <label class="cf-radio-label"><input type="radio" name="sort-amt" value="desc"> <span data-i18n="sortHighest">${_t('sortHighest')}</span></label>
+                    <label class="cf-radio-label"><input type="radio" name="sort-amt" value="asc"> <span data-i18n="sortLowest">${_t('sortLowest')}</span></label>
+                    <label class="cf-radio-label"><input type="radio" name="sort-amt" value="none" checked> <span data-i18n="sortNone">${_t('sortNone')}</span></label>
                   </div>
                   <div class="cf-popover-actions">
-                    <button id="btn-filter-amt-clear" class="hub-cf-modal-btn--cancel" style="padding:4px 12px; font-size:12px;">${_t('btnClear')}</button>
-                    <button id="btn-filter-amt-apply" class="hub-cf-modal-btn--save" style="padding:4px 12px; font-size:12px;">${_t('btnApply')}</button>
+                    <button id="btn-filter-amt-clear" class="hub-cf-modal-btn--cancel" style="padding:4px 12px; font-size:12px;" data-i18n="btnClear">${_t('btnClear')}</button>
+                    <button id="btn-filter-amt-apply" class="hub-cf-modal-btn--save" style="padding:4px 12px; font-size:12px;" data-i18n="btnApply">${_t('btnApply')}</button>
                   </div>
                 </div>
               </th>
@@ -2972,7 +3234,7 @@ function _restoreAIState() {
       </div>
     </div>
 
-    <!-- STATS VIEW: Category Breakdown -->
+    <!-- STATS VIEW -->
     <div class="hub-cf-view-wrapper" id="hub-cf-stats-view" style="display:none;">
       <div class="hub-cf-category-breakdown" id="hub-cf-breakdown-section">
         <p class="hub-cf-breakdown-title" data-i18n="categoryTitle">${_t('categoryTitle')}</p>
@@ -2997,14 +3259,12 @@ function _restoreAIState() {
     </div>
   </div>
 
-  <!-- Empty state -->
   <div class="hub-cf-debt-empty" id="hub-cf-debt-empty-state" style="display:none;">
     <span class="hub-cf-debt-empty-icon">📓</span>
     <p class="hub-cf-debt-empty-text" data-i18n="noDebtsYet">${_pd_t('noDebtsYet')}</p>
     <p class="hub-cf-debt-empty-hint" data-i18n="noDebtsHint">${_pd_t('noDebtsHint')}</p>
   </div>
 
-  <!-- Active Debts Table -->
   <div class="hub-cf-debt-table-wrap" id="hub-cf-debt-table-wrap" style="display:none;">
     <table class="hub-cf-debt-table">
       <thead>
@@ -3022,35 +3282,35 @@ function _restoreAIState() {
   </div>
 </div>
 
-<!-- ═══ AI FINANCIAL ADVISOR v2 — Kế hoạch chi tiêu + Hỏi đáp ═══ -->
+<!-- ═══ AI FINANCIAL ADVISOR v2 ═══ -->
 ${_aiShellHTML()}
 
 <!-- ═══ AI KEY MANAGEMENT MODAL ═══ -->
-<div id="cf-ai-key-modal" class="hub-cf-ai-key-modal" role="dialog" aria-modal="true" aria-label="AI API Key Management" style="display:none;">
+<div id="cf-ai-key-modal" class="hub-cf-ai-key-modal" role="dialog" aria-modal="true" aria-label="${_escHtml(_t('aiKeyModalTitle'))}" style="display:none;">
   <div class="hub-cf-ai-key-modal-content glass">
     <div class="hub-cf-ai-key-modal-header">
-      <h4>🔑 AI API Key Management</h4>
+      <h4 data-i18n="aiKeyModalTitle">${_t('aiKeyModalTitle')}</h4>
       <button id="cf-key-close" class="hub-cf-ai-key-modal-close" aria-label="Close">✕</button>
     </div>
     <div class="hub-cf-ai-key-modal-body">
       <div class="hub-cf-ai-key-group">
-        <label for="cf-key-gemini">Gemini API Key</label>
-        <input type="password" id="cf-key-gemini" class="hub-cf-ai-key-input" placeholder="Nhập Gemini API Key..." autocomplete="new-password" spellcheck="false">
+        <label for="cf-key-gemini" data-i18n="aiKeyGeminiLabel">${_t('aiKeyGeminiLabel')}</label>
+        <input type="password" id="cf-key-gemini" class="hub-cf-ai-key-input" data-i18n-placeholder="aiKeyGeminiPlaceholder" placeholder="${_t('aiKeyGeminiPlaceholder')}" autocomplete="new-password" spellcheck="false">
       </div>
       <div class="hub-cf-ai-key-group">
-        <label for="cf-key-nvidia">Nvidia NIM API Key</label>
-        <input type="password" id="cf-key-nvidia" class="hub-cf-ai-key-input" placeholder="Nhập Nvidia NIM API Key..." autocomplete="new-password" spellcheck="false">
+        <label for="cf-key-nvidia" data-i18n="aiKeyNvidiaLabel">${_t('aiKeyNvidiaLabel')}</label>
+        <input type="password" id="cf-key-nvidia" class="hub-cf-ai-key-input" data-i18n-placeholder="aiKeyNvidiaPlaceholder" placeholder="${_t('aiKeyNvidiaPlaceholder')}" autocomplete="new-password" spellcheck="false">
       </div>
       <div class="hub-cf-ai-key-actions">
-        <button id="cf-key-save" class="hub-cf-ai-key-btn hub-cf-ai-key-btn--save">Lưu Keys</button>
-        <button id="cf-key-clear" class="hub-cf-ai-key-btn hub-cf-ai-key-btn--clear">Xóa Keys</button>
-        <button id="cf-key-close-bottom" class="hub-cf-ai-key-btn hub-cf-ai-key-btn--close">Đóng</button>
+        <button id="cf-key-save" class="hub-cf-ai-key-btn hub-cf-ai-key-btn--save" data-i18n="aiKeySave">${_t('aiKeySave')}</button>
+        <button id="cf-key-clear" class="hub-cf-ai-key-btn hub-cf-ai-key-btn--clear" data-i18n="aiKeyClear">${_t('aiKeyClear')}</button>
+        <button id="cf-key-close-bottom" class="hub-cf-ai-key-btn hub-cf-ai-key-btn--close" data-i18n="aiKeyClose">${_t('aiKeyClose')}</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ═══ QUICK-ADD MODAL (injected into container) ═══ -->
+<!-- ═══ QUICK-ADD MODAL ═══ -->
 <div class="hub-cf-overlay" id="hub-cf-overlay" role="dialog" aria-modal="true" aria-label="${_t('modalTitle')}" style="display:none;">
   <div class="hub-cf-modal glass">
     <div class="hub-cf-modal-header">
@@ -3062,7 +3322,7 @@ ${_aiShellHTML()}
         </button>
         <button class="hub-cf-tab" data-tab="income" id="hub-cf-tab-income">
           <span class="hub-cf-tab-dot hub-cf-tab-dot--income"></span>
-          <span data-i18n="addTx">${_t('tabIncome')}</span>
+          <span data-i18n="tabIncome">${_t('tabIncome')}</span>
         </button>
       </div>
       <button class="hub-cf-modal-close" id="hub-cf-modal-close" aria-label="Close modal">✕</button>
@@ -3082,6 +3342,7 @@ ${_aiShellHTML()}
         <div class="hub-cf-form-group">
           <label class="hub-cf-form-label" for="hub-cf-desc" data-i18n="labelDesc">${_t('labelDesc')}</label>
           <input type="text" id="hub-cf-desc" class="hub-cf-form-input"
+                 data-i18n-placeholder="placeholderDesc"
                  placeholder="${_t('placeholderDesc')}" maxlength="120" />
         </div>
         <div class="hub-cf-form-group">
@@ -3119,6 +3380,7 @@ ${_aiShellHTML()}
         <div class="hub-cf-form-group">
           <label class="hub-cf-form-label" for="hub-cf-debt-debtor" data-i18n="labelDebtorName">${_pd_t('labelDebtorName')}</label>
           <input type="text" id="hub-cf-debt-debtor" class="hub-cf-form-input"
+                 data-i18n-placeholder="placeholderDebtor"
                  placeholder="${_pd_t('placeholderDebtor')}" maxlength="80" required />
         </div>
         <div class="hub-cf-form-group">
@@ -3139,6 +3401,7 @@ ${_aiShellHTML()}
         <div class="hub-cf-form-group">
           <label class="hub-cf-form-label" for="hub-cf-debt-note" data-i18n="labelNote">${_pd_t('labelNote')}</label>
           <textarea id="hub-cf-debt-note" class="hub-cf-form-input hub-cf-textarea"
+                    data-i18n-placeholder="placeholderNote"
                     placeholder="${_pd_t('placeholderNote')}" maxlength="200" rows="2"></textarea>
         </div>
         <div class="hub-cf-form-actions">
@@ -3167,7 +3430,7 @@ ${_aiShellHTML()}
   </div>
 </div>
 
-<!-- ═══ DEBT RECOVERY MODAL (Thu hồi nợ) ═══ -->
+<!-- ═══ DEBT RECOVERY MODAL ═══ -->
 <div class="hub-cf-overlay" id="hub-cf-debt-recovery-overlay" role="dialog" aria-modal="true" aria-label="${_pd_t('recoveryTitle')}" style="display:none;">
   <div class="hub-cf-modal hub-cf-debt-recovery-modal glass">
     <div class="hub-cf-modal-header">
@@ -3268,41 +3531,64 @@ ${_aiShellHTML()}
    *
    * @param {'en'|'vi'} lang — the new language code
    */
+  var _HTML_I18N_KEYS = { noTxHint: true, noDebtsHint: true, hintRecoveryNoIncome: true };
+  var _DEBT_SCOPES = '.hub-cf-debt-ledger, #hub-cf-debt-overlay, #hub-cf-debt-history-overlay, #hub-cf-debt-recovery-overlay';
+
   function updateCashFlowLanguage(lang) {
     if (!lang) lang = _getCFLang();
     var dict = CASHFLOW_I18N[lang] || CASHFLOW_I18N['vi'];
 
-    // ── Static text nodes: [data-i18n] ──
     if (_container) {
+      // 1. Dịch toàn bộ phần tử [data-i18n] thuộc CashFlow & AI Advisor (tách biệt với Pocket Debt)
       var els = _container.querySelectorAll('[data-i18n]');
       Array.prototype.forEach.call(els, function (el) {
+        if (el.closest(_DEBT_SCOPES)) return;
         var key = el.getAttribute('data-i18n');
         if (key && dict[key] !== undefined) {
-          el.textContent = dict[key];
+          if (_HTML_I18N_KEYS[key]) el.innerHTML = dict[key];
+          else el.textContent = dict[key];
         }
       });
 
-      // ── Chart filter <option> text ──
-      var filterEl = _qs('#hub-cf-chart-filter');
-      if (filterEl) {
-        var opts = filterEl.querySelectorAll('option');
-        opts.forEach(function (opt) {
-          var key = opt.getAttribute('data-i18n');
-          if (key && dict[key] !== undefined) {
-            opt.textContent = dict[key];
-          }
-        });
-      }
+      // 2. Dịch toàn bộ thuộc tính placeholder có [data-i18n-placeholder]
+      var phEls = _container.querySelectorAll('[data-i18n-placeholder]');
+      Array.prototype.forEach.call(phEls, function (el) {
+        if (el.closest(_DEBT_SCOPES)) return;
+        var key = el.getAttribute('data-i18n-placeholder');
+        if (key && dict[key] !== undefined) {
+          el.setAttribute('placeholder', dict[key]);
+        }
+      });
+
+      // 3. Cập nhật tooltip các nút chỉnh sửa số dư trên Dashboard
+      var nwBtn = _qs('#btn-edit-networth');
+      if (nwBtn) { nwBtn.title = dict.editNetWorthTitle; nwBtn.setAttribute('aria-label', dict.editNetWorthTitle); }
+      var bankBtn = _qs('#btn-edit-bank');
+      if (bankBtn) { bankBtn.title = dict.editBankTitle; bankBtn.setAttribute('aria-label', dict.editBankTitle); }
+      var cashBtn = _qs('#btn-edit-cash');
+      if (cashBtn) { cashBtn.title = dict.editCashTitle; cashBtn.setAttribute('aria-label', dict.editCashTitle); }
+      var savBtn = _qs('.hub-cf-card-edit-btn[data-target="savings"]');
+      if (savBtn) { savBtn.title = dict.editSavingsTitle; savBtn.setAttribute('aria-label', dict.editSavingsTitle); }
     }
 
-    // ── Re-render dynamic sections that contain language-dependent strings ──
+    // 4. Cập nhật lại các tùy chọn danh mục và bộ lọc
+    _populateCategories();
+    _populateCategoryFilterOptions();
+
+    // 5. Render lại tất cả vùng động (Lịch sử, Biểu đồ, Heatmap, Sổ nợ, Kế hoạch AI)
     _refreshLedger();
     _updateChart();
     _refreshHeatmap();
     _updateDebtLanguage();
     updateDashboardTotals();
+    _renderSpendingPlan();
+    _renderAIQuickChips();
+    _updateAIStatus();
+
     var _hb = document.getElementById('cfd-hide-label'), _hr = document.getElementById('cfd-root');
     if (_hb && _hr) _hb.textContent = _hr.classList.contains('cfd--hidden') ? _t('cfdShow') : _t('cfdHide');
+    var _tb = document.getElementById('cfd-trend-toggle');
+    if (_tb) _cfdSetTrendOpen(_tb.getAttribute('aria-expanded') === 'true');
   }
 
   // Expose updateCashFlowLanguage as a public module method
@@ -3345,6 +3631,163 @@ ${_aiShellHTML()}
     // Net Worth = Bank + Cash + Uncategorized + offset
     return bankBalance + cashBalance + uncategorizedBalance + (_cashFlowMeta.netWorthOffset || 0);
   }
+
+  // ── TREND BEGIN ─────────────────────────────────────────────
+  // Tỷ lệ để dành theo tháng (display-only). Cùng quy tắc với thẻ tổng kết:
+  // loại chuyển tiết kiệm (source 'savings' / danh mục tiết kiệm) và thu hồi nợ.
+  function _cfdIsSavingsRelated(tx) {
+    return tx.source === 'savings' || tx.category === 'tiet-kiem' || tx.category === 'Tiết kiệm' || tx.category === '🐷 Tiết kiệm';
+  }
+  function _cfdIsDebtRecovery(tx) { return tx.category === 'thu-no' || tx.category === 'Thu nợ'; }
+
+  /** Tổng hợp một tháng; maxDay > 0 chỉ tính đến ngày đó (so sánh cùng kỳ). */
+  function _cfdMonthAgg(year, month, maxDay) {
+    var agg = { income: 0, expense: 0, byCat: {}, n: 0 };
+    _getMonthTransactions(year, month).forEach(function (tx) {
+      if (maxDay && (tx.day || 1) > maxDay) return;
+      if (_cfdIsSavingsRelated(tx)) return;
+      var amt = Number(tx.amount) || 0;
+      if (tx.type === 'income') { if (!_cfdIsDebtRecovery(tx)) agg.income += amt; }
+      else { agg.expense += amt; agg.byCat[tx.category] = (agg.byCat[tx.category] || 0) + amt; }
+      agg.n++;
+    });
+    return agg;
+  }
+  function _cfdRate(a) { return a.income > 0 ? (a.income - a.expense) / a.income * 100 : null; }
+  function _cfdR1(v) { return Math.round(Math.abs(v) * 10) / 10; }
+  function _cfdPct(v) { return String(_cfdR1(v)).replace('.', ',') + '%'; }
+  function _cfdDelta(v) { return (v > 0 ? '+' : (v < 0 ? '−' : '')) + String(_cfdR1(v)).replace('.', ',') + ' ' + _t('cfdPts'); }
+  function _cfdTri(up) {
+    return '<svg class="cfd-tri" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="' + (up ? 'M6 2l5 8H1z' : 'M6 10L1 2h10z') + '" fill="currentColor"/></svg>';
+  }
+  function _cfdMonthLbl(m) { return _t('cfdMonthShort') + m.month; }
+
+  /** Cột tỷ lệ để dành; big = có nhãn số + nhãn tháng. */
+  function _cfdBarsHTML(rates, target, H, big) {
+    var maxR = 10;
+    rates.forEach(function (r) { if (r.rate != null && r.rate > maxR) maxR = r.rate; });
+    maxR = Math.max(maxR * 1.1, target * 1.25);
+    var cols = rates.map(function (r, i) {
+      var cur = i === rates.length - 1;
+      var h = r.rate == null ? 2 : (r.rate <= 0 ? 3 : Math.max(3, r.rate / maxR * H));
+      var cls = 'cfd-bar' + (cur ? ' cfd-bar--cur' : '') + (r.rate != null && r.rate < 0 ? ' cfd-bar--neg' : '') + (r.rate == null ? ' cfd-bar--na' : '');
+      var tip = _cfdMonthLbl(r.m) + ': ' + (r.rate == null ? '—' : (r.rate < 0 ? '−' : '') + _cfdPct(r.rate));
+      var col = '<div class="cfd-col" title="' + _escHtml(tip) + '">';
+      if (big) col += '<span class="cfd-col-val' + (cur ? ' is-cur' : '') + '">' + (r.rate == null ? '—' : (r.rate < 0 ? '−' : '') + _cfdPct(r.rate)) + '</span>';
+      col += '<i class="' + cls + '" style="height:' + h.toFixed(1) + 'px"></i></div>';
+      return col;
+    }).join('');
+    var line = '<div class="cfd-tline" style="bottom:' + (target / maxR * H).toFixed(1) + 'px"></div>';
+    var html = '<div class="cfd-cols" style="height:' + (big ? H + 22 : H) + 'px">' + line + cols + '</div>';
+    if (big) {
+      html += '<div class="cfd-col-lbls">' + rates.map(function (r, i) {
+        return '<span class="' + (i === rates.length - 1 ? 'is-cur' : '') + '">' + _escHtml(_cfdMonthLbl(r.m)) + (i === rates.length - 1 && r._partial ? ' *' : '') + '</span>';
+      }).join('') + '</div>';
+    }
+    return html;
+  }
+
+  function _cfdSetTrendOpen(on) {
+    var root = document.getElementById('cfd-trend'), det = document.getElementById('cfd-trend-detail');
+    var btn = document.getElementById('cfd-trend-toggle'), lbl = document.getElementById('cfd-trend-toggle-label');
+    if (!root || !det || !btn) return;
+    det.hidden = !on;
+    root.classList.toggle('cfd-trend--open', on);
+    btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+    if (lbl) lbl.textContent = on ? _t('cfdTrendLess') : _t('cfdTrendMore');
+  }
+
+  function _updateTrend() {
+    var root = document.getElementById('cfd-trend');
+    if (!root) return;
+    var ym = _currentMonth || _currentYearMonth();
+    var now = new Date();
+    var isCur = ym.year === now.getFullYear() && ym.month === now.getMonth() + 1;
+    var cutoff = isCur ? now.getDate() : 0;
+    var target = _aiGetTargetRate();
+
+    var rates = [];
+    for (var i = 5; i >= 0; i--) {
+      var m = _aiShiftMonth(ym, -i);
+      var a = _cfdMonthAgg(m.year, m.month, 0);
+      rates.push({ m: m, rate: _cfdRate(a), agg: a, _partial: i === 0 && isCur });
+    }
+    var cur = rates[5], pm = rates[4].m;
+    var dim = new Date(pm.year, pm.month, 0).getDate();
+    var curAgg = cutoff ? _cfdMonthAgg(ym.year, ym.month, cutoff) : cur.agg;
+    var prevAgg = _cfdMonthAgg(pm.year, pm.month, cutoff ? Math.min(cutoff, dim) : 0);
+    var prevRate = _cfdRate(prevAgg), curRate = _cfdRate(curAgg);
+
+    // Nhóm chip so sánh
+    var chips = [];
+    var dPrev = (curRate != null && prevRate != null) ? curRate - prevRate : null;
+    function triChip(d, text) {
+      var tone = Math.abs(d) < 0.05 ? 'flat' : (d > 0 ? 'ok' : 'neg');
+      return '<span class="cfd-chip cfd-chip--tri cfd-chip--' + tone + '">' + (tone === 'flat' ? '' : _cfdTri(d > 0)) + _escHtml(text) + '</span>';
+    }
+    if (dPrev != null) chips.push(triChip(dPrev, _cfdDelta(dPrev) + ' ' + _t('cfdVsMonth') + ' ' + _cfdMonthLbl(pm)));
+
+    var past3 = [rates[2], rates[3], rates[4]].filter(function (r) { return r.rate != null; });
+    if (curRate != null && past3.length) {
+      var avg = past3.reduce(function (s, r) { return s + r.rate; }, 0) / past3.length;
+      chips.push(triChip(curRate - avg, _cfdDelta(curRate - avg) + ' ' + _t('cfdVsAvg3')));
+    }
+    if (curRate != null) {
+      var meets = curRate >= target;
+      chips.push('<span class="cfd-chip ' + (meets ? 'cfd-chip--ok' : 'cfd-chip--flat') + '">' +
+        _escHtml(meets ? _t('cfdMeetsTarget').replace('{t}', target) : _t('cfdBelowTarget').replace('{x}', _cfdR1(target - curRate).toString().replace('.', ',')).replace('{t}', target)) + '</span>');
+    }
+    var others = rates.slice(0, 5).filter(function (r) { return r.rate != null; }).map(function (r) { return r.rate; });
+    if (cur.rate != null && others.length >= 2) {
+      if (cur.rate >= Math.max.apply(null, others)) chips.push('<span class="cfd-chip cfd-chip--ok">' + _escHtml(_t('cfdBest6')) + '</span>');
+      else if (cur.rate <= Math.min.apply(null, others)) chips.push('<span class="cfd-chip cfd-chip--neg">' + _escHtml(_t('cfdWorst6')) + '</span>');
+    }
+
+    // Dòng gọn: chip so sánh với tháng trước + 6 cột mini
+    var topChip = document.getElementById('cfd-trend-chip');
+    if (topChip) {
+      if (dPrev != null) {
+        var tone = Math.abs(dPrev) < 0.05 ? 'flat' : (dPrev > 0 ? 'ok' : 'neg');
+        topChip.className = 'cfd-chip cfd-chip--tri cfd-chip--' + tone;
+        topChip.innerHTML = (tone === 'flat' ? '' : _cfdTri(dPrev > 0)) + _escHtml(_cfdDelta(dPrev) + ' ' + _t('cfdVsMonth') + ' ' + _cfdMonthLbl(pm));
+        topChip.hidden = false;
+      } else {
+        topChip.hidden = true;
+      }
+    }
+    var aria = _t('cfdSaveRate6') + ': ' + rates.map(function (r) { return _cfdMonthLbl(r.m) + ' ' + (r.rate == null ? '—' : (r.rate < 0 ? '−' : '') + _cfdPct(r.rate)); }).join(', ') + '. ' + _t('cfdTargetLbl').replace('{t}', target);
+    var mini = document.getElementById('cfd-mini'), big = document.getElementById('cfd-bigchart');
+    if (mini) { mini.innerHTML = _cfdBarsHTML(rates, target, 40, false); mini.setAttribute('aria-label', aria); }
+    if (big)  { big.innerHTML = _cfdBarsHTML(rates, target, 130, true);  big.setAttribute('aria-label', aria); }
+
+    // Chi tiết
+    var set = function (id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; };
+    var last6 = document.getElementById('cfd-last6'); if (last6) last6.textContent = _t('cfdLast6');
+    var tl = document.getElementById('cfd-target-lbl'); if (tl) tl.textContent = _t('cfdTargetLbl').replace('{t}', target);
+    set('cfd-chips', chips.length ? chips.join('') : '<span class="cfd-muted-txt">' + _escHtml(_t('cfdNoData')) + '</span>');
+    var partial = document.getElementById('cfd-partial');
+    if (partial) { partial.hidden = !isCur; partial.textContent = isCur ? _t('cfdPartial').replace('{d}', cutoff) : ''; }
+
+    var whyTitle = document.getElementById('cfd-why-title');
+    if (whyTitle) whyTitle.textContent = _t('cfdWhy').replace('{m}', _cfdMonthLbl(pm));
+    if (prevAgg.n === 0 || curAgg.n === 0) {
+      set('cfd-why', '<div class="cfd-muted-txt">' + _escHtml(_t('cfdNoData')) + '</div>');
+    } else {
+      var ids = {};
+      Object.keys(curAgg.byCat).forEach(function (k) { ids[k] = 1; });
+      Object.keys(prevAgg.byCat).forEach(function (k) { ids[k] = 1; });
+      var diffs = Object.keys(ids).map(function (k) { return { id: k, d: (curAgg.byCat[k] || 0) - (prevAgg.byCat[k] || 0) }; })
+        .filter(function (x) { return Math.abs(x.d) >= 1; })
+        .sort(function (a, b) { return Math.abs(b.d) - Math.abs(a.d); }).slice(0, 3);
+      set('cfd-why', diffs.length ? diffs.map(function (x) {
+        var up = x.d > 0;   // chi tăng = xấu (đỏ), chi giảm = tốt (xanh)
+        return '<div class="cfd-why-row"><span class="cfd-why-name"><span class="cfd-why-tri ' + (up ? 'is-bad' : 'is-good') + '">' + _cfdTri(up) + '</span>' +
+          _escHtml(_categoryDisplayName(x.id, 'expense')) + '</span><span class="cfd-num cfd-why-amt ' + (up ? 'is-bad' : 'is-good') + '">' +
+          (up ? '+' : '−') + _escHtml(_formatVNFull(Math.abs(x.d))) + '</span></div>';
+      }).join('') : '<div class="cfd-muted-txt">' + _escHtml(_t('cfdNoData')) + '</div>');
+    }
+  }
+  // ── TREND END ───────────────────────────────────────────────
 
   /** Derived, display-only values for the dashboard (allocation %, remaining, saved rate, bars, period).
    *  Reads numbers already computed by updateDashboardTotals — never recomputes balances. */
@@ -3399,6 +3842,8 @@ ${_aiShellHTML()}
       label = _t('cfdMonth') + ' ' + String(ymx.month).padStart(2, '0') + '/' + ymx.year;
     }
     set('cfd-period', label ? ' · ' + label : '');
+
+    _updateTrend();
   }
 
   function updateDashboardTotals() {
@@ -3593,14 +4038,12 @@ ${_aiShellHTML()}
   }
 
   function _updateMonthLabel() {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const label = months[_currentMonth.month - 1] + ' ' + _currentMonth.year;
+    var months = _heatmapMonthNames(false);
+    var label = months[_currentMonth.month - 1] + ' ' + _currentMonth.year;
     _setTextById('hub-cf-month-label', label);
   }
 
   function _refreshTransactions() {
-    // Use Data Pipeline: filtered + sorted transactions
     var rawMonthTxs = _getMonthTransactions(_currentMonth.year, _currentMonth.month);
     var txs = typeof _getFilteredAndSortedTransactions === 'function' ? _getFilteredAndSortedTransactions() : rawMonthTxs;
     var emptyEl = _qs('#hub-cf-empty-state');
@@ -3610,7 +4053,6 @@ ${_aiShellHTML()}
 
     if (!emptyEl || !tableEl || !tbody) return;
 
-    // Case 1: Absolutely no transactions this month (Raw data is empty)
     if (rawMonthTxs.length === 0) {
       emptyEl.style.display = 'flex';
       tableEl.style.display = 'none';
@@ -3618,21 +4060,19 @@ ${_aiShellHTML()}
       return;
     }
 
-    // Case 2: Has data, but filtered result is empty
     if (txs.length === 0) {
       emptyEl.style.display = 'none';
-      tableEl.style.display = ''; // MUST KEEP TABLE VISIBLE SO FILTERS REMAIN ACCESSIBLE
+      tableEl.style.display = '';
       if (countEl) countEl.textContent = _t('txCount_zero');
-
-      // Inject a "No results found" row directly into the tbody
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:32px 16px; color:var(--text-muted);">Không tìm thấy giao dịch nào khớp với bộ lọc.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:32px 16px; color:var(--text-muted);">' + _escHtml(_t('noFilterMatch')) + '</td></tr>';
       return;
     }
 
-    // Case 3: Normal rendering (Has filtered data)
     emptyEl.style.display = 'none';
     tableEl.style.display = '';
-    if (countEl) countEl.textContent = txs.length + ' ' + _t('txCount_other');
+    if (countEl) {
+      countEl.textContent = txs.length === 1 ? _t('txCount_one') : (txs.length + ' ' + _t('txCount_other'));
+    }
 
     var html = '';
     txs.forEach(function (tx) {
@@ -3641,16 +4081,15 @@ ${_aiShellHTML()}
       var prefix = isExpense ? '-' : '+';
       var amountFormatted = prefix + _formatVND(tx.amount).replace(/^\+/, '+').replace(/^-/, '-');
       var catName = _categoryDisplayName(tx.category, tx.type);
-      // Source badge
       var sourceBadge = '';
       if (tx.source === 'bank') {
-        sourceBadge = '<span class="hub-cf-source-badge hub-cf-source-badge--bank" title="' + _t('sourceBank') + '">🏦</span>';
+        sourceBadge = '<span class="hub-cf-source-badge hub-cf-source-badge--bank" title="' + _escHtml(_t('sourceBank')) + '">🏦</span>';
       } else if (tx.source === 'cash') {
-        sourceBadge = '<span class="hub-cf-source-badge hub-cf-source-badge--cash" title="' + _t('sourceCash') + '">💵</span>';
+        sourceBadge = '<span class="hub-cf-source-badge hub-cf-source-badge--cash" title="' + _escHtml(_t('sourceCash')) + '">💵</span>';
       } else if (tx.source === 'savings') {
-        sourceBadge = '<span class="hub-cf-source-badge hub-cf-source-badge--savings" title="' + _t('sourceSavings') + '">🐷</span>';
+        sourceBadge = '<span class="hub-cf-source-badge hub-cf-source-badge--savings" title="' + _escHtml(_t('sourceSavings')) + '">🐷</span>';
       } else {
-        sourceBadge = '<span class="hub-cf-source-badge hub-cf-source-badge--uncategorized" title="' + _t('sourceUncategorized') + '">❓</span>';
+        sourceBadge = '<span class="hub-cf-source-badge hub-cf-source-badge--uncategorized" title="' + _escHtml(_t('sourceUncategorized')) + '">❓</span>';
       }
 
       html += '<tr class="' + rowClass + '" data-tx-id="' + tx.id + '">';
@@ -3660,13 +4099,13 @@ ${_aiShellHTML()}
       html += '<td>' + amountFormatted + '</td>';
       html += '<td>';
       html += '<div class="hub-cf-tx-actions">';
-      html += '<button class="hub-cf-edit-btn" data-tx-id="' + tx.id + '" title="Chỉnh sửa" aria-label="Chỉnh sửa giao dịch">';
+      html += '<button class="hub-cf-edit-btn" data-tx-id="' + tx.id + '" title="' + _escHtml(_t('btnEditTx')) + '" aria-label="' + _escHtml(_t('btnEditTx')) + '">';
       html += '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">';
       html += '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>';
       html += '<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>';
       html += '</svg>';
       html += '</button>';
-      html += '<button class="hub-cf-delete-btn" data-tx-id="' + tx.id + '" title="Xóa" aria-label="Xóa giao dịch">✕</button>';
+      html += '<button class="hub-cf-delete-btn" data-tx-id="' + tx.id + '" title="' + _escHtml(_t('btnDeleteTx')) + '" aria-label="' + _escHtml(_t('btnDeleteTx')) + '">✕</button>';
       html += '</div>';
       html += '</td>';
       html += '</tr>';
@@ -3674,8 +4113,6 @@ ${_aiShellHTML()}
 
     tbody.innerHTML = html;
 
-    // Event delegation for edit buttons (transaction)
-    // Bind ONCE to tbody - handles dynamically rendered edit buttons
     if (!tbody.dataset.editDelegationBound) {
       tbody.dataset.editDelegationBound = 'true';
       tbody.addEventListener('click', function (e) {
@@ -3687,7 +4124,6 @@ ${_aiShellHTML()}
       });
     }
 
-    // Bind delete buttons
     tbody.querySelectorAll('.hub-cf-delete-btn').forEach(function (btn) {
       btn.addEventListener('click', function (e) {
         e.stopPropagation();
@@ -3697,174 +4133,655 @@ ${_aiShellHTML()}
     });
   }
 
+  // ==== BUDGET-ENGINE-BEGIN ================================================
+  // ══════════════════════════════════════════════════════════════
+  // BUDGET ENGINE & BUDGET STUDIO — ngân sách theo tháng (budgetPlans)
+  // ══════════════════════════════════════════════════════════════
+  // Dữ liệu: _cashFlowMeta.budgetPlans = { "YYYY-MM": { catId: { limit, kind } } }
+  // Hạn mức của một tháng = chính tháng đó → tháng gần nhất trước đó có kế hoạch
+  // → `budgets` cũ (legacy, vẫn đọc được). Mỗi tháng bắt đầu lại từ đầu: không cộng dồn phần dư.
+
+  var BUDGET_KINDS = { fixed: {}, flex: {}, goal: {} };
+  function _bt(key, vars) {
+    var out = _t(key);
+    if (vars) Object.keys(vars).forEach(function (k) { out = out.split('{' + k + '}').join(vars[k]); });
+    return out;
+  }
+  function _bgKindLabel(k) { return _t('bsKind_' + k); }
+  function _bgKindHint(k) { return _t('bsKindHint_' + k); }
+
+  function _bgMonthKey(y, m) { return y + '-' + String(m).padStart(2, '0'); }
+  function _bgMonthLabel(y, m) { return _bt('bsMonth', { m: m, y: y }); }
+  function _bgIsKind(k) { return Object.prototype.hasOwnProperty.call(BUDGET_KINDS, k); }
+  function _bgDefaultKind(catId) { return catId === 'nha-o' ? 'fixed' : 'flex'; }
+  function _bgRound10k(n) {
+    n = Number(n) || 0;
+    if (n <= 0) return 0;
+    return Math.max(10000, Math.round(n / 10000) * 10000);
+  }
+
+  /** Kế hoạch ngân sách hiệu lực của tháng (y, m) → { items: {catId:{limit,kind}}, source, from } */
+  function _bgResolvePlan(y, m) {
+    var plans = (_cashFlowMeta && _cashFlowMeta.budgetPlans) || {};
+    var key = _bgMonthKey(y, m);
+    var srcKey = null;
+    if (Object.prototype.hasOwnProperty.call(plans, key)) {
+      srcKey = key;
+    } else {
+      Object.keys(plans).forEach(function (k) {
+        if (k < key && (srcKey === null || k > srcKey)) srcKey = k;
+      });
+    }
+    var items = {};
+    if (srcKey !== null) {
+      var src = plans[srcKey] || {};
+      Object.keys(src).forEach(function (id) {
+        var e = src[id] || {};
+        var lim = Number(e.limit) || 0;
+        if (lim > 0) items[id] = { limit: lim, kind: _bgIsKind(e.kind) ? e.kind : _bgDefaultKind(id) };
+      });
+      return { items: items, source: srcKey === key ? 'own' : 'inherited', from: srcKey };
+    }
+    var legacy = (_cashFlowMeta && _cashFlowMeta.budgets) || {};
+    Object.keys(legacy).forEach(function (id) {
+      var lim = Number(legacy[id]) || 0;
+      if (lim > 0) items[id] = { limit: lim, kind: _bgDefaultKind(id) };
+    });
+    return { items: items, source: Object.keys(items).length ? 'legacy' : 'none', from: null };
+  }
+
+  /** { catId: limit } của tháng — dùng cho AI, xuất Excel… */
+  function _getBudgetLimits(y, m) {
+    var items = _bgResolvePlan(y, m).items, out = {};
+    Object.keys(items).forEach(function (id) { out[id] = items[id].limit; });
+    return out;
+  }
+
+  function _bgPersist() {
+    if (typeof HubDB !== 'undefined' && typeof HubDB.saveCashFlowMeta === 'function') {
+      HubDB.saveCashFlowMeta(_cashFlowMeta).catch(function (_) {});
+    }
+  }
+
+  /** Ghi hạn mức một hạng mục cho tháng (y, m). limit <= 0 → xóa. Tháng được "đóng băng" thành kế hoạch riêng. */
+  function _bgSetEntry(y, m, catId, limit, kind) {
+    if (!_cashFlowMeta.budgetPlans) _cashFlowMeta.budgetPlans = {};
+    var cur = _bgResolvePlan(y, m).items, next = {};
+    Object.keys(cur).forEach(function (id) { next[id] = { limit: cur[id].limit, kind: cur[id].kind }; });
+    if (limit > 0) next[catId] = { limit: Math.round(limit), kind: _bgIsKind(kind) ? kind : _bgDefaultKind(catId) };
+    else delete next[catId];
+    _cashFlowMeta.budgetPlans[_bgMonthKey(y, m)] = next;
+    _bgPersist();
+  }
+
+  /** "1.4m", "1,4tr", "500k", "1.500.000" → số nguyên VND (NaN nếu không hiểu) */
+  function _bgParseAmount(raw) {
+    var s = String(raw == null ? '' : raw).toLowerCase().replace(/\s+/g, '').replace(/₫|đ|vnđ|vnd/g, '');
+    if (!s) return NaN;
+    var mult = 1;
+    var mm = /(triệu|trieu|nghìn|nghin|ngàn|ngan|tỷ|ty|tr|b|m|k|n)$/.exec(s);
+    if (mm) {
+      var u = mm[1];
+      if (u === 'tỷ' || u === 'ty' || u === 'b') mult = 1e9;
+      else if (u === 'tr' || u === 'triệu' || u === 'trieu' || u === 'm') mult = 1e6;
+      else mult = 1e3;
+      s = s.slice(0, mm.index);
+    }
+    if (!s) return NaN;
+    var val;
+    if (mult > 1) {
+      if (!/^\d+([.,]\d+)?$/.test(s)) return NaN;
+      val = parseFloat(s.replace(',', '.')) * mult;
+    } else if (/^\d+$/.test(s)) {
+      val = parseInt(s, 10);
+    } else if (/^\d{1,3}([.,]\d{3})+$/.test(s)) {
+      val = parseInt(s.replace(/[.,]/g, ''), 10);
+    } else {
+      return NaN;
+    }
+    return isFinite(val) ? Math.round(val) : NaN;
+  }
+
+  /** Cùng quy tắc với thẻ tổng kết: chuyển tiết kiệm & thu hồi nợ không phải thu/chi thật */
+  function _bgClassifyTx(tx) {
+    var isSavings = tx.source === 'savings' || tx.category === 'tiet-kiem' ||
+      tx.category === 'Tiết kiệm' || tx.category === '🐷 Tiết kiệm';
+    var isDebtRecovery = tx.type === 'income' && (tx.category === 'thu-no' || tx.category === 'Thu nợ');
+    if (isSavings || isDebtRecovery) return 'transfer';
+    return tx.type === 'income' ? 'income' : 'expense';
+  }
+
+  /** Chi thật của một hạng mục trong tháng (y, m) */
+  function _bgCatSpend(catId, y, m) {
+    var sum = 0;
+    _getMonthTransactions(y, m).forEach(function (tx) {
+      if (tx.category === catId && _bgClassifyTx(tx) === 'expense') sum += (Number(tx.amount) || 0);
+    });
+    return sum;
+  }
+
+  /** Chuỗi chi 6 tháng gần nhất (cũ → mới) của hạng mục, kết thúc ở (y, m) */
+  function _bgCatSeries(catId, y, m, n) {
+    var out = [];
+    for (var k = n - 1; k >= 0; k--) {
+      var s = _aiShiftMonth({ year: y, month: m }, -k);
+      out.push({ y: s.year, m: s.month, amt: _bgCatSpend(catId, s.year, s.month) });
+    }
+    return out;
+  }
+
+  /** Nhịp thời gian của tháng đang xem */
+  function _bgTiming(y, m) {
+    var now = new Date();
+    var nowIdx = now.getFullYear() * 12 + now.getMonth();
+    var viewIdx = y * 12 + (m - 1);
+    var daysInMonth = new Date(y, m, 0).getDate();
+    var isCurrent = viewIdx === nowIdx;
+    var isFuture = viewIdx > nowIdx;
+    var daysElapsed = isCurrent ? now.getDate() : (isFuture ? 0 : daysInMonth);
+    return {
+      isCurrent: isCurrent, isFuture: isFuture, daysInMonth: daysInMonth, daysElapsed: daysElapsed,
+      remainingDays: isCurrent ? (daysInMonth - now.getDate() + 1) : 0,
+      timePct: daysInMonth > 0 ? (daysElapsed / daysInMonth) * 100 : 0
+    };
+  }
+
+  /** Đánh giá một hạng mục có ngân sách → { status, used, note } */
+  function _bgAssess(amt, entry, t) {
+    var F = function (n) { return _formatVND(Math.round(n)); };
+    var limit = entry.limit, kind = entry.kind;
+    var used = limit > 0 ? (amt / limit) * 100 : 0;
+    var left = limit - amt;
+    var status = 'ok', note = '';
+
+    if (kind === 'goal') {
+      status = used >= 100 ? 'done' : 'goal';
+      note = used >= 100
+        ? _bt('bsNoteGoalDone') + (amt > limit ? _bt('bsNoteGoalOver', { v: F(amt - limit) }) : '')
+        : _bt('bsNoteGoalLeft', { v: F(left) });
+    } else if (used > 100) {
+      status = 'over';
+      note = _bt('bsNoteOver', { v: F(amt - limit) });
+    } else if (kind === 'fixed') {
+      status = 'ok';
+      note = amt >= limit * 0.999 ? _bt('bsNoteFixedPaid')
+        : (amt > 0 ? _bt('bsNoteFixedLeft', { v: F(left) }) : _bt('bsNoteFixedUnpaid'));
+    } else if (t.isCurrent) {
+      var ahead = used - t.timePct;
+      status = (used >= 85 || ahead > 10) ? 'watch' : 'ok';
+      if (amt <= 0) {
+        note = _bt('bsNoteNoSpend', { v: F(limit / t.remainingDays) });
+      } else {
+        var burn = amt / t.daysElapsed;
+        var projected = amt + burn * (t.daysInMonth - t.daysElapsed);
+        if (projected > limit) {
+          var hitDay = Math.min(t.daysInMonth, t.daysElapsed + Math.floor((limit - amt) / burn));
+          status = 'watch';
+          note = _bt('bsNoteHit', { d: hitDay, v: F(left / t.remainingDays) });
+        } else {
+          note = _bt('bsNoteProj', { p: F(projected), l: F(left), v: F(left / t.remainingDays) });
+        }
+      }
+    } else {
+      status = used >= 85 ? 'watch' : 'ok';
+      note = t.isFuture ? _bt('bsNoteFuture') : _bt('bsNoteSurplus', { v: F(left) });
+    }
+    return { status: status, used: used, note: note };
+  }
+
+  // ── Budget Studio (drawer) ─────────────────────────────────────
+  var _bsState = null; // { catId, y, m, kind, hadEntry, removeArmed }
+
+  function _bgSparkSVG(series, limit) {
+    var W = 280, H = 72, padT = 8, padB = 16, n = series.length, bw = 28;
+    var gap = (W - n * bw) / (n + 1);
+    var chartH = H - padT - padB;
+    var max = series.reduce(function (a, p) { return Math.max(a, p.amt); }, Math.max(limit || 0, 1));
+    var bars = '', labels = '';
+    series.forEach(function (p, i) {
+      var h = p.amt > 0 ? Math.max(2, (p.amt / max) * chartH) : 0;
+      var x = gap + i * (bw + gap);
+      var y = padT + chartH - h;
+      var cur = i === n - 1;
+      bars += '<rect class="hub-cf-bs-bar' + (cur ? ' is-cur' : '') + '" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) +
+        '" width="' + bw + '" height="' + h.toFixed(1) + '" rx="3"><title>' + _escHtml(_bgMonthLabel(p.y, p.m)) + ': ' + _escHtml(_formatVNFull(p.amt)) + '</title></rect>';
+      labels += '<text class="hub-cf-bs-barlab' + (cur ? ' is-cur' : '') + '" x="' + (x + bw / 2).toFixed(1) + '" y="' + (H - 3) + '" text-anchor="middle">T' + p.m + '</text>';
+    });
+    var line = '';
+    if (limit > 0) {
+      var ly = padT + chartH - (limit / max) * chartH;
+      line = '<line class="hub-cf-bs-limitline" x1="0" x2="' + W + '" y1="' + ly.toFixed(1) + '" y2="' + ly.toFixed(1) + '"/>';
+    }
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="' + _escHtml(_t('bsSparkAria')) + '">' +
+      bars + line + labels + '</svg>';
+  }
+
+  function _bgStudioInputValue() {
+    var el = document.getElementById('hub-cf-bs-limit');
+    return el ? _bgParseAmount(el.value) : NaN;
+  }
+
+  /** Vẽ lại phần thay đổi theo hạng mục / số đang nhập: thống kê, sparkline, nút nhanh, mô tả loại */
+  function _bgRefreshStudio() {
+    var s = _bsState;
+    if (!s) return;
+    var dyn = document.getElementById('hub-cf-bs-dyn');
+    if (!dyn) return;
+    var val = _bgStudioInputValue();
+    var series = s.catId ? _bgCatSeries(s.catId, s.y, s.m, 6) : [];
+    var cur = series.length ? series[series.length - 1].amt : 0;
+    var prev = series.length > 1 ? series[series.length - 2].amt : 0;
+    var avg3 = series.length >= 4 ? (series[1].amt + series[2].amt + series[3].amt + 0) / 3 : 0;
+    // series[0..4] là 5 tháng trước tháng đang xem; ba tháng liền trước = series[n-4..n-2]
+    var n = series.length;
+    avg3 = n >= 4 ? (series[n - 2].amt + series[n - 3].amt + series[n - 4].amt) / 3 : 0;
+    s.avg3 = avg3;
+    var prevMonth = _aiShiftMonth({ year: s.y, month: s.m }, -1);
+    var prevPlan = _bgResolvePlan(prevMonth.year, prevMonth.month).items;
+    s.prevLimit = s.catId && prevPlan[s.catId] ? prevPlan[s.catId].limit : 0;
+
+    dyn.innerHTML =
+      '<div class="hub-cf-bs-stats">' +
+        '<div><span>' + _escHtml(_t('bsStatCur')) + '</span><strong>' + _formatVNFull(cur) + '</strong></div>' +
+        '<div><span>' + _escHtml(_t('bsStatAvg')) + '</span><strong>' + _formatVNFull(avg3) + '</strong></div>' +
+        '<div><span>' + _escHtml(_t('bsStatPrev')) + '</span><strong>' + _formatVNFull(prev) + '</strong></div>' +
+      '</div>' +
+      '<div class="hub-cf-bs-spark">' + (s.catId ? _bgSparkSVG(series, isNaN(val) ? 0 : val) : '') + '</div>' +
+      '<div class="hub-cf-bs-sparkcap">' + _escHtml(_t('bsSparkCap')) + (!isNaN(val) && val > 0 ? _escHtml(_t('bsSparkLimit')) : '') + '</div>';
+
+    var q = function (id) { return document.querySelector('#hub-cf-bs-quick [data-q="' + id + '"]'); };
+    var set = function (id, enabled) { var b = q(id); if (b) b.disabled = !enabled; };
+    set('avg3', !!s.catId && avg3 > 0);
+    set('prev', !!s.catId && s.prevLimit > 0);
+    set('up', !isNaN(val) && val > 0);
+    set('down', !isNaN(val) && val > 0);
+
+    var hint = document.getElementById('hub-cf-bs-kinddesc');
+    if (hint) hint.textContent = _bgKindHint(s.kind);
+    document.querySelectorAll('#hub-cf-bs-kinds [data-kind]').forEach(function (b) {
+      var on = b.getAttribute('data-kind') === s.kind;
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+
+    var pv = document.getElementById('hub-cf-bs-preview');
+    var inp = document.getElementById('hub-cf-bs-limit');
+    if (pv && inp) {
+      var raw = inp.value.trim();
+      pv.classList.remove('is-error');
+      if (!raw) {
+        pv.textContent = _t('bsHintType');
+      } else if (isNaN(val) || val <= 0) {
+        pv.classList.add('is-error');
+        pv.textContent = _t('bsHintBad');
+      } else {
+        var pct = val > 0 ? Math.round((cur / val) * 100) : 0;
+        pv.textContent = '= ' + _formatVNFull(val) + (s.catId ? _bt('bsPreviewUsed', { p: pct }) : '');
+      }
+    }
+  }
+
+  function _bgStudioTitle() {
+    var s = _bsState;
+    return s && s.catId ? _categoryDisplayName(s.catId, 'expense') : _t('bsAddTitle');
+  }
+
+  function _closeBudgetStudio() {
+    var el = document.getElementById('hub-cf-bs-overlay');
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+    if (_bsState && _bsState.opener && typeof _bsState.opener.focus === 'function') {
+      try { _bsState.opener.focus(); } catch (_) {}
+    }
+    _bsState = null;
+  }
+
+  function _bgCommitStudio() {
+    var s = _bsState;
+    if (!s) return;
+    if (!s.catId) { _showToast(_t('bsPickCat')); return; }
+    var val = _bgStudioInputValue();
+    if (isNaN(val) || val <= 0 || val > 1e11) {
+      var pv = document.getElementById('hub-cf-bs-preview');
+      if (pv) { pv.classList.add('is-error'); pv.textContent = _t('bsInvalid'); }
+      var inp = document.getElementById('hub-cf-bs-limit');
+      if (inp) inp.focus();
+      return;
+    }
+    var name = _bgStudioTitle();
+    _bgSetEntry(s.y, s.m, s.catId, val, s.kind);
+    _closeBudgetStudio();
+    _renderCategoryBreakdown();
+    _showToast(_bt('bsSaved', { n: name, v: _formatVNFull(val) }));
+  }
+
+  function _bgRemoveStudio() {
+    var s = _bsState;
+    if (!s || !s.catId) return;
+    var btn = document.getElementById('hub-cf-bs-remove');
+    if (!s.removeArmed) {
+      s.removeArmed = true;
+      if (btn) btn.textContent = _t('bsRemoveConfirm');
+      setTimeout(function () {
+        if (_bsState === s) { s.removeArmed = false; var b = document.getElementById('hub-cf-bs-remove'); if (b) b.textContent = _t('bsRemove'); }
+      }, 3000);
+      return;
+    }
+    var name = _bgStudioTitle();
+    _bgSetEntry(s.y, s.m, s.catId, 0, s.kind);
+    _closeBudgetStudio();
+    _renderCategoryBreakdown();
+    _showToast(_bt('bsRemoved', { n: name, m: _bgMonthLabel(s.y, s.m).toLowerCase() }));
+  }
+
+  function _openBudgetStudio(catId) {
+    if (!_container) return;
+    var opener = document.activeElement;
+    _closeBudgetStudio();
+    var ym = _currentMonth || _currentYearMonth();
+    var plan = _bgResolvePlan(ym.year, ym.month);
+    var entry = catId ? plan.items[catId] : null;
+    _bsState = {
+      catId: catId || null, y: ym.year, m: ym.month,
+      kind: entry ? entry.kind : _bgDefaultKind(catId), hadEntry: !!entry, removeArmed: false, opener: opener
+    };
+
+    var catField = '';
+    if (!catId) {
+      var opts = EXPENSE_CATEGORIES.filter(function (c) { return c.id !== 'tiet-kiem' && !plan.items[c.id]; })
+        .map(function (c) { return '<option value="' + _escHtml(c.id) + '">' + _escHtml(_categoryDisplayName(c.id, 'expense')) + '</option>'; }).join('');
+      catField =
+        '<div class="hub-cf-form-group">' +
+          '<label class="hub-cf-form-label" for="hub-cf-bs-cat">' + _escHtml(_t('bsCategory')) + '</label>' +
+          '<select id="hub-cf-bs-cat" class="hub-cf-form-input"><option value="">' + _escHtml(_t('bsChoose')) + '</option>' + opts + '</select>' +
+        '</div>';
+    }
+
+    var kinds = Object.keys(BUDGET_KINDS).map(function (k) {
+      return '<button type="button" role="radio" class="hub-cf-bs-kind" data-kind="' + k + '" aria-checked="false">' + _bgKindLabel(k) + '</button>';
+    }).join('');
+
+    var overlay = document.createElement('div');
+    overlay.className = 'hub-cf-bs-overlay';
+    overlay.id = 'hub-cf-bs-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', 'hub-cf-bs-title');
+    overlay.innerHTML =
+      '<div class="hub-cf-bs-backdrop" data-bs="close"></div>' +
+      '<aside class="hub-cf-bs-panel" tabindex="-1">' +
+        '<header class="hub-cf-bs-head">' +
+          '<div class="hub-cf-bs-headtext">' +
+            '<span class="hub-cf-bs-kicker">' + _escHtml(_t('bsKicker')) + '</span>' +
+            '<h3 class="hub-cf-bs-title" id="hub-cf-bs-title">' + _escHtml(_bgStudioTitle()) + '</h3>' +
+            '<span class="hub-cf-bs-sub">' + _bgMonthLabel(ym.year, ym.month) + '</span>' +
+          '</div>' +
+          '<button type="button" class="hub-cf-modal-close" data-bs="close" aria-label="' + _escHtml(_t('bsClose')) + '">✕</button>' +
+        '</header>' +
+        '<div class="hub-cf-bs-body">' +
+          catField +
+          '<div class="hub-cf-form-group">' +
+            '<label class="hub-cf-form-label" for="hub-cf-bs-limit">' + _escHtml(_t('bsLimitLabel')) + '</label>' +
+            '<input type="text" id="hub-cf-bs-limit" class="hub-cf-form-input hub-cf-bs-limit" autocomplete="off" spellcheck="false" placeholder="0 ₫" value="' + (entry ? String(entry.limit).replace(/\B(?=(\d{3})+(?!\d))/g, '.') : '') + '" />' +
+            '<div class="hub-cf-bs-preview" id="hub-cf-bs-preview" aria-live="polite"></div>' +
+          '</div>' +
+          '<div class="hub-cf-bs-quick" id="hub-cf-bs-quick">' +
+            '<button type="button" class="hub-cf-bs-chip" data-q="avg3">' + _escHtml(_t('bsQAvg')) + '</button>' +
+            '<button type="button" class="hub-cf-bs-chip" data-q="prev">' + _escHtml(_t('bsQPrev')) + '</button>' +
+            '<button type="button" class="hub-cf-bs-chip" data-q="up">+10%</button>' +
+            '<button type="button" class="hub-cf-bs-chip" data-q="down">−10%</button>' +
+          '</div>' +
+          '<div class="hub-cf-form-group">' +
+            '<span class="hub-cf-form-label" id="hub-cf-bs-kindlabel">' + _escHtml(_t('bsKindLabel')) + '</span>' +
+            '<div class="hub-cf-bs-kinds" id="hub-cf-bs-kinds" role="radiogroup" aria-labelledby="hub-cf-bs-kindlabel">' + kinds + '</div>' +
+            '<div class="hub-cf-bs-kinddesc" id="hub-cf-bs-kinddesc"></div>' +
+          '</div>' +
+          '<div class="hub-cf-bs-dyn" id="hub-cf-bs-dyn"></div>' +
+          '<p class="hub-cf-bs-foot-note">' + _escHtml(_bt('bsFootNote', { m: _bgMonthLabel(ym.year, ym.month).toLowerCase() })) + '</p>' +
+        '</div>' +
+        '<footer class="hub-cf-bs-foot">' +
+          (entry ? '<button type="button" class="hub-cf-bs-remove" id="hub-cf-bs-remove">' + _escHtml(_t('bsRemove')) + '</button>' : '<span></span>') +
+          '<div class="hub-cf-bs-actions">' +
+            '<button type="button" class="hub-cf-modal-btn hub-cf-modal-btn--cancel" data-bs="close">' + _escHtml(_t('btnCancel')) + '</button>' +
+            '<button type="button" class="hub-cf-modal-btn hub-cf-modal-btn--save" id="hub-cf-bs-save">' + _escHtml(_t('btnSave')) + '</button>' +
+          '</div>' +
+        '</footer>' +
+      '</aside>';
+    _container.appendChild(overlay);
+
+    var input = overlay.querySelector('#hub-cf-bs-limit');
+
+    overlay.addEventListener('click', function (e) {
+      var closer = e.target.closest('[data-bs="close"]');
+      if (closer) { _closeBudgetStudio(); return; }
+      if (e.target.closest('#hub-cf-bs-save')) { _bgCommitStudio(); return; }
+      if (e.target.closest('#hub-cf-bs-remove')) { _bgRemoveStudio(); return; }
+      var kindBtn = e.target.closest('[data-kind]');
+      if (kindBtn && _bsState) { _bsState.kind = kindBtn.getAttribute('data-kind'); _bgRefreshStudio(); return; }
+      var chip = e.target.closest('[data-q]');
+      if (chip && !chip.disabled && _bsState) {
+        var cur = _bgStudioInputValue();
+        var next = NaN;
+        switch (chip.getAttribute('data-q')) {
+          case 'avg3': next = _bgRound10k(_bsState.avg3); break;
+          case 'prev': next = _bsState.prevLimit; break;
+          case 'up':   next = _bgRound10k(cur * 1.1); break;
+          case 'down': next = _bgRound10k(cur * 0.9); break;
+        }
+        if (!isNaN(next) && next > 0) {
+          input.value = String(next).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+          _bgRefreshStudio();
+          input.focus();
+        }
+      }
+    });
+
+    input.addEventListener('input', function () {
+      var v = input.value;
+      var digits = v.replace(/\D/g, '');
+      if (/^[\d.]+$/.test(v) && digits && (v.indexOf('.') < 0 || digits.length >= 4)) {
+        input.value = digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      }
+      _bgRefreshStudio();
+    });
+
+    var catSel = overlay.querySelector('#hub-cf-bs-cat');
+    if (catSel) {
+      catSel.addEventListener('change', function () {
+        if (!_bsState) return;
+        _bsState.catId = catSel.value || null;
+        _bsState.kind = _bgDefaultKind(_bsState.catId);
+        var t = document.getElementById('hub-cf-bs-title');
+        if (t) t.textContent = _bgStudioTitle();
+        _bgRefreshStudio();
+      });
+    }
+
+    // Enter = Lưu; Tab xoay vòng trong bảng
+    overlay.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && e.target && e.target.id === 'hub-cf-bs-limit') {
+        e.preventDefault();
+        _bgCommitStudio();
+      } else if (e.key === 'Tab') {
+        var f = Array.prototype.filter.call(overlay.querySelectorAll('button, input, select'), function (el) { return !el.disabled && el.offsetParent !== null; });
+        if (!f.length) return;
+        var first = f[0], last = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    });
+
+    _bgRefreshStudio();
+    requestAnimationFrame(function () { overlay.classList.add('is-open'); });
+    setTimeout(function () {
+      var focusEl = catSel || input;
+      if (focusEl) { focusEl.focus(); if (!catSel && input.select) input.select(); }
+    }, 60);
+  }
+
+  // ── Category Breakdown ─────────────────────────────────────────
   function _renderCategoryBreakdown() {
     var container = _qs('#hub-cf-breakdown-content');
     if (!container) return;
 
-    var txs = _getMonthTransactions(_currentMonth.year, _currentMonth.month);
+    var ym = _currentMonth || _currentYearMonth();
+    var txs = _getMonthTransactions(ym.year, ym.month);
 
-    // ── Partition by type ──
-    var incomeTxs = [];
-    var expenseTxs = [];
+    // ── Phân loại theo cùng quy tắc với thẻ tổng kết ──
+    var incomeByCat = {}, expenseByCat = {}, transferByKey = {};
+    var totalIncome = 0, totalExpense = 0;
     txs.forEach(function (tx) {
-      if (tx.type === 'income') incomeTxs.push(tx);
-      else expenseTxs.push(tx);
-    });
-
-    // ── Group & sum income by category ──
-    var incomeByCat = {};
-    var totalIncome = 0;
-    incomeTxs.forEach(function (tx) {
+      var amt = Number(tx.amount) || 0;
       var cat = tx.category || 'unknown';
-      incomeByCat[cat] = (incomeByCat[cat] || 0) + (tx.amount || 0);
-      totalIncome += (tx.amount || 0);
+      var kind = _bgClassifyTx(tx);
+      if (kind === 'income') { incomeByCat[cat] = (incomeByCat[cat] || 0) + amt; totalIncome += amt; }
+      else if (kind === 'expense') { expenseByCat[cat] = (expenseByCat[cat] || 0) + amt; totalExpense += amt; }
+      else {
+        var key = tx.type + '|' + cat;
+        if (!transferByKey[key]) transferByKey[key] = { type: tx.type, cat: cat, amt: 0 };
+        transferByKey[key].amt += amt;
+      }
     });
 
-    // ── Group & sum expense by category ──
-    var expenseByCat = {};
-    var totalExpense = 0;
-    expenseTxs.forEach(function (tx) {
-      var cat = tx.category || 'unknown';
-      expenseByCat[cat] = (expenseByCat[cat] || 0) + (tx.amount || 0);
-      totalExpense += (tx.amount || 0);
-    });
+    var plan = _bgResolvePlan(ym.year, ym.month).items;
+    var t = _bgTiming(ym.year, ym.month);
 
-    // ── Helper: sort entries by amount desc ──
-    function sortEntries(obj) {
-      return Object.keys(obj)
-        .map(function (k) { return { id: k, amt: obj[k] }; })
-        .sort(function (a, b) { return b.amt - a.amt; });
-    }
-
-    var incomeSorted  = sortEntries(incomeByCat);
-    var expenseSorted = sortEntries(expenseByCat);
+    // Hạng mục chi = có phát sinh + có ngân sách (kể cả chưa chi đồng nào)
+    var expenseIds = Object.keys(expenseByCat);
+    Object.keys(plan).forEach(function (id) { if (expenseIds.indexOf(id) < 0) expenseIds.push(id); });
+    var expenseSorted = expenseIds.map(function (id) { return { id: id, amt: expenseByCat[id] || 0 }; })
+      .sort(function (a, b) {
+        if (b.amt !== a.amt) return b.amt - a.amt;
+        return ((plan[b.id] && plan[b.id].limit) || 0) - ((plan[a.id] && plan[a.id].limit) || 0);
+      });
+    var incomeSorted = Object.keys(incomeByCat).map(function (id) { return { id: id, amt: incomeByCat[id] }; })
+      .sort(function (a, b) { return b.amt - a.amt; });
 
     var html = '';
 
-    // ── INCOME SECTION ──
+    // ── INCOME ──
     if (incomeSorted.length > 0) {
       html += '<p class="hub-cf-breakdown-section-label">' + _t('breakdownIncome') + '</p>';
       incomeSorted.forEach(function (entry) {
-        var cat = _lookupCategory(entry.id, 'income');
-        var name = cat ? cat.name : entry.id;
-        var amt  = entry.amt;
-        var pct  = totalIncome > 0 ? Math.round((amt / totalIncome) * 100) : 0;
-
-        html += '<div class="hub-cf-breakdown-item">';
-        html += '<span class="hub-cf-breakdown-name">' + _escHtml(name) + '</span>';
-        html += '<span class="hub-cf-breakdown-amt hub-cf-breakdown-amt--income">' +
-                  _formatVND(amt) + ' (' + pct + '%)' +
-                '</span>';
-        html += '</div>';
-        html += '<div class="hub-cf-breakdown-bar-track">';
-        html += '<div class="hub-cf-breakdown-bar-fill hub-cf-breakdown-bar-fill--income" style="width:' + pct + '%"></div>';
-        html += '</div>';
+        var name = _categoryDisplayName(entry.id, 'income');
+        var pct = totalIncome > 0 ? Math.round((entry.amt / totalIncome) * 100) : 0;
+        html += '<div class="hub-cf-breakdown-item">' +
+                  '<span class="hub-cf-breakdown-name">' + _escHtml(name) + '</span>' +
+                  '<span class="hub-cf-breakdown-amt hub-cf-breakdown-amt--income">' + _formatVND(entry.amt) + ' (' + pct + '%)</span>' +
+                '</div>' +
+                '<div class="hub-cf-breakdown-bar-track"><div class="hub-cf-breakdown-bar-fill hub-cf-breakdown-bar-fill--income" style="width:' + pct + '%"></div></div>';
       });
     }
 
-    // ── EXPENSE SECTION (Smart Budget) ──
+    // ── EXPENSE ──
     if (expenseSorted.length > 0) {
-      if (incomeSorted.length > 0) {
-        html += '<p class="hub-cf-breakdown-section-label" style="margin-top:2px;">' + _t('breakdownExpense') + '</p>';
-      } else {
-        html += '<p class="hub-cf-breakdown-section-label">' + _t('breakdownExpense') + '</p>';
+      html += '<p class="hub-cf-breakdown-section-label"' + (incomeSorted.length > 0 ? ' style="margin-top:2px;"' : '') + '>' + _t('breakdownExpense') + '</p>';
+
+      // Tổng quan ngân sách (chỉ tính khoản Cố định + Linh hoạt; khoản Mục tiêu không phải trần chi)
+      var capLimit = 0, capSpent = 0, flexLimit = 0, flexSpent = 0;
+      Object.keys(plan).forEach(function (id) {
+        var e = plan[id], spent = expenseByCat[id] || 0;
+        if (e.kind === 'goal') return;
+        capLimit += e.limit; capSpent += spent;
+        if (e.kind === 'flex') { flexLimit += e.limit; flexSpent += spent; }
+      });
+      if (capLimit > 0) {
+        var capPct = (capSpent / capLimit) * 100;
+        var flexAhead = flexLimit > 0 ? (flexSpent / flexLimit) * 100 - t.timePct : 0;
+        var ovStatus = capPct > 100 ? 'over' : ((capPct >= 85 || (t.isCurrent && flexAhead > 10)) ? 'watch' : 'safe');
+        var capLeft = capLimit - capSpent;
+        var sub = (t.isCurrent ? _bt('bsDayOf', { d: t.daysElapsed, n: t.daysInMonth }) : '') +
+          (capLeft >= 0 ? _bt('bsLeft', { v: _formatVND(capLeft) }) : _bt('bsOverBy', { v: _formatVND(-capLeft) }));
+        html += '<div class="hub-cf-budget-overview is-' + ovStatus + '">' +
+                  '<div class="hub-cf-budget-overview-main">' +
+                    '<span class="hub-cf-budget-kicker">' + _escHtml(_bt('bsOverviewKicker', { m: _bgMonthLabel(ym.year, ym.month).toLowerCase() })) + '</span>' +
+                    '<strong>' + _formatVND(capSpent) + ' / ' + _formatVND(capLimit) + '</strong>' +
+                    '<span class="hub-cf-budget-subline">' + _escHtml(sub) + '</span>' +
+                  '</div>' +
+                  '<div class="hub-cf-budget-meter"><span style="width:' + Math.min(100, Math.round(capPct)) + '%"></span></div>' +
+                '</div>';
       }
+
       expenseSorted.forEach(function (entry) {
-        var cat = _lookupCategory(entry.id, 'expense');
-        var name = cat ? cat.name : entry.id;
-        var amt  = entry.amt;
-        var budgetLimit = _cashFlowMeta.budgets && _cashFlowMeta.budgets[entry.id];
+        var name = _categoryDisplayName(entry.id, 'expense');
+        var amt = entry.amt;
+        var budget = plan[entry.id];
+        var btnHtml = '<button type="button" class="hub-cf-cat-budget-btn" data-cat-id="' + _escHtml(entry.id) + '" title="' + _escHtml(_t('editBudgetTitle')) + '" aria-label="' + _escHtml(_bt('bsSetFor', { n: name })) + '">✏️</button>';
 
-        // Budget edit button HTML (explicit for clarity)
-        var btnHtml = '<button class="hub-cf-cat-budget-btn" data-cat-id="' + entry.id + '" title="Cài đặt ngân sách">✏️</button>';
-
-        // Legacy mode: no budget set → pct relative to totalExpense
-        if (!budgetLimit || budgetLimit <= 0) {
+        if (!budget) {
+          // Chưa có ngân sách → tỷ trọng trong tổng chi
           var pct = totalExpense > 0 ? Math.round((amt / totalExpense) * 100) : 0;
-
-          html += '<div class="hub-cf-breakdown-item">';
-          html += '<span class="hub-cf-breakdown-name">' + _escHtml(name) + btnHtml + '</span>';
-          html += '<span class="hub-cf-breakdown-amt hub-cf-breakdown-amt--expense">' +
-                    _formatVND(amt) + ' (' + pct + '%)' +
-                  '</span>';
-          html += '</div>';
-          html += '<div class="hub-cf-breakdown-bar-track">';
-          html += '<div class="hub-cf-breakdown-bar-fill hub-cf-breakdown-bar-fill--expense" style="width:' + Math.min(pct, 100) + '%"></div>';
-          html += '</div>';
+          html += '<div class="hub-cf-breakdown-item">' +
+                    '<span class="hub-cf-breakdown-name">' + _escHtml(name) + btnHtml + '</span>' +
+                    '<span class="hub-cf-breakdown-amt hub-cf-breakdown-amt--expense">' + _formatVND(amt) + ' (' + pct + '%)</span>' +
+                  '</div>' +
+                  '<div class="hub-cf-breakdown-bar-track"><div class="hub-cf-breakdown-bar-fill hub-cf-breakdown-bar-fill--expense" style="width:' + Math.min(pct, 100) + '%"></div></div>';
+          return;
         }
-        // Smart Budget mode: budgetLimit > 0
-        else {
-          var budgetPct = (amt / budgetLimit) * 100;
-          var displayPct = Math.round(budgetPct);
-          var barPct = Math.min(budgetPct, 100);
 
-          // Determine dynamic color & bar class based on budgetPct
-          var color;
-          if (budgetPct <= 50) {
-            color = 'var(--success, #00e676)';
-          } else if (budgetPct <= 85) {
-            color = 'var(--warning, #ffb300)';
-          } else {
-            color = 'var(--danger, #ff5252)';
-          }
+        var a = _bgAssess(amt, budget, t);
+        var fillW = Math.min(a.used, 100);
+        if (amt > 0 && fillW < 1.5) fillW = 1.5;
+        var tick = (budget.kind === 'flex' && t.isCurrent)
+          ? '<span class="hub-cf-bs-tick" style="left:' + t.timePct.toFixed(1) + '%" title="' + _escHtml(_bt('bsToday', { d: t.daysElapsed, n: t.daysInMonth })) + '"></span>' : '';
+        html += '<div class="hub-cf-bs-row is-' + a.status + '">' +
+                  '<div class="hub-cf-breakdown-item">' +
+                    '<span class="hub-cf-breakdown-name">' + _escHtml(name) + btnHtml +
+                      '<span class="hub-cf-bs-kindtag">' + _bgKindLabel(budget.kind) + '</span></span>' +
+                    '<span class="hub-cf-breakdown-amt' + (a.status === 'over' ? ' hub-cf-budget-over' : '') + '">' +
+                      _formatVND(amt) + ' / ' + _formatVND(budget.limit) + ' (' + Math.round(a.used) + '%)</span>' +
+                  '</div>' +
+                  '<div class="hub-cf-bs-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(Math.min(a.used, 100)) + '">' +
+                    '<div class="hub-cf-bs-fill" style="width:' + fillW.toFixed(1) + '%"></div>' + tick +
+                  '</div>' +
+                  '<div class="hub-cf-bs-note">' + _escHtml(a.note) + '</div>' +
+                '</div>';
+      });
 
-          // Over-budget pulse class for amount text (keep if over 100%)
-          var amtClass = 'hub-cf-breakdown-amt';
-          if (budgetPct > 100) {
-            amtClass += ' hub-cf-budget-over';
-          }
+      html += '<button type="button" class="hub-cf-bs-add" data-bs-add="1">' + _escHtml(_t('bsAddBtn')) + '</button>';
+    } else if (Object.keys(plan).length === 0) {
+      // Chưa có chi tiêu và chưa có ngân sách: vẫn cho đặt ngân sách đầu tiên
+      html += '<button type="button" class="hub-cf-bs-add" data-bs-add="1">' + _escHtml(_t('bsAddBtn')) + '</button>';
+    }
 
-          html += '<div class="hub-cf-breakdown-item">';
-          html += '<span class="hub-cf-breakdown-name">' + _escHtml(name) + btnHtml + '</span>';
-          html += '<span class="' + amtClass + '" style="color:' + color + ';">' +
-                    _formatVND(amt) + ' / ' + _formatVND(budgetLimit) + ' (' + displayPct + '%)' +
-                  '</span>';
-          html += '</div>';
-          html += '<div class="hub-cf-breakdown-bar-track">';
-          html += '<div class="hub-cf-breakdown-bar-fill" style="width:' + barPct + '%; background-color:' + color + ';"></div>';
-          html += '</div>';
-        }
+    // ── Chuyển nội bộ: hiển thị nhưng không tính vào Thu/Chi ──
+    var transfers = Object.keys(transferByKey).map(function (k) { return transferByKey[k]; })
+      .sort(function (a, b) { return b.amt - a.amt; });
+    if (transfers.length > 0) {
+      html += '<p class="hub-cf-breakdown-section-label hub-cf-bs-xfer-label" style="margin-top:14px;" title="' + _escHtml(_t('bsXferTip')) + '">' + _escHtml(_t('bsXferLabel')) + '</p>';
+      transfers.forEach(function (x) {
+        var name = _categoryDisplayName(x.cat, x.type === 'income' ? 'income' : 'expense');
+        html += '<div class="hub-cf-breakdown-item hub-cf-bs-xfer">' +
+                  '<span class="hub-cf-breakdown-name">' + _escHtml(name) + '</span>' +
+                  '<span class="hub-cf-breakdown-amt">' + (x.type === 'income' ? '+' : '−') + _formatVND(x.amt) + '</span>' +
+                '</div>';
       });
     }
 
-    // ── Empty state ──
     if (!html) {
       html = '<p style="color:var(--text-muted);font-size:0.74rem;text-align:center;padding:8px 0;">' + _t('noCategoryData') + '</p>';
     }
 
     container.innerHTML = html;
 
-    // ── Event delegation for budget edit buttons (bound ONCE via dataset guard) ──
+    // ── Event delegation (bind một lần) ──
     if (!container.dataset.budgetDelegationBound) {
       container.dataset.budgetDelegationBound = 'true';
       container.addEventListener('click', function (e) {
         var btn = e.target.closest('.hub-cf-cat-budget-btn');
-        if (!btn) return;
-        e.stopPropagation();
-
-        var catId = btn.getAttribute('data-cat-id');
-        var currentBudget = _cashFlowMeta.budgets[catId] || 0;
-
-        var raw = prompt('Nhập ngân sách tối đa cho tháng (VND)\n(Nhập 0 để xóa ngân sách hạng mục này):', currentBudget);
-        if (raw !== null) {
-          var val = parseInt(String(raw).replace(/[\s,.]/g, ''), 10);
-          if (!isNaN(val) && val > 0) {
-            _cashFlowMeta.budgets[catId] = val;
-          } else if (val === 0) {
-            delete _cashFlowMeta.budgets[catId];
-          }
-          if (typeof HubDB !== 'undefined' && typeof HubDB.saveCashFlowMeta === 'function') {
-            HubDB.saveCashFlowMeta(_cashFlowMeta).catch(function (_) {});
-          }
-          _renderCategoryBreakdown();
+        if (btn) {
+          e.stopPropagation();
+          _openBudgetStudio(btn.getAttribute('data-cat-id'));
+          return;
+        }
+        if (e.target.closest('[data-bs-add]')) {
+          e.stopPropagation();
+          _openBudgetStudio(null);
         }
       });
     }
   }
+  // ==== BUDGET-ENGINE-END ==================================================
 
-  // ══════════════════════════════════════════════════════════════
-  // DEBT RENDER FUNCTIONS
-  // ══════════════════════════════════════════════════════════════
 
   function _renderDebtSummaryCard() {
     var totalPending = _getTotalPendingDebt();
@@ -3873,53 +4790,6 @@ ${_aiShellHTML()}
       '<div class="hub-cf-card-value-row">' +
         '<span class="hub-cf-card-value hub-cf-card-value--debt" id="cf-debt-pending">' + _formatVNFull(totalPending) + '</span>' +
         '<span class="hub-cf-card-sub" data-i18n="totalPendingDebt">' + _pd_t('totalPendingDebt') + '</span>' +
-      '</div>' +
-    '</div>';
-  }
-
-  function _renderDebtLedgerHTML() {
-    return '<!-- POCKET DEBT LEDGER -->' +
-    '<div class="hub-cf-debt-ledger glass-card">' +
-      '<div class="hub-cf-debt-header">' +
-        '<h4 class="hub-cf-debt-title" data-i18n="ledgerTitle">' + _pd_t('ledgerTitle') + '</h4>' +
-        '<div class="hub-cf-debt-actions">' +
-          '<button class="hub-cf-btn hub-cf-btn--add-debt" id="hub-cf-btn-add-debt">' +
-            '<svg width="16" height="16" viewBox="0 0 16 16" fill="none">' +
-              '<path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
-            '</svg>' +
-            '<span data-i18n="btnAddDebt">' + _pd_t('btnAddDebt') + '</span>' +
-          '</button>' +
-          '<button class="hub-cf-btn hub-cf-btn--ghost hub-cf-debt-history-toggle" id="hub-cf-debt-history-toggle">' +
-            '<span data-i18n="toggleHistory">' + _pd_t('toggleHistory') + '</span>' +
-          '</button>' +
-        '</div>' +
-      '</div>' +
-      '<div class="hub-cf-debt-empty" id="hub-cf-debt-empty-state" style="display:none;">' +
-        '<span class="hub-cf-debt-empty-icon">📓</span>' +
-        '<p class="hub-cf-debt-empty-text" data-i18n="noDebtsYet">' + _pd_t('noDebtsYet') + '</p>' +
-        '<p class="hub-cf-debt-empty-hint" data-i18n="noDebtsHint">' + _pd_t('noDebtsHint') + '</p>' +
-      '</div>' +
-      '<div class="hub-cf-debt-table-wrap" id="hub-cf-debt-table-wrap" style="display:none;">' +
-        '<table class="hub-cf-debt-table">' +
-          '<thead>' +
-            '<tr>' +
-              '<th class="hub-cf-debt-col--debtor" data-i18n="colDebtor">' + _pd_t('colDebtor') + '</th>' +
-              '<th class="hub-cf-debt-col--amount" data-i18n="colAmount">' + _pd_t('colAmount') + '</th>' +
-              '<th class="hub-cf-debt-col--date" data-i18n="colDateBorrowed">' + _pd_t('colDateBorrowed') + '</th>' +
-              '<th class="hub-cf-debt-col--expected" data-i18n="colExpectedReturn">' + _pd_t('colExpectedReturn') + '</th>' +
-              '<th class="hub-cf-debt-col--status" data-i18n="colStatus">' + _pd_t('colStatus') + '</th>' +
-              '<th class="hub-cf-debt-col--actions" data-i18n="colActions">' + _pd_t('colActions') + '</th>' +
-            '</tr>' +
-          '</thead>' +
-          '<tbody id="hub-cf-debt-body"></tbody>' +
-        '</table>' +
-      '</div>' +
-      '<div class="hub-cf-debt-history collapsed" id="hub-cf-debt-history">' +
-        '<h5 class="hub-cf-debt-history-title" data-i18n="historyTitle">' + _pd_t('historyTitle') + '</h5>' +
-        '<div class="hub-cf-debt-history-empty" id="hub-cf-debt-history-empty" style="display:none;">' +
-          '<p style="color:var(--text-muted);font-size:0.74rem;text-align:center;padding:16px 0;" data-i18n="emptyHistory">' + _pd_t('emptyHistory') + '</p>' +
-        '</div>' +
-        '<div class="hub-cf-debt-history-list" id="hub-cf-debt-history-list"></div>' +
       '</div>' +
     '</div>';
   }
@@ -3942,14 +4812,14 @@ ${_aiShellHTML()}
       '<td>' +
         '<div class="hub-cf-debt-actions">' +
           (status !== 'paid' ?
-            '<button class="hub-cf-debt-btn hub-cf-debt-btn--paid" data-debt-id="' + debt.id + '" data-i18n="btnMarkPaid" title="' + _pd_t('btnMarkPaid') + '">' + _pd_t('btnMarkPaid') + '</button>' : '') +
-          '<button class="hub-cf-debt-edit-btn" data-debt-id="' + debt.id + '" title="Chỉnh sửa" aria-label="Chỉnh sửa khoản nợ">' +
+            '<button class="hub-cf-debt-btn hub-cf-debt-btn--paid" data-debt-id="' + debt.id + '" data-i18n="btnMarkPaid" title="' + _escHtml(_pd_t('btnMarkPaid')) + '">' + _pd_t('btnMarkPaid') + '</button>' : '') +
+          '<button class="hub-cf-debt-edit-btn" data-debt-id="' + debt.id + '" title="' + _escHtml(_pd_t('btnEdit')) + '" aria-label="' + _escHtml(_pd_t('btnEdit')) + '">' +
           '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
           '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>' +
           '<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>' +
           '</svg>' +
           '</button>' +
-          '<button class="hub-cf-debt-btn hub-cf-debt-btn--delete" data-debt-id="' + debt.id + '" title="' + _pd_t('btnDelete') + '">✕</button>' +
+          '<button class="hub-cf-debt-btn hub-cf-debt-btn--delete" data-debt-id="' + debt.id + '" title="' + _escHtml(_pd_t('btnDelete')) + '">✕</button>' +
         '</div>' +
       '</td>' +
     '</tr>';
@@ -3958,7 +4828,7 @@ ${_aiShellHTML()}
   function _renderDebtHistoryItem(debt) {
     var amountFormatted = _formatVND(debt.amount);
     var dateBorrowed = _formatDateISOtoVN(debt.dateBorrowed);
-    var paidAt = debt.paidAt ? new Date(debt.paidAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
+    var paidAt = debt.paidAt ? new Date(debt.paidAt).toLocaleDateString(_getCFLang() === 'en' ? 'en-GB' : 'vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 
     return '<div class="hub-cf-debt-history-item" data-debt-id="' + debt.id + '">' +
       '<div class="hub-cf-debt-history-main">' +
@@ -3966,43 +4836,37 @@ ${_aiShellHTML()}
         '<span class="hub-cf-debt-history-amount hub-cf-debt-history-amount--paid">' + amountFormatted + '</span>' +
       '</div>' +
       '<div class="hub-cf-debt-history-meta">' +
-        '<span>Mượn: ' + dateBorrowed + '</span>' +
-        '<span>Trả: ' + paidAt + '</span>' +
+        '<span>' + _escHtml(_pd_t('metaBorrowed')) + dateBorrowed + '</span>' +
+        '<span>' + _escHtml(_pd_t('metaPaid')) + paidAt + '</span>' +
         (debt.note ? '<span class="hub-cf-debt-history-note">' + _escHtml(debt.note) + '</span>' : '') +
       '</div>' +
     '</div>';
   }
 
-  // ── NEW: Render item for paid history modal
   function _renderDebtHistoryModalItem(debt) {
     var amountFormatted = _formatVND(debt.amount);
     var dateBorrowed = _formatDateISOtoVN(debt.dateBorrowed);
-    var paidAt = debt.paidAt ? new Date(debt.paidAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
+    var paidAt = debt.paidAt ? new Date(debt.paidAt).toLocaleDateString(_getCFLang() === 'en' ? 'en-GB' : 'vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 
     return '<div class="hub-cf-debt-history-modal-item" data-debt-id="' + debt.id + '">' +
       '<div class="hub-cf-debt-history-modal-main">' +
         '<div class="hub-cf-debt-history-modal-debtor">' + _escHtml(debt.debtorName) + '</div>' +
         '<div class="hub-cf-debt-history-modal-meta">' +
-          '<span>Mượn: ' + dateBorrowed + '</span>' +
-          '<span>Trả: ' + paidAt + '</span>' +
+          '<span>' + _escHtml(_pd_t('metaBorrowed')) + dateBorrowed + '</span>' +
+          '<span>' + _escHtml(_pd_t('metaPaid')) + paidAt + '</span>' +
           (debt.note ? '<span class="hub-cf-debt-history-note">' + _escHtml(debt.note) + '</span>' : '') +
         '</div>' +
       '</div>' +
       '<span class="hub-cf-debt-history-modal-amount">' + amountFormatted + '</span>' +
-      '<button class="hub-cf-debt-btn hub-cf-debt-btn--delete" data-debt-id="' + debt.id + '" title="' + _pd_t('btnDelete') + '">✕</button>' +
+      '<button class="hub-cf-debt-btn hub-cf-debt-btn--delete" data-debt-id="' + debt.id + '" title="' + _escHtml(_pd_t('btnDelete')) + '">✕</button>' +
     '</div>';
   }
 
-  // ── NEW: Refresh paid history modal content (uses event delegation on static parent)
   function _refreshDebtHistoryModal() {
     var paidDebts = _getPaidDebts();
     var listEl = document.getElementById('hub-cf-debt-history-modal-list');
     var emptyEl = document.getElementById('hub-cf-debt-history-modal-empty');
-
-    if (!listEl || !emptyEl) {
-      console.warn('[CashFlow] Modal elements not found during refresh');
-      return;
-    }
+    if (!listEl || !emptyEl) return;
 
     if (paidDebts.length === 0) {
       listEl.innerHTML = '';
@@ -4015,31 +4879,19 @@ ${_aiShellHTML()}
     }
   }
 
-  // ── Event delegation for Paid History Modal (bound ONCE in _bindDebtEvents)
-  // Handles delete buttons that are dynamically rendered via innerHTML
   function _bindDebtHistoryModalDelegation() {
     var listEl = document.getElementById('hub-cf-debt-history-modal-list');
-    if (!listEl) {
-      console.warn('[CashFlow] Paid history modal list element not found for delegation binding');
-      return;
-    }
-    if (listEl.dataset.delegationBound === 'true') return;
-
+    if (!listEl || listEl.dataset.delegationBound === 'true') return;
     listEl.dataset.delegationBound = 'true';
-
     listEl.addEventListener('click', function (e) {
       var deleteBtn = e.target.closest('.hub-cf-debt-btn--delete');
       if (!deleteBtn) return;
-
       e.stopPropagation();
       var debtId = deleteBtn.getAttribute('data-debt-id');
       if (debtId) _deleteDebtFromHistory(debtId);
     });
-
-    console.log('[CashFlow] Paid history modal delegation bound successfully');
   }
 
-  // ── NEW: Open paid history modal
   function _openDebtHistoryModal() {
     var overlay = _qs('#hub-cf-debt-history-overlay');
     if (!overlay) return;
@@ -4047,13 +4899,11 @@ ${_aiShellHTML()}
     overlay.style.display = 'flex';
   }
 
-  // ── NEW: Close paid history modal
   function _closeDebtHistoryModal() {
     var overlay = _qs('#hub-cf-debt-history-overlay');
     if (overlay) overlay.style.display = 'none';
   }
 
-  // ── NEW: Delete debt from paid history (permanently remove)
   function _deleteDebtFromHistory(debtId) {
     _ensureDebtData();
     var debts = _data.debts;
@@ -4083,10 +4933,8 @@ ${_aiShellHTML()}
     var tbody = _qs('#hub-cf-debt-body');
     var emptyEl = _qs('#hub-cf-debt-empty-state');
     var tableEl = _qs('#hub-cf-debt-table-wrap');
-
     if (!tbody || !emptyEl || !tableEl) return;
 
-    // Active debts
     if (activeDebts.length === 0) {
       emptyEl.style.display = 'flex';
       tableEl.style.display = 'none';
@@ -4097,7 +4945,6 @@ ${_aiShellHTML()}
       activeDebts.forEach(function (debt) { html += _renderDebtRow(debt); });
       tbody.innerHTML = html;
 
-      // Event delegation for debt edit buttons
       if (!tbody.dataset.editDelegationBound) {
         tbody.dataset.editDelegationBound = 'true';
         tbody.addEventListener('click', function (e) {
@@ -4129,13 +4976,28 @@ ${_aiShellHTML()}
   function _updateDebtLanguage() {
     if (!_container) return;
     var dict = POCKET_DEBT_I18N[_getCFLang()] || POCKET_DEBT_I18N['vi'];
-    var els = _container.querySelectorAll('[data-i18n]');
-    Array.prototype.forEach.call(els, function (el) {
-      var key = el.getAttribute('data-i18n');
-      if (key && dict[key] !== undefined) { el.textContent = dict[key]; }
+
+    var scopes = _container.querySelectorAll(_DEBT_SCOPES);
+    Array.prototype.forEach.call(scopes, function (scope) {
+      var els = scope.querySelectorAll('[data-i18n]');
+      Array.prototype.forEach.call(els, function (el) {
+        var key = el.getAttribute('data-i18n');
+        if (key && dict[key] !== undefined) {
+          if (_HTML_I18N_KEYS[key]) el.innerHTML = dict[key];
+          else el.textContent = dict[key];
+        }
+      });
+
+      var phEls = scope.querySelectorAll('[data-i18n-placeholder]');
+      Array.prototype.forEach.call(phEls, function (el) {
+        var key = el.getAttribute('data-i18n-placeholder');
+        if (key && dict[key] !== undefined) {
+          el.setAttribute('placeholder', dict[key]);
+        }
+      });
     });
+
     _refreshDebtLedger();
-    // Refresh history modal if visible
     var historyOverlay = _qs('#hub-cf-debt-history-overlay');
     if (historyOverlay && historyOverlay.style.display === 'flex') {
       _refreshDebtHistoryModal();
@@ -4195,6 +5057,19 @@ ${_aiShellHTML()}
         var on = !_cfdRoot.classList.contains('cfd--hidden');
         _cfdApplyHide(on);
         try { localStorage.setItem('hub_cf_hide_balance', on ? '1' : '0'); } catch (_) {}
+      });
+    }
+
+    // ── Savings-rate trend: expand / collapse (remembered per browser) ──
+    var _cfdTrendBtn = _qs('#cfd-trend-toggle');
+    if (_cfdTrendBtn) {
+      var _cfdOpen = false;
+      try { _cfdOpen = localStorage.getItem('hub_cf_trend_open') === '1'; } catch (_) {}
+      _cfdSetTrendOpen(_cfdOpen);
+      _cfdTrendBtn.addEventListener('click', function () {
+        var on = _cfdTrendBtn.getAttribute('aria-expanded') !== 'true';
+        _cfdSetTrendOpen(on);
+        try { localStorage.setItem('hub_cf_trend_open', on ? '1' : '0'); } catch (_) {}
       });
     }
 
@@ -4408,6 +5283,7 @@ ${_aiShellHTML()}
     _boundKeydown = function (e) {
       if (e.key === 'Escape') {
         _closeHeatmapPicker(true);
+        _closeBudgetStudio();
         _closeModal();
         _closeDebtModal();
         _closeDebtHistoryModal();
@@ -4783,36 +5659,37 @@ ${_aiShellHTML()}
     const select = _qs('#hub-cf-category');
     if (!select) return;
 
+    const lang = _getCFLang();
     const categories = _activeTab === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
     var html = '';
     categories.forEach(function (cat) {
-      html += '<option value="' + cat.id + '">' + _escHtml(cat.name) + '</option>';
+      var label = lang === 'en' ? cat.name : (cat.nameVI || cat.name);
+      html += '<option value="' + cat.id + '">' + _escHtml(label) + '</option>';
     });
     select.innerHTML = html;
 
-    // --- Restore Sticky Category ---
     try {
       var lastCat = localStorage.getItem('hub_cf_last_category_' + _activeTab);
-      if (lastCat && !window.isEditingTransactionMode) { // Ensure we don't override edit mode
+      if (lastCat && !window.isEditingTransactionMode) {
         var exists = Array.from(select.options).some(function(opt) { return opt.value === lastCat; });
         if (exists) select.value = lastCat;
       }
     } catch(e) {}
   }
 
-  /** Populate category checkbox list for filter popover (uses ALL categories, not tab-dependent) */
   function _populateCategoryFilterOptions() {
     const container = _qs('#filter-cat-list');
     if (!container) return;
 
-    // Combine income and expense categories for filtering
+    const lang = _getCFLang();
     var allCats = INCOME_CATEGORIES.concat(EXPENSE_CATEGORIES);
     var html = '';
     allCats.forEach(function (cat) {
       var isChecked = _txTableState.category.selected.indexOf(cat.id) !== -1;
+      var label = lang === 'en' ? cat.name : (cat.nameVI || cat.name);
       html += '<label class="cf-category-item">';
       html += '  <input type="checkbox" value="' + cat.id + '" class="cf-filter-cat-checkbox"' + (isChecked ? ' checked' : '') + ' />';
-      html += '  <span class="cf-category-label">' + _escHtml(cat.name) + '</span>';
+      html += '  <span class="cf-category-label">' + _escHtml(label) + '</span>';
       html += '</label>';
     });
     container.innerHTML = html;
@@ -6272,13 +7149,14 @@ ${_aiShellHTML()}
     });
 
     var expenseCats = [], incomeCats = [], budgets = {}, allCats = [], seen = {};
-    var bud = (_cashFlowMeta && _cashFlowMeta.budgets) || {};
+    var bud = _getBudgetLimits(_currentMonth ? _currentMonth.year : fallbackYear, _currentMonth ? _currentMonth.month : (new Date().getMonth() + 1));
+    var legacyBud = (_cashFlowMeta && _cashFlowMeta.budgets) || {};
     EXPENSE_CATEGORIES.forEach(function (c) {
       var label = _categoryDisplayName(c.id, 'expense');
       allCats.push({ type: 'Chi phí', label: label });
       if (c.id === 'tiet-kiem') return;
       expenseCats.push(label);
-      var b = bud[c.id] || bud[label] || bud[c.name];
+      var b = bud[c.id] || legacyBud[label] || legacyBud[c.name];
       if (b > 0) budgets[label] = b;
     });
     INCOME_CATEGORIES.forEach(function (c) {
@@ -6553,8 +7431,11 @@ ${_aiShellHTML()}
 
     var data = _dataZoom();
     _chart.data.labels = data.labels;
+    _chart.data.datasets[0].label = _t('chartIncome');
+    _chart.data.datasets[1].label = _t('chartExpense');
     _chart.data.datasets[0].data = data.incomeData;
     _chart.data.datasets[1].data = data.expenseData;
+    // ... giữ nguyên phần còn lại của _updateChart()
 
     // Toggle chart type: line for day-level detail, bar for month/year aggregation
     var isDayView = _chartFilter === 'day';
@@ -7392,35 +8273,68 @@ ${_aiShellHTML()}
     }
   }
 
-  // ============================================================
-  //   AI FINANCIAL ADVISOR v2
-  //   ① Kế hoạch chi tiêu — tính ngay tại máy (tức thì, số liệu chính xác)
-  //   ② Hỏi đáp AI — có trí nhớ hội thoại + ngữ cảnh tài chính đầy đủ
+// ============================================================
+  //   AI FINANCIAL ADVISOR v2 (100% Bilingual EN / VI)
+  //   ① Spending Plan — instant local computation
+  //   ② Ask AI — multi-turn conversation + full financial context
   // ============================================================
 
-  var AI_ADDRESS = 'Thiếu gia';                 // Cách AI xưng hô với bạn — đổi tại đây
-  var AI_HISTORY_TURNS = 8;                     // Số tin nhắn gần nhất gửi kèm làm "trí nhớ"
-  var AI_MAX_STORED = 60;                       // Số tin nhắn tối đa lưu lại
+  var AI_HISTORY_TURNS = 8;
+  var AI_MAX_STORED = 60;
   var AI_TARGET_RATE_KEY = 'hub_cf_ai_target_rate';
-  var AI_DEFAULT_TARGET_RATE = 20;              // Mục tiêu tiết kiệm mặc định (% thu nhập)
+  var AI_DEFAULT_TARGET_RATE = 20;
 
-  // Nhóm hạng mục theo quy tắc 50/30/20 (mục tiêu Needs/Wants tự co giãn theo % tiết kiệm)
   var AI_BUCKETS = {
-    needs:  { label: 'Thiết yếu',               cats: ['nha-o', 'an-uong', 'di-chuyen', 'tieu-dung-thiet-yeu', 'suc-khoe'] },
-    wants:  { label: 'Mong muốn',               cats: ['tieu-dung-khac', 'doodad', 'cho-di', 'chi-phi-khac'] },
-    growth: { label: 'Tiết kiệm & phát triển',  cats: ['tiet-kiem', 'phat-trien-ban-than'] }
+    needs:  { labelVI: 'Thiết yếu',              labelEN: 'Needs (Essentials)',     cats: ['nha-o', 'an-uong', 'di-chuyen', 'tieu-dung-thiet-yeu', 'suc-khoe'] },
+    wants:  { labelVI: 'Mong muốn',              labelEN: 'Wants (Lifestyle)',      cats: ['tieu-dung-khac', 'doodad', 'cho-di', 'chi-phi-khac'] },
+    growth: { labelVI: 'Tiết kiệm & phát triển', labelEN: 'Savings & Growth',       cats: ['tiet-kiem', 'phat-trien-ban-than'] }
   };
 
-  var AI_PROMPTS = {
-    summary:  'Tóm tắt thu chi tháng này và chỉ ra điều đáng chú ý nhất.',
-    plan:     'Hãy lập kế hoạch chi tiêu chi tiết cho tháng sau dựa trên dữ liệu thu chi của tôi: ngân sách từng hạng mục, quy tắc chi tiêu và việc cần làm trong 7 ngày đầu.',
-    cut:      'Tôi nên cắt giảm những khoản nào để đạt mục tiêu tiết kiệm? Cho tôi số tiền cụ thể cho từng khoản.',
-    forecast: 'Dự báo chi tiêu và số tiền để dành được đến cuối tháng này, và cho tôi biết cần điều chỉnh gì.',
-    cash:     'Phân tích dòng tiền mặt và ngân hàng của tôi. Tôi nên giữ bao nhiêu tiền mặt?',
-    savings:  'Tôi đang có một khoản tiền tiết kiệm. Tôi nên làm gì để nó phát huy hiệu quả và không bị tiêu hao dần?'
+  var AI_PROMPTS_I18N = {
+    vi: {
+      summary:  'Tóm tắt thu chi tháng này và chỉ ra điều đáng chú ý nhất.',
+      plan:     'Hãy lập kế hoạch chi tiêu chi tiết cho tháng sau dựa trên dữ liệu thu chi của tôi: ngân sách từng hạng mục, quy tắc chi tiêu và việc cần làm trong 7 ngày đầu.',
+      cut:      'Tôi nên cắt giảm những khoản nào để đạt mục tiêu tiết kiệm? Cho tôi số tiền cụ thể cho từng khoản.',
+      forecast: 'Dự báo chi tiêu và số tiền để dành được đến cuối tháng này, và cho tôi biết cần điều chỉnh gì.',
+      cash:     'Phân tích dòng tiền mặt và ngân hàng của tôi. Tôi nên giữ bao nhiêu tiền mặt?',
+      savings:  'Tôi đang có một khoản tiền tiết kiệm. Tôi nên làm gì để nó phát huy hiệu quả và không bị tiêu hao dần?',
+      overCap:  'Tôi đã vượt trần chi tiêu tháng này. Hãy đưa ra phương án cứu vãn cụ thể cho những ngày còn lại.'
+    },
+    en: {
+      summary:  'Summarize my income and expenses this month and highlight the most notable insight.',
+      plan:     'Build a detailed spending plan for next month based on my financial data: category budgets, spending rules, and a 7-day action checklist.',
+      cut:      'Which expenses should I cut to reach my savings target? Give me specific VND amounts for each category.',
+      forecast: 'Forecast my month-end spending and savings, and tell me what adjustments I should make now.',
+      cash:     'Analyze my cash vs. bank flow. How much physical cash should I keep on hand?',
+      savings:  'I have a savings balance. How should I allocate and protect it effectively?',
+      overCap:  'I have exceeded my spending cap this month. Give me a concrete recovery plan for the remaining days.'
+    }
   };
 
-  var AI_STATUS_STEPS = ['Đọc dữ liệu giao dịch…', 'Đối chiếu với ngân sách…', 'Soạn khuyến nghị…'];
+  var AI_CHIPS_I18N = {
+    vi: [
+      ['Tóm tắt tháng này', 'summary'],
+      ['Lập kế hoạch tháng sau', 'plan'],
+      ['Cắt giảm ở đâu?', 'cut'],
+      ['Dự báo cuối tháng', 'forecast'],
+      ['Tiền mặt vs Ngân hàng', 'cash'],
+      ['Quản lý tiền tiết kiệm', 'savings']
+    ],
+    en: [
+      ['Summarize this month', 'summary'],
+      ['Plan next month', 'plan'],
+      ['Where to cut?', 'cut'],
+      ['Month-end forecast', 'forecast'],
+      ['Cash vs. Bank', 'cash'],
+      ['Manage savings', 'savings']
+    ]
+  };
+
+  function _getAIPrompt(key) {
+    var lang = _getCFLang();
+    var dict = AI_PROMPTS_I18N[lang] || AI_PROMPTS_I18N.vi;
+    return dict[key] || AI_PROMPTS_I18N.vi[key] || '';
+  }
 
   var AI_ICON = {
     spark:   '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>',
@@ -7436,12 +8350,8 @@ ${_aiShellHTML()}
     info:    '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>',
     ok:      '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/></svg>',
     warn:    '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/></svg>',
-    danger:  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5h.01"/></svg>'
+    danger:  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5h.01"/></svg>'
   };
-
-  // ─────────────────────────────────────────────────────────────
-  //  Tiện ích nhỏ
-  // ─────────────────────────────────────────────────────────────
 
   function _aiGetTargetRate() {
     try {
@@ -7464,18 +8374,18 @@ ${_aiShellHTML()}
 
   function _aiTime(ts) {
     try {
-      return new Date(ts || Date.now()).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+      var locale = _getCFLang() === 'en' ? 'en-US' : 'vi-VN';
+      return new Date(ts || Date.now()).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
     } catch (_) { return ''; }
   }
 
-  /** Tổng hợp một tháng: thu nhập thật (không tính rút tiết kiệm), chi tiêu thật (không tính chuyển vào tiết kiệm). */
   function _aiMonthAgg(year, month) {
     var txs = _getMonthTransactions(year, month);
     var agg = { income: 0, spent: 0, saved: 0, byCat: {}, count: txs.length };
     txs.forEach(function (tx) {
       var amt = Number(tx.amount) || 0;
       if (tx.type === 'income') {
-        if (tx.category !== 'tiet-kiem') agg.income += amt;
+        if (tx.category !== 'tiet-kiem' && tx.category !== 'thu-no' && tx.category !== 'Thu nợ') agg.income += amt;
       } else if (tx.category === 'tiet-kiem') {
         agg.saved += amt;
       } else {
@@ -7486,13 +8396,10 @@ ${_aiShellHTML()}
     return agg;
   }
 
-  // ─────────────────────────────────────────────────────────────
-  //  ENGINE: Kế hoạch chi tiêu (không cần AI)
-  // ─────────────────────────────────────────────────────────────
-
   function _computeSpendingPlan() {
     if (!_data || !_data.transactions) return null;
 
+    var lang = _getCFLang();
     var ym = _currentMonth || _currentYearMonth();
     var now = new Date();
     var nowIdx = now.getFullYear() * 12 + now.getMonth();
@@ -7501,12 +8408,11 @@ ${_aiShellHTML()}
     var isFuture = viewIdx > nowIdx;
     var daysInMonth = new Date(ym.year, ym.month, 0).getDate();
     var daysElapsed = isCurrent ? now.getDate() : (isFuture ? 0 : daysInMonth);
-    var remainingDays = isCurrent ? (daysInMonth - now.getDate() + 1) : 0; // gồm cả hôm nay
+    var remainingDays = isCurrent ? (daysInMonth - now.getDate() + 1) : 0;
 
     var cur = _aiMonthAgg(ym.year, ym.month);
     var prev = _aiMonthAgg(_aiShiftMonth(ym, -1).year, _aiShiftMonth(ym, -1).month);
 
-    // Thu nhập nền: tháng này nếu đã có, nếu chưa → trung bình 3 tháng gần nhất có thu nhập
     var hist = [1, 2, 3].map(function (k) {
       var s = _aiShiftMonth(ym, -k);
       return _aiMonthAgg(s.year, s.month).income;
@@ -7519,14 +8425,12 @@ ${_aiShellHTML()}
     var spendCap = incomeBase * (1 - targetRate / 100);
     var remaining = spendCap - cur.spent;
     var safePerDay = remainingDays > 0 ? Math.max(0, remaining) / remainingDays : 0;
-    // Dự báo: khoản cố định (nhà ở) trả một lần nên không nhân theo ngày; phần còn lại ngoại suy theo tốc độ chi/ngày
     var fixedSpent = cur.byCat['nha-o'] || 0;
     var burn = daysElapsed > 0 ? (cur.spent - fixedSpent) / daysElapsed : 0;
     var projectedSpend = isCurrent ? cur.spent + burn * (daysInMonth - daysElapsed) : cur.spent;
     var projectedSavings = incomeBase - projectedSpend;
     var savingsRate = cur.income > 0 ? ((cur.income - cur.spent) / cur.income) * 100 : null;
 
-    // Phân bổ 50/30/20 (Needs/Wants co giãn theo mục tiêu tiết kiệm, tỷ lệ 5:3)
     var rest = 100 - targetRate;
     var needsTarget = Math.round(rest * 0.625);
     var targets = { needs: needsTarget, wants: rest - needsTarget, growth: targetRate };
@@ -7534,17 +8438,22 @@ ${_aiShellHTML()}
     ['needs', 'wants'].forEach(function (k) {
       var amt = 0;
       AI_BUCKETS[k].cats.forEach(function (c) { amt += cur.byCat[c] || 0; });
-      buckets[k] = { label: AI_BUCKETS[k].label, amount: amt, pct: incomeBase > 0 ? (amt / incomeBase) * 100 : null, target: targets[k] };
+      buckets[k] = {
+        label: lang === 'en' ? AI_BUCKETS[k].labelEN : AI_BUCKETS[k].labelVI,
+        amount: amt,
+        pct: incomeBase > 0 ? (amt / incomeBase) * 100 : null,
+        target: targets[k]
+      };
     });
     var growthPct = incomeBase > 0 ? _aiClamp(100 - buckets.needs.pct - buckets.wants.pct, 0, 100) : null;
     buckets.growth = {
-      label: AI_BUCKETS.growth.label,
+      label: lang === 'en' ? AI_BUCKETS.growth.labelEN : AI_BUCKETS.growth.labelVI,
       amount: incomeBase > 0 ? Math.max(0, incomeBase - buckets.needs.amount - buckets.wants.amount) : 0,
-      pct: growthPct, target: targets.growth
+      pct: growthPct,
+      target: targets.growth
     };
 
-    // Hạng mục chi (so sánh tháng trước + ngân sách)
-    var budgets = _cashFlowMeta.budgets || {};
+    var budgets = _getBudgetLimits(ym.year, ym.month);
     var catIds = Object.keys(cur.byCat);
     var cats = catIds.map(function (id) {
       var amt = cur.byCat[id];
@@ -7564,7 +8473,6 @@ ${_aiShellHTML()}
       };
     }).sort(function (a, b) { return b.amount - a.amount; });
 
-    // Nợ cần thu hồi
     var activeDebts = [];
     try { activeDebts = _getActiveDebts(); } catch (_) {}
     var debtList = activeDebts.map(function (d) {
@@ -7597,66 +8505,112 @@ ${_aiShellHTML()}
     };
   }
 
-  /** Rule-based: các hành động nên làm, xếp theo mức khẩn cấp */
   function _aiBuildActions(p) {
     var A = [];
     var F = _formatVNFull;
+    var en = _getCFLang() === 'en';
 
     if (!p || (p.cur.count === 0 && p.incomeBase <= 0)) {
-      return [{ level: 'info', title: 'Chưa có dữ liệu để lập kế hoạch', body: 'Hãy ghi lại thu nhập và vài khoản chi, mình sẽ tính cần chi và nhắc bạn mỗi ngày.' }];
+      return [{
+        level: 'info',
+        title: en ? 'Not enough data to build a plan yet' : 'Chưa có dữ liệu để lập kế hoạch',
+        body: en ? 'Add your income and a few expenses to unlock your daily spending cap and reminders.' : 'Hãy ghi lại thu nhập và vài khoản chi, mình sẽ tính trần chi và nhắc bạn mỗi ngày.'
+      }];
     }
 
     if (p.incomeBase <= 0) {
-      A.push({ level: 'warn', title: 'Chưa ghi nhận thu nhập', body: 'Thêm thu nhập của tháng này để mình tính cần chi và mục tiêu tiết kiệm.' });
+      A.push({
+        level: 'warn',
+        title: en ? 'No income recorded yet' : 'Chưa ghi nhận thu nhập',
+        body: en ? 'Add this month’s income to calculate your spending cap and savings target.' : 'Thêm thu nhập của tháng này để mình tính trần chi và mục tiêu tiết kiệm.'
+      });
     } else if (p.isCurrent) {
       if (p.remaining < 0) {
-        A.push({ level: 'danger', title: 'Đã vượt cần chi ' + F(-p.remaining), body: 'Để giữ mục tiêu tiết kiệm ' + p.targetRate + '%, hãy tạm dừng các khoản "mong muốn" trong ' + p.remainingDays + ' ngày còn lại.', prompt: 'Tôi đã vượt cần chi tháng này. Hãy đưa ra phương án cứu vãn cụ thể cho những ngày còn lại.' });
+        A.push({
+          level: 'danger',
+          title: en ? ('Exceeded spending cap by ' + F(-p.remaining)) : ('Đã vượt trần chi ' + F(-p.remaining)),
+          body: en ? ('To keep your ' + p.targetRate + '% savings goal, pause non-essential spending for the remaining ' + p.remainingDays + ' days.') : ('Để giữ mục tiêu tiết kiệm ' + p.targetRate + '%, hãy tạm dừng các khoản "mong muốn" trong ' + p.remainingDays + ' ngày còn lại.'),
+          prompt: _getAIPrompt('overCap')
+        });
       } else if (p.projectedSpend > p.spendCap) {
-        A.push({ level: 'warn', title: 'Đang chi nhanh hơn kế hoạch', body: 'Tốc độ chi (không tính nhà ở) ≈ ' + F(p.burn) + '/ngày, dự báo chạm ' + F(p.projectedSpend) + ' (cần ' + F(p.spendCap) + '). Giữ dưới ' + F(p.safePerDay) + '/ngày để về đích.', prompt: AI_PROMPTS.forecast });
+        A.push({
+          level: 'warn',
+          title: en ? 'Spending faster than planned' : 'Đang chi nhanh hơn kế hoạch',
+          body: en ? ('Burn rate (excl. housing) ≈ ' + F(p.burn) + '/day, projected ' + F(p.projectedSpend) + ' (cap ' + F(p.spendCap) + '). Stay under ' + F(p.safePerDay) + '/day.') : ('Tốc độ chi (không tính nhà ở) ≈ ' + F(p.burn) + '/ngày, dự báo chạm ' + F(p.projectedSpend) + ' (trần ' + F(p.spendCap) + '). Giữ dưới ' + F(p.safePerDay) + '/ngày để về đích.'),
+          prompt: _getAIPrompt('forecast')
+        });
       } else {
-        A.push({ level: 'ok', title: 'Đang đi đúng kế hoạch', body: 'Còn ' + F(p.remaining) + ' trong cần chi — khoảng ' + F(p.safePerDay) + '/ngày cho ' + p.remainingDays + ' ngày còn lại.' });
+        A.push({
+          level: 'ok',
+          title: en ? 'On track with your plan' : 'Đang đi đúng kế hoạch',
+          body: en ? (F(p.remaining) + ' left under cap — about ' + F(p.safePerDay) + '/day for the remaining ' + p.remainingDays + ' days.') : ('Còn ' + F(p.remaining) + ' trong trần chi — khoảng ' + F(p.safePerDay) + '/ngày cho ' + p.remainingDays + ' ngày còn lại.')
+        });
       }
     } else if (p.savingsRate !== null) {
       if (p.savingsRate >= p.targetRate) {
-        A.push({ level: 'ok', title: 'Tháng này đạt mục tiêu tiết kiệm', body: 'Tỷ lệ để dành ' + p.savingsRate.toFixed(1) + '% so với mục tiêu ' + p.targetRate + '%.' });
+        A.push({
+          level: 'ok',
+          title: en ? 'Savings target reached this month' : 'Tháng này đạt mục tiêu tiết kiệm',
+          body: en ? ('Saved ' + p.savingsRate.toFixed(1) + '% vs. ' + p.targetRate + '% target.') : ('Tỷ lệ để dành ' + p.savingsRate.toFixed(1) + '% so với mục tiêu ' + p.targetRate + '%.')
+        });
       } else {
-        A.push({ level: 'warn', title: 'Chưa đạt mục tiêu tiết kiệm', body: 'Tỷ lệ để dành ' + p.savingsRate.toFixed(1) + '% so với mục tiêu ' + p.targetRate + '%.', prompt: AI_PROMPTS.cut });
+        A.push({
+          level: 'warn',
+          title: en ? 'Below savings target' : 'Chưa đạt mục tiêu tiết kiệm',
+          body: en ? ('Saved ' + p.savingsRate.toFixed(1) + '% vs. ' + p.targetRate + '% target.') : ('Tỷ lệ để dành ' + p.savingsRate.toFixed(1) + '% so với mục tiêu ' + p.targetRate + '%.'),
+          prompt: _getAIPrompt('cut')
+        });
       }
     }
 
-    // Nhóm "mong muốn" vượt mức khuyến nghị
     var w = p.buckets.wants;
     if (w.pct !== null && w.pct > w.target + 5) {
       var wantCats = p.cats.filter(function (c) { return AI_BUCKETS.wants.cats.indexOf(c.id) !== -1; });
       var big = wantCats[0];
-      var tip = big ? ' Thử giảm 15% "' + big.name + '" ≈ ' + F(big.amount * 0.15) + '.' : '';
-      A.push({ level: 'warn', title: 'Nhóm "Mong muốn" chiếm ' + w.pct.toFixed(0) + '% thu nhập', body: 'Mức khuyến nghị ≤ ' + w.target + '%.' + tip, prompt: AI_PROMPTS.cut });
-    }
-
-    // Hạng mục vượt ngân sách
-    p.cats.filter(function (c) { return c.status === 'over'; }).slice(0, 2).forEach(function (c) {
-      A.push({ level: 'danger', title: c.name + ' vượt ngân sách ' + Math.round(c.budgetPct - 100) + '%', body: 'Đã chi ' + F(c.amount) + ' / hạn mức ' + F(c.limit) + '.', prompt: 'Tôi đang chi vượt ngân sách cho hạng mục ' + c.name + '. Nên điều chỉnh thế nào?' });
-    });
-
-    // Hạng mục tăng mạnh so với tháng trước
-    p.cats.filter(function (c) { return c.delta !== null && c.delta >= 30 && c.share >= 8 && c.status !== 'over'; }).slice(0, 1).forEach(function (c) {
-      A.push({ level: 'warn', title: c.name + ' tăng ' + Math.round(c.delta) + '% so với tháng trước', body: 'Từ ' + F(c.prev) + ' lên ' + F(c.amount) + '.', prompt: 'Vì sao hạng mục ' + c.name + ' của tôi tăng mạnh so với tháng trước và nên xử lý thế nào?' });
-    });
-
-    // Nợ cho mượn
-    if (p.debts.total > 0) {
+      var tip = big ? (en ? (' Try trimming 15% of "' + big.name + '" ≈ ' + F(big.amount * 0.15) + '.') : (' Thử giảm 15% "' + big.name + '" ≈ ' + F(big.amount * 0.15) + '.')) : '';
       A.push({
-        level: p.debts.overdue > 0 ? 'warn' : 'info',
-        title: p.debts.overdue > 0 ? 'Có ' + p.debts.overdue + ' khoản nợ đã quá hạn' : 'Còn ' + F(p.debts.total) + ' chưa thu hồi',
-        body: 'Tổng đang cho mượn ' + F(p.debts.total) + '. Thu hồi sớm giúp tăng dòng tiền khả dụng.'
+        level: 'warn',
+        title: en ? ('"Wants" bucket takes ' + w.pct.toFixed(0) + '% of income') : ('Nhóm "Mong muốn" chiếm ' + w.pct.toFixed(0) + '% thu nhập'),
+        body: (en ? ('Recommended ≤ ' + w.target + '%.') : ('Mức khuyến nghị ≤ ' + w.target + '%.')) + tip,
+        prompt: _getAIPrompt('cut')
       });
     }
 
-    // Tiền mặt vs ngân hàng
-    if (p.balances.cash > 0 && p.balances.bank > 0) {
-      if (p.balances.cash > p.balances.bank * 2) {
-        A.push({ level: 'info', title: 'Tiền mặt đang nhiều gấp đôi ngân hàng', body: 'Cân nhắc gửi bớt vào tài khoản để an toàn và dễ theo dõi.', prompt: AI_PROMPTS.cash });
-      }
+    p.cats.filter(function (c) { return c.status === 'over'; }).slice(0, 2).forEach(function (c) {
+      A.push({
+        level: 'danger',
+        title: en ? (c.name + ' exceeded budget by ' + Math.round(c.budgetPct - 100) + '%') : (c.name + ' vượt ngân sách ' + Math.round(c.budgetPct - 100) + '%'),
+        body: en ? ('Spent ' + F(c.amount) + ' / limit ' + F(c.limit) + '.') : ('Đã chi ' + F(c.amount) + ' / hạn mức ' + F(c.limit) + '.'),
+        prompt: en ? ('I exceeded my budget for ' + c.name + '. How should I adjust?') : ('Tôi đang chi vượt ngân sách cho hạng mục ' + c.name + '. Nên điều chỉnh thế nào?')
+      });
+    });
+
+    p.cats.filter(function (c) { return c.delta !== null && c.delta >= 30 && c.share >= 8 && c.status !== 'over'; }).slice(0, 1).forEach(function (c) {
+      A.push({
+        level: 'warn',
+        title: en ? (c.name + ' jumped ' + Math.round(c.delta) + '% vs. last month') : (c.name + ' tăng ' + Math.round(c.delta) + '% so với tháng trước'),
+        body: en ? ('From ' + F(c.prev) + ' to ' + F(c.amount) + '.') : ('Từ ' + F(c.prev) + ' lên ' + F(c.amount) + '.'),
+        prompt: en ? ('Why did my ' + c.name + ' spending spike compared to last month and how should I handle it?') : ('Vì sao hạng mục ' + c.name + ' của tôi tăng mạnh so với tháng trước và nên xử lý thế nào?')
+      });
+    });
+
+    if (p.debts.total > 0) {
+      A.push({
+        level: p.debts.overdue > 0 ? 'warn' : 'info',
+        title: p.debts.overdue > 0
+          ? (en ? (p.debts.overdue + ' overdue debt(s) pending') : ('Có ' + p.debts.overdue + ' khoản nợ đã quá hạn'))
+          : (en ? (F(p.debts.total) + ' in pending loans') : ('Còn ' + F(p.debts.total) + ' chưa thu hồi')),
+        body: en ? ('Total lent out: ' + F(p.debts.total) + '. Collecting early boosts your liquid cash.') : ('Tổng đang cho mượn ' + F(p.debts.total) + '. Thu hồi sớm giúp tăng dòng tiền khả dụng.')
+      });
+    }
+
+    if (p.balances.cash > 0 && p.balances.bank > 0 && p.balances.cash > p.balances.bank * 2) {
+      A.push({
+        level: 'info',
+        title: en ? 'Cash balance is over 2x your bank balance' : 'Tiền mặt đang nhiều gấp đôi ngân hàng',
+        body: en ? 'Consider depositing excess physical cash into your bank account for safety and tracking.' : 'Cân nhắc gửi bớt vào tài khoản để an toàn và dễ theo dõi.',
+        prompt: _getAIPrompt('cash')
+      });
     }
 
     var rank = { danger: 0, warn: 1, info: 2, ok: 3 };
@@ -7664,27 +8618,27 @@ ${_aiShellHTML()}
     return A.slice(0, 5);
   }
 
-  // ─────────────────────────────────────────────────────────────
-  //  Render: Tab "Kế hoạch chi tiêu"
-  // ─────────────────────────────────────────────────────────────
-
   function _aiTone(level) { return 'is-' + level; }
 
   function _renderSpendingPlan() {
     var root = _qs('#cfx-plan');
     if (!root) return;
 
+    var en = _getCFLang() === 'en';
     var ym = _currentMonth || _currentYearMonth();
     var periodEl = _qs('#cfx-ai-period');
-    if (periodEl) periodEl.textContent = 'Tháng ' + ym.month + '/' + ym.year;
+    if (periodEl) {
+      var mNames = _heatmapMonthNames(false);
+      periodEl.textContent = mNames[ym.month - 1] + ' ' + ym.year;
+    }
 
     var p = _computeSpendingPlan();
     if (!p || (p.cur.count === 0 && p.incomeBase <= 0)) {
       root.innerHTML =
         '<div class="cfx-empty-plan">' +
           '<div class="cfx-empty-plan__icon">' + AI_ICON.plan + '</div>' +
-          '<strong>Chưa có dữ liệu cho tháng ' + ym.month + '/' + ym.year + '</strong>' +
-          '<p>Hãy ghi lại thu nhập và vài khoản chi. Kế hoạch chi tiêu sẽ tự động xuất hiện ở đây.</p>' +
+          '<strong>' + (en ? ('No data for ' + ym.month + '/' + ym.year + ' yet') : ('Chưa có dữ liệu cho tháng ' + ym.month + '/' + ym.year)) + '</strong>' +
+          '<p>' + (en ? 'Record your income and a few expenses. Your spending plan will appear here automatically.' : 'Hãy ghi lại thu nhập và vài khoản chi. Kế hoạch chi tiêu sẽ tự động xuất hiện ở đây.') + '</p>' +
         '</div>';
       _generateAIInsight();
       return;
@@ -7693,7 +8647,6 @@ ${_aiShellHTML()}
     var F = _formatVNFull;
     var e = _escHtml;
 
-    // ── Hero: tiến độ chi tiêu so với cần chi ──
     var heroTone = p.usedPct > 100 ? 'danger' : ((p.isCurrent && p.usedPct > p.timePct + 10) ? 'warn' : 'ok');
     var fillW = _aiClamp(p.usedPct, 0, 100).toFixed(1);
     var tickW = _aiClamp(p.timePct, 0, 100).toFixed(1);
@@ -7705,50 +8658,64 @@ ${_aiShellHTML()}
       '<div class="cfx-hero ' + _aiTone(heroTone) + '">' +
         '<div class="cfx-hero__top">' +
           '<div>' +
-            '<div class="cfx-label">cần chi để đạt mục tiêu tiết kiệm</div>' +
+            '<div class="cfx-label">' + (en ? 'Spending cap to hit savings target' : 'Trần chi để đạt mục tiêu tiết kiệm') + '</div>' +
             '<div class="cfx-hero__value">' + (p.spendCap > 0 ? F(p.spendCap) : '—') + '</div>' +
             '<div class="cfx-hero__sub">' +
               (p.spendCap > 0
-                ? 'Đã chi <b>' + F(p.cur.spent) + '</b> · ' + (p.remaining >= 0 ? 'còn <b>' + F(p.remaining) + '</b>' : 'vượt <b>' + F(-p.remaining) + '</b>')
-                : 'Thêm thu nhập để tính cần chi') +
-              (p.incomeIsEstimate ? ' · <span class="cfx-muted">thu nhập ước tính (TB 3 tháng)</span>' : '') +
+                ? (en
+                    ? ('Spent <b>' + F(p.cur.spent) + '</b> · ' + (p.remaining >= 0 ? ('<b>' + F(p.remaining) + '</b> left') : ('exceeded by <b>' + F(-p.remaining) + '</b>')))
+                    : ('Đã chi <b>' + F(p.cur.spent) + '</b> · ' + (p.remaining >= 0 ? ('còn <b>' + F(p.remaining) + '</b>') : ('vượt <b>' + F(-p.remaining) + '</b>'))))
+                : (en ? 'Add income to calculate spending cap' : 'Thêm thu nhập để tính trần chi')) +
+              (p.incomeIsEstimate ? (' · <span class="cfx-muted">' + (en ? 'estimated income (3-month avg)' : 'thu nhập ước tính (TB 3 tháng)') + '</span>') : '') +
             '</div>' +
           '</div>' +
-          '<div class="cfx-seg" role="group" aria-label="Mục tiêu tiết kiệm"><span class="cfx-seg__label">Mục tiêu tiết kiệm</span>' + segBtns + '</div>' +
+          '<div class="cfx-seg" role="group" aria-label="' + (en ? 'Savings target' : 'Mục tiêu tiết kiệm') + '"><span class="cfx-seg__label">' + (en ? 'Savings target' : 'Mục tiêu tiết kiệm') + '</span>' + segBtns + '</div>' +
         '</div>' +
         '<div class="cfx-pace" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(_aiClamp(p.usedPct, 0, 100)) + '">' +
           '<div class="cfx-pace__fill" style="width:' + fillW + '%"></div>' +
-          (p.isCurrent ? '<div class="cfx-pace__tick" style="left:' + tickW + '%" title="Tiến độ thời gian của tháng"></div>' : '') +
+          (p.isCurrent ? '<div class="cfx-pace__tick" style="left:' + tickW + '%" title="' + (en ? 'Month time elapsed' : 'Tiến độ thời gian của tháng') + '"></div>' : '') +
         '</div>' +
-        '<div class="cfx-pace__legend"><span>Đã dùng ' + Math.round(p.usedPct) + '% cần chi</span>' +
-          (p.isCurrent ? '<span>Ngày ' + p.daysElapsed + '/' + p.daysInMonth + ' (' + Math.round(p.timePct) + '% tháng)</span>' : '<span>Tháng đã kết thúc</span>') +
+        '<div class="cfx-pace__legend"><span>' + (en ? ('Used ' + Math.round(p.usedPct) + '% of cap') : ('Đã dùng ' + Math.round(p.usedPct) + '% trần chi')) + '</span>' +
+          (p.isCurrent
+            ? ('<span>' + (en ? ('Day ' + p.daysElapsed + '/' + p.daysInMonth + ' (' + Math.round(p.timePct) + '% of month)') : ('Ngày ' + p.daysElapsed + '/' + p.daysInMonth + ' (' + Math.round(p.timePct) + '% tháng)')) + '</span>')
+            : ('<span>' + (en ? 'Month ended' : 'Tháng đã kết thúc') + '</span>')) +
         '</div>' +
       '</div>';
 
-    // ── KPI ──
     var overProj = p.incomeBase > 0 && p.projectedSpend > p.spendCap;
     var rateOk = p.savingsRate !== null && p.savingsRate >= p.targetRate;
     var kpis =
       '<div class="cfx-kpis">' +
-        _aiKpi('Chi an toàn mỗi ngày',
+        _aiKpi(
+          en ? 'Safe daily spend' : 'Chi an toàn mỗi ngày',
           (p.isCurrent && p.incomeBase > 0) ? F(p.safePerDay) : '—',
-          p.isCurrent ? (p.remaining >= 0 ? 'Còn ' + p.remainingDays + ' ngày · hạn mức ngày ' + F(p.dailyLimit) : 'Đã vượt cần chi') : 'Chỉ áp dụng tháng hiện tại',
-          (p.isCurrent && p.remaining < 0) ? 'danger' : 'ok') +
-        _aiKpi(p.isCurrent ? 'Dự báo chi cuối tháng' : 'Tổng chi trong tháng',
+          p.isCurrent
+            ? (p.remaining >= 0
+                ? (en ? (p.remainingDays + ' days left · daily limit ' + F(p.dailyLimit)) : ('Còn ' + p.remainingDays + ' ngày · hạn mức ngày ' + F(p.dailyLimit)))
+                : (en ? 'Exceeded spending cap' : 'Đã vượt trần chi'))
+            : (en ? 'Current month only' : 'Chỉ áp dụng tháng hiện tại'),
+          (p.isCurrent && p.remaining < 0) ? 'danger' : 'ok'
+        ) +
+        _aiKpi(
+          p.isCurrent ? (en ? 'Projected month-end spend' : 'Dự báo chi cuối tháng') : (en ? 'Total monthly spend' : 'Tổng chi trong tháng'),
           F(p.projectedSpend),
-          p.incomeBase > 0 ? 'cần chi ' + F(p.spendCap) : 'Chưa có thu nhập',
-          overProj ? 'warn' : 'ok') +
-        _aiKpi('Tỷ lệ để dành',
+          p.incomeBase > 0 ? (en ? ('Cap ' + F(p.spendCap)) : ('Trần chi ' + F(p.spendCap))) : (en ? 'No income yet' : 'Chưa có thu nhập'),
+          overProj ? 'warn' : 'ok'
+        ) +
+        _aiKpi(
+          en ? 'Savings rate' : 'Tỷ lệ để dành',
           p.savingsRate !== null ? p.savingsRate.toFixed(1) + '%' : '—',
-          'Mục tiêu ' + p.targetRate + '%',
-          p.savingsRate === null ? 'info' : (rateOk ? 'ok' : 'warn')) +
-        _aiKpi(p.isCurrent ? 'Dự kiến để dành' : 'Đã để dành',
+          en ? ('Target ' + p.targetRate + '%') : ('Mục tiêu ' + p.targetRate + '%'),
+          p.savingsRate === null ? 'info' : (rateOk ? 'ok' : 'warn')
+        ) +
+        _aiKpi(
+          p.isCurrent ? (en ? 'Projected savings' : 'Dự kiến để dành') : (en ? 'Net saved' : 'Đã để dành'),
           p.incomeBase > 0 ? F(p.projectedSavings) : '—',
-          'Đã chuyển vào tiết kiệm ' + F(p.cur.saved),
-          p.projectedSavings < 0 ? 'danger' : 'ok') +
+          en ? ('Moved to savings: ' + F(p.cur.saved)) : ('Đã chuyển vào tiết kiệm ' + F(p.cur.saved)),
+          p.projectedSavings < 0 ? 'danger' : 'ok'
+        ) +
       '</div>';
 
-    // ── Phân bổ 50/30/20 ──
     var allocRows = ['needs', 'wants', 'growth'].map(function (k) {
       var b = p.buckets[k];
       var pct = b.pct;
@@ -7761,7 +8728,7 @@ ${_aiShellHTML()}
         '<div class="cfx-alloc__name">' + e(b.label) + '</div>' +
         '<div class="cfx-alloc__bar ' + _aiTone(tone) + '">' +
           '<i style="width:' + _aiClamp(pct || 0, 0, 100).toFixed(1) + '%"></i>' +
-          '<b style="left:' + _aiClamp(b.target, 0, 100) + '%" title="Mục tiêu ' + b.target + '%"></b>' +
+          '<b style="left:' + _aiClamp(b.target, 0, 100) + '%" title="' + (en ? 'Target ' : 'Mục tiêu ') + b.target + '%"></b>' +
         '</div>' +
         '<div class="cfx-alloc__val"><strong>' + (pct !== null ? pct.toFixed(0) + '%' : '—') + '</strong><span>/ ' + (k === 'growth' ? '≥' : '≤') + b.target + '%</span></div>' +
       '</div>';
@@ -7769,15 +8736,14 @@ ${_aiShellHTML()}
 
     var alloc =
       '<div class="cfx-card">' +
-        '<div class="cfx-card__head"><h5>Phân bổ thu nhập</h5><span class="cfx-muted">Vạch đứng = mục tiêu</span></div>' +
+        '<div class="cfx-card__head"><h5>' + (en ? 'Income allocation' : 'Phân bổ thu nhập') + '</h5><span class="cfx-muted">' + (en ? 'Vertical marker = target' : 'Vạch đứng = mục tiêu') + '</span></div>' +
         allocRows +
       '</div>';
 
-    // ── Hạng mục chi ──
     var catRows = p.cats.slice(0, 6).map(function (c) {
       var barPct = c.budgetPct !== null ? _aiClamp(c.budgetPct, 0, 100) : _aiClamp(c.share, 0, 100);
       var tone = c.status === 'over' ? 'danger' : (c.status === 'warn' ? 'warn' : (c.status === 'ok' ? 'ok' : 'info'));
-      var deltaHtml = '<span class="cfx-delta cfx-muted">mới</span>';
+      var deltaHtml = '<span class="cfx-delta cfx-muted">' + (en ? 'new' : 'mới') + '</span>';
       if (c.delta !== null) {
         var up = c.delta > 0;
         deltaHtml = '<span class="cfx-delta ' + (Math.abs(c.delta) < 5 ? 'cfx-muted' : (up ? 'is-up' : 'is-down')) + '">' + (up ? '▲' : '▼') + ' ' + Math.abs(Math.round(c.delta)) + '%</span>';
@@ -7785,39 +8751,37 @@ ${_aiShellHTML()}
       return '<div class="cfx-cat">' +
         '<div class="cfx-cat__name" title="' + e(c.name) + '">' + e(c.name) + '</div>' +
         '<div class="cfx-cat__bar ' + _aiTone(tone) + '"><i style="width:' + barPct.toFixed(1) + '%"></i></div>' +
-        '<div class="cfx-cat__amt">' + F(c.amount) + (c.limit > 0 ? '<small>/ ' + F(c.limit) + '</small>' : '<small>' + Math.round(c.share) + '% tổng chi</small>') + '</div>' +
+        '<div class="cfx-cat__amt">' + F(c.amount) + (c.limit > 0 ? '<small>/ ' + F(c.limit) + '</small>' : '<small>' + Math.round(c.share) + (en ? '% of spend' : '% tổng chi') + '</small>') + '</div>' +
         deltaHtml +
       '</div>';
     }).join('');
 
     var cats =
       '<div class="cfx-card">' +
-        '<div class="cfx-card__head"><h5>Hạng mục chi nhiều nhất</h5><span class="cfx-muted">So với tháng trước</span></div>' +
-        (catRows || '<p class="cfx-muted">Chưa có khoản chi nào trong tháng.</p>') +
+        '<div class="cfx-card__head"><h5>' + (en ? 'Top expense categories' : 'Hạng mục chi nhiều nhất') + '</h5><span class="cfx-muted">' + (en ? 'vs. last month' : 'So với tháng trước') + '</span></div>' +
+        (catRows || ('<p class="cfx-muted">' + (en ? 'No expenses recorded this month.' : 'Chưa có khoản chi nào trong tháng.') + '</p>')) +
       '</div>';
 
-    // ── Hành động đề xuất ──
     var actions = _aiBuildActions(p);
     var actionRows = actions.map(function (a) {
       return '<div class="cfx-action ' + _aiTone(a.level) + '">' +
         '<span class="cfx-action__icon">' + AI_ICON[a.level === 'ok' ? 'ok' : a.level] + '</span>' +
         '<div class="cfx-action__text"><strong>' + e(a.title) + '</strong><span>' + e(a.body) + '</span></div>' +
-        (a.prompt ? '<button type="button" class="cfx-link" data-ai-prompt="' + e(a.prompt) + '">Hỏi AI</button>' : '') +
+        (a.prompt ? '<button type="button" class="cfx-link" data-ai-prompt="' + e(a.prompt) + '">' + e(_t('aiAskBtn')) + '</button>' : '') +
       '</div>';
     }).join('');
 
     var actionsCard =
       '<div class="cfx-card cfx-card--wide">' +
-        '<div class="cfx-card__head"><h5>Việc nên làm ngay</h5><span class="cfx-muted">Phân tích tự động</span></div>' +
+        '<div class="cfx-card__head"><h5>' + (en ? 'Recommended actions' : 'Việc nên làm ngay') + '</h5><span class="cfx-muted">' + (en ? 'Auto-analysis' : 'Phân tích tự động') + '</span></div>' +
         actionRows +
       '</div>';
 
-    // ── CTA ──
     var cta =
       '<div class="cfx-cta">' +
-        '<button type="button" class="cfx-btn cfx-btn--primary" data-ai-prompt="' + e(AI_PROMPTS.plan) + '">' + AI_ICON.spark + '<span>Lập kế hoạch tháng sau với AI</span></button>' +
-        '<button type="button" class="cfx-btn" data-ai-prompt="' + e(AI_PROMPTS.cut) + '"><span>Tìm khoản nên cắt giảm</span></button>' +
-        '<button type="button" class="cfx-btn" data-ai-prompt="' + e(AI_PROMPTS.forecast) + '"><span>Dự báo cuối tháng</span></button>' +
+        '<button type="button" class="cfx-btn cfx-btn--primary" data-ai-prompt="' + e(_getAIPrompt('plan')) + '">' + AI_ICON.spark + '<span>' + (en ? 'Plan next month with AI' : 'Lập kế hoạch tháng sau với AI') + '</span></button>' +
+        '<button type="button" class="cfx-btn" data-ai-prompt="' + e(_getAIPrompt('cut')) + '"><span>' + (en ? 'Find expenses to cut' : 'Tìm khoản nên cắt giảm') + '</span></button>' +
+        '<button type="button" class="cfx-btn" data-ai-prompt="' + e(_getAIPrompt('forecast')) + '"><span>' + (en ? 'Month-end forecast' : 'Dự báo cuối tháng') + '</span></button>' +
       '</div>';
 
     root.innerHTML = hero + kpis + '<div class="cfx-grid">' + alloc + cats + '</div>' + actionsCard + cta;
@@ -7831,10 +8795,6 @@ ${_aiShellHTML()}
       '<div class="cfx-kpi__sub">' + _escHtml(sub) + '</div>' +
     '</div>';
   }
-
-  // ─────────────────────────────────────────────────────────────
-  //  Insight banner (luôn hiển thị phía trên, theo mức độ khẩn cấp)
-  // ─────────────────────────────────────────────────────────────
 
   function _showAIInsight(message, level) {
     var banner = _qs('#cf-ai-insight-banner');
@@ -7854,18 +8814,18 @@ ${_aiShellHTML()}
   }
 
   function _generateAIInsight() {
+    var en = _getCFLang() === 'en';
     var p = _computeSpendingPlan();
     if (!p || (p.cur.count === 0 && p.incomeBase <= 0)) {
-      _showAIInsight('Chưa có dữ liệu tháng này. Ghi vài khoản thu chi để mình lập kế hoạch cho bạn.', 'info');
+      _showAIInsight(
+        en ? 'No data for this month yet. Log a few transactions to generate your spending plan.' : 'Chưa có dữ liệu tháng này. Ghi vài khoản thu chi để mình lập kế hoạch cho bạn.',
+        'info'
+      );
       return;
     }
     var top = _aiBuildActions(p)[0];
     if (top) _showAIInsight(top.title + '. ' + top.body, top.level);
   }
-
-  // ─────────────────────────────────────────────────────────────
-  //  Ngữ cảnh gửi cho AI
-  // ─────────────────────────────────────────────────────────────
 
   function _getAIKey(provider) {
     var storageKey = provider === 'gemini' ? 'gemini_api_key' : 'nvidia_api_key';
@@ -7883,7 +8843,7 @@ ${_aiShellHTML()}
     };
 
     if (!_data || !_data.transactions || _data.transactions.length === 0 || !plan) {
-      return JSON.stringify({ month: ym.month + '/' + ym.year, message: 'Chưa có dữ liệu giao dịch.', balances: balances });
+      return JSON.stringify({ month: ym.month + '/' + ym.year, message: 'No transaction data yet.', balances: balances });
     }
 
     var monthTxs = _getMonthTransactions(ym.year, ym.month);
@@ -7891,7 +8851,6 @@ ${_aiShellHTML()}
       .sort(function (a, b) { return (b.day || 0) - (a.day || 0); })
       .slice(0, 80);
 
-    // Tổng theo hạng mục tính sẵn để AI không phải cộng
     var categoryTotals = { income: {}, expense: {} };
     monthTxs.forEach(function (tx) {
       var type = tx.type === 'income' ? 'income' : 'expense';
@@ -7900,8 +8859,9 @@ ${_aiShellHTML()}
     });
 
     var budgets = {};
-    Object.keys(_cashFlowMeta.budgets || {}).forEach(function (id) {
-      if (_cashFlowMeta.budgets[id] > 0) budgets[_categoryDisplayName(id, 'expense')] = _cashFlowMeta.budgets[id];
+    var _bgLimits = _getBudgetLimits(ym.year, ym.month);
+    Object.keys(_bgLimits).forEach(function (id) {
+      budgets[_categoryDisplayName(id, 'expense')] = _bgLimits[id];
     });
 
     var prevByCat = {};
@@ -7929,8 +8889,8 @@ ${_aiShellHTML()}
         safeToSpendPerDay: R(plan.safePerDay),
         dailyLimitSetByUser: plan.dailyLimit,
         allocationPctOfIncome: {
-          needs:  { actual: plan.buckets.needs.pct === null ? null : +plan.buckets.needs.pct.toFixed(1), target: plan.buckets.needs.target },
-          wants:  { actual: plan.buckets.wants.pct === null ? null : +plan.buckets.wants.pct.toFixed(1), target: plan.buckets.wants.target },
+          needs:            { actual: plan.buckets.needs.pct === null ? null : +plan.buckets.needs.pct.toFixed(1), target: plan.buckets.needs.target },
+          wants:            { actual: plan.buckets.wants.pct === null ? null : +plan.buckets.wants.pct.toFixed(1), target: plan.buckets.wants.target },
           savingsAndGrowth: { actual: plan.buckets.growth.pct === null ? null : +plan.buckets.growth.pct.toFixed(1), target: plan.buckets.growth.target }
         }
       },
@@ -7953,24 +8913,31 @@ ${_aiShellHTML()}
   }
 
   function _aiSystemInstruction() {
-    return 'Bạn là "Quân sư tài chính cá nhân" của ' + AI_ADDRESS + ': cố vấn lập kế hoạch chi tiêu thực chiến, thẳng thắn, tinh gọn. ' +
-      'Luôn xưng hô với người dùng là "' + AI_ADDRESS + '" và trả lời bằng tiếng Việt.\n\n' +
+    if (_getCFLang() === 'en') {
+      return 'You are a sharp, practical Personal Financial Advisor. Always respond in English.\n\n' +
+        'DATA RULES\n' +
+        '1. Use ONLY the numbers provided in the FINANCIAL DATA JSON block. Do NOT invent or recalculate aggregate totals: use the exact pre-computed values in plan, categoryTotals, previousMonth, and balances. Simple illustrative estimates (e.g. trimming 15% of a category) are allowed if marked with (≈).\n' +
+        '2. Format currency in VND (e.g. 1.250.000 ₫). Never fabricate transactions, categories, or balances.\n' +
+        '3. plan.targetSavingsRatePct is the user’s chosen savings target; plan.spendCap is the spending cap to reach that target.\n\n' +
+        'RESPONSE STYLE\n' +
+        '- Lead with a 1-sentence conclusion, followed by concise bullet points with concrete VND amounts and actionable steps.\n' +
+        '- When asked for a spending plan or next month’s budget: provide (1) Current status in 2–3 lines; (2) A Markdown table with columns Category | This Month | Proposed | Notes (total proposed ≤ plan.spendCap); (3) 3 spending rules; (4) A 7-day action checklist.\n' +
+        '- Keep tone respectful, grounded, and non-judgmental. Use **bold** for key figures.';
+    }
+
+    return 'Bạn là "Quân sư tài chính cá nhân" của Thiếu gia: cố vấn lập kế hoạch chi tiêu thực chiến, thẳng thắn, tinh gọn. ' +
+      'Luôn xưng hô với người dùng là "Thiếu gia" và trả lời bằng tiếng Việt.\n\n' +
       'NGUYÊN TẮC SỐ LIỆU\n' +
       '1. Chỉ dùng số liệu trong khối DỮ LIỆU. KHÔNG tự cộng/trừ để tạo ra con số tổng hợp mới: dùng đúng giá trị có sẵn trong plan, categoryTotals, previousMonth, balances. Phép tính đơn giản để minh hoạ (ví dụ giảm 15% một hạng mục) được phép nhưng phải ghi rõ là ước tính (≈).\n' +
       '2. Định dạng tiền kiểu Việt Nam: 1.250.000 ₫. Không bịa giao dịch, hạng mục hay số dư không có trong dữ liệu; thiếu dữ liệu thì nói rõ.\n' +
-      '3. plan.targetSavingsRatePct là mục tiêu tiết kiệm người dùng đã chọn; plan.spendCap là cần chi để đạt mục tiêu đó. Mọi kế hoạch ngân sách phải nằm trong spendCap.\n' +
+      '3. plan.targetSavingsRatePct là mục tiêu tiết kiệm người dùng đã chọn; plan.spendCap là trần chi để đạt mục tiêu đó. Mọi kế hoạch ngân sách phải nằm trong spendCap.\n' +
       '4. Giao dịch có trường s: "cash" (tiền mặt) hoặc "bank" (ngân hàng). Chỉ phân tích riêng hai nguồn này khi liên quan.\n\n' +
       'CÁCH TRẢ LỜI\n' +
-      '- Chào hỏi/xã giao ("hello", "cảm ơn"…): đáp 1–2 câu thân thiện rồi gợi ý 2–3 việc bạn có thể làm. KHÔNG đổ số liệu khi chưa được hỏi.\n' +
-      '- Câu hỏi mơ hồ: nêu ngắn gọn cách bạn hiểu rồi vẫn trả lời luôn; chỉ hỏi lại tối đa 1 câu ở cuối.\n' +
-      '- Câu hỏi kiến thức tài chính chung: giải thích ngắn gọn, gắn với tình hình thực tế của người dùng nếu liên quan.\n' +
-      '- Mở đầu bằng kết luận 1 câu. Sau đó là các ý chính dạng gạch đầu dòng; mỗi ý có con số cụ thể và hành động cụ thể (làm gì, bao nhiêu, khi nào). Tối đa khoảng 220 từ, trừ khi được yêu cầu lập kế hoạch.\n' +
+      '- Mở đầu bằng kết luận 1 câu. Sau đó là các ý chính dạng gạch đầu dòng; mỗi ý có con số cụ thể và hành động cụ thể (làm gì, bao nhiêu, khi nào).\n' +
       '- Yêu cầu lập kế hoạch chi tiêu/ngân sách/tháng sau: trả lời theo cấu trúc (1) Hiện trạng 2–3 dòng; (2) Bảng markdown ngân sách đề xuất với các cột Hạng mục | Tháng này | Đề xuất | Ghi chú, tổng đề xuất không vượt plan.spendCap; (3) 3 quy tắc chi tiêu; (4) Việc cần làm trong 7 ngày tới.\n' +
-      '- Thứ tự ưu tiên khi tối ưu: khoản thiết yếu → thu hồi/trả nợ → quỹ khẩn cấp (3–6 tháng chi thiết yếu) → tiết kiệm/đầu tư → mong muốn. Không khuyên mã cổ phiếu/coin cụ thể.\n' +
-      '- Giọng văn tôn trọng, không phán xét. Dùng **in đậm** cho con số then chốt, không dùng emoji tràn lan.';
+      '- Giọng văn tôn trọng, không phán xét. Dùng **in đậm** cho con số then chốt.';
   }
 
-  /** Lấy các tin nhắn gần nhất làm "trí nhớ" (bỏ tin cuối vì đó là câu hỏi hiện tại) */
   function _aiBuildHistory() {
     var h = _aiState.conversationHistory.slice(0, -1).slice(-AI_HISTORY_TURNS);
     var out = [];
@@ -7978,10 +8945,10 @@ ${_aiShellHTML()}
       var role = m.role === 'user' ? 'user' : 'assistant';
       var text = String(m.content || '').slice(0, 1500);
       if (!text) return;
-      if (out.length && out[out.length - 1].role === role) out[out.length - 1].text += '\n' + text; // gộp tin liền nhau cùng vai trò
+      if (out.length && out[out.length - 1].role === role) out[out.length - 1].text += '\n' + text;
       else out.push({ role: role, text: text });
     });
-    while (out.length && out[0].role !== 'user') out.shift(); // Gemini yêu cầu bắt đầu bằng user
+    while (out.length && out[0].role !== 'user') out.shift();
     return out;
   }
 
@@ -7989,18 +8956,13 @@ ${_aiShellHTML()}
     var system = _aiSystemInstruction();
     var context = _getFinancialContext();
     var history = _aiBuildHistory();
-    var transcript = history.map(function (m) { return (m.role === 'user' ? 'NGƯỜI DÙNG: ' : 'TRỢ LÝ: ') + m.text; }).join('\n');
-    var flat = system + '\n\n=== DỮ LIỆU TÀI CHÍNH (JSON) ===\n' + context +
-      (transcript ? '\n\n=== HỘI THOẠI TRƯỚC ĐÓ ===\n' + transcript : '') +
-      '\n\n=== CÂU HỎI MỚI CỦA NGƯỜI DÙNG ===\n' + userQuery;
+    var transcript = history.map(function (m) { return (m.role === 'user' ? 'USER: ' : 'ASSISTANT: ') + m.text; }).join('\n');
+    var flat = system + '\n\n=== FINANCIAL DATA (JSON) ===\n' + context +
+      (transcript ? '\n\n=== PREVIOUS CONVERSATION ===\n' + transcript : '') +
+      '\n\n=== USER QUESTION ===\n' + userQuery;
     return { system: system, context: context, history: history, user: userQuery, flat: flat };
   }
 
-  // ─────────────────────────────────────────────────────────────
-  //  Gọi API
-  // ─────────────────────────────────────────────────────────────
-
-  /** fetch có timeout + retry + hỗ trợ huỷ */
   async function _resilientFetch(url, options, config) {
     options = options || {};
     config = config || {};
@@ -8031,7 +8993,6 @@ ${_aiShellHTML()}
     throw lastError;
   }
 
-  /** Gemini: dùng systemInstruction + hội thoại nhiều lượt đúng chuẩn */
   async function _callGeminiAPI(req, apiKey, signal) {
     var contents = req.history.concat([{ role: 'user', text: req.user }]).map(function (m) {
       return { role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.text }] };
@@ -8043,7 +9004,7 @@ ${_aiShellHTML()}
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          systemInstruction: { parts: [{ text: req.system + '\n\n=== DỮ LIỆU TÀI CHÍNH (JSON) ===\n' + req.context }] },
+          systemInstruction: { parts: [{ text: req.system + '\n\n=== FINANCIAL DATA (JSON) ===\n' + req.context }] },
           contents: contents,
           generationConfig: { maxOutputTokens: 2048, temperature: 0.6 }
         })
@@ -8059,13 +9020,13 @@ ${_aiShellHTML()}
     var data = await response.json();
     var cand = data.candidates && data.candidates[0];
     var text = cand && cand.content && cand.content.parts ? cand.content.parts.map(function (p) { return p.text || ''; }).join('') : '';
+    var en = _getCFLang() === 'en';
     if (!text && data.promptFeedback && data.promptFeedback.blockReason) {
-      throw new Error('Yêu cầu bị chặn bởi bộ lọc an toàn (' + data.promptFeedback.blockReason + ').');
+      throw new Error(en ? ('Request blocked by safety filter (' + data.promptFeedback.blockReason + ').') : ('Yêu cầu bị chặn bởi bộ lọc an toàn (' + data.promptFeedback.blockReason + ').'));
     }
-    return text || 'Không có phản hồi từ AI.';
+    return text || (en ? 'No response from AI.' : 'Không có phản hồi từ AI.');
   }
 
-  /** Nvidia Nemotron qua backend Vercel (backend chỉ nhận 1 chuỗi → gộp ngữ cảnh + lịch sử vào đó) */
   async function _callNvidiaAPI(req, apiKey, signal) {
     var response = await _resilientFetch('https://personal-hub-rose-xi.vercel.app/api/ask-nvidia', {
       method: 'POST',
@@ -8078,21 +9039,26 @@ ${_aiShellHTML()}
       throw new Error('Nvidia API error: ' + response.status + ' - ' + (error.message || response.statusText));
     }
     var data = await response.json();
-    return data.response || 'Không có phản hồi từ AI.';
+    return data.response || (_getCFLang() === 'en' ? 'No response from AI.' : 'Không có phản hồi từ AI.');
   }
 
   function _aiFriendlyError(err) {
+    var en = _getCFLang() === 'en';
     var msg = String((err && err.message) || err || '');
-    if (/401|403|API key|api_key|permission|unauthor/i.test(msg)) return 'API key không hợp lệ hoặc đã hết hạn. Mở Cài đặt (biểu tượng chìa khoá) để kiểm tra lại.';
-    if (/429|quota|rate/i.test(msg)) return 'Đã chạm giới hạn truy cập của dịch vụ AI. Hãy thử lại sau ít phút hoặc đổi mô hình.';
-    if (/Failed to fetch|NetworkError|TypeError/i.test(msg)) return 'Không kết nối được tới dịch vụ AI. Kiểm tra mạng rồi thử lại.';
-    if (err && err.name === 'AbortError') return 'Yêu cầu quá thời gian chờ. Hãy thử lại.';
-    return msg || 'Đã xảy ra lỗi không xác định.';
+    if (/401|403|API key|api_key|permission|unauthor/i.test(msg)) {
+      return en ? 'Invalid or expired API key. Open Settings (key icon) to check your key.' : 'API key không hợp lệ hoặc đã hết hạn. Mở Cài đặt (biểu tượng chìa khoá) để kiểm tra lại.';
+    }
+    if (/429|quota|rate/i.test(msg)) {
+      return en ? 'AI rate limit reached. Please try again in a few minutes or switch models.' : 'Đã chạm giới hạn truy cập của dịch vụ AI. Hãy thử lại sau ít phút hoặc đổi mô hình.';
+    }
+    if (/Failed to fetch|NetworkError|TypeError/i.test(msg)) {
+      return en ? 'Could not connect to the AI service. Please check your internet connection.' : 'Không kết nối được tới dịch vụ AI. Kiểm tra mạng rồi thử lại.';
+    }
+    if (err && err.name === 'AbortError') {
+      return en ? 'Request timed out. Please try again.' : 'Yêu cầu quá thời gian chờ. Hãy thử lại.';
+    }
+    return msg || (en ? 'An unexpected error occurred.' : 'Đã xảy ra lỗi không xác định.');
   }
-
-  // ─────────────────────────────────────────────────────────────
-  //  Markdown renderer (an toàn: escape trước, rồi mới dựng thẻ)
-  // ─────────────────────────────────────────────────────────────
 
   function _aiInline(s) {
     return s
@@ -8121,7 +9087,6 @@ ${_aiShellHTML()}
 
       if (!line.trim()) { flushPara(); closeList(); i++; continue; }
 
-      // Bảng
       if (/^\s*\|.*\|\s*$/.test(line) && isTableSep(lines[i + 1])) {
         flushPara(); closeList();
         var head = cells(line);
@@ -8157,66 +9122,62 @@ ${_aiShellHTML()}
     return html;
   }
 
-  // ─────────────────────────────────────────────────────────────
-  //  Khung giao diện (HTML shell) — được chèn vào render()
-  // ─────────────────────────────────────────────────────────────
+  function _buildAIChipsHTML() {
+    var lang = _getCFLang();
+    var list = AI_CHIPS_I18N[lang] || AI_CHIPS_I18N.vi;
+    return list.map(function (c) {
+      return '<button type="button" class="cf-ai-chip cfx-chip" data-ai-prompt="' + _escHtml(_getAIPrompt(c[1])) + '">' + _escHtml(c[0]) + '</button>';
+    }).join('');
+  }
+
+  function _renderAIQuickChips() {
+    var wrap = _qs('#cfx-chips');
+    if (wrap) wrap.innerHTML = _buildAIChipsHTML();
+  }
 
   function _aiShellHTML() {
-    var chips = [
-      ['Tóm tắt tháng này', AI_PROMPTS.summary],
-      ['Lập kế hoạch tháng sau', AI_PROMPTS.plan],
-      ['Cắt giảm ở đâu?', AI_PROMPTS.cut],
-      ['Dự báo cuối tháng', AI_PROMPTS.forecast],
-      ['Tiền mặt vs Ngân hàng', AI_PROMPTS.cash],
-      ['Quản lý tiền tiết kiệm', AI_PROMPTS.savings]
-    ].map(function (c) {
-      return '<button type="button" class="cf-ai-chip cfx-chip" data-ai-prompt="' + _escHtml(c[1]) + '">' + _escHtml(c[0]) + '</button>';
-    }).join('');
-
     return '' +
-    '<section class="cfx-ai" id="cfx-ai" aria-label="Trợ lý tài chính AI">' +
+    '<section class="cfx-ai" id="cfx-ai" aria-label="' + _escHtml(_t('aiHeaderTitle')) + '">' +
       '<header class="cfx-ai__head">' +
         '<div class="cfx-ai__brand">' +
           '<div class="cfx-ai__logo">' + AI_ICON.spark + '</div>' +
           '<div class="cfx-ai__titles">' +
-            '<h4>AI Financial Advisor</h4>' +
-            '<p><span class="cfx-ai__dot" id="cfx-ai-dot"></span><span id="cfx-ai-status">Sẵn sàng</span><span class="cfx-sep">·</span><span id="cfx-ai-period"></span></p>' +
+            '<h4 data-i18n="aiHeaderTitle">' + _t('aiHeaderTitle') + '</h4>' +
+            '<p><span class="cfx-ai__dot" id="cfx-ai-dot"></span><span id="cfx-ai-status" data-i18n="aiStatusReady">' + _t('aiStatusReady') + '</span><span class="cfx-sep">·</span><span id="cfx-ai-period"></span></p>' +
           '</div>' +
         '</div>' +
         '<div class="cfx-ai__tools">' +
-          '<select id="cf-ai-provider" class="cfx-select" aria-label="Chọn mô hình AI">' +
+          '<select id="cf-ai-provider" class="cfx-select" aria-label="AI Model">' +
             '<option value="gemini">Gemini 3.7 Flash</option>' +
             '<option value="nvidia">Nvidia Nemotron 3 Ultra</option>' +
           '</select>' +
-          '<button type="button" id="cfx-ai-new" class="cfx-iconbtn" title="Cuộc trò chuyện mới" aria-label="Cuộc trò chuyện mới">' + AI_ICON.plus + '</button>' +
-          '<button type="button" id="cf-ai-settings-btn" class="cfx-iconbtn" title="Cài đặt API Key" aria-label="Cài đặt API Key">' + AI_ICON.key + '</button>' +
+          '<button type="button" id="cfx-ai-new" class="cfx-iconbtn" title="' + _escHtml(_t('aiNewChat')) + '" aria-label="' + _escHtml(_t('aiNewChat')) + '">' + AI_ICON.plus + '</button>' +
+          '<button type="button" id="cf-ai-settings-btn" class="cfx-iconbtn" title="' + _escHtml(_t('aiSettingsTitle')) + '" aria-label="' + _escHtml(_t('aiSettingsTitle')) + '">' + AI_ICON.key + '</button>' +
         '</div>' +
       '</header>' +
 
       '<div class="cfx-insight" id="cf-ai-insight-banner" data-level="info" role="status">' +
         '<span class="cfx-insight__icon" id="cf-ai-insight-icon">' + AI_ICON.info + '</span>' +
-        '<div class="cfx-insight__text"><span class="cfx-insight__tag">Insight</span><span id="cf-ai-insight-message">Đang phân tích dữ liệu chi tiêu tháng này…</span></div>' +
+        '<div class="cfx-insight__text"><span class="cfx-insight__tag" data-i18n="aiInsightTag">' + _t('aiInsightTag') + '</span><span id="cf-ai-insight-message">' + _t('aiInsightAnalyzing') + '</span></div>' +
       '</div>' +
 
-      '<div class="cfx-tabs" role="tablist" aria-label="Chế độ">' +
-        '<button type="button" role="tab" class="cfx-tab" data-tab="plan" id="cfx-tab-plan" aria-controls="cfx-panel-plan">' + AI_ICON.plan + '<span>Kế hoạch chi tiêu</span></button>' +
-        '<button type="button" role="tab" class="cfx-tab" data-tab="chat" id="cfx-tab-chat" aria-controls="cfx-panel-chat">' + AI_ICON.chat + '<span>Hỏi đáp AI</span></button>' +
+      '<div class="cfx-tabs" role="tablist">' +
+        '<button type="button" role="tab" class="cfx-tab" data-tab="plan" id="cfx-tab-plan" aria-controls="cfx-panel-plan">' + AI_ICON.plan + '<span data-i18n="aiTabPlan">' + _t('aiTabPlan') + '</span></button>' +
+        '<button type="button" role="tab" class="cfx-tab" data-tab="chat" id="cfx-tab-chat" aria-controls="cfx-panel-chat">' + AI_ICON.chat + '<span data-i18n="aiTabChat">' + _t('aiTabChat') + '</span></button>' +
       '</div>' +
 
       '<div class="cfx-panel" id="cfx-panel-plan" role="tabpanel" aria-labelledby="cfx-tab-plan">' +
-        '<div id="cfx-plan"></div>' +
+        '<div class="cfx-plan" id="cfx-plan"></div>' +
       '</div>' +
 
-      '<div class="cfx-panel cfx-chat" id="cfx-panel-chat" role="tabpanel" aria-labelledby="cfx-tab-chat" hidden>' +
-        '<div class="cfx-chat__scroll" id="hub-cf-ai-output" aria-live="polite"></div>' +
-        '<div class="cfx-chat__composer">' +
-          '<div class="cfx-chips" id="cf-ai-quick-prompts">' + chips + '</div>' +
-          '<div class="cfx-input">' +
-            '<textarea id="cf-ai-prompt" class="cfx-input__field" rows="1" maxlength="1500" placeholder="Hỏi về chi tiêu, ngân sách, cách tiết kiệm…" autocomplete="off" data-lpignore="true" data-form-type="other" aria-label="Câu hỏi cho trợ lý AI"></textarea>' +
-            '<button type="button" id="cf-ai-ask-btn" class="cfx-send" aria-label="Gửi câu hỏi" title="Gửi (Enter)">' + AI_ICON.send + '</button>' +
-          '</div>' +
-          '<div class="cfx-hint">Enter để gửi · Shift+Enter xuống dòng · AI đọc dữ liệu của tháng đang xem</div>' +
-        '</div>' +
+      '<div class="cfx-panel" id="cfx-panel-chat" role="tabpanel" aria-labelledby="cfx-tab-chat" hidden>' +
+        '<div class="cfx-chips" id="cfx-chips">' + _buildAIChipsHTML() + '</div>' +
+        '<div class="cfx-chat" id="cf-ai-chat-history" role="log" aria-live="polite"></div>' +
+        '<form class="cfx-composer" id="cfx-composer" autocomplete="off">' +
+          '<textarea id="cf-ai-input" class="cfx-input" rows="1" data-i18n-placeholder="aiChatPlaceholder" placeholder="' + _escHtml(_t('aiChatPlaceholder')) + '"></textarea>' +
+          '<button type="button" id="cf-ai-stop-btn" class="cfx-send cfx-send--stop" style="display:none;" title="' + _escHtml(_t('aiBtnStop')) + '" aria-label="' + _escHtml(_t('aiBtnStop')) + '">' + AI_ICON.stop + '</button>' +
+          '<button type="submit" id="cf-ai-send-btn" class="cfx-send" title="' + _escHtml(_t('aiBtnSend')) + '" aria-label="' + _escHtml(_t('aiBtnSend')) + '">' + AI_ICON.send + '</button>' +
+        '</form>' +
       '</div>' +
     '</section>';
   }
@@ -8544,7 +9505,7 @@ ${_aiShellHTML()}
         if (tabBtn) { _switchAITab(tabBtn.dataset.tab); return; }
 
         var rateBtn = t.closest('[data-rate]');
-        if (rateBtn) { _aiSetTargetRate(parseInt(rateBtn.dataset.rate, 10)); _renderSpendingPlan(); return; }
+        if (rateBtn) { _aiSetTargetRate(parseInt(rateBtn.dataset.rate, 10)); _renderSpendingPlan(); updateDashboardTotals(); return; }
 
         var promptBtn = t.closest('[data-ai-prompt]');
         if (promptBtn) { _handleAIAdvisorQuery(promptBtn.getAttribute('data-ai-prompt')); return; }
