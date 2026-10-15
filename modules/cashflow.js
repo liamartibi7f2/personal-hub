@@ -135,6 +135,12 @@ const cashflowModule = (function () {
       cfdNoData:           'Not enough data to compare yet',
       cfdPartial:          'Estimate up to day {d}, compared over the same days',
       cfdWhy:              'What changed vs {m} (same period)',
+      cfqLabel: 'Quick add', cfqPlaceholder: 'Type one line: pho 55k · grab 48k yesterday · salary 20tr',
+      cfqHint: 'Enter to save · Esc to clear · understands 35k, 1tr2, yesterday, 5/10, bank, cash',
+      cfqSave: 'Save', cfqExpense: 'Expense', cfqIncome: 'Income', cfqToggleType: 'Switch income / expense',
+      cfqNeedAmount: 'Add an amount, e.g. 55k or 1tr2', cfqUnsure: 'Not sure about the category, please check',
+      cfqAssumedK: 'Read as {x}', cfqSaved: 'Added', cfqUndo: 'Undo', cfqUndone: 'Undone',
+      cfqDate: 'Date', cfqCategory: 'Category', cfqSource: 'Source', cfqSaveFail: 'Could not save, please check',
 
       // Edit balance prompts & toasts
       editNetWorthTitle:   'Edit Net Worth',
@@ -405,6 +411,12 @@ const cashflowModule = (function () {
       cfdNoData:           'Chưa đủ dữ liệu để so sánh',
       cfdPartial:          'Tạm tính đến ngày {d}, so sánh cùng số ngày',
       cfdWhy:              'Vì sao thay đổi so với {m} (cùng kỳ)',
+      cfqLabel: 'Nhập nhanh', cfqPlaceholder: 'Gõ một dòng: phở 55k · grab 48k hôm qua · lương 20tr',
+      cfqHint: 'Enter để lưu · Esc để xóa · hiểu 35k, 1tr2, hôm qua, 5/10, bank, tiền mặt',
+      cfqSave: 'Lưu', cfqExpense: 'Chi', cfqIncome: 'Thu', cfqToggleType: 'Đổi giữa thu và chi',
+      cfqNeedAmount: 'Thêm số tiền, ví dụ 55k hoặc 1tr2', cfqUnsure: 'Chưa chắc nhóm, hãy kiểm tra',
+      cfqAssumedK: 'Hiểu là {x}', cfqSaved: 'Đã thêm', cfqUndo: 'Hoàn tác', cfqUndone: 'Đã hoàn tác',
+      cfqDate: 'Ngày', cfqCategory: 'Nhóm', cfqSource: 'Nguồn tiền', cfqSaveFail: 'Không lưu được, hãy kiểm tra lại',
 
       // Edit balance prompts & toasts
       editNetWorthTitle:   'Chỉnh sửa Tổng Tài Sản',
@@ -680,7 +692,16 @@ const cashflowModule = (function () {
       optionCash:           'Tiền mặt (Cash)',
       optionBank:           'Chuyển khoản (Bank)',
       hintRecoveryNoIncome: 'Tiền nợ sẽ được cộng vào ví bạn chọn. Loại này <strong>không tính vào Thu nhập</strong>.',
-      btnConfirm:           'Xác nhận'
+      btnConfirm:           'Xác nhận',
+
+      // Sổ nợ v2
+      dlFiltersLabel: 'Lọc theo trạng thái', dlFilterAll: 'Tất cả', dlFilterOverdue: 'Quá hạn', dlFilterSoon: 'Sắp đến hạn', dlFilterPaid: 'Đã trả',
+      dlSearch: 'Tìm theo tên hoặc ghi chú', dlSortLabel: 'Sắp xếp', dlSortDue: 'Hạn gần nhất', dlSortAmount: 'Số tiền lớn nhất', dlSortNew: 'Mới thêm',
+      dlStatPending: 'Đang chờ thu', dlStatOverdue: 'Quá hạn', dlStatSoon: 'Đến hạn trong 7 ngày', dlStatCollected: 'Đã thu tháng này', dlCount: '{n} khoản',
+      dlOverdueDays: 'Quá hạn {n} ngày', dlDueToday: 'Đến hạn hôm nay', dlDueIn: 'Còn {n} ngày', dlPaidOn: 'Đã thu {d}',
+      dlBorrowed: 'Ngày mượn', dlDueDate: 'Hạn trả', dlHeldDays: 'Đã mượn {n} ngày', dlNoNote: 'Không có ghi chú',
+      dlProgress: 'Thời gian từ ngày mượn đến hạn trả', dlNoResult: 'Không có khoản nợ nào khớp bộ lọc',
+      dlDeleted: 'Đã xóa khoản nợ của {name}', dlUndo: 'Hoàn tác', dlUndone: 'Đã hoàn tác', dlPaidDone: 'Đã ghi nhận thu {amount} từ {name}'
     },
     en: {
       debtSummaryTitle:     'POCKET DEBT',
@@ -733,7 +754,16 @@ const cashflowModule = (function () {
       optionCash:           'Cash (Physical)',
       optionBank:           'Bank Transfer',
       hintRecoveryNoIncome: 'Money will be added to selected wallet. This does <strong>not count as Income</strong>.',
-      btnConfirm:           'Confirm'
+      btnConfirm:           'Confirm',
+
+      // Debt ledger v2
+      dlFiltersLabel: 'Filter by status', dlFilterAll: 'All', dlFilterOverdue: 'Overdue', dlFilterSoon: 'Due soon', dlFilterPaid: 'Paid',
+      dlSearch: 'Search by name or note', dlSortLabel: 'Sort', dlSortDue: 'Nearest due date', dlSortAmount: 'Largest amount', dlSortNew: 'Recently added',
+      dlStatPending: 'Pending', dlStatOverdue: 'Overdue', dlStatSoon: 'Due within 7 days', dlStatCollected: 'Collected this month', dlCount: '{n} items',
+      dlOverdueDays: 'Overdue {n} days', dlDueToday: 'Due today', dlDueIn: '{n} days left', dlPaidOn: 'Paid {d}',
+      dlBorrowed: 'Borrowed', dlDueDate: 'Due', dlHeldDays: 'Borrowed {n} days', dlNoNote: 'No note',
+      dlProgress: 'Time from borrowed date to due date', dlNoResult: 'No debts match this filter',
+      dlDeleted: 'Deleted debt from {name}', dlUndo: 'Undo', dlUndone: 'Undone', dlPaidDone: 'Recorded {amount} collected from {name}'
     }
   };
 
@@ -3050,6 +3080,20 @@ function _restoreAIState() {
     </div>
   </div>
 
+  <!-- ═══ QUICK ENTRY (một dòng) ═══ -->
+  <div class="cfq" id="cfq">
+    <div class="cfq-bar">
+      <svg class="cfq-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z"></path></svg>
+      <input type="text" id="cfq-input" class="cfq-input" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"
+             aria-label="${_escHtml(_t('cfqLabel'))}" aria-describedby="cfq-hint"
+             data-i18n-placeholder="cfqPlaceholder" placeholder="${_escHtml(_t('cfqPlaceholder'))}" maxlength="160" />
+      <button type="button" class="cfq-save" id="cfq-save" disabled data-i18n="cfqSave">${_t('cfqSave')}</button>
+    </div>
+    <div class="cfq-preview" id="cfq-preview" aria-live="polite" hidden></div>
+    <div class="cfq-done" id="cfq-done" role="status" hidden></div>
+    <div class="cfq-hint" id="cfq-hint" data-i18n="cfqHint">${_t('cfqHint')}</div>
+  </div>
+
   <!-- ═══ REAL-TIME CHART / HEATMAP ═══ -->
   <div class="hub-cf-chart-section glass-card cfc">
     <div class="hub-cf-chart-header cfc-head">
@@ -3315,26 +3359,35 @@ function _restoreAIState() {
     </div>
   </div>
 
+  <div class="dl" id="dl-root">
+    <div class="dl-stats" id="dl-stats" hidden></div>
+    <div class="dl-toolbar" id="dl-toolbar" hidden>
+      <div class="dl-filters" id="dl-filters" role="group">
+        <button type="button" class="dl-filter" data-filter="all" aria-pressed="true"></button>
+        <button type="button" class="dl-filter" data-filter="overdue" aria-pressed="false"></button>
+        <button type="button" class="dl-filter" data-filter="soon" aria-pressed="false"></button>
+        <button type="button" class="dl-filter" data-filter="paid" aria-pressed="false"></button>
+      </div>
+      <div class="dl-tools">
+        <label class="dl-search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+          <input type="search" id="dl-search" autocomplete="off" />
+        </label>
+        <select id="dl-sort" class="dl-sort"></select>
+      </div>
+    </div>
+    <div class="dl-undo" id="dl-undo" role="status" aria-live="polite" hidden></div>
+  </div>
+
   <div class="hub-cf-debt-empty" id="hub-cf-debt-empty-state" style="display:none;">
     <span class="hub-cf-debt-empty-icon">📓</span>
     <p class="hub-cf-debt-empty-text" data-i18n="noDebtsYet">${_pd_t('noDebtsYet')}</p>
     <p class="hub-cf-debt-empty-hint" data-i18n="noDebtsHint">${_pd_t('noDebtsHint')}</p>
   </div>
 
-  <div class="hub-cf-debt-table-wrap" id="hub-cf-debt-table-wrap" style="display:none;">
-    <table class="hub-cf-debt-table">
-      <thead>
-        <tr>
-          <th class="hub-cf-debt-col--debtor" data-i18n="colDebtor">${_pd_t('colDebtor')}</th>
-          <th class="hub-cf-debt-col--amount" data-i18n="colAmount">${_pd_t('colAmount')}</th>
-          <th class="hub-cf-debt-col--date" data-i18n="colDateBorrowed">${_pd_t('colDateBorrowed')}</th>
-          <th class="hub-cf-debt-col--expected" data-i18n="colExpectedReturn">${_pd_t('colExpectedReturn')}</th>
-          <th class="hub-cf-debt-col--status" data-i18n="colStatus">${_pd_t('colStatus')}</th>
-          <th class="hub-cf-debt-col--actions" data-i18n="colActions">${_pd_t('colActions')}</th>
-        </tr>
-      </thead>
-      <tbody id="hub-cf-debt-body"></tbody>
-    </table>
+  <div class="dl-list-wrap" id="hub-cf-debt-table-wrap" style="display:none;">
+    <div class="dl-list" id="hub-cf-debt-body" role="list"></div>
+    <div class="dl-noresult" id="dl-noresult" hidden></div>
   </div>
 </div>
 
@@ -3637,6 +3690,7 @@ ${_aiShellHTML()}
     _refreshHeatmap();
     _updateDebtLanguage();
     updateDashboardTotals();
+    _cfqRender();
     _renderSpendingPlan();
     _renderAIQuickChips();
     _updateAIStatus();
@@ -4984,49 +5038,235 @@ ${_aiShellHTML()}
     _setTextById('cf-debt-pending', _formatVNFull(totalPending));
   }
 
-  function _refreshDebtLedger() {
-    var activeDebts = _getActiveDebts();
-    var tbody = _qs('#hub-cf-debt-body');
-    var emptyEl = _qs('#hub-cf-debt-empty-state');
-    var tableEl = _qs('#hub-cf-debt-table-wrap');
-    if (!tbody || !emptyEl || !tableEl) return;
+  // ============================================================
+  //   DEBT LEDGER v2 — danh sách mở rộng được (display-only)
+  //   Dữ liệu và trạng thái vẫn do _getDebtStatus / _addDebt / _executeDebtRecovery quản lý.
+  // ============================================================
+  var _dlUI = { filter: 'all', q: '', sort: 'due', open: {} };
+  var _dlUndo = null, _dlUndoTimer = null, _dlBound = false;
 
-    if (activeDebts.length === 0) {
-      emptyEl.style.display = 'flex';
-      tableEl.style.display = 'none';
-    } else {
-      emptyEl.style.display = 'none';
-      tableEl.style.display = '';
-      var html = '';
-      activeDebts.forEach(function (debt) { html += _renderDebtRow(debt); });
-      tbody.innerHTML = html;
+  function _dlToday() { var t = new Date(); t.setHours(0, 0, 0, 0); return t; }
+  function _dlDue(debt) { var d = new Date(String(debt.expectedReturnDate || '') + 'T00:00:00'); return isNaN(d.getTime()) ? null : d; }
+  /** Số ngày từ hôm nay đến hạn trả (âm = quá hạn); null nếu không có ngày hợp lệ. */
+  function _dlDaysTo(debt) { var d = _dlDue(debt); return d ? Math.round((d - _dlToday()) / 86400000) : null; }
+  function _dlFmtTs(ts) {
+    if (!ts) return '—';
+    var d = new Date(ts);
+    return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
+  }
+  function _dlIsSoon(debt) { var n = _dlDaysTo(debt); return _getDebtStatus(debt) === 'pending' && n !== null && n >= 0 && n <= 7; }
 
-      if (!tbody.dataset.editDelegationBound) {
-        tbody.dataset.editDelegationBound = 'true';
-        tbody.addEventListener('click', function (e) {
-          var editBtn = e.target.closest('.hub-cf-debt-edit-btn');
-          if (!editBtn) return;
-          e.stopPropagation();
-          var debtId = editBtn.getAttribute('data-debt-id');
-          if (debtId) _openEditDebtModal(debtId);
-        });
-      }
+  var _DL_ICONS = {
+    alert: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.3 3.9L2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>',
+    clock: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+    check: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>',
+    chev:  '<svg class="dl-chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>',
+    edit:  '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
+    trash: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m-9 0l1 14h8l1-14"/></svg>'
+  };
 
-      tbody.querySelectorAll('.hub-cf-debt-btn--paid').forEach(function (btn) {
-        btn.addEventListener('click', function (e) {
-          e.stopPropagation();
-          var debtId = this.getAttribute('data-debt-id');
-          if (debtId) _markDebtPaid(debtId);
-        });
-      });
-      tbody.querySelectorAll('.hub-cf-debt-btn--delete').forEach(function (btn) {
-        btn.addEventListener('click', function (e) {
-          e.stopPropagation();
-          var debtId = this.getAttribute('data-debt-id');
-          if (debtId) _deleteDebt(debtId);
-        });
-      });
+  /** Tone + chip text của một khoản nợ. */
+  function _dlStatusInfo(debt) {
+    var st = _getDebtStatus(debt), n = _dlDaysTo(debt);
+    if (st === 'paid') return { tone: 'good', icon: _DL_ICONS.check, text: _pd_t('dlPaidOn').replace('{d}', _dlFmtTs(debt.paidAt)) };
+    if (n === null) return { tone: 'neutral', icon: _DL_ICONS.clock, text: '—' };
+    if (st === 'overdue') return { tone: 'bad', icon: _DL_ICONS.alert, text: _pd_t('dlOverdueDays').replace('{n}', Math.abs(n)) };
+    if (n === 0) return { tone: 'warn', icon: _DL_ICONS.clock, text: _pd_t('dlDueToday') };
+    return { tone: n <= 7 ? 'warn' : 'neutral', icon: _DL_ICONS.clock, text: _pd_t('dlDueIn').replace('{n}', n) };
+  }
+
+  /** % thời gian đã trôi qua giữa ngày mượn và hạn trả (0–100). */
+  function _dlProgress(debt) {
+    if (_getDebtStatus(debt) === 'paid') return 100;
+    var b = new Date(String(debt.dateBorrowed || '') + 'T00:00:00'), d = _dlDue(debt);
+    if (!d || isNaN(b.getTime())) return 0;
+    var span = d - b;
+    if (span <= 0) return _getDebtStatus(debt) === 'overdue' ? 100 : 0;
+    return Math.max(0, Math.min(100, (_dlToday() - b) / span * 100));
+  }
+
+  function _dlRowHTML(debt) {
+    var info = _dlStatusInfo(debt), paid = _getDebtStatus(debt) === 'paid';
+    var open = !!_dlUI.open[debt.id], id = _escHtml(debt.id);
+    var name = String(debt.debtorName || '?');
+    var held = (function () {
+      var b = new Date(String(debt.dateBorrowed || '') + 'T00:00:00');
+      if (isNaN(b.getTime())) return '—';
+      var end = paid && debt.paidAt ? new Date(debt.paidAt) : new Date();
+      end.setHours(0, 0, 0, 0);
+      return _pd_t('dlHeldDays').replace('{n}', Math.max(0, Math.round((end - b) / 86400000)));
+    })();
+    var sub = debt.note ? _escHtml(debt.note) : _escHtml(_pd_t('dlDueDate')) + ' ' + _escHtml(_formatDateISOtoVN(debt.expectedReturnDate));
+
+    var html = '<div class="dl-item dl-item--' + info.tone + (open ? ' is-open' : '') + '" role="listitem" data-debt-id="' + id + '">' +
+      '<button type="button" class="dl-head" aria-expanded="' + (open ? 'true' : 'false') + '" aria-controls="dl-p-' + id + '">' +
+        '<span class="dl-avatar" aria-hidden="true">' + _escHtml(name.trim().charAt(0).toUpperCase() || '?') + '</span>' +
+        '<span class="dl-who"><span class="dl-name">' + _escHtml(name) + '</span><span class="dl-sub">' + sub + '</span></span>' +
+        '<span class="dl-amt">' + _escHtml(_formatVND(debt.amount)) + '</span>' +
+        '<span class="dl-chip dl-chip--' + info.tone + '">' + info.icon + '<span>' + _escHtml(info.text) + '</span></span>' +
+        _DL_ICONS.chev +
+      '</button>' +
+      '<div class="dl-panel" id="dl-p-' + id + '" role="region" aria-label="' + _escHtml(name) + '"' + (open ? '' : ' hidden') + '>' +
+        '<div class="dl-timeline" role="img" aria-label="' + _escHtml(_pd_t('dlProgress')) + '">' +
+          '<div class="dl-track"><i class="dl-fill dl-fill--' + info.tone + '" style="width:' + _dlProgress(debt).toFixed(1) + '%"></i></div>' +
+          '<div class="dl-tl-labels"><span>' + _escHtml(_pd_t('dlBorrowed')) + ' · ' + _escHtml(_formatDateISOtoVN(debt.dateBorrowed)) + '</span>' +
+          '<span>' + _escHtml(_pd_t('dlDueDate')) + ' · ' + _escHtml(_formatDateISOtoVN(debt.expectedReturnDate)) + '</span></div>' +
+        '</div>' +
+        '<div class="dl-facts"><span class="dl-fact">' + _escHtml(held) + '</span>' +
+          '<span class="dl-fact dl-fact--note">' + (debt.note ? _escHtml(debt.note) : '<em>' + _escHtml(_pd_t('dlNoNote')) + '</em>') + '</span></div>' +
+        '<div class="dl-acts">' +
+          (paid ? '' : '<button type="button" class="dl-act dl-act--primary" data-act="paid" data-debt-id="' + id + '">' + _DL_ICONS.check + '<span>' + _escHtml(_pd_t('btnMarkPaid')) + '</span></button>') +
+          (paid ? '' : '<button type="button" class="dl-act" data-act="edit" data-debt-id="' + id + '">' + _DL_ICONS.edit + '<span>' + _escHtml(_pd_t('btnEdit')) + '</span></button>') +
+          '<button type="button" class="dl-act dl-act--danger" data-act="delete" data-debt-id="' + id + '">' + _DL_ICONS.trash + '<span>' + _escHtml(_pd_t('btnDelete')) + '</span></button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+    return html;
+  }
+
+  function _dlShowUndo(payload, msg, ms) {
+    var box = _qs('#dl-undo');
+    _dlUndo = payload || null;
+    clearTimeout(_dlUndoTimer);
+    if (!box) return;
+    box.innerHTML = '<span class="dl-undo-txt">' + _escHtml(msg) + '</span>' +
+      (payload ? '<button type="button" class="dl-undo-btn" id="dl-undo-btn">' + _escHtml(_pd_t('dlUndo')) + '</button>' : '');
+    box.hidden = false;
+    _dlUndoTimer = setTimeout(function () { var b = _qs('#dl-undo'); if (b) b.hidden = true; _dlUndo = null; }, ms || 8000);
+  }
+
+  function _dlDoUndo() {
+    var u = _dlUndo;
+    if (!u) return;
+    _dlUndo = null;
+    _ensureDebtData();
+    if (u.kind === 'delete') {
+      _data.debts.splice(Math.min(u.index, _data.debts.length), 0, u.debt);
+    } else if (u.kind === 'paid') {
+      var d = _data.debts.find(function (x) { return x.id === u.debtId; });
+      if (d) { d.status = 'pending'; delete d.paidAt; }
+      var ti = _data.transactions.findIndex(function (t) { return t.id === u.txId; });
+      if (ti !== -1) _data.transactions.splice(ti, 1);
+      _renderAllViews();
+      _updateChart();
     }
+    _debouncedPersist();
+    _refreshDebtSummary();
+    _refreshDebtLedger();
+    _dlShowUndo(null, _pd_t('dlUndone'), 3000);
+  }
+
+  function _dlBind() {
+    var root = _qs('#dl-root');
+    if (!root || root.dataset.bound === 'true') return;
+    root.dataset.bound = 'true';
+    var timer = null;
+
+    root.addEventListener('click', function (e) {
+      var f = e.target.closest('.dl-filter');
+      if (f) { _dlUI.filter = f.getAttribute('data-filter'); _refreshDebtLedger(); return; }
+      if (e.target.closest('#dl-undo-btn')) { _dlDoUndo(); return; }
+    });
+    var search = _qs('#dl-search');
+    if (search) search.addEventListener('input', function () {
+      clearTimeout(timer);
+      var v = this.value;
+      timer = setTimeout(function () { _dlUI.q = v; _refreshDebtLedger(); }, 120);
+    });
+    var sort = _qs('#dl-sort');
+    if (sort) sort.addEventListener('change', function () { _dlUI.sort = this.value; _refreshDebtLedger(); });
+
+    var list = _qs('#hub-cf-debt-body');
+    if (list) list.addEventListener('click', function (e) {
+      var act = e.target.closest('[data-act]');
+      if (act) {
+        e.stopPropagation();
+        var id = act.getAttribute('data-debt-id'), kind = act.getAttribute('data-act');
+        if (kind === 'paid') _markDebtPaid(id);
+        else if (kind === 'edit') _openEditDebtModal(id);
+        else if (kind === 'delete') _deleteDebt(id);
+        return;
+      }
+      var head = e.target.closest('.dl-head');
+      if (!head) return;
+      var item = head.closest('.dl-item'), panel = item.querySelector('.dl-panel');
+      var on = head.getAttribute('aria-expanded') !== 'true';
+      head.setAttribute('aria-expanded', on ? 'true' : 'false');
+      item.classList.toggle('is-open', on);
+      if (panel) panel.hidden = !on;
+      _dlUI.open[item.getAttribute('data-debt-id')] = on;
+    });
+  }
+
+  function _refreshDebtLedger() {
+    var listEl = _qs('#hub-cf-debt-body'), emptyEl = _qs('#hub-cf-debt-empty-state'), wrap = _qs('#hub-cf-debt-table-wrap');
+    if (!listEl || !emptyEl || !wrap) return;
+    var active = _getActiveDebts(), paid = _getPaidDebts();
+    var overdue = active.filter(function (d) { return _getDebtStatus(d) === 'overdue'; });
+    var soon = active.filter(_dlIsSoon);
+
+    // ── Dải tóm tắt ──
+    var now = new Date(), collected = paid.filter(function (d) {
+      if (!d.paidAt) return false;
+      var p = new Date(d.paidAt);
+      return p.getFullYear() === now.getFullYear() && p.getMonth() === now.getMonth();
+    });
+    function sum(arr) { return arr.reduce(function (s, d) { return s + (Number(d.amount) || 0); }, 0); }
+    function tile(label, arr, tone) {
+      return '<div class="dl-stat dl-stat--' + tone + '"><span class="dl-stat-label">' + _escHtml(label) + '</span>' +
+        '<span class="dl-stat-val">' + _escHtml(_formatVND(sum(arr))) + '</span>' +
+        '<span class="dl-stat-sub">' + _escHtml(_pd_t('dlCount').replace('{n}', arr.length)) + '</span></div>';
+    }
+    var stats = _qs('#dl-stats'), toolbar = _qs('#dl-toolbar');
+    var hasAny = active.length + paid.length > 0;
+    if (stats) {
+      stats.hidden = !hasAny;
+      stats.innerHTML = tile(_pd_t('dlStatPending'), active, 'neutral') + tile(_pd_t('dlStatOverdue'), overdue, overdue.length ? 'bad' : 'neutral') +
+        tile(_pd_t('dlStatSoon'), soon, soon.length ? 'warn' : 'neutral') + tile(_pd_t('dlStatCollected'), collected, collected.length ? 'good' : 'neutral');
+    }
+    if (toolbar) toolbar.hidden = !hasAny;
+
+    // ── Bộ lọc (có số lượng) + ô tìm + sắp xếp ──
+    var counts = { all: active.length, overdue: overdue.length, soon: soon.length, paid: paid.length };
+    var labels = { all: 'dlFilterAll', overdue: 'dlFilterOverdue', soon: 'dlFilterSoon', paid: 'dlFilterPaid' };
+    Array.prototype.forEach.call(document.querySelectorAll('#dl-filters .dl-filter'), function (b) {
+      var k = b.getAttribute('data-filter');
+      b.innerHTML = _escHtml(_pd_t(labels[k])) + ' <span class="dl-filter-n">' + counts[k] + '</span>';
+      b.setAttribute('aria-pressed', _dlUI.filter === k ? 'true' : 'false');
+      b.classList.toggle('is-on', _dlUI.filter === k);
+    });
+    var filtersEl = _qs('#dl-filters'); if (filtersEl) filtersEl.setAttribute('aria-label', _pd_t('dlFiltersLabel'));
+    var search = _qs('#dl-search');
+    if (search) { search.placeholder = _pd_t('dlSearch'); search.setAttribute('aria-label', _pd_t('dlSearch')); if (search.value !== _dlUI.q && document.activeElement !== search) search.value = _dlUI.q; }
+    var sortEl = _qs('#dl-sort');
+    if (sortEl) {
+      sortEl.setAttribute('aria-label', _pd_t('dlSortLabel'));
+      var opts = [['due', 'dlSortDue'], ['amount', 'dlSortAmount'], ['new', 'dlSortNew']];
+      sortEl.innerHTML = opts.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === _dlUI.sort ? ' selected' : '') + '>' + _escHtml(_pd_t(o[1])) + '</option>'; }).join('');
+    }
+
+    // ── Lọc → tìm → sắp xếp ──
+    var pool = _dlUI.filter === 'paid' ? paid : (_dlUI.filter === 'overdue' ? overdue : (_dlUI.filter === 'soon' ? soon : active));
+    var q = _catKey(_dlUI.q);
+    if (q) pool = pool.filter(function (d) { return _catKey((d.debtorName || '') + ' ' + (d.note || '')).indexOf(q) !== -1; });
+    pool = pool.slice();
+    if (_dlUI.sort === 'amount') pool.sort(function (a, b) { return (Number(b.amount) || 0) - (Number(a.amount) || 0); });
+    else if (_dlUI.sort === 'new') pool.sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
+    // 'due': _getActiveDebts đã xếp quá hạn trước rồi theo ngày hẹn; _getPaidDebts theo ngày thu mới nhất
+
+    // ── Hiển thị ──
+    var noRes = _qs('#dl-noresult');
+    var noneAtAll = _dlUI.filter !== 'paid' && active.length === 0;
+    emptyEl.style.display = noneAtAll ? 'flex' : 'none';   // như cũ: chưa có nợ đang chờ → hiện trạng thái trống
+    wrap.style.display = noneAtAll ? 'none' : '';
+    if (!noneAtAll) {
+      listEl.innerHTML = pool.map(_dlRowHTML).join('');
+      if (noRes) {
+        noRes.hidden = pool.length > 0;
+        noRes.textContent = _dlUI.filter === 'paid' && paid.length === 0 ? _pd_t('emptyHistory') : _pd_t('dlNoResult');
+      }
+    }
+    _dlBind();
   }
 
   function _updateDebtLanguage() {
@@ -5083,12 +5323,388 @@ ${_aiShellHTML()}
   //   EVENT BINDING
   // ============================================================
 
+  // ── QUICK ENTRY BEGIN ───────────────────────────────────────
+  // Nhập nhanh một dòng: "phở 55k", "grab 48k bank hôm qua", "lương 20tr", "+trợ cấp 500k 5/10".
+  // Chỉ phân tích câu → điền sẵn form → gọi lại đúng _saveTransaction() (không có đường lưu riêng).
+
+  /** Chữ thường, bỏ dấu, GIỮ NGUYÊN ĐỘ DÀI (để đánh dấu vị trí trên chuỗi gốc). */
+  function _cfqPlain(s) {
+    var out = '';
+    for (var i = 0; i < s.length; i++) {
+      var ch = s.charAt(i), b = ch.normalize('NFD').charAt(0);
+      if (ch === 'đ' || ch === 'Đ') b = 'd';
+      out += b.toLowerCase();
+    }
+    return out;
+  }
+
+  // [id, [từ khóa không dấu]] — dùng khi lịch sử của bạn chưa biết từ đó
+  var _CFQ_KW = {
+    expense: [
+      ['an-uong', ['pho', 'bun', 'com', 'banh mi', 'banh', 'xoi', 'chao', 'mi tom', 'an sang', 'an trua', 'an toi', 'an vat', 'an uong', 'an', 'tra sua', 'tra da', 'tra dao', 'tra chanh', 'cafe', 'ca phe', 'cf', 'nuoc ngot', 'nuoc mia', 'sinh to', 'bia', 'ruou', 'nhau', 'lau', 'nuong', 'do an', 'thuc an', 'quan an', 'nha hang', 'grabfood', 'shopeefood', 'kem', 'tra sua']],
+      ['nha-o', ['tien nha', 'thue nha', 'nha tro', 'phong tro', 'tien dien', 'dien', 'tien nuoc', 'nuoc sinh hoat', 'wifi', 'internet', 'gas', 'tien rac', 'phi quan ly', 'chung cu', 'tien phong']],
+      ['di-chuyen', ['grab', 'gojek', 'xanh sm', 'taxi', 'xang', 'do xang', 'xe om', 'gui xe', 've xe', 'xe buyt', 'bus', 'tau', 'may bay', 've may bay', 'sua xe', 'rua xe', 'thay lop', 'thay nhot', 'phi cau duong', 'bao duong xe', 'dang kiem']],
+      ['tieu-dung-thiet-yeu', ['sieu thi', 'tap hoa', 'bach hoa', 'bach hoa xanh', 'winmart', 'vinmart', 'coop', 'di cho', 'giat', 'xa phong', 'dau goi', 'sua tam', 'kem danh rang', 'giay ve sinh', 'nuoc rua chen', 'bot giat', 'dien thoai', 'nap tien dien thoai', 'cuoc dien thoai', 'sim']],
+      ['suc-khoe', ['thuoc', 'nha thuoc', 'kham', 'benh vien', 'bac si', 'y te', 'suc khoe', 'xet nghiem', 'vitamin', 'bao hiem y te', 'nha khoa', 'nho rang']],
+      ['doodad', ['xem phim', 'phim', 'game', 'netflix', 'spotify', 'youtube', 'karaoke', 'du lich', 'di choi', 'choi', 'quan ao', 'giay dep', 'my pham', 'shopee', 'lazada', 'tiki', 'do choi', 'concert', 've xem']],
+      ['cho-di', ['qua tang', 'mua qua', 'tang qua', 'tang ban', 'tang me', 'tang ba', 'bieu', 'li xi', 'lixi', 'mung cuoi', 'phong bi', 'tu thien', 'ung ho', 'cho me', 'cho ba', 'gui bo me', 'dong gop', 'qua sinh nhat']],
+      ['phat-trien-ban-than', ['hoc', 'khoa hoc', 'hoc phi', 'sach', 'lop hoc', 'dong lop', 'gym', 'yoga', 'the thao', 'udemy', 'coursera', 'hoi thao', 'workshop', 'sach vo']],
+      ['tiet-kiem', ['gui tiet kiem', 'chuyen vao tiet kiem', 'cho vao tiet kiem', 'gui tk']]
+    ],
+    income: [
+      ['luong', ['luong', 'salary', 'tien thuong', 'thuong tet', 'thuong thang', 'bonus', 'thu nhap chinh']],
+      ['kinh-doanh', ['ban hang', 'ban do', 'doanh thu', 'freelance', 'khach tra', 'lam them', 'hop dong', 'nhan job']],
+      ['lai-dau-tu', ['tien lai', 'nhan lai', 'lai suat', 'lai tiet kiem', 'lai ngan hang', 'lai dau tu', 'co tuc', 'chung khoan', 'coin', 'crypto']],
+      ['thu-nhap-bi-dong', ['cho thue', 'tien thue nha', 'ban quyen', 'affiliate', 'adsense', 'thu nhap bi dong']],
+      ['tro-cap', ['tro cap', 'ho tro', 'phu cap', 'tien tro cap']],
+      ['tiet-kiem', ['rut tiet kiem', 'rut tk']]
+    ]
+  };
+  // Từ dễ nhầm khi bỏ dấu (thưởng/thường, lãi/lại, giày/giấy): chỉ nhận khi bạn GÕ CÓ DẤU
+  var _CFQ_KW_DIAC = [
+    ['income', 'luong', ['thưởng']], ['income', 'lai-dau-tu', ['lãi']],
+    ['expense', 'doodad', ['giày']], ['expense', 'phat-trien-ban-than', ['thể thao']]
+  ];
+  var _CFQ_INCOME_CUES = /(^|[^a-z0-9])(nhan tien|nhan luong|nhan duoc|duoc cho|duoc tra|khach tra|hoan tien|hoan lai|thu nhap|thu tien)(?![a-z0-9])/;
+  var _CFQ_BANK = /(^|[^a-z0-9])(bank|ck|chuyen khoan|ngan hang|the tin dung|the ghi no|quet the|atm|momo|zalopay|vcb|tcb|vietcombank|techcombank|visa)(?![a-z0-9])/;
+  var _CFQ_CASH = /(^|[^a-z0-9])(tien mat|tm|cash)(?![a-z0-9])/;
+  var _cfqKwRe = null, _cfqIdx = null, _cfqIdxStamp = -1;
+
+  function _cfqCatList(type) { return type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES; }
+  function _cfqCatOk(type, id) { return _cfqCatList(type).some(function (c) { return c.id === id; }); }
+  function _cfqFallbackCat(type) { return _cfqCatOk(type, type === 'income' ? 'thu-nhap-khac' : 'chi-phi-khac') ? (type === 'income' ? 'thu-nhap-khac' : 'chi-phi-khac') : _cfqCatList(type)[0].id; }
+
+  function _cfqKwRegexes() {
+    if (_cfqKwRe) return _cfqKwRe;
+    _cfqKwRe = { expense: [], income: [] };
+    ['expense', 'income'].forEach(function (type) {
+      _CFQ_KW[type].forEach(function (row) {
+        row[1].forEach(function (kw) {
+          _cfqKwRe[type].push({ id: row[0], len: kw.length, re: new RegExp('(^|[^a-z0-9])' + kw.replace(/ /g, '\\s+') + '(?![a-z0-9])') });
+        });
+      });
+    });
+    return _cfqKwRe;
+  }
+
+  /** Học từ lịch sử: mô tả đã gặp → nhóm thường dùng. Dựng lại khi số giao dịch đổi. */
+  function _cfqIndex() {
+    var txs = (_data && _data.transactions) || [];
+    if (_cfqIdx && _cfqIdxStamp === txs.length) return _cfqIdx;
+    var idx = { byDesc: {}, byTok: {} };
+    txs.forEach(function (tx) {
+      if (!tx || !tx.desc || !tx.category || tx.category === 'thu-no' || tx.category === 'tiet-kiem') return;
+      var type = tx.type === 'income' ? 'income' : 'expense';
+      if (!_cfqCatOk(type, tx.category)) return;
+      var key = _catKey(tx.desc);
+      if (!key) return;
+      var tag = (type === 'income' ? 'i:' : 'e:') + tx.category;
+      (idx.byDesc[key] = idx.byDesc[key] || {})[tag] = ((idx.byDesc[key] || {})[tag] || 0) + 1;
+      key.split(' ').forEach(function (tok) {
+        if (tok.length < 3 || /^\d+$/.test(tok)) return;
+        var o = (idx.byTok[tok] = idx.byTok[tok] || {});
+        o[tag] = (o[tag] || 0) + 1;
+      });
+    });
+    _cfqIdx = idx; _cfqIdxStamp = txs.length;
+    return idx;
+  }
+  function _cfqPickTag(counts, forcedType, minTotal, minShare) {
+    var best = null, total = 0;
+    Object.keys(counts).forEach(function (tag) {
+      if (forcedType && tag.charAt(0) !== (forcedType === 'income' ? 'i' : 'e')) return;
+      total += counts[tag];
+      if (!best || counts[tag] > counts[best]) best = tag;
+    });
+    if (!best || total < minTotal || counts[best] / total < minShare) return null;
+    return { type: best.charAt(0) === 'i' ? 'income' : 'expense', category: best.slice(2) };
+  }
+
+  /** Đoán loại + nhóm: lịch sử của bạn → từ khóa → mặc định (đánh dấu "chưa chắc"). */
+  function _cfqGuess(plainMasked, descKey, forcedType, descLower) {
+    var idx = _cfqIndex(), hit = null;
+    if (descKey && idx.byDesc[descKey]) hit = _cfqPickTag(idx.byDesc[descKey], forcedType, 1, 0.5);
+    if (!hit && descKey) {
+      var agg = {};
+      descKey.split(' ').forEach(function (tok) {
+        var o = idx.byTok[tok]; if (!o) return;
+        Object.keys(o).forEach(function (tag) { agg[tag] = (agg[tag] || 0) + o[tag]; });
+      });
+      hit = _cfqPickTag(agg, forcedType, 2, 0.7);
+    }
+    if (hit && _cfqCatOk(hit.type, hit.category)) return { type: hit.type, category: hit.category, sure: true };
+
+    for (var di = 0; di < _CFQ_KW_DIAC.length; di++) {
+      var row = _CFQ_KW_DIAC[di];
+      if (forcedType && forcedType !== row[0]) continue;
+      if (!_cfqCatOk(row[0], row[1])) continue;
+      for (var dj = 0; dj < row[2].length; dj++) {
+        if (new RegExp('(^|[^\\p{L}])' + row[2][dj] + '(?![\\p{L}])', 'u').test(descLower || '')) return { type: row[0], category: row[1], sure: true };
+      }
+    }
+    if (!forcedType && _CFQ_INCOME_CUES.test(plainMasked)) forcedType = 'income';
+    var res = _cfqKwRegexes(), best = null;
+    ['expense', 'income'].forEach(function (type) {
+      if (forcedType && forcedType !== type) return;
+      res[type].forEach(function (k) {
+        if (!_cfqCatOk(type, k.id) || !k.re.test(plainMasked)) return;
+        if (!best || k.len > best.len) best = { type: type, category: k.id, len: k.len };
+      });
+    });
+    if (best) return { type: best.type, category: best.category, sure: true };
+
+    var type2 = forcedType || (_CFQ_INCOME_CUES.test(plainMasked) ? 'income' : 'expense');
+    return { type: type2, category: _cfqFallbackCat(type2), sure: false };
+  }
+
+  function _cfqIso(y, m, d) { return y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0'); }
+
+  /**
+   * Phân tích một dòng → bản nháp giao dịch (hoặc null nếu trống).
+   * draft = { amount, type, category, source, y, m, d, desc, sure, assumedK, dateGiven }
+   */
+  function _cfqParse(raw, overrides) {
+    var text = String(raw == null ? '' : raw).normalize('NFC').trim();
+    if (!text) return null;
+    overrides = overrides || {};
+    var forced = overrides.type || null;
+    var lead = /^\s*([+＋]|[-−–])\s*/.exec(text);
+    if (lead) { if (!forced) forced = /[+＋]/.test(lead[1]) ? 'income' : 'expense'; text = text.slice(lead[0].length); }
+
+    var plain = _cfqPlain(text), n = text.length;
+    var used = [];                                  // [start, end) đã tiêu thụ (ngày / số tiền / nguồn)
+    function mark(a, b) { used.push([a, b]); }
+    function masked() {
+      var chars = plain.split('');
+      used.forEach(function (r) { for (var i = r[0]; i < r[1]; i++) chars[i] = ' '; });
+      return chars.join('');
+    }
+
+    // ── Ngày ──
+    var now = new Date(), today = { y: now.getFullYear(), m: now.getMonth() + 1, d: now.getDate() };
+    function shiftDay(delta) { var x = new Date(now.getFullYear(), now.getMonth(), now.getDate() + delta); return { y: x.getFullYear(), m: x.getMonth() + 1, d: x.getDate() }; }
+    var date = null, m;
+    if ((m = /(^|[^a-z0-9])hom nay(?![a-z0-9])/.exec(plain))) { mark(m.index + m[1].length, m.index + m[0].length); date = today; }
+    else if ((m = /(^|[^a-z0-9])hom qua(?![a-z0-9])/.exec(plain))) { mark(m.index + m[1].length, m.index + m[0].length); date = shiftDay(-1); }
+    else if ((m = /(^|[^a-z0-9])hom kia(?![a-z0-9])/.exec(plain))) { mark(m.index + m[1].length, m.index + m[0].length); date = shiftDay(-2); }
+    else if ((m = /(^|[^\d\/])(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?(?![\d\/])/.exec(plain))) {
+      var dd = +m[2], mm = +m[3], yy = m[4] ? (m[4].length === 2 ? 2000 + +m[4] : +m[4]) : today.y;
+      var t = new Date(yy, mm - 1, dd);
+      if (mm >= 1 && mm <= 12 && dd >= 1 && t.getFullYear() === yy && t.getMonth() === mm - 1 && t.getDate() === dd) {
+        if (!m[4] && t.getTime() - now.getTime() > 30 * 86400000) yy -= 1;      // "28/12" gõ vào tháng 1 = năm trước
+        mark(m.index + m[1].length, m.index + m[0].length); date = { y: yy, m: mm, d: dd };
+      }
+    } else if ((m = /(^|[^a-z0-9])ngay (\d{1,2})(?![a-z0-9\/])/.exec(plain))) {
+      var nd = +m[2];
+      if (nd >= 1 && nd <= 31) {
+        var tt = new Date(today.y, today.m - 1, nd);
+        if (tt.getMonth() !== today.m - 1) tt = null;
+        else if (nd > today.d) tt = new Date(today.y, today.m - 2, nd);          // ngày chưa tới → tháng trước
+        if (tt && tt.getDate() === nd) { mark(m.index + m[1].length, m.index + m[0].length); date = { y: tt.getFullYear(), m: tt.getMonth() + 1, d: nd }; }
+      }
+    }
+
+    // ── Số tiền: 35k · 1tr2 · 1,5tr · 2 triệu rưỡi · 2tr 500k · 55.000 · 55 (=55k) ──
+    var amount = 0, assumedK = false, mp = masked(), units = { k: 1e3, nghin: 1e3, ngan: 1e3, tr: 1e6, trieu: 1e6, m: 1e6, cu: 1e6, ty: 1e9, ti: 1e9 };
+    var reU = /(\d+)(?:[.,](\d{1,3}))?\s*(nghin|ngan|trieu|tr|ty|ti|cu|k|m)(?![a-z])/g, um, lastEnd = -1, lastMult = Infinity, haveUnit = false;
+    while ((um = reU.exec(mp))) {
+      var mult = units[um[3]], val = parseFloat(um[1] + '.' + (um[2] || '0')) * mult, end = um.index + um[0].length;
+      var tail = /^(\d{1,3})(?![\d]|\s*(?:k|m|tr|nghin|ngan|trieu|ty|ti|cu)(?![a-z]))/.exec(mp.slice(end));
+      if (tail) { val += (+tail[1]) / Math.pow(10, tail[1].length) * mult; end += tail[0].length; }
+      var half = /^\s*ruoi(?![a-z])/.exec(mp.slice(end));
+      if (half) { val += mult / 2; end += half[0].length; }
+      var adjacent = lastEnd >= 0 && /^\s*$/.test(mp.slice(lastEnd, um.index)) && mult < lastMult;
+      if (!haveUnit) { amount = val; haveUnit = true; mark(um.index, end); }
+      else if (adjacent) { amount += val; mark(um.index, end); }
+      else break;
+      lastEnd = end; lastMult = mult; reU.lastIndex = end;
+    }
+    if (!haveUnit) {
+      mp = masked();
+      var rePl = /(\d{1,3}(?:[.,]\d{3})+(?!\d)|\d+)/g, pm, bestN = null;
+      while ((pm = rePl.exec(mp))) {
+        var v = parseInt(pm[1].replace(/[.,]/g, ''), 10);
+        if (!isNaN(v) && (!bestN || v > bestN.v)) bestN = { v: v, a: pm.index, b: pm.index + pm[0].length };
+      }
+      if (bestN) {
+        amount = bestN.v; mark(bestN.a, bestN.b);
+        if (amount > 0 && amount < 1000) { amount *= 1000; assumedK = true; }   // "phở 55" → 55.000
+      }
+    }
+    amount = Math.round(amount);
+    if (!(amount > 0) || amount > 1e12) amount = 0;
+
+    // ── Nguồn tiền ──
+    var source = null, sm;
+    mp = masked();
+    if ((sm = _CFQ_BANK.exec(mp))) { source = 'bank'; mark(sm.index + sm[1].length, sm.index + sm[0].length); }
+    else if ((sm = _CFQ_CASH.exec(mp))) { source = 'cash'; mark(sm.index + sm[1].length, sm.index + sm[0].length); }
+    if (!source) {
+      var lastSrc = null; try { lastSrc = localStorage.getItem('hub_cf_last_source'); } catch (_) {}
+      source = (lastSrc === 'bank' || lastSrc === 'cash' || lastSrc === 'savings' || lastSrc === 'uncategorized') ? lastSrc : 'bank';
+    }
+
+    // ── Mô tả = phần còn lại của câu gốc ──
+    var chars = text.split('');
+    used.forEach(function (r) { for (var i = r[0]; i < r[1]; i++) chars[i] = ' '; });
+    var desc = chars.join('').replace(/\s+/g, ' ').replace(/^[\s,.;:\-–·]+|[\s,.;:\-–·]+$/g, '');
+    if (desc.length > 120) desc = desc.slice(0, 120);
+    if (desc) desc = desc.charAt(0).toUpperCase() + desc.slice(1);
+
+    // ── Loại + nhóm ──
+    var g = _cfqGuess(' ' + _cfqPlain(desc).replace(/[^a-z0-9]+/g, ' ') + ' ', _catKey(desc), forced, desc.toLowerCase());
+    var type = g.type, category = g.category, sure = g.sure;
+    if (overrides.category && _cfqCatOk(type, overrides.category)) { category = overrides.category; sure = true; }
+    if (overrides.source) source = overrides.source;
+
+    var dt = date || today;
+    if (overrides.date) { var dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(overrides.date); if (dm) dt = { y: +dm[1], m: +dm[2], d: +dm[3] }; }
+    return { amount: amount, type: type, category: category, source: source, y: dt.y, m: dt.m, d: dt.d, desc: desc, sure: sure, assumedK: assumedK, dateGiven: !!date };
+  }
+  // ── QUICK ENTRY END ─────────────────────────────────────────
+
+
+  // ── QUICK ENTRY UI BEGIN ────────────────────────────────────
+  var _cfqOv = {};                 // lựa chọn thủ công (loại / nhóm / nguồn / ngày) — giữ khi gõ tiếp
+  var _cfqDraft = null, _cfqUndoTimer = null;
+
+  function _cfqEl(id) { return document.getElementById(id); }
+
+  function _cfqRender() {
+    var box = _cfqEl('cfq-preview'), saveBtn = _cfqEl('cfq-save'), input = _cfqEl('cfq-input');
+    if (!box || !input) return;
+    var d = _cfqParse(input.value, _cfqOv);
+    _cfqDraft = d;
+    if (!d) { box.hidden = true; box.innerHTML = ''; if (saveBtn) saveBtn.disabled = true; return; }
+    box.hidden = false;
+    if (!d.amount) {
+      box.innerHTML = '<span class="cfq-need">' + _escHtml(_t('cfqNeedAmount')) + '</span>';
+      if (saveBtn) saveBtn.disabled = true;
+      return;
+    }
+    var lang = _getCFLang();
+    var cats = _cfqCatList(d.type).map(function (c) {
+      return '<option value="' + _escHtml(c.id) + '"' + (c.id === d.category ? ' selected' : '') + '>' + _escHtml(lang === 'en' ? c.name : (c.nameVI || c.name)) + '</option>';
+    }).join('');
+    var srcs = [['bank', 'sourceBank'], ['cash', 'sourceCash'], ['savings', 'sourceSavings'], ['uncategorized', 'sourceUncategorized']].map(function (r) {
+      return '<option value="' + r[0] + '"' + (r[0] === d.source ? ' selected' : '') + '>' + _escHtml(_t(r[1])) + '</option>';
+    }).join('');
+    var html = '<button type="button" class="cfq-type is-' + d.type + '" id="cfq-type" aria-label="' + _escHtml(_t('cfqToggleType')) + '">' + _escHtml(d.type === 'income' ? _t('cfqIncome') : _t('cfqExpense')) + '</button>' +
+      '<span class="cfq-amount cfd-num">' + _escHtml(_formatVNFull(d.amount)) + '</span>' +
+      '<input type="date" class="cfq-field" id="cfq-date" value="' + _cfqIso(d.y, d.m, d.d) + '" aria-label="' + _escHtml(_t('cfqDate')) + '">' +
+      '<select class="cfq-field" id="cfq-cat" aria-label="' + _escHtml(_t('cfqCategory')) + '">' + cats + '</select>' +
+      '<select class="cfq-field" id="cfq-src" aria-label="' + _escHtml(_t('cfqSource')) + '">' + srcs + '</select>';
+    if (d.desc) html += '<span class="cfq-desc">' + _escHtml(d.desc) + '</span>';
+    var notes = [];
+    if (!d.sure) notes.push(_t('cfqUnsure'));
+    if (d.assumedK) notes.push(_t('cfqAssumedK').replace('{x}', _formatVNFull(d.amount)));
+    if (notes.length) html += '<span class="cfq-note">' + _escHtml(notes.join(' · ')) + '</span>';
+    box.innerHTML = html;
+    if (saveBtn) saveBtn.disabled = false;
+  }
+
+  function _cfqShowDone(html, ms) {
+    var done = _cfqEl('cfq-done');
+    if (!done) return;
+    done.innerHTML = html; done.hidden = false;
+    clearTimeout(_cfqUndoTimer);
+    _cfqUndoTimer = setTimeout(function () { var el = _cfqEl('cfq-done'); if (el) el.hidden = true; }, ms || 8000);
+  }
+
+  /** Lưu: điền sẵn form cũ rồi gọi ĐÚNG _saveTransaction() — cùng kiểm tra, cùng ghi, cùng cập nhật tổng. */
+  function _cfqCommit() {
+    var input = _cfqEl('cfq-input'), d = _cfqDraft;
+    if (!input || !d || !(d.amount > 0) || !_data || !Array.isArray(_data.transactions)) return;
+    var prevTab = _activeTab, prevEditing = _editingTxId, prevFlag = window.isEditingTransactionMode;
+    var before = _data.transactions.length;
+    try {
+      _editingTxId = null;
+      window.isEditingTransactionMode = false;
+      _activeTab = d.type;
+      _populateCategories();
+      var set = function (sel, v) { var el = _qs(sel); if (el) el.value = v; };
+      set('#hub-cf-amount', String(d.amount));
+      set('#hub-cf-date', _cfqIso(d.y, d.m, d.d));
+      set('#hub-cf-desc', d.desc || '');
+      set('#hub-cf-source', d.source);
+      set('#hub-cf-category', d.category);
+      _saveTransaction();
+    } finally {
+      _activeTab = prevTab; _editingTxId = prevEditing; window.isEditingTransactionMode = prevFlag;
+      _populateCategories();
+    }
+    if (_data.transactions.length === before + 1) {
+      var tx = _data.transactions[before];
+      _cfqIdxStamp = -1;                       // học lại từ giao dịch mới
+      input.value = ''; _cfqOv = {}; _cfqRender();
+      _cfqShowDone('<span class="cfq-done-txt">' + _escHtml(_t('cfqSaved')) + ': ' + _escHtml(tx.type === 'income' ? _t('cfqIncome') : _t('cfqExpense')) + ' ' +
+        _escHtml(_formatVNFull(tx.amount)) + ' · ' + _escHtml(_categoryDisplayName(tx.category, tx.type)) + '</span>' +
+        '<button type="button" class="cfq-undo" id="cfq-undo" data-id="' + _escHtml(tx.id) + '">' + _escHtml(_t('cfqUndo')) + '</button>', 8000);
+      input.focus();
+    } else {
+      _cfqShowDone('<span class="cfq-done-txt cfq-done-txt--err">' + _escHtml(_t('cfqSaveFail')) + '</span>', 5000);
+    }
+  }
+
+  function _bindQuickEntry() {
+    var input = _qs('#cfq-input');
+    if (!input) return;
+    var timer = null;
+    input.addEventListener('input', function () {
+      clearTimeout(timer);
+      timer = setTimeout(_cfqRender, 90);
+      var done = _cfqEl('cfq-done'); if (done) done.hidden = true;
+    });
+    input.addEventListener('keydown', function (e) {
+      if (e.isComposing) return;                      // đang gõ dấu tiếng Việt: chưa xử lý
+      if (e.key === 'Enter') { e.preventDefault(); clearTimeout(timer); _cfqRender(); _cfqCommit(); }
+      else if (e.key === 'Escape' && input.value) { e.stopPropagation(); input.value = ''; _cfqOv = {}; _cfqRender(); }
+    });
+    var save = _qs('#cfq-save');
+    if (save) save.addEventListener('click', function () { clearTimeout(timer); _cfqRender(); _cfqCommit(); input.focus(); });
+
+    var box = _qs('#cfq-preview');
+    if (box) {
+      box.addEventListener('change', function (e) {
+        var t = e.target;
+        if (!_cfqDraft) return;
+        if (t.id === 'cfq-cat') { _cfqOv.category = t.value; _cfqDraft.category = t.value; _cfqDraft.sure = true; var n = box.querySelector('.cfq-note'); if (n && !_cfqDraft.assumedK) n.remove(); }
+        else if (t.id === 'cfq-src') { _cfqOv.source = t.value; _cfqDraft.source = t.value; }
+        else if (t.id === 'cfq-date' && t.value) {
+          _cfqOv.date = t.value;
+          var p = t.value.split('-'); _cfqDraft.y = +p[0]; _cfqDraft.m = +p[1]; _cfqDraft.d = +p[2];
+        }
+      });
+      box.addEventListener('click', function (e) {
+        var b = e.target.closest ? e.target.closest('#cfq-type') : null;
+        if (!b || !_cfqDraft) return;
+        _cfqOv.type = _cfqDraft.type === 'income' ? 'expense' : 'income';
+        delete _cfqOv.category;
+        _cfqRender();
+        var nb = _cfqEl('cfq-type'); if (nb) nb.focus();
+      });
+    }
+    var doneBox = _qs('#cfq-done');
+    if (doneBox) doneBox.addEventListener('click', function (e) {
+      var u = e.target.closest ? e.target.closest('#cfq-undo') : null;
+      if (!u) return;
+      _deleteTransaction(u.getAttribute('data-id'));
+      _cfqIdxStamp = -1;
+      _cfqShowDone('<span class="cfq-done-txt">' + _escHtml(_t('cfqUndone')) + '</span>', 3000);
+      input.focus();
+    });
+  }
+  // ── QUICK ENTRY UI END ──────────────────────────────────────
+
   function _bindEvents() {
     // Add button
     const addBtn = _qs('#hub-cf-btn-add');
     if (addBtn) {
       addBtn.addEventListener('click', _openModal);
     }
+
+    // Nhập nhanh một dòng
+    _bindQuickEntry();
 
     // Export button
     const exportBtn = _qs('#hub-cf-btn-export');
@@ -6012,11 +6628,7 @@ ${_aiShellHTML()}
     var debt = _data.debts.find(function (d) { return d.id === debtId; });
     if (!debt) return;
 
-    // Confirm
-    var confirmMsg = _pd_t('confirmMarkPaid')
-      .replace('{name}', debt.debtorName)
-      .replace('{amount}', _formatVND(debt.amount));
-    if (!confirm(confirmMsg)) return;
+    // (Bỏ confirm() của trình duyệt: hộp "Thu nợ" bên dưới đã là bước xác nhận, và có Hoàn tác sau khi lưu)
 
     // Store debtId for the recovery modal to use
     window.currentDebtRecoveryId = debtId;
@@ -6069,6 +6681,8 @@ ${_aiShellHTML()}
     _debouncedPersist();
     _renderAllViews(); // Updates dashboard totals, ledger, chart
     _updateChart();
+    _dlShowUndo({ kind: 'paid', debtId: debt.id, txId: tx.id },
+      _pd_t('dlPaidDone').replace('{amount}', _formatVND(debt.amount)).replace('{name}', debt.debtorName), 8000);
 
     var walletLabel = targetSource === 'cash' ? _pd_t('optionCash') : _pd_t('optionBank');
     _showToast(_pd_t('toastRecoveryDone')
@@ -6104,11 +6718,6 @@ ${_aiShellHTML()}
     var debt = _data.debts.find(function (d) { return d.id === debtId; });
     if (!debt) return;
 
-    var confirmMsg = _pd_t('confirmDelete')
-      .replace('{name}', debt.debtorName)
-      .replace('{amount}', _formatVND(debt.amount));
-    if (!confirm(confirmMsg)) return;
-
     var idx = _data.debts.findIndex(function (d) { return d.id === debtId; });
     if (idx === -1) return;
 
@@ -6117,7 +6726,8 @@ ${_aiShellHTML()}
     _refreshDebtSummary();
     _refreshDebtLedger();
 
-    _showToast(_pd_t('toastDebtDeleted').replace('{name}', debt.debtorName));
+    // Hoàn tác trong 8 giây (thay cho hộp xác nhận)
+    _dlShowUndo({ kind: 'delete', debt: debt, index: idx }, _pd_t('dlDeleted').replace('{name}', debt.debtorName), 8000);
   }
 
   function _showInput(sel) {
