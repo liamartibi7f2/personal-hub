@@ -43,8 +43,16 @@ const flashcardModule = (function () {
     easyInterval: 4,               // days — immediate graduation for EASY press
     graduatingInterval: 1,         // days — interval after completing all learning steps
     multiplier: 2.5,               // exponential growth factor for graduated cards
-    maxInterval: 90                // days — absolute ceiling
+    maxInterval: 90,               // days — absolute ceiling
+    newPerDay: 20,                 // new cards introduced per deck per day (0 = unlimited)
+    maxReviewsPerDay: 200,         // graduated reviews per deck per day (0 = unlimited)
+    lapseMultiplier: 0.5           // interval kept after forgetting a graduated card
   };
+
+  // Per-card ease bounds (ease now drives interval growth — see calculateSRS)
+  const EASE_MIN = 1.3;
+  const EASE_MAX = 3.0;
+  const STATS_KEEP_DAYS = 400;       // daily review stats older than this are pruned
 
   // Runtime SRS config — loaded from Firebase userSettings.srs
   let _srsConfig = { ...DEFAULT_SRS_CONFIG };
@@ -56,6 +64,11 @@ const flashcardModule = (function () {
   let _container      = null;       // Reference to the DOM container for cleanup
   let _isGenerating   = false;      // Prevent double-submit (Gemini API)
   let _pageUnloading  = false;      // Prevents ghost saves during page reload
+
+  // --- Review history (compact daily aggregates, synced via HubDB.*FlashcardStats) ---
+  let _stats          = { daily: {} };  // { daily: { 'YYYY-MM-DD': { n,a,h,g,e,ms,nw,rv,rva,decks:{[deckId]:{n,nw,rv}} } } }
+  let _cardShownAt    = 0;              // when the current study card was rendered (answer-time tracking)
+  let _idsAssigned    = 0;              // cards that received a fresh id during load (triggers one save)
 
   // --- SRS state ---
   let _mode           = 'library';  // 'library' | 'study' | 'browse'
@@ -76,6 +89,19 @@ const flashcardModule = (function () {
 
   // --- UI State ---
   let _activeVault    = 'en';        // Which vault panel is visible: 'en' | 'zh'
+
+  // --- Card-face design prefs (device-local UI only; never touches card/deck data) ---
+  const BACK_EXPANDED_KEY = 'hub_flashcard_back_expanded';        // '1' = keep "Show more" open
+  const HIDE_PHONETIC_KEY = 'hub_flashcard_hide_front_phonetic';  // '1' = hide pinyin/phonetic on CJK fronts
+  const STRUGGLING_LAPSES = 5;       // lapses at/after which a card is flagged "struggling" (display only)
+  const MATURE_INTERVAL   = 21;      // days: interval at/after which a graduated card is "mature"
+  const CJK_RE = /[\u3400-\u9fff\uf900-\ufaff]/;
+  function _lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function _lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* storage unavailable */ } }
+  let _backExpanded   = _lsGet(BACK_EXPANDED_KEY) === '1';
+  let _cardUiBound    = null;        // element the delegated card-UI listeners are attached to
+  let _cardUiClickHandler  = null;
+  let _cardUiToggleHandler = null;
   let _systemLanguage = 'en';        // Global UI language: 'en' | 'vi'
 
   // --- i18n Dictionary ---
@@ -202,7 +228,64 @@ const flashcardModule = (function () {
       srsGuideEasyInterval: { en: 'Easy Interval: Jump to 1+ days to avoid over-reviewing known cards / Tránh lặp lại quá nhiều thẻ đã biết. Set higher (3–7d) for topics you already know well.', vi: 'Khoảng Dễ: Nhảy đến 1+ ngày để tránh lặp lại thẻ đã biết. Đặt cao hơn (3–7 ngày) cho chủ đề bạn đã nắm vững.' },
       srsGuideGraduating: { en: 'Graduating: Normal progression after learning phase / Vượt qua giai đoạn học. Cards exit the short-step queue and enter exponential scheduling.', vi: 'Tốt Nghiệp: Tiến trình bình thường sau giai đoạn học. Thẻ rời khỏi hàng đợi bước ngắn và bước vào lịch trình lũy tiến.' },
       srsGuideMultiplier: { en: 'Multiplier: Exponential growth factor / Hệ số nhân khoảng cách. ~2.5 is standard (Anki SM-2). Lower (1.8–2.2) = more frequent reviews; higher (3–4) = aggressive spacing.', vi: 'Hệ Số Nhân: Yếu tố tăng trưởng lũy tiến. ~2.5 là chuẩn (Anki SM-2). Thấp hơn (1.8–2.2) = ôn tập thường xuyên hơn; cao hơn (3–4) = giãn cách mạnh.' },
-      srsGuideMaxInterval: { en: 'Maximum Interval: Hard ceiling in days / Giới hạn cứng theo ngày. Prevents intervals from growing unboundedly; 90–180d is typical for vocabulary.', vi: 'Khoảng Tối Đa: Giới hạn cứng theo ngày. Ngăn khoảng cách tăng không giới hạn; 90–180 ngày là điển hình cho từ vựng.' }
+      srsGuideMaxInterval: { en: 'Maximum Interval: Hard ceiling in days / Giới hạn cứng theo ngày. Prevents intervals from growing unboundedly; 90–180d is typical for vocabulary.', vi: 'Khoảng Tối Đa: Giới hạn cứng theo ngày. Ngăn khoảng cách tăng không giới hạn; 90–180 ngày là điển hình cho từ vựng.' },
+      srsNewPerDayLabel:     { en: 'New Cards / Day', vi: 'Thẻ Mới / Ngày' },
+      srsNewPerDayHint:      { en: 'Max brand-new cards introduced per day (0 = unlimited)', vi: 'Số thẻ hoàn toàn mới tối đa mỗi ngày (0 = không giới hạn)' },
+      srsMaxReviewsLabel:    { en: 'Max Reviews / Day', vi: 'Ôn Tập Tối Đa / Ngày' },
+      srsMaxReviewsHint:     { en: 'Max graduated-card reviews per day (0 = unlimited)', vi: 'Số thẻ đã thuộc cần ôn tối đa mỗi ngày (0 = không giới hạn)' },
+      heldBack:              { en: 'held back by daily limit', vi: 'bị giữ lại bởi giới hạn ngày' },
+      studyExtra:            { en: 'Study extra', vi: 'Học thêm' },
+      studyMoreBtn:          { en: 'Study more (ignore daily limit)', vi: 'Học thêm (bỏ qua giới hạn ngày)' },
+      timeSpentLabel:        { en: 'Time', vi: 'Thời gian' },
+      dueTomorrowLabel:      { en: 'due tomorrow', vi: 'đến hạn ngày mai' },
+      statsTitle:            { en: 'Study Stats', vi: 'Thống Kê Học Tập' },
+      statsToday:            { en: 'Today', vi: 'Hôm nay' },
+      statsStreak:           { en: 'Streak', vi: 'Chuỗi ngày' },
+      statsRecall:           { en: 'Recall 30d', vi: 'Nhớ 30 ngày' },
+      statsTomorrow:         { en: 'Due tomorrow', vi: 'Đến hạn mai' },
+      statsDaysUnit:         { en: 'd', vi: ' ngày' },
+      statsReviewsUnit:      { en: 'reviews', vi: 'lượt ôn' },
+      stateNew:              { en: 'New', vi: 'Mới' },
+      stateLearning:         { en: 'Learning', vi: 'Đang học' },
+      stateYoung:            { en: 'Young', vi: 'Đang nhớ' },
+      stateMature:           { en: 'Mature', vi: 'Đã thuộc' },
+      stateStruggling:       { en: 'Struggling', vi: 'Hay quên' },
+      imageAlt:              { en: 'Visual memory', vi: 'Hình ảnh ghi nhớ' },
+      moreDetails:           { en: 'Show more', vi: 'Xem thêm' },
+      lessDetails:           { en: 'Show less', vi: 'Thu gọn' },
+      togglePhonetic:        { en: 'Show / hide pronunciation on front', vi: 'Hiện / ẩn phiên âm ở mặt trước' },
+      statsHeatmap:          { en: 'Last 12 weeks', vi: '12 tuần gần nhất' },
+      statsForecast:         { en: 'Next 7 days', vi: '7 ngày tới' },
+      statsNoData:           { en: 'Complete a review to start your history.', vi: 'Hoàn thành một lượt ôn để bắt đầu lịch sử.' },
+
+      // --- Fading Memory Wall ---
+      wallTitle:             { en: 'Memory Wall', vi: 'Bức Tường Ký Ức' },
+      wallOpen:              { en: 'Open memory wall', vi: 'Mở bức tường ký ức' },
+      wallRemembered:        { en: 'remembered', vi: 'còn nhớ' },
+      wallNoImages:          { en: 'Add photos to cards to build this deck\'s memory wall.', vi: 'Thêm ảnh vào thẻ để dựng bức tường ký ức cho bộ này.' },
+      wallMore:              { en: 'more', vi: 'thẻ nữa' },
+      wallHint:              { en: 'The blurrier a photo, the closer you are to forgetting it. Review a card and its photo sharpens at once.', vi: 'Ảnh càng mờ là càng gần quên. Ôn thẻ nào, ảnh thẻ đó sáng rõ lại ngay.' },
+      wallLvFresh:           { en: 'Vivid', vi: 'Rõ nét' },
+      wallLvOk:              { en: 'Steady', vi: 'Ổn định' },
+      wallLvFading:          { en: 'Fading', vi: 'Đang phai' },
+      wallLvCritical:        { en: 'Almost lost', vi: 'Sắp mất' },
+      wallLvNew:             { en: 'Unseen', vi: 'Chưa gặp' },
+      wallRescue:            { en: 'Rescue due cards', vi: 'Cứu các thẻ đến hạn' },
+      wallNothingDue:        { en: 'Nothing to rescue right now', vi: 'Hiện chưa có thẻ cần cứu' },
+      wallClose:             { en: 'Close', vi: 'Đóng' },
+      wallRecall:            { en: 'Recall estimate', vi: 'Ước lượng nhớ' },
+      wallLastSeen:          { en: 'Last reviewed', vi: 'Ôn lần cuối' },
+      wallNextDue:           { en: 'Next review', vi: 'Ôn tiếp theo' },
+      wallNeverReviewed:     { en: 'Never reviewed', vi: 'Chưa ôn lần nào' },
+      wallOverdue:           { en: 'Overdue', vi: 'Quá hạn' },
+      wallSummary:           { en: 'cards with photos', vi: 'thẻ có ảnh' },
+      wallTileHint:          { en: 'Tap a photo for details', vi: 'Chạm vào ảnh để xem chi tiết' },
+      wallJustNow:           { en: 'Just now', vi: 'Vừa xong' },
+      wallAgoFmt:            { en: '{t} ago', vi: '{t} trước' },
+      wallInFmt:             { en: 'in {t}', vi: 'sau {t}' },
+      wallUnitMin:           { en: 'min', vi: 'phút' },
+      wallUnitHour:          { en: 'h', vi: ' giờ' },
+      wallUnitDay:           { en: 'd', vi: ' ngày' }
     }
   };
 
@@ -360,6 +443,7 @@ const flashcardModule = (function () {
 
   async function render(container) {
     _container = container;
+    _attachCardUiDelegates();
 
     // ⚡ FAST PATH: If already initialized in this session, skip async
     //    fetches entirely. Just re-render the UI from memory. This prevents
@@ -455,6 +539,8 @@ const flashcardModule = (function () {
       delete window._hubFlashcardTipBlurHandler;
     }
 
+    _detachCardUiDelegates();
+    _closeWallModal();
     _container = null;
 
     // Clean up all global keyboard listeners to prevent leak/accumulation
@@ -503,6 +589,7 @@ const flashcardModule = (function () {
   async function _loadData() {
     await _loadDecksAsync();
     await _loadAISettingsAsync();
+    await _loadStatsAsync();
   }
 
   /**
@@ -556,6 +643,13 @@ const flashcardModule = (function () {
 
     // ── DATA REPAIR MIGRATION: auto-fix corrupted timestamps on every load ──
     _repairCardTimestamps();
+
+    // ── Cards that had no stable id just received one → persist it once so ids survive reloads ──
+    if (_idsAssigned > 0) {
+      console.log('[Flashcard] assigned ids to ' + _idsAssigned + ' card(s)');
+      _idsAssigned = 0;
+      _saveDecks();
+    }
   }
 
   /**
@@ -662,6 +756,9 @@ const flashcardModule = (function () {
       if (typeof raw.graduatingInterval === 'number' && raw.graduatingInterval > 0) cfg.graduatingInterval = raw.graduatingInterval;
       if (typeof raw.multiplier === 'number' && raw.multiplier >= 1.1) cfg.multiplier = raw.multiplier;
       if (typeof raw.maxInterval === 'number' && raw.maxInterval > 0) cfg.maxInterval = raw.maxInterval;
+      if (typeof raw.newPerDay === 'number' && isFinite(raw.newPerDay) && raw.newPerDay >= 0) cfg.newPerDay = Math.floor(raw.newPerDay);
+      if (typeof raw.maxReviewsPerDay === 'number' && isFinite(raw.maxReviewsPerDay) && raw.maxReviewsPerDay >= 0) cfg.maxReviewsPerDay = Math.floor(raw.maxReviewsPerDay);
+      if (typeof raw.lapseMultiplier === 'number' && raw.lapseMultiplier >= 0.1 && raw.lapseMultiplier <= 1) cfg.lapseMultiplier = raw.lapseMultiplier;
     }
     return cfg;
   }
@@ -682,6 +779,8 @@ const flashcardModule = (function () {
         _srsField(pfx + 'graduating-interval', _('fc', 'srsGraduatingLabel'),    _('fc', 'srsGraduatingHint'),    cfg.graduatingInterval,         'number', '') +
         _srsField(pfx + 'multiplier',          _('fc', 'srsMultiplierLabel'),    _('fc', 'srsMultiplierHint'),    cfg.multiplier,                 'number', '') +
         _srsField(pfx + 'max-interval',        _('fc', 'srsMaxIntervalLabel'),   _('fc', 'srsMaxIntervalHint'),   cfg.maxInterval,                'number', '') +
+        _srsField(pfx + 'new-per-day',         _('fc', 'srsNewPerDayLabel'),     _('fc', 'srsNewPerDayHint'),     cfg.newPerDay,                  'number', '') +
+        _srsField(pfx + 'max-reviews',         _('fc', 'srsMaxReviewsLabel'),    _('fc', 'srsMaxReviewsHint'),    cfg.maxReviewsPerDay,           'number', '') +
       '</div>';
   }
 
@@ -691,7 +790,11 @@ const flashcardModule = (function () {
         '<label class="hub-srs-label" for="' + _esc(id) + '">' + _esc(label) + '</label>' +
         '<input type="' + type + '" id="' + _esc(id) + '" class="hub-srs-input" value="' + _esc(String(value)) + '"' +
           (placeholder ? ' placeholder="' + _esc(placeholder) + '"' : '') +
-          (type === 'number' ? ' min="' + (id.indexOf('multiplier') !== -1 ? '1.1' : '1') + '" max="' + (id.indexOf('max-interval') !== -1 ? '3650' : '365') + '" step="' + (id.indexOf('multiplier') !== -1 ? '0.1' : '1') + '"' : '') +
+          (type === 'number' ? (
+            (id.indexOf('new-per-day') !== -1 || id.indexOf('max-reviews') !== -1)
+              ? ' min="0" max="9999" step="1"'
+              : ' min="' + (id.indexOf('multiplier') !== -1 ? '1.1' : '1') + '" max="' + (id.indexOf('max-interval') !== -1 ? '3650' : '365') + '" step="' + (id.indexOf('multiplier') !== -1 ? '0.1' : '1') + '"'
+          ) : '') +
           ' autocomplete="off">' +
         '<span class="hub-srs-hint">' + _esc(hint) + '</span>' +
       '</div>';
@@ -711,12 +814,16 @@ const flashcardModule = (function () {
       easyInterval:       _numVal(pfx + 'easy-interval', DEFAULT_SRS_CONFIG.easyInterval),
       graduatingInterval: _numVal(pfx + 'graduating-interval', DEFAULT_SRS_CONFIG.graduatingInterval),
       multiplier:         _numVal(pfx + 'multiplier', DEFAULT_SRS_CONFIG.multiplier),
-      maxInterval:        _numVal(pfx + 'max-interval', DEFAULT_SRS_CONFIG.maxInterval)
+      maxInterval:        _numVal(pfx + 'max-interval', DEFAULT_SRS_CONFIG.maxInterval),
+      newPerDay:          _numValZero(pfx + 'new-per-day', DEFAULT_SRS_CONFIG.newPerDay),
+      maxReviewsPerDay:   _numValZero(pfx + 'max-reviews', DEFAULT_SRS_CONFIG.maxReviewsPerDay)
     };
   }
 
   function _val(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; }
   function _numVal(id, fallback) { var v = parseFloat(_val(id)); return isNaN(v) || v <= 0 ? fallback : v; }
+  /** Like _numVal but 0 is a valid value ("unlimited"). */
+  function _numValZero(id, fallback) { var v = parseFloat(_val(id)); return isNaN(v) || v < 0 ? fallback : Math.floor(v); }
 
   /**
    * Bind SRS input change events that auto-save via callback.
@@ -729,7 +836,9 @@ const flashcardModule = (function () {
       idPrefix + 'easy-interval',
       idPrefix + 'graduating-interval',
       idPrefix + 'multiplier',
-      idPrefix + 'max-interval'
+      idPrefix + 'max-interval',
+      idPrefix + 'new-per-day',
+      idPrefix + 'max-reviews'
     ];
     fieldIds.forEach(function (fid) {
       var el = document.getElementById(fid);
@@ -1236,6 +1345,231 @@ return '<option value="' + _esc(p.value) + '"' + (p.value === 'bottom' ? ' selec
   }
 
   /* ==========================================================
+     REVIEW HISTORY — compact daily aggregates
+     ==========================================================
+     One small record per calendar day (not one per review), so the
+     history stays tiny (~60 bytes/day) yet powers the heatmap,
+     streak, recall rate, daily limits and time-spent figures.
+       n   reviews          a/h/g/e  Again/Hard/Good/Easy counts
+       ms  answer time      nw       brand-new cards first rated
+       rv  graduated-card reviews    rva  of which Again (lapses)
+       decks[deckId] = { n, nw, rv } — per-deck usage for daily limits
+     ========================================================== */
+
+  function _dayKey(ts) {
+    var d = new Date(ts || Date.now());
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  function _blankDay() { return { n: 0, a: 0, h: 0, g: 0, e: 0, ms: 0, nw: 0, rv: 0, rva: 0, decks: {} }; }
+
+  /** Read-only view of a day (never creates it). */
+  function _peekDay(key) {
+    return (_stats.daily && _stats.daily[key]) || null;
+  }
+
+  function _getDay(key) {
+    if (!_stats.daily) _stats.daily = {};
+    if (!_stats.daily[key]) _stats.daily[key] = _blankDay();
+    return _stats.daily[key];
+  }
+
+  /** What a deck has already consumed of today's limits. */
+  function _deckStatsToday(deckId) {
+    var day = _peekDay(_dayKey());
+    var d = day && day.decks && day.decks[deckId];
+    return { n: (d && d.n) || 0, nw: (d && d.nw) || 0, rv: (d && d.rv) || 0 };
+  }
+
+  function _normalizeStats(raw) {
+    var out = { daily: {} };
+    if (raw && raw.daily && typeof raw.daily === 'object') {
+      var cutoff = _dayKey(Date.now() - STATS_KEEP_DAYS * 86400000);
+      Object.keys(raw.daily).forEach(function (k) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || k < cutoff) return;
+        var src = raw.daily[k] || {}, day = _blankDay();
+        ['n', 'a', 'h', 'g', 'e', 'ms', 'nw', 'rv', 'rva'].forEach(function (f) {
+          day[f] = (typeof src[f] === 'number' && isFinite(src[f]) && src[f] > 0) ? src[f] : 0;
+        });
+        if (src.decks && typeof src.decks === 'object') {
+          Object.keys(src.decks).forEach(function (id) {
+            var dd = src.decks[id] || {};
+            day.decks[id] = { n: +dd.n || 0, nw: +dd.nw || 0, rv: +dd.rv || 0 };
+          });
+        }
+        out.daily[k] = day;
+      });
+    }
+    return out;
+  }
+
+  async function _loadStatsAsync() {
+    try {
+      if (typeof HubDB.loadFlashcardStats === 'function') {
+        _stats = _normalizeStats(await HubDB.loadFlashcardStats());
+        return;
+      }
+    } catch (_) { /* fall through to empty history */ }
+    _stats = { daily: {} };
+  }
+
+  function _saveStats() {
+    if (_pageUnloading || typeof HubDB.saveFlashcardStats !== 'function') return;
+    var run = function () { HubDB.saveFlashcardStats(_stats).then(_absorbStats).catch(function () {}); };
+    if (typeof HubDebounce !== 'undefined') HubDebounce.call('fc-stats', run, 800);
+    else run();
+  }
+
+  /** Persist right now (end of session / leaving the module). */
+  function _flushStats() {
+    if (typeof HubDebounce !== 'undefined') HubDebounce.cancel('fc-stats');
+    if (_pageUnloading || typeof HubDB.saveFlashcardStats !== 'function') return;
+    HubDB.saveFlashcardStats(_stats, { force: true }).then(_absorbStats).catch(function () {});   // force: re-read the cloud copy so other devices' reviews are merged in
+  }
+
+  /**
+   * Fold the merged history the cloud returned (which may include reviews done on another device)
+   * into the in-memory stats. Per counter the LARGER value wins, so a review recorded while the save
+   * was in flight is never lost.
+   */
+  function _absorbStats(merged) {
+    if (!merged || !merged.daily) return;
+    var norm = _normalizeStats(merged);
+    var FIELDS = ['n', 'a', 'h', 'g', 'e', 'ms', 'nw', 'rv', 'rva'];
+    Object.keys(norm.daily).forEach(function (k) {
+      var src = norm.daily[k];
+      var dst = _stats.daily[k] || (_stats.daily[k] = _blankDay());
+      FIELDS.forEach(function (f) { if (src[f] > dst[f]) dst[f] = src[f]; });
+      if (!dst.decks) dst.decks = {};
+      Object.keys(src.decks || {}).forEach(function (id) {
+        var s = src.decks[id];
+        var d = dst.decks[id] || (dst.decks[id] = { n: 0, nw: 0, rv: 0 });
+        ['n', 'nw', 'rv'].forEach(function (f) { if (s[f] > d[f]) d[f] = s[f]; });
+      });
+    });
+  }
+
+  /**
+   * Record one rating.
+   * @param {string}  deckId
+   * @param {number}  quality  QUALITY.*
+   * @param {boolean} wasNew   card had never been rated before
+   * @param {boolean} wasGrad  card was graduated (a true "review", not a learning step)
+   * @param {number}  ms       time spent on the card
+   */
+  function _recordReview(deckId, quality, wasNew, wasGrad, ms) {
+    var day = _getDay(_dayKey());
+    day.n++;
+    if (quality === QUALITY.AGAIN) day.a++;
+    else if (quality === QUALITY.HARD) day.h++;
+    else if (quality === QUALITY.GOOD) day.g++;
+    else day.e++;
+    day.ms += Math.max(0, Math.round(ms || 0));
+    if (wasNew) day.nw++;
+    if (wasGrad) { day.rv++; if (quality === QUALITY.AGAIN) day.rva++; }
+    if (!day.decks) day.decks = {};
+    var d = day.decks[deckId] || (day.decks[deckId] = { n: 0, nw: 0, rv: 0 });
+    d.n++;
+    if (wasNew) d.nw++;
+    if (wasGrad) d.rv++;
+    _saveStats();
+  }
+
+  /** Consecutive study days ending today (or yesterday, if you haven't studied yet today). */
+  function _calcStreak() {
+    var streak = 0, t = Date.now();
+    var today = _peekDay(_dayKey(t));
+    if (!today || !today.n) t -= 86400000;           // today not studied yet → don't break the streak
+    for (var i = 0; i < 4000; i++) {
+      var d = _peekDay(_dayKey(t));
+      if (d && d.n > 0) { streak++; t -= 86400000; } else break;
+    }
+    return streak;
+  }
+
+  /** Recall rate over the last N days = 1 − lapses / graduated reviews. null when too little data. */
+  function _calcRecall(days) {
+    var rv = 0, rva = 0, t = Date.now();
+    for (var i = 0; i < days; i++) {
+      var d = _peekDay(_dayKey(t - i * 86400000));
+      if (d) { rv += d.rv; rva += d.rva; }
+    }
+    return rv >= 5 ? Math.round((1 - rva / rv) * 100) : null;
+  }
+
+  /** Cards coming due per day for the next `days` days (day 0 also includes anything already overdue). */
+  function _calcForecast(days) {
+    var out = [], i;
+    for (i = 0; i < days; i++) out.push(0);
+    var startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+    var base = startOfToday.getTime();
+    _decks.forEach(function (deck) {
+      (deck.cards || []).forEach(function (c) {
+        if (!c || typeof c.nextReviewDate !== 'number' || !isFinite(c.nextReviewDate)) return;
+        var idx = Math.floor((c.nextReviewDate - base) / 86400000);
+        if (idx < 0) idx = 0;
+        if (idx < days) out[idx]++;
+      });
+    });
+    return out;
+  }
+
+  /** "Study Stats" strip for the deck library: today, streak, recall, tomorrow, 12-week heatmap, 7-day forecast. */
+  function _renderStatsPanel() {
+    var todayRec = _peekDay(_dayKey());
+    var todayN = todayRec ? todayRec.n : 0;
+    var streak = _calcStreak();
+    var recall = _calcRecall(30);
+    var forecast = _calcForecast(7);
+
+    // 12-week heatmap: columns = weeks (Mon→Sun), rows = weekday; ends on the current week
+    var now = new Date(); now.setHours(0, 0, 0, 0);
+    var dow = (now.getDay() + 6) % 7;                   // Mon=0
+    var start = new Date(now.getTime() - (dow + 11 * 7) * 86400000);
+    var max = 0, cells = [];
+    for (var w = 0; w < 12; w++) {
+      for (var r = 0; r < 7; r++) {
+        var dt = new Date(start.getTime() + (w * 7 + r) * 86400000);
+        var rec = _peekDay(_dayKey(dt.getTime()));
+        var n = rec ? rec.n : 0;
+        if (n > max) max = n;
+        cells.push({ dt: dt, n: n, future: dt.getTime() > now.getTime() });
+      }
+    }
+    var heat = cells.map(function (c) {
+      var lvl = c.future ? 'f' : (c.n === 0 ? '0' : (c.n <= max * 0.25 ? '1' : (c.n <= max * 0.5 ? '2' : (c.n <= max * 0.75 ? '3' : '4'))));
+      var label = _dayKey(c.dt.getTime()) + ': ' + c.n + ' ' + _('fc', 'statsReviewsUnit');
+      return '<span class="fc-heat-cell" data-l="' + lvl + '" title="' + _esc(label) + '"></span>';
+    }).join('');
+
+    var fMax = Math.max.apply(null, forecast.concat([1]));
+    var bars = forecast.map(function (v, i) {
+      var d = new Date(now.getTime() + i * 86400000);
+      var lab = ['S', 'M', 'T', 'W', 'T', 'F', 'S'][d.getDay()];
+      return '<div class="fc-fc-col" title="' + _esc(_dayKey(d.getTime()) + ': ' + v) + '">' +
+               '<span class="fc-fc-val">' + v + '</span>' +
+               '<span class="fc-fc-bar"><i style="height:' + Math.round((v / fMax) * 100) + '%"></i></span>' +
+               '<span class="fc-fc-lab">' + lab + '</span>' +
+             '</div>';
+    }).join('');
+
+    return '<div class="fc-stats glass-card">' +
+        '<div class="fc-stats-title">📈 ' + _esc(_('fc', 'statsTitle')) + '</div>' +
+        '<div class="fc-stats-tiles">' +
+          '<div class="fc-stat"><strong>' + todayN + '</strong><span>' + _esc(_('fc', 'statsToday')) + '</span></div>' +
+          '<div class="fc-stat"><strong>' + streak + _esc(_('fc', 'statsDaysUnit')) + '</strong><span>' + _esc(_('fc', 'statsStreak')) + '</span></div>' +
+          '<div class="fc-stat"><strong>' + (recall === null ? '—' : recall + '%') + '</strong><span>' + _esc(_('fc', 'statsRecall')) + '</span></div>' +
+          '<div class="fc-stat"><strong>' + forecast[1] + '</strong><span>' + _esc(_('fc', 'statsTomorrow')) + '</span></div>' +
+        '</div>' +
+        '<div class="fc-stats-charts">' +
+          '<div><div class="fc-stats-cap">' + _esc(_('fc', 'statsHeatmap')) + '</div><div class="fc-heat">' + heat + '</div></div>' +
+          '<div><div class="fc-stats-cap">' + _esc(_('fc', 'statsForecast')) + '</div><div class="fc-fc">' + bars + '</div></div>' +
+        '</div>' +
+        (max === 0 ? '<div class="fc-stats-empty">' + _esc(_('fc', 'statsNoData')) + '</div>' : '') +
+      '</div>';
+  }
+
+  /* ==========================================================
      SRS HELPER: Unified due-card query engine
      ==========================================================
      A SINGLE canonical function that BOTH the count display AND
@@ -1257,27 +1591,52 @@ return '<option value="' + _esc(p.value) + '"' + (p.value === 'bottom' ? ' selec
    * @param {object} deck
    * @returns {number[]} array of indices into deck.cards
    */
-  function _getDueCardIndices(deck) {
+  function _getDueCardIndices(deck, ignoreLimits) {
     if (!deck || !Array.isArray(deck.cards)) return [];
     const now = Date.now();
-    const indices = [];
+    const learning = [], reviews = [], fresh = [];
     deck.cards.forEach(function (card, i) {
       // Validate the field: must be a finite number (not NaN, not null,
       // not undefined, not Infinity) and MUST be in the past.
-      if (typeof card.nextReviewDate === 'number'
+      if (card && typeof card.nextReviewDate === 'number'
           && isFinite(card.nextReviewDate)
           && card.nextReviewDate <= now) {
-        indices.push(i);
+        if (_isNewCard(card)) fresh.push(i);
+        else if ((card.repetition || 0) >= 1) reviews.push(i);
+        else learning.push(i);
       }
     });
-    return indices;
+    if (ignoreLimits) return learning.concat(reviews, fresh);
+
+    // ── Daily limits (per deck; 0 = unlimited) ──
+    const cfg = (deck.srs && typeof deck.srs === 'object') ? _normalizeSRSConfig(deck.srs) : _srsConfig;
+    const used = _deckStatsToday(deck.id);
+    const newLeft = cfg.newPerDay > 0 ? Math.max(0, cfg.newPerDay - used.nw) : Infinity;
+    const revLeft = cfg.maxReviewsPerDay > 0 ? Math.max(0, cfg.maxReviewsPerDay - used.rv) : Infinity;
+    // Most overdue reviews first; new cards in creation order. Learning cards are never held back.
+    reviews.sort(function (x, y) { return deck.cards[x].nextReviewDate - deck.cards[y].nextReviewDate; });
+    return learning.concat(
+      revLeft === Infinity ? reviews : reviews.slice(0, revLeft),
+      newLeft === Infinity ? fresh : fresh.slice(0, newLeft)
+    );
+  }
+
+  /** A card that has never been rated. */
+  function _isNewCard(card) {
+    return !(typeof card.lastReviewed === 'number' && card.lastReviewed > 0);
   }
 
   /**
    * Count due cards in a single deck (used for deck-card badges).
+   * Respects the daily limits — the same call the study session uses.
    */
   function _countDueCards(deck) {
     return _getDueCardIndices(deck).length;
+  }
+
+  /** Due cards ignoring daily limits (for "held back" hints and "study extra"). */
+  function _countDueCardsRaw(deck) {
+    return _getDueCardIndices(deck, true).length;
   }
 
   /**
@@ -1306,11 +1665,13 @@ return '<option value="' + _esc(p.value) + '"' + (p.value === 'bottom' ? ' selec
    *   - GOOD  (2): advance to step 2, 30m; if already at step 2, GRADUATE
    *   - EASY  (3): graduate immediately → easyInterval
    *
-   * Graduated phase (repetition ≥ 1):
-   *   - AGAIN: reset streak, back to learning step 0
-   *   - HARD:  interval × 1.2
-   *   - GOOD:  interval × multiplier
-   *   - EASY:  interval × multiplier × 1.3
+   * Graduated phase (repetition ≥ 1) — growth uses the card's OWN easeFactor:
+   *   - AGAIN: lapse → lapses+1, ease −0.20, relearn through the steps, then return
+   *            to interval × lapseMultiplier (not back to day 1)
+   *   - HARD:  interval × 1.2, ease −0.15
+   *   - GOOD:  interval × ease (at least +1 day)
+   *   - EASY:  interval × ease × 1.3 (at least +1 day), ease +0.15
+   *   The configured `multiplier` is the starting ease a card gets when it first graduates.
    *
    * @param {number} quality - QUALITY.AGAIN(0) | HARD(1) | GOOD(2) | EASY(3)
    * @param {object} card   - the card object (mutated copy returned)
@@ -1321,103 +1682,111 @@ return '<option value="' + _esc(p.value) + '"' + (p.value === 'bottom' ? ' selec
   function calculateSRS(quality, card, isAgainInSession, deckSrs) {
     const updated = { ...card };
     // If the deck has its own SRS config, use it; otherwise fall back to global defaults
-    const cfg = (deckSrs && typeof deckSrs === 'object' && deckSrs.learningSteps) ? deckSrs : _srsConfig;
+    const cfg = (deckSrs && typeof deckSrs === 'object' && deckSrs.learningSteps)
+      ? _normalizeSRSConfig(deckSrs)
+      : _srsConfig;
     const now = Date.now();
+    const DAY = 24 * 60 * 60 * 1000;
 
     // ── AUDIT TRAIL: stamp every assessment with the exact moment it happened ──
     updated.lastReviewed = now;
+    updated.reviewCount = (updated.reviewCount || 0) + 1;
 
     // Parse learning steps array (minutes) — ensure we have 3 valid numbers
     const steps = (Array.isArray(cfg.learningSteps) && cfg.learningSteps.length >= 3)
       ? cfg.learningSteps.map(function (s) { return Math.max(1, Number(s) || 1); })
       : [1, 10, 30];
 
-    // Track learning progress via a dedicated counter (0 = step 0, 1 = step 1, 2 = step 2)
     const learningStep = (typeof updated.learningStep === 'number') ? updated.learningStep : 0;
-    // A card is graduated if it has ever passed step 2 (repetition ≥ 1)
+    // A card is graduated if it has ever passed the final learning step (repetition ≥ 1)
     const isGraduated = (updated.repetition || 0) >= 1;
 
     // ── Safety: clamp the existing interval to a reasonable range ──
-    //    If a card somehow has interval=0 or interval=NaN, fall back to 1 day.
     var currentInterval = (typeof updated.interval === 'number' && updated.interval > 0)
       ? updated.interval
       : 1;
 
+    // Per-card ease: the growth factor for THIS card (hard cards grow slower, easy cards faster)
+    var ease = _clampEase(updated.easeFactor);
+    // Interval a lapsed card returns to once it re-graduates (0 = not relearning)
+    var lapseInterval = (typeof updated.lapseInterval === 'number' && updated.lapseInterval > 0) ? updated.lapseInterval : 0;
+    // A card seeing its very first graduation adopts the configured multiplier as its starting ease
+    var isFirstGraduation = !isGraduated && !(updated.lapses > 0) && lapseInterval === 0;
+
+    function _capDays(d) { return Math.min(Math.max(d, 1), cfg.maxInterval); }
+    function _setDays(d) {
+      updated.interval = _capDays(d);
+      updated.nextReviewDate = now + (updated.interval * DAY);
+    }
+    function _setMinutes(m) {
+      updated.interval = m / (24 * 60); // stored as days fraction
+      updated.nextReviewDate = now + (m * 60 * 1000);
+    }
+
     if (quality === QUALITY.AGAIN) {
-      // ── AGAIN (0): Reset to the beginning of learning ──
+      // ── AGAIN (0): forgot. A graduated card lapses: remember a reduced interval, lower its ease,
+      //    and go through the learning steps again. A card still in learning just restarts.
+      if (isGraduated) {
+        updated.lapses = (updated.lapses || 0) + 1;
+        lapseInterval = Math.max(1, Math.round(currentInterval * cfg.lapseMultiplier));
+        ease -= 0.20;
+      }
       updated.repetition = 0;
       updated.learningStep = 0;
-      updated.interval = steps[0] / (24 * 60); // stored as days fraction
-      updated.nextReviewDate = now + (steps[0] * 60 * 1000);
+      _setMinutes(steps[0]);
 
     } else if (quality === QUALITY.HARD) {
-      // ── HARD (1): Advance exactly 1 step (clamped to step 1 minimum) ──
       if (!isGraduated) {
-        updated.repetition = 0; // not graduated yet
-        // From step 0 → step 1. From step 1 → stay at step 1.
+        // Learning: advance exactly 1 step (clamped to step 1 minimum)
+        updated.repetition = 0;
         const targetStep = Math.min(Math.max(learningStep + 1, 1), steps.length - 1);
         updated.learningStep = targetStep;
-        updated.interval = steps[targetStep] / (24 * 60);
-        updated.nextReviewDate = now + (steps[targetStep] * 60 * 1000);
+        _setMinutes(steps[targetStep]);
       } else {
-        // Graduated: interval × 1.2 (conservative growth)
+        // Graduated: slow growth, and the card is clearly harder than expected
         updated.repetition = (updated.repetition || 0) + 1;
-        updated.interval = Math.round(currentInterval * 1.2);
-        updated.interval = Math.max(updated.interval, 1);
-        updated.interval = Math.min(updated.interval, cfg.maxInterval);
-        updated.nextReviewDate = now + (updated.interval * 24 * 60 * 60 * 1000);
+        ease -= 0.15;
+        _setDays(Math.round(currentInterval * 1.2));
       }
 
     } else if (quality === QUALITY.GOOD) {
-      // ── GOOD (2): Jump straight to step 2 (30m) from any earlier step, or graduate if already at step 2 ──
       if (!isGraduated) {
         if (learningStep >= steps.length - 1) {
-          // Already at the final learning step → GRADUATE
+          // Final learning step → GRADUATE (a lapsed card returns to its reduced interval)
           updated.repetition = 1;
-          updated.learningStep = steps.length - 1; // mark final step
-          updated.interval = cfg.graduatingInterval;
-          updated.interval = Math.max(updated.interval, 1);
-          updated.interval = Math.min(updated.interval, cfg.maxInterval);
-          updated.nextReviewDate = now + (updated.interval * 24 * 60 * 60 * 1000);
+          updated.learningStep = steps.length - 1;
+          if (isFirstGraduation) ease = cfg.multiplier;
+          _setDays(lapseInterval > 0 ? lapseInterval : cfg.graduatingInterval);
+          lapseInterval = 0;
         } else {
-          // Jump to step 2 (the final learning step, e.g. 30m)
+          // Jump to the final learning step
           updated.repetition = 0;
-          updated.learningStep = steps.length - 1; // land at step 2
-          updated.interval = steps[steps.length - 1] / (24 * 60);
-          updated.nextReviewDate = now + (steps[steps.length - 1] * 60 * 1000);
+          updated.learningStep = steps.length - 1;
+          _setMinutes(steps[steps.length - 1]);
         }
       } else {
-        // Graduated: standard exponential growth
+        // Graduated: grow by this card's own ease; always move forward at least 1 day
         updated.repetition = (updated.repetition || 0) + 1;
-        updated.interval = Math.round(currentInterval * cfg.multiplier);
-        updated.interval = Math.max(updated.interval, 1);
-        updated.interval = Math.min(updated.interval, cfg.maxInterval);
-        updated.nextReviewDate = now + (updated.interval * 24 * 60 * 60 * 1000);
+        _setDays(Math.max(Math.round(currentInterval * ease), Math.floor(currentInterval) + 1));
       }
 
     } else {
-      // ── EASY (3): Immediate graduation, jump to easyInterval days ──
+      // ── EASY (3) ──
       updated.repetition = Math.max(1, (updated.repetition || 0) + 1);
-      updated.learningStep = steps.length - 1; // mark as having completed learning
+      updated.learningStep = steps.length - 1;
       if (isGraduated) {
-        // Already graduated: interval × multiplier × 1.3
-        updated.interval = Math.round(currentInterval * cfg.multiplier * 1.3);
+        ease += 0.15;
+        _setDays(Math.max(Math.round(currentInterval * ease * 1.3), Math.floor(currentInterval) + 1));
       } else {
-        // New card graduating via EASY: use easyInterval directly
-        updated.interval = cfg.easyInterval;
+        if (isFirstGraduation) ease = cfg.multiplier;
+        _setDays(lapseInterval > 0 ? lapseInterval + 1 : cfg.easyInterval);
+        lapseInterval = 0;
       }
-      updated.interval = Math.max(updated.interval, 1);
-      updated.interval = Math.min(updated.interval, cfg.maxInterval);
-      updated.nextReviewDate = now + (updated.interval * 24 * 60 * 60 * 1000);
     }
 
-    // Ease factor adjustment (only for graduated cards receiving Good/Easy)
-    if (updated.repetition >= 1 && quality >= QUALITY.GOOD) {
-      const qBonus = quality === QUALITY.EASY ? 0.15 : 0;
-      updated.easeFactor = (updated.easeFactor || 2.5) + (0.1 + qBonus);
-      if (updated.easeFactor < 1.3) updated.easeFactor = 1.3;
-      if (!isFinite(updated.easeFactor)) updated.easeFactor = 2.5;
-    }
+    updated.easeFactor = _clampEase(ease);
+    updated.lapseInterval = lapseInterval;
+    if (typeof updated.lapses !== 'number') updated.lapses = 0;
 
     // If marked Again in current session, re-add immediately
     if (isAgainInSession) {
@@ -1428,88 +1797,32 @@ return '<option value="' + _esc(p.value) + '"' + (p.value === 'bottom' ? ' selec
     if (typeof updated.nextReviewDate !== 'number'
         || !isFinite(updated.nextReviewDate)
         || updated.nextReviewDate < 0) {
-      // Fallback: schedule for 1 minute from now (worst case, card
-      // shows up quickly rather than disappearing forever)
       updated.nextReviewDate = now + 60 * 1000;
     }
 
     return updated;
   }
 
+  function _clampEase(v) {
+    if (typeof v !== 'number' || !isFinite(v)) return 2.5;
+    return Math.min(EASE_MAX, Math.max(EASE_MIN, v));
+  }
+
   /**
    * Predict the next review label for the assessment button tooltip.
-   * Mirrors the exact state-machine logic in calculateSRS.
+   * Calls calculateSRS itself so the label can never drift from the real schedule.
    * @param {number} quality - QUALITY.AGAIN(0) | HARD(1) | GOOD(2) | EASY(3)
    * @param {object} card   - current card state
    * @param {object} [deckSrs] - optional deck-level SRS override
-   * @returns {string} human-readable interval label (e.g. "< 1m", "30m", "4d", "6mo")
+   * @returns {string} human-readable interval label (e.g. "< 1m", "< 30m", "4d", "6mo")
    */
   function _getNextReviewLabel(quality, card, deckSrs) {
-    if (quality === QUALITY.AGAIN) return '< 1m';
-
-    const cfg = (deckSrs && typeof deckSrs === 'object' && deckSrs.learningSteps) ? deckSrs : _srsConfig;
-    const steps = (Array.isArray(cfg.learningSteps) && cfg.learningSteps.length >= 3)
-      ? cfg.learningSteps.map(function (s) { return Math.max(1, Number(s) || 1); })
-      : [1, 10, 30];
-
-    const learningStep = (typeof card.learningStep === 'number') ? card.learningStep : 0;
-    const isGraduated = (card.repetition || 0) >= 1;
-
-    // ── Safety: clamp current interval ──
-    var curInterval = (typeof card.interval === 'number' && isFinite(card.interval) && card.interval > 0)
-      ? card.interval
-      : 1;
-
-    // ── Quick helper: format minutes or days ──
-    function _label(minutes, days) {
-      if (minutes !== null) {
-        if (minutes < 60) return `< ${minutes}m`;
-        const hrs = Math.round(minutes / 60);
-        return `< ${hrs}h`;
-      }
-      return _formatInterval(days);
-    }
-
-    if (quality === QUALITY.HARD) {
-      if (!isGraduated) {
-        // Learning: advance 1 step (min clamp at step 1)
-        const targetStep = Math.min(Math.max(learningStep + 1, 1), steps.length - 1);
-        return _label(steps[targetStep], null);
-      } else {
-        // Graduated: interval × 1.2
-        const raw = Math.round(curInterval * 1.2);
-        return _formatInterval(Math.min(Math.max(raw, 1), cfg.maxInterval));
-      }
-    }
-
-    if (quality === QUALITY.GOOD) {
-      if (!isGraduated) {
-        if (learningStep >= steps.length - 1) {
-          // Already at final step → will graduate
-          return _formatInterval(Math.min(cfg.graduatingInterval, cfg.maxInterval));
-        } else {
-          // Jump to step 2 (the final learning step) — show its minutes
-          return _label(steps[steps.length - 1], null);
-        }
-      } else {
-        // Graduated: interval × multiplier
-        const raw = Math.round(curInterval * cfg.multiplier);
-        return _formatInterval(Math.min(Math.max(raw, 1), cfg.maxInterval));
-      }
-    }
-
-    if (quality === QUALITY.EASY) {
-      if (!isGraduated) {
-        // New card graduating via EASY: easyInterval
-        return _formatInterval(Math.min(cfg.easyInterval, cfg.maxInterval));
-      } else {
-        // Graduated: interval × multiplier × 1.3
-        const raw = Math.round(curInterval * cfg.multiplier * 1.3);
-        return _formatInterval(Math.min(Math.max(raw, 1), cfg.maxInterval));
-      }
-    }
-
-    return '1d';
+    const before = Date.now();
+    const next = calculateSRS(quality, card, false, deckSrs);
+    const ms = Math.max(0, next.nextReviewDate - before);
+    if (ms < 60 * 60 * 1000) return '< ' + Math.max(1, Math.ceil(ms / 60000)) + 'm';
+    if (ms < 24 * 60 * 60 * 1000) return '< ' + Math.max(1, Math.round(ms / 3600000)) + 'h';
+    return _formatInterval(Math.max(1, Math.round(ms / 86400000)));
   }
 
   /* ==========================================================
@@ -1541,6 +1854,126 @@ return '<option value="' + _esc(p.value) + '"' + (p.value === 'bottom' ? ' selec
              '<span class="card-section-label label-' + labelCSS + '">' + label + '</span>' +
              bodyHTML +
            '</div>';
+  }
+
+  /* ==========================================================
+     CARD-FACE DESIGN HELPERS
+     Everything below is derived at render time from existing
+     card fields. Nothing here writes to a card or a deck.
+     ========================================================== */
+
+  /** new | learning | young | mature | struggling — purely visual. */
+  function _cardState(card) {
+    if (!card || _isNewCard(card)) return 'new';
+    if ((card.lapses || 0) >= STRUGGLING_LAPSES) return 'struggling';
+    if (!(card.repetition >= 1)) return 'learning';
+    return (card.interval >= MATURE_INTERVAL) ? 'mature' : 'young';
+  }
+
+  function _stateBadge(state) {
+    var key = 'state' + state.charAt(0).toUpperCase() + state.slice(1);
+    return '<span class="card-state-badge" data-state="' + state + '">' + _esc(_('fc', key)) + '</span>';
+  }
+
+  /** card-term, plus a modifier for Chinese/Japanese terms so hanzi can be set larger. */
+  function _termClass(term) {
+    return 'card-term' + (CJK_RE.test(String(term || '')) ? ' card-term--cjk' : '');
+  }
+
+  /**
+   * Visual-memory image shown on the FRONT face (imageUrl is rendered here only, never on the back).
+   * @param {object} card
+   * @param {boolean} [compact] - smaller variant for the cloze front, which is already crowded
+   */
+  function _frontImage(card, compact) {
+    if (!card || !card.imageUrl) return '';
+    return '<img src="' + _esc(card.imageUrl) + '" alt="' + _esc(_('fc', 'imageAlt')) + '" ' +
+             'class="card-front-img' + (compact ? ' card-front-img--compact' : '') + '" ' +
+             'loading="lazy" draggable="false" onerror="this.style.display=\'none\'">';
+  }
+
+  /** Button to show/hide the phonetic line on CJK fronts (recall the character without a pinyin crutch). */
+  function _phoneticToggle(card) {
+    if (!card || !card.phonetic || !CJK_RE.test(String(card.term || ''))) return '';
+    var hidden = !!(_container && _container.classList.contains('fc-hide-front-phonetic'));
+    return '<button type="button" class="card-pinyin-toggle" data-fc-toggle-phonetic ' +
+             'aria-pressed="' + (hidden ? 'true' : 'false') + '" ' +
+             'title="' + _esc(_('fc', 'togglePhonetic')) + '" aria-label="' + _esc(_('fc', 'togglePhonetic')) + '">拼</button>';
+  }
+
+  /**
+   * Escape `text` and wrap occurrences of `term` (plus short English suffixes: -s -ed -ing -ly ...)
+   * in <mark class="card-term-hl">. Works on RAW text, so HTML escaping is always applied.
+   */
+  function _highlightTerm(text, term) {
+    var raw = String(text == null ? '' : text);
+    var t = String(term || '').trim();
+    if (!t) return _esc(raw);
+    var pat = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    var re;
+    try {
+      re = CJK_RE.test(t) ? new RegExp(pat, 'g') : new RegExp('\\b' + pat + '[A-Za-z]{0,4}', 'gi');
+    } catch (e) { return _esc(raw); }
+    var out = '', last = 0, m;
+    while ((m = re.exec(raw)) !== null) {
+      if (m[0].length === 0) { re.lastIndex++; continue; }
+      out += _esc(raw.slice(last, m.index)) + '<mark class="card-term-hl">' + _esc(m[0]) + '</mark>';
+      last = m.index + m[0].length;
+    }
+    return out + _esc(raw.slice(last));
+  }
+
+  /* Delegated listeners for the card-face extras (phonetic toggle + "Show more" memory).
+     CAPTURE phase on the module container: the phonetic toggle must stop the click
+     before it reaches #card-3d (otherwise it would flip the card). */
+  function _detachCardUiDelegates() {
+    if (_cardUiBound) {
+      if (_cardUiClickHandler)  _cardUiBound.removeEventListener('click', _cardUiClickHandler, true);
+      if (_cardUiToggleHandler) _cardUiBound.removeEventListener('toggle', _cardUiToggleHandler, true);
+    }
+    _cardUiBound = null; _cardUiClickHandler = null; _cardUiToggleHandler = null;
+  }
+
+  function _attachCardUiDelegates() {
+    if (!_container) return;
+    _detachCardUiDelegates();
+    _container.classList.toggle('fc-hide-front-phonetic', _lsGet(HIDE_PHONETIC_KEY) === '1');
+
+    _cardUiClickHandler = function (e) {
+      // "Show more" opened by the user → bring the new content into view (the back face is a fixed-height scroller)
+      var sum = e.target && e.target.closest ? e.target.closest('.card-more-summary') : null;
+      if (sum) {
+        var det = sum.parentNode;
+        setTimeout(function () {
+          var sc = det && det.open ? det.closest('.card-back-scroll') : null;
+          if (!sc) return;
+          var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+          var top = sc.scrollTop + (sum.getBoundingClientRect().top - sc.getBoundingClientRect().top) - 8;
+          sc.scrollTo({ top: Math.max(0, top), behavior: reduce ? 'auto' : 'smooth' });
+        }, 0);
+        return;
+      }
+      var btn = e.target && e.target.closest ? e.target.closest('[data-fc-toggle-phonetic]') : null;
+      if (!btn || !_container) return;
+      e.stopPropagation();
+      e.preventDefault();
+      var hide = !_container.classList.contains('fc-hide-front-phonetic');
+      _container.classList.toggle('fc-hide-front-phonetic', hide);
+      _lsSet(HIDE_PHONETIC_KEY, hide ? '1' : '0');
+      _container.querySelectorAll('[data-fc-toggle-phonetic]').forEach(function (b) {
+        b.setAttribute('aria-pressed', hide ? 'true' : 'false');
+      });
+    };
+    _cardUiToggleHandler = function (e) {
+      var d = e.target;
+      if (d && d.classList && d.classList.contains('card-more')) {
+        _backExpanded = !!d.open;
+        _lsSet(BACK_EXPANDED_KEY, _backExpanded ? '1' : '0');
+      }
+    };
+    _cardUiBound = _container;
+    _container.addEventListener('click', _cardUiClickHandler, true);
+    _container.addEventListener('toggle', _cardUiToggleHandler, true);
   }
 
   /**
@@ -1657,6 +2090,10 @@ return '<option value="' + _esc(p.value) + '"' + (p.value === 'bottom' ? ' selec
     // ── COLLECT custom fields into their position slots ──
     var customSlots = { top: [], after_examples: [], after_synonyms: [], bottom: [] };
     _aiSchema.forEach(function (field) {
+      // The default AI schema ships a custom "phonetic" field that reads the very same
+      // card.phonetic the built-in Phonetic block above already shows → skip the duplicate.
+      // (Render-only: the field and its data are untouched.)
+      if (field && field.id === 'phonetic') return;
       var pos = field.position || 'bottom';
       // Validate position
       if (!customSlots[pos]) pos = 'bottom';
@@ -1666,11 +2103,21 @@ return '<option value="' + _esc(p.value) + '"' + (p.value === 'bottom' ? ' selec
 
     // ── BLOCK 3: Examples ──
     var hasExamples = card.examples && card.examples.length > 0;
+    var moreExamplesHTML = '';
     if (hasExamples) {
+      // First example stays on the main view; the rest move into "Show more".
       blocks.push({ slot: 'examples', html: _sectionBlock('💬 Examples', 'examples',
         '<ul class="card-bullet-list">' +
-          card.examples.map(function (e) { return '<li class="card-example-item">' + _esc(e) + '</li>'; }).join('') +
+          '<li class="card-example-item">' + _highlightTerm(card.examples[0], card.term) + '</li>' +
         '</ul>') });
+      if (card.examples.length > 1) {
+        moreExamplesHTML = _sectionBlock('💬 More examples', 'examples',
+          '<ul class="card-bullet-list">' +
+            card.examples.slice(1).map(function (e) {
+              return '<li class="card-example-item">' + _highlightTerm(e, card.term) + '</li>';
+            }).join('') +
+          '</ul>');
+      }
     } else {
       blocks.push({ slot: 'examples', html: '' });
     }
@@ -1719,84 +2166,55 @@ return '<option value="' + _esc(p.value) + '"' + (p.value === 'bottom' ? ' selec
         '</ul>') });
     }
 
-    // ── Image ──
-    var imageHTML = '';
-    if (card.imageUrl) {
-      imageHTML = _sectionBlock('🖼️ Visual Memory', 'image',
-        '<img src="' + _esc(card.imageUrl) + '" alt="Vocabulary Image" class="card-visual-img" loading="lazy">');
+    // ── Image: now rendered on the FRONT face (see _frontImage) — intentionally not on the back ──
+
+    // ── ASSEMBLE ──
+    //   MAIN VIEW (always visible):
+    //     phonetic → vietnamese → definition(+top customs) → first example
+    //   "SHOW MORE" (collapsed <details>, remembers open/closed):
+    //     more examples → after_examples customs → synonyms → after_synonyms customs
+    //     → word family → idioms → collocations → notes → bottom customs
+    //   Same data, same order as before — only grouped.
+    var core = [];
+    var extra = [];
+    var pick = function (slot) {
+      return blocks.filter(function (b) { return b.slot === slot && b.html; })
+                   .map(function (b) { return b.html; });
+    };
+
+    var lead = pick('fixed_top');
+    if (lead.length) core.push('<div class="card-core-lead">' + lead.join('') + '</div>');
+    pick('definition').forEach(function (h) { core.push(h); });
+    customSlots.top.forEach(function (h) { core.push(h); });
+    pick('examples').forEach(function (h) { core.push(h); });
+
+    if (moreExamplesHTML) extra.push(moreExamplesHTML);
+    customSlots.after_examples.forEach(function (h) { extra.push(h); });
+    pick('synonyms').forEach(function (h) { extra.push(h); });
+    customSlots.after_synonyms.forEach(function (h) { extra.push(h); });
+    pick('word_family').forEach(function (h) { extra.push(h); });
+    pick('idioms').forEach(function (h) { extra.push(h); });
+    pick('collocations').forEach(function (h) { extra.push(h); });
+    pick('notes').forEach(function (h) { extra.push(h); });
+    customSlots.bottom.forEach(function (h) { extra.push(h); });
+
+    var coreHTML = '<div class="card-core">' +
+                     '<div class="card-core-main">' + core.join('\n') + '</div>' +
+                   '</div>';
+
+    var moreHTML = '';
+    if (extra.length > 0) {
+      moreHTML = '<details class="card-more"' + (_backExpanded ? ' open' : '') + '>' +
+                   '<summary class="card-more-summary">' +
+                     '<span class="card-more-when-closed">' + _esc(_('fc', 'moreDetails')) + '</span>' +
+                     '<span class="card-more-when-open">' + _esc(_('fc', 'lessDetails')) + '</span>' +
+                     '<span class="card-more-count">' + extra.length + '</span>' +
+                   '</summary>' +
+                   '<div class="card-more-body">' + extra.join('\n') + '</div>' +
+                 '</details>';
     }
 
-    // ── ASSEMBLE: ordered list of slots ──
-    //   fixed_top → definition(+top customs) → examples(+after_examples customs)
-    //   → synonyms(+after_synonyms customs) → word_family → idioms
-    //   → collocations → notes → bottom customs → image
-    var slotOrder = [
-      'fixed_top',
-      'definition',
-      'examples',
-      'synonyms',
-      'word_family',
-      'idioms',
-      'collocations',
-      'notes',
-      'bottom',
-      'image'
-    ];
-
-    var outputParts = [];
-
-    slotOrder.forEach(function (slotKey) {
-      switch (slotKey) {
-        case 'fixed_top':
-          blocks.filter(function (b) { return b.slot === 'fixed_top' && b.html; })
-            .forEach(function (b) { outputParts.push(b.html); });
-          break;
-        case 'definition':
-          // Find the definition block
-          var defBlock = blocks.find(function (b) { return b.slot === 'definition'; });
-          if (defBlock && defBlock.html) outputParts.push(defBlock.html);
-          // Inject 'top' custom fields right after definition
-          customSlots.top.forEach(function (h) { outputParts.push(h); });
-          break;
-        case 'examples':
-          var exBlock = blocks.find(function (b) { return b.slot === 'examples'; });
-          if (exBlock && exBlock.html) outputParts.push(exBlock.html);
-          // Inject 'after_examples' custom fields
-          customSlots.after_examples.forEach(function (h) { outputParts.push(h); });
-          break;
-        case 'synonyms':
-          var synBlock = blocks.find(function (b) { return b.slot === 'synonyms'; });
-          if (synBlock && synBlock.html) outputParts.push(synBlock.html);
-          // Inject 'after_synonyms' custom fields
-          customSlots.after_synonyms.forEach(function (h) { outputParts.push(h); });
-          break;
-        case 'word_family':
-          blocks.filter(function (b) { return b.slot === 'word_family' && b.html; })
-            .forEach(function (b) { outputParts.push(b.html); });
-          break;
-        case 'idioms':
-          blocks.filter(function (b) { return b.slot === 'idioms' && b.html; })
-            .forEach(function (b) { outputParts.push(b.html); });
-          break;
-        case 'collocations':
-          blocks.filter(function (b) { return b.slot === 'collocations' && b.html; })
-            .forEach(function (b) { outputParts.push(b.html); });
-          break;
-        case 'notes':
-          blocks.filter(function (b) { return b.slot === 'notes' && b.html; })
-            .forEach(function (b) { outputParts.push(b.html); });
-          break;
-        case 'bottom':
-          // 'bottom' custom fields before image
-          customSlots.bottom.forEach(function (h) { outputParts.push(h); });
-          break;
-        case 'image':
-          if (imageHTML) outputParts.push(imageHTML);
-          break;
-      }
-    });
-
-    return outputParts.join('\n');
+    return coreHTML + moreHTML;
   }
 
   /**
@@ -1916,12 +2334,16 @@ const prompt = buildAIPrompt(word, _aiSchema);
       tip: parsed.tip || '',
       // Dynamic fields from AI schema
       ...(_buildDynamicFields(parsed)),
+      id: _newCardId(),
       repetition: 0,
       interval: 0,
       easeFactor: 2.5,
       nextReviewDate: Date.now(),
       lastReviewed: 0,
-      learningStep: 0
+      learningStep: 0,
+      lapses: 0,
+      lapseInterval: 0,
+      reviewCount: 0
     };
   }
 
@@ -2134,6 +2556,242 @@ const prompt = buildAIPrompt(word, _aiSchema);
      Tab toggles switch active panel via translateX on the track.
      ========================================================== */
 
+  /* ==========================================================
+     FADING MEMORY WALL
+     Every card with a photo becomes a tile. The photo blurs and
+     greys as the estimated recall drops; reviewing the card
+     sharpens it again. Display only: reads lastReviewed,
+     interval, easeFactor and nextReviewDate — writes nothing.
+     ========================================================== */
+
+  const WALL_MINI_MAX = 12;           // tiles shown on a deck card
+  const WALL_RECALL_AT_DUE = 0.9;     // recall assumed at the moment a card becomes due
+  const WALL_MIN_STABILITY = 1 / 144; // days (≈10 min) — keeps just-learned cards from dividing by ~0
+  let _wallPrevFade = {};             // cardId → last rendered fade (lets re-renders animate old → new)
+  let _wallEscHandler = null;
+
+  /** Estimated recall 0..1, or null for a card that was never reviewed. */
+  function _cardRecall(card, now) {
+    if (!card || _isNewCard(card)) return null;
+    var t = Math.max(0, ((now || Date.now()) - card.lastReviewed) / 86400000);        // days since last review
+    var ease = _clampEase(card.easeFactor);
+    var easeAdj = Math.min(1.2, Math.max(0.6, ease / 2.5));                          // easy cards hold memory longer
+    var stability = _wallStability(card.interval) * easeAdj;
+    return Math.pow(WALL_RECALL_AT_DUE, t / stability);                               // R = 0.9^(t/S)
+  }
+  function _wallStability(v) { return (typeof v === 'number' && isFinite(v) && v > WALL_MIN_STABILITY) ? v : WALL_MIN_STABILITY; }
+
+  /** Localised relative time: past → "3d ago" / "3 ngày trước", future → "in 3d" / "sau 3 ngày". */
+  function _wallRel(ts) {
+    var diff = ts - Date.now(), abs = Math.abs(diff);
+    var min = abs / 60000, t;
+    if (min < 1) return _('fc', 'wallJustNow');
+    if (min < 60) t = Math.round(min) + ' ' + _('fc', 'wallUnitMin');
+    else if (min < 1440) t = Math.round(min / 60) + _('fc', 'wallUnitHour');
+    else t = Math.round(min / 1440) + _('fc', 'wallUnitDay');
+    return _('fc', diff < 0 ? 'wallAgoFmt' : 'wallInFmt').replace('{t}', t);
+  }
+
+  /** Map recall → { fade: 0..1, lv: level key }. fade drives blur/grayscale in CSS. */
+  function _wallLook(card, now) {
+    var r = _cardRecall(card, now);
+    if (r === null) return { recall: null, fade: 1, lv: 'new' };
+    var fade = Math.min(1, Math.max(0, (1 - r) / 0.6));
+    var lv = r >= 0.85 ? 'fresh' : (r >= 0.65 ? 'ok' : (r >= 0.45 ? 'fading' : 'critical'));
+    return { recall: r, fade: fade, lv: lv };
+  }
+
+  function _wallLvLabel(lv) {
+    return _('fc', 'wallLv' + lv.charAt(0).toUpperCase() + lv.slice(1));
+  }
+
+  /** Cards of a deck that carry a photo, with their look, most-faded first. */
+  function _wallItems(deck) {
+    var now = Date.now(), out = [];
+    ((deck && deck.cards) || []).forEach(function (c) {
+      if (!c || !c.imageUrl) return;
+      var look = _wallLook(c, now);
+      out.push({ card: c, look: look });
+    });
+    out.sort(function (a, b) {
+      // new (unseen) tiles last; otherwise lowest recall first
+      var ar = a.look.recall === null ? 2 : a.look.recall;
+      var br = b.look.recall === null ? 2 : b.look.recall;
+      return ar - br;
+    });
+    return out;
+  }
+
+  /** Average recall over reviewed photo cards, as a percentage (null if none reviewed). */
+  function _wallAverage(items) {
+    var sum = 0, n = 0;
+    items.forEach(function (it) { if (it.look.recall !== null) { sum += it.look.recall; n++; } });
+    return n ? Math.round((sum / n) * 100) : null;
+  }
+
+  function _wallTileHTML(it, opts) {
+    var c = it.card, look = it.look;
+    var id = String(c.id || '');
+    var prev = _wallPrevFade[id];
+    var startFade = (typeof prev === 'number') ? prev : look.fade;
+    var pct = look.recall === null ? '' : Math.round(look.recall * 100) + '%';
+    var title = (c.term ? c.term + ' · ' : '') + (pct ? pct : _('fc', 'wallLvNew'));
+    var tag = opts && opts.button ? 'button type="button"' : 'span';
+    var endTag = opts && opts.button ? 'button' : 'span';
+    return '<' + tag + ' class="fc-wall-tile" data-lv="' + look.lv + '" data-card-id="' + _esc(id) + '"' +
+             ' data-fade-target="' + look.fade.toFixed(3) + '" style="--fade:' + startFade.toFixed(3) + ';"' +
+             ' title="' + _esc(title) + '" aria-label="' + _esc(title) + '">' +
+             '<img class="fc-wall-img" src="' + _esc(c.imageUrl) + '" alt="" loading="lazy" decoding="async" draggable="false"' +
+               ' onerror="this.style.display=\'none\'">' +
+             '<span class="fc-wall-fog" aria-hidden="true"></span>' +
+           '</' + endTag + '>';
+  }
+
+  /** Compact strip rendered inside a deck card. */
+  function _buildDeckWall(deck) {
+    var items = _wallItems(deck);
+    if (items.length === 0) {
+      return '<div class="fc-wall-mini fc-wall-mini--empty">' + _esc(_('fc', 'wallNoImages')) + '</div>';
+    }
+    var shown = items.slice(0, WALL_MINI_MAX);
+    var extra = items.length - shown.length;
+    var avg = _wallAverage(items);
+    return '<div class="fc-wall-mini" data-action="open-wall" data-deck-id="' + _esc(deck.id) + '" role="button" tabindex="0"' +
+             ' aria-label="' + _esc(_('fc', 'wallOpen')) + '">' +
+             '<div class="fc-wall-mini-head">' +
+               '<span class="fc-wall-mini-title">🧠 ' + _esc(_('fc', 'wallTitle')) + '</span>' +
+               '<span class="fc-wall-mini-pct">' + (avg === null ? '—' : avg + '% ' + _esc(_('fc', 'wallRemembered'))) + '</span>' +
+             '</div>' +
+             '<div class="fc-wall-grid fc-wall-grid--mini">' +
+               shown.map(function (it) { return _wallTileHTML(it, false); }).join('') +
+               (extra > 0 ? '<span class="fc-wall-extra">+' + extra + '</span>' : '') +
+             '</div>' +
+           '</div>';
+  }
+
+  /** After insertion: animate every tile from its previous fade to the current one (review → photo sharpens). */
+  function _wallAnimate(root) {
+    if (!root) return;
+    var tiles = root.querySelectorAll('.fc-wall-tile[data-fade-target]');
+    if (!tiles.length) return;
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        tiles.forEach(function (t) {
+          var target = t.getAttribute('data-fade-target');
+          t.style.setProperty('--fade', target);
+          var id = t.getAttribute('data-card-id');
+          if (id) _wallPrevFade[id] = parseFloat(target);
+        });
+      });
+    });
+  }
+
+  function _closeWallModal() {
+    var overlay = document.getElementById('fc-wall-overlay');
+    if (overlay) overlay.remove();
+    if (_wallEscHandler) { document.removeEventListener('keydown', _wallEscHandler); _wallEscHandler = null; }
+  }
+
+  function _wallDetailHTML(it) {
+    var c = it.card, look = it.look;
+    var pct = look.recall === null ? '—' : Math.round(look.recall * 100) + '%';
+    var last = _isNewCard(c) ? _('fc', 'wallNeverReviewed') : _wallRel(c.lastReviewed);
+    var due = '—';
+    if (!_isNewCard(c) && typeof c.nextReviewDate === 'number') {
+      due = (c.nextReviewDate <= Date.now()) ? _('fc', 'wallOverdue') : _wallRel(c.nextReviewDate);
+    }
+    return '<img class="fc-wall-detail-img" src="' + _esc(c.imageUrl) + '" alt="" draggable="false">' +
+           '<div class="fc-wall-detail-body">' +
+             '<div class="fc-wall-detail-term">' + _esc(c.term || '') + '</div>' +
+             '<div class="fc-wall-detail-lv" data-lv="' + look.lv + '">' + _esc(_wallLvLabel(look.lv)) + '</div>' +
+             '<dl class="fc-wall-detail-list">' +
+               '<div><dt>' + _esc(_('fc', 'wallRecall')) + '</dt><dd>' + pct + '</dd></div>' +
+               '<div><dt>' + _esc(_('fc', 'wallLastSeen')) + '</dt><dd>' + _esc(last) + '</dd></div>' +
+               '<div><dt>' + _esc(_('fc', 'wallNextDue')) + '</dt><dd>' + _esc(due) + '</dd></div>' +
+             '</dl>' +
+           '</div>';
+  }
+
+  /** Full wall for one deck: every photo tile, tap to expand details, one-tap rescue. */
+  function _showWallModal(deckId) {
+    if (document.getElementById('fc-wall-overlay')) return;
+    var deck = _decks.find(function (d) { return d.id === deckId; });
+    if (!deck) return;
+
+    var items = _wallItems(deck);
+    var avg = _wallAverage(items);
+    var due = _countDueCardsRaw(deck);
+    var legend = ['fresh', 'ok', 'fading', 'critical', 'new'].map(function (lv) {
+      return '<span class="fc-wall-legend-item" data-lv="' + lv + '"><i></i>' + _esc(_wallLvLabel(lv)) + '</span>';
+    }).join('');
+
+    var overlay = document.createElement('div');
+    overlay.id = 'fc-wall-overlay';
+    overlay.className = 'add-card-overlay';
+    overlay.innerHTML =
+      '<div class="fc-wall-modal glass" role="dialog" aria-modal="true" aria-label="' + _esc(_('fc', 'wallTitle')) + '">' +
+        '<div class="fc-wall-modal-head">' +
+          '<div>' +
+            '<h3 class="fc-wall-modal-title">🧠 ' + _esc(_('fc', 'wallTitle')) + '</h3>' +
+            '<p class="fc-wall-modal-sub">' + _esc(deck.title) + ' · ' + items.length + ' ' + _esc(_('fc', 'wallSummary')) +
+              (avg === null ? '' : ' · ' + avg + '% ' + _esc(_('fc', 'wallRemembered'))) + '</p>' +
+          '</div>' +
+          '<button type="button" class="fc-wall-close" id="fc-wall-close" aria-label="' + _esc(_('fc', 'wallClose')) + '">✕</button>' +
+        '</div>' +
+        '<p class="fc-wall-hint">' + _esc(_('fc', 'wallHint')) + '</p>' +
+        '<div class="fc-wall-legend">' + legend + '</div>' +
+        (items.length === 0
+          ? '<div class="fc-wall-mini fc-wall-mini--empty">' + _esc(_('fc', 'wallNoImages')) + '</div>'
+          : '<div class="fc-wall-grid fc-wall-grid--full" id="fc-wall-grid">' +
+              items.map(function (it) { return _wallTileHTML(it, { button: true }); }).join('') +
+            '</div>' +
+            '<div class="fc-wall-detail" id="fc-wall-detail" hidden></div>' +
+            '<p class="fc-wall-tilehint">' + _esc(_('fc', 'wallTileHint')) + '</p>') +
+        '<div class="fc-wall-actions">' +
+          '<button type="button" class="btn btn-primary fc-wall-rescue" id="fc-wall-rescue"' + (due === 0 ? ' disabled' : '') + '>' +
+            (due === 0 ? _esc(_('fc', 'wallNothingDue')) : '🛟 ' + _esc(_('fc', 'wallRescue')) + ' (' + due + ')') +
+          '</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    _wallAnimate(overlay);
+
+    // --- events ---
+    var closeBtn = overlay.querySelector('#fc-wall-close');
+    if (closeBtn) closeBtn.addEventListener('click', _closeWallModal);
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) _closeWallModal(); });
+    _wallEscHandler = function (e) { if (e.key === 'Escape') _closeWallModal(); };
+    document.addEventListener('keydown', _wallEscHandler);
+
+    var grid = overlay.querySelector('#fc-wall-grid');
+    var detail = overlay.querySelector('#fc-wall-detail');
+    if (grid && detail) {
+      grid.addEventListener('click', function (e) {
+        var tile = e.target.closest ? e.target.closest('.fc-wall-tile') : null;
+        if (!tile) return;
+        var id = tile.getAttribute('data-card-id');
+        var it = items.find(function (x) { return String(x.card.id || '') === id; });
+        if (!it) return;
+        var wasOpen = tile.classList.contains('is-selected');
+        grid.querySelectorAll('.fc-wall-tile.is-selected').forEach(function (t) { t.classList.remove('is-selected'); });
+        if (wasOpen) { detail.hidden = true; detail.innerHTML = ''; return; }
+        tile.classList.add('is-selected');
+        detail.innerHTML = _wallDetailHTML(it);
+        detail.dataset.lv = it.look.lv;
+        detail.hidden = false;
+      });
+    }
+
+    var rescue = overlay.querySelector('#fc-wall-rescue');
+    if (rescue && due > 0) {
+      rescue.addEventListener('click', function () {
+        _closeWallModal();
+        _activeDeckId = deckId;
+        _startStudySession(_getDueCardIndices(deck).length === 0);   // fall back to "study extra" if only limits block it
+      });
+    }
+  }
+
   function _renderDeckLibrary() {
     if (!_container) return;
 
@@ -2176,6 +2834,9 @@ const prompt = buildAIPrompt(word, _aiSchema);
     function _buildDeckCard(deck) {
       var dTotal = deck.cards.length;
       var dDue = _countDueCards(deck);
+      var dDueRaw = _countDueCardsRaw(deck);
+      var dHeld = Math.max(0, dDueRaw - dDue);
+      var studyExtraOnly = (dDue === 0 && dHeld > 0);   // limit reached: offer an explicit "study extra"
       return `
         <div class="deck-card glass-card" data-deck-id="${_esc(deck.id)}">
           <div class="deck-card-top">
@@ -2194,13 +2855,15 @@ const prompt = buildAIPrompt(word, _aiSchema);
             <span style="color:${dDue > 0 ? 'var(--accent-primary)' : 'var(--text-muted)'};">
               ${_('fc', 'dueForReview')}: ${dDue}
             </span>
+            ${dHeld > 0 ? `<span class="fc-held-back">· +${dHeld} ${_esc(_('fc', 'heldBack'))}</span>` : ''}
           </div>
+          ${_buildDeckWall(deck)}
           <div class="deck-card-actions">
-            <button class="deck-play-btn" data-action="study" data-deck-id="${_esc(deck.id)}" ${dDue === 0 ? 'disabled style="opacity:0.35;cursor:not-allowed;box-shadow:none;"' : ''}>
+            <button class="deck-play-btn" data-action="study" data-deck-id="${_esc(deck.id)}" ${studyExtraOnly ? 'data-ignore-limits="1"' : ''} ${(dDue === 0 && !studyExtraOnly) ? 'disabled style="opacity:0.35;cursor:not-allowed;box-shadow:none;"' : ''}>
               <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
                 <polygon points="4,2 16,10 4,18"/>
               </svg>
-              ${_('fc', 'studyDue')}
+              ${studyExtraOnly ? _esc(_('fc', 'studyExtra')) + ' (' + dHeld + ')' : _('fc', 'studyDue')}
             </button>
             <button class="deck-browse-btn" data-action="browse" data-deck-id="${_esc(deck.id)}">
               ${_('fc', 'browseEdit')}
@@ -2226,6 +2889,8 @@ const prompt = buildAIPrompt(word, _aiSchema);
             ${totalCards} cards · ${totalDue} ${_('fc', 'cardsDue')}
           </span>
         </div>
+
+        ${_renderStatsPanel()}
 
         <!-- Vault Tab Toggles -->
         <div class="hub-flashcard-vault-tabs">
@@ -2328,6 +2993,14 @@ const prompt = buildAIPrompt(word, _aiSchema);
       });
     }
 
+    // Memory wall: sharpen/fade tiles from their previous state, keyboard access for the mini wall
+    _wallAnimate(_container);
+    _container.querySelectorAll('.fc-wall-mini[data-action="open-wall"]').forEach(function (el) {
+      el.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); _showWallModal(el.dataset.deckId); }
+      });
+    });
+
     // Deck action buttons (Study Due, Browse/Edit, Delete, Rename) — delegated
     _container.querySelectorAll('[data-action]').forEach(function (btn) {
       btn.addEventListener('click', function (e) {
@@ -2335,9 +3008,11 @@ const prompt = buildAIPrompt(word, _aiSchema);
         var action = btn.dataset.action;
         var deckId = btn.dataset.deckId;
 
-        if (action === 'study') {
+        if (action === 'open-wall') {
+          _showWallModal(deckId);
+        } else if (action === 'study') {
           _activeDeckId = deckId;
-          _startStudySession();
+          _startStudySession(btn.dataset.ignoreLimits === '1');
         } else if (action === 'browse') {
           _activeDeckId = deckId;
           _currentIndex = 0;
@@ -2831,7 +3506,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
      then enter study mode.
      ========================================================== */
 
-  function _startStudySession() {
+  function _startStudySession(ignoreLimits) {
     const deck = _getActiveDeck();
     if (!deck) {
       _showToast('Please select a deck first.');
@@ -2841,10 +3516,12 @@ const prompt = buildAIPrompt(word, _aiSchema);
     }
 
     // ── SINGLE SOURCE OF TRUTH: unified due-card query ──
-    _studyQueue = _getDueCardIndices(deck);
+    _studyQueue = _getDueCardIndices(deck, !!ignoreLimits);
 
     if (_studyQueue.length === 0) {
-      _showToast('No cards due in this deck! You\'re all caught up.');
+      _showToast(_countDueCardsRaw(deck) > 0
+        ? 'Daily limit reached for this deck. Use "Study extra" to keep going.'
+        : 'No cards due in this deck! You\'re all caught up.');
       _mode = 'library';
       _renderApp();
       return;
@@ -2861,6 +3538,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
       correct: 0,
       hard: 0,
       again: 0,
+      ms: 0,
       started: Date.now()
     };
 
@@ -2890,6 +3568,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
     const cardIdx = _studyQueue[0];
     const cards = _getActiveCards();
     const card = cards[cardIdx];
+    _cardShownAt = Date.now();      // answer-time tracking starts when the card appears
     const remaining = _studyQueue.length;
     const reviewed = _sessionStats ? _sessionStats.reviewed : 0;
 
@@ -2912,7 +3591,8 @@ const prompt = buildAIPrompt(word, _aiSchema);
           <div class="card-3d" id="card-3d">
             <!-- ============ FRONT FACE ============ -->
             ${card.clozeSentence ? `
-            <div class="card-face card-front card-front-cloze">
+            <div class="card-face card-front card-front-cloze card-state-${_cardState(card)}">
+              ${_stateBadge(_cardState(card))}
               <!-- 💡 Tip / Analogy (inline-editable) -->
               <div class="hub-flashcard-tip-container" id="tip-container">
                 <span class="hub-flashcard-tip-icon" id="tip-icon">💡</span>
@@ -2921,6 +3601,8 @@ const prompt = buildAIPrompt(word, _aiSchema);
                 <input type="text" id="tip-input" class="hub-flashcard-tip-input" style="display:none;" placeholder="e.g. 'it's' = 'it is' contracted" autocomplete="off" maxlength="200">
                 <span class="hub-flashcard-tip-hint" id="tip-hint" style="display:none;">Enter ↵ to save · Esc to cancel</span>
               </div>
+
+              ${_frontImage(card, true)}
 
               <div class="cloze-sentence">
                 <span>${_esc(card.clozeSentence.split('___')[0] || '')}</span>
@@ -2935,16 +3617,19 @@ const prompt = buildAIPrompt(word, _aiSchema);
               <div id="cloze-diff-mask" class="hub-flashcard-diff-mask"></div>
             </div>
             ` : `
-            <div class="card-face card-front">
-              <span class="card-term">${_esc(card.term)}</span>
+            <div class="card-face card-front card-state-${_cardState(card)}">
+              ${_stateBadge(_cardState(card))}
+              ${_frontImage(card)}
+              <span class="${_termClass(card.term)}">${_esc(card.term)}</span>
               ${card.type ? '<span class="card-pos">' + _esc(card.type) + '</span>' : ''}
               ${card.phonetic ? '<span class="card-phonetic-front">' + _esc(card.phonetic) + '</span>' : ''}
+              ${_phoneticToggle(card)}
               <span class="card-hint">Click to flip</span>
             </div>
             `}
 
             <!-- ============ BACK FACE ============ -->
-            <div class="card-face card-back">
+            <div class="card-face card-back card-state-${_cardState(card)}">
               <div class="card-back-scroll">
                 <!-- Header: word + type -->
                 <div class="card-back-header">
@@ -3588,6 +4273,12 @@ const prompt = buildAIPrompt(word, _aiSchema);
     const card = deck.cards[cardIdx];
     const isAgain = (quality === QUALITY.AGAIN);
 
+    // Review history: capture the card's state BEFORE rating (new? graduated?) and the answer time
+    const wasNew = _isNewCard(card);
+    const wasGrad = (card.repetition || 0) >= 1;
+    const spentMs = _cardShownAt ? Math.min(Date.now() - _cardShownAt, 120000) : 0;
+    _recordReview(deck.id, quality, wasNew, wasGrad, spentMs);
+
     // Apply SRS algorithm — use deck-level override if present
     const deckSrs = deck.srs || null;
     const updated = calculateSRS(quality, card, isAgain, deckSrs);
@@ -3596,6 +4287,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
 
     // Track stats — incremented ONCE per assessment
     if (_sessionStats) {
+      _sessionStats.ms = (_sessionStats.ms || 0) + spentMs;
       _sessionStats.reviewed++;
       if (isAgain) _sessionStats.again++;
       else if (quality === QUALITY.HARD) _sessionStats.hard++;
@@ -3665,6 +4357,12 @@ const prompt = buildAIPrompt(word, _aiSchema);
     }
 
     const deckDueCount = deck ? _countDueCards(deck) : 0;
+    const deckDueRaw = deck ? _countDueCardsRaw(deck) : 0;
+    const heldBack = Math.max(0, deckDueRaw - deckDueCount);
+    const tomorrowCount = _calcForecast(2)[1];
+    const secs = Math.round((stats.ms || 0) / 1000);
+    const timeLabel = secs >= 60 ? Math.floor(secs / 60) + 'm ' + String(secs % 60).padStart(2, '0') + 's' : secs + 's';
+    _flushStats();
 
     _container.innerHTML = `
       <div class="tab-content flashcard-app srs-completion">
@@ -3692,6 +4390,9 @@ const prompt = buildAIPrompt(word, _aiSchema);
         <!-- Next due count -->
         <p style="font-family:var(--font-mono);font-size:0.72rem;color:var(--text-muted);margin-top:var(--space-sm);">
           ${deckDueCount} card${deckDueCount !== 1 ? 's' : ''} due now${deck ? ` in "${_esc(deck.title)}"` : ''}
+          ${heldBack > 0 ? ` · +${heldBack} ${_esc(_('fc', 'heldBack'))}` : ''}
+          ${total > 0 ? ` · ${_esc(_('fc', 'timeSpentLabel'))} ${timeLabel}` : ''}
+          · ${tomorrowCount} ${_esc(_('fc', 'dueTomorrowLabel'))}
         </p>
 
         <div style="display:flex;gap:var(--space-md);margin-top:var(--space-lg);">
@@ -3706,11 +4407,18 @@ const prompt = buildAIPrompt(word, _aiSchema);
             Keep Studying
           </button>
           ` : ''}
+          ${deckDueCount === 0 && heldBack > 0 ? `
+          <button class="srs-btn-study" id="btn-study-extra">
+            ${_esc(_('fc', 'studyMoreBtn'))} (${heldBack})
+          </button>
+          ` : ''}
         </div>
       </div>
     `;
 
     // Bind events
+    const btnExtra = _container.querySelector('#btn-study-extra');
+    if (btnExtra) btnExtra.addEventListener('click', () => { _startStudySession(true); });
     const btnDash = _container.querySelector('#btn-back-to-library');
     if (btnDash) btnDash.addEventListener('click', () => {
       _mode = 'library';
@@ -3794,6 +4502,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
     const dueLabel = _formatDueDate(card.nextReviewDate || 0);
     const intervalLabel = _formatInterval(card.interval || 0);
     const easeLabel = (card.easeFactor || 2.5).toFixed(1);
+    const lapsesLabel = String(card.lapses || 0);
 
     _container.innerHTML = `
       <div class="tab-content flashcard-app">
@@ -3820,15 +4529,18 @@ const prompt = buildAIPrompt(word, _aiSchema);
         <div class="card-stage" id="card-stage">
           <div class="card-3d" id="card-3d">
             <!-- ============ FRONT FACE ============ -->
-            <div class="card-face card-front">
-              <span class="card-term">${_esc(card.term)}</span>
+            <div class="card-face card-front card-state-${_cardState(card)}">
+              ${_stateBadge(_cardState(card))}
+              ${_frontImage(card)}
+              <span class="${_termClass(card.term)}">${_esc(card.term)}</span>
               ${card.type ? `<span class="card-pos">${_esc(card.type)}</span>` : ''}
               ${card.phonetic ? `<span class="card-phonetic-front">${_esc(card.phonetic)}</span>` : ''}
+              ${_phoneticToggle(card)}
               <span class="card-hint">Click to flip</span>
             </div>
 
             <!-- ============ BACK FACE ============ -->
-            <div class="card-face card-back">
+            <div class="card-face card-back card-state-${_cardState(card)}">
               <div class="card-back-scroll">
                 <!-- Header: word + type + flip-back button -->
                 <div class="card-back-header">
@@ -3858,6 +4570,10 @@ const prompt = buildAIPrompt(word, _aiSchema);
                   <div class="srs-info-item">
                     <span class="srs-info-item-label">Ease</span>
                     <span class="srs-info-item-value">${easeLabel}×</span>
+                  </div>
+                  <div class="srs-info-item">
+                    <span class="srs-info-item-label">Lapses</span>
+                    <span class="srs-info-item-value">${lapsesLabel}</span>
                   </div>
                 </div>
 
@@ -4419,7 +5135,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
           <div class="form-group">
             <label>🖼️ Visual Memory (Optional)</label>
             <input type="text" id="ceditor-image" class="card-editor-input hub-flashcard-visual-input" value="${_esc(imageUrl)}" placeholder="Paste an image from clipboard, or type a URL..." autocomplete="off">
-            <span style="font-family:var(--font-mono);font-size:0.6rem;color:var(--text-muted);">Copy an image (Ctrl+C), then paste it here (Ctrl+V). Auto-compresses to save space.</span>
+            <span style="font-family:var(--font-mono);font-size:0.6rem;color:var(--text-muted);">Shown on the card FRONT to boost recall. Copy an image (Ctrl+C), then paste it here (Ctrl+V). Auto-compresses to save space.</span>
           </div>
 
           <div class="form-group">
@@ -4656,12 +5372,16 @@ const prompt = buildAIPrompt(word, _aiSchema);
       if (!deck) { _closeCardEditorModal(); return; }
       const newCard = {
         ...cardFields,
+        id: _newCardId(),
         repetition: 0,
         interval: 0,
         easeFactor: 2.5,
         nextReviewDate: Date.now(),
         lastReviewed: 0,
-        learningStep: 0
+        learningStep: 0,
+        lapses: 0,
+        lapseInterval: 0,
+        reviewCount: 0
       };
       deck.cards.push(newCard);
       _currentIndex = deck.cards.length - 1;
@@ -4743,6 +5463,19 @@ const prompt = buildAIPrompt(word, _aiSchema);
    * AND ensure SRS fields are present (migration).
    * Handles migration of old-format cards and adds SRS defaults.
    */
+  /** Stable card identifier (survives sorting, merging between devices, review history). */
+  function _newCardId() {
+    return 'c_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 8);
+  }
+
+  /** Keys that _normalizeCard rebuilds itself; everything else (custom AI fields…) is preserved. */
+  var _CARD_KNOWN_KEYS = {
+    id: 1, term: 1, type: 1, pos: 1, phonetic: 1, vietnamese: 1, describe: 1, definition: 1, examples: 1,
+    note: 1, synonyms: 1, word_family: 1, idioms: 1, idiom: 1, collocations: 1, clozeSentence: 1,
+    imageUrl: 1, tip: 1, repetition: 1, interval: 1, easeFactor: 1, nextReviewDate: 1, lastReviewed: 1,
+    learningStep: 1, lapses: 1, lapseInterval: 1, reviewCount: 1
+  };
+
   function _normalizeCard(card) {
     // --- SRS defaults (for migration of existing cards) ---
     // STRICT validation: nextReviewDate MUST be a finite number.
@@ -4764,9 +5497,10 @@ const prompt = buildAIPrompt(word, _aiSchema);
       interval = card.interval;
     }
 
+    // Ease now drives interval growth; older builds let it climb without bound, so clamp it.
     var easeFactor = 2.5;
-    if (typeof card.easeFactor === 'number' && isFinite(card.easeFactor) && card.easeFactor >= 1.3) {
-      easeFactor = card.easeFactor;
+    if (typeof card.easeFactor === 'number' && isFinite(card.easeFactor) && card.easeFactor >= EASE_MIN) {
+      easeFactor = Math.min(card.easeFactor, EASE_MAX);
     }
 
     var lastReviewed = 0;
@@ -4781,19 +5515,31 @@ const prompt = buildAIPrompt(word, _aiSchema);
       learningStep = card.learningStep;
     }
 
+    var cardId = (typeof card.id === 'string' && card.id) ? card.id : null;
+    if (!cardId) { cardId = _newCardId(); _idsAssigned++; }
+
     const srsDefaults = {
+      id: cardId,
       repetition: repetition,
       interval: interval,
       easeFactor: easeFactor,
       nextReviewDate: nextReview,
       lastReviewed: lastReviewed,
-      learningStep: learningStep
+      learningStep: learningStep,
+      lapses: (typeof card.lapses === 'number' && card.lapses > 0) ? Math.floor(card.lapses) : 0,
+      lapseInterval: (typeof card.lapseInterval === 'number' && card.lapseInterval > 0) ? card.lapseInterval : 0,
+      reviewCount: (typeof card.reviewCount === 'number' && card.reviewCount > 0) ? Math.floor(card.reviewCount) : 0
     };
+
+    // Custom fields from the AI schema (and anything else we don't rebuild below) must survive a reload.
+    var extras = {};
+    Object.keys(card).forEach(function (k) { if (!_CARD_KNOWN_KEYS[k]) extras[k] = card[k]; });
 
     // If the card already has 'describe' as an array, it's likely
     // already in the new format — just ensure arrays are arrays
     if (Array.isArray(card.describe)) {
       return {
+        ...extras,
         term: card.term || '',
         type: card.type || card.pos || '',
         phonetic: card.phonetic || '',
@@ -4828,6 +5574,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
       : [];
 
     return {
+      ...extras,
       term: card.term || '',
       type: card.pos || card.type || '',
       phonetic: '',
@@ -4908,11 +5655,11 @@ const prompt = buildAIPrompt(word, _aiSchema);
         }
 
         // ── 3. easeFactor ──
-        if (typeof card.easeFactor !== 'number'
-            || !isFinite(card.easeFactor)
-            || card.easeFactor < 1.3
-            || card.easeFactor > 10) {
+        if (typeof card.easeFactor !== 'number' || !isFinite(card.easeFactor)) {
           card.easeFactor = 2.5;
+          wasFixed = true;
+        } else if (card.easeFactor < EASE_MIN || card.easeFactor > EASE_MAX) {
+          card.easeFactor = _clampEase(card.easeFactor);
           wasFixed = true;
         }
 

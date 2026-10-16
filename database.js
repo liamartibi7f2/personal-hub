@@ -412,8 +412,17 @@ const HubDB = (function () {
    * ═══ DUAL-WRITE for metadata (netWorthOffset + savingsBalance + initBank + initCash + budgets) ═══
    * Same pattern: IndexedDB first, then Firestore.
    *
-   * @param {Object} meta — { netWorthOffset: number, savingsBalance: number, initBank: number, initCash: number, budgets: object }
+   * @param {Object} meta — { netWorthOffset, savingsBalance, initBank, initCash, budgets, budgetPlans, dailyLimits }
    */
+  /** Make sure every map-valued meta field exists (older cached copies predate budgetPlans / dailyLimits). */
+  function _cfMetaFill(m) {
+    if (!m || typeof m !== 'object') return m;
+    if (!m.budgets || typeof m.budgets !== 'object') m.budgets = {};
+    if (!m.budgetPlans || typeof m.budgetPlans !== 'object') m.budgetPlans = {};
+    if (!m.dailyLimits || typeof m.dailyLimits !== 'object') m.dailyLimits = {};
+    return m;
+  }
+
   async function saveCashFlowMeta(meta) {
     // ── STEP 1: IndexedDB cache ──
     try { await _idb.cacheCFMeta(meta); } catch (_) {}
@@ -432,8 +441,14 @@ const HubDB = (function () {
               savingsBalance: Number(meta.savingsBalance) || 0,
               initBank: Number(meta.initBank) || 0,
               initCash: Number(meta.initCash) || 0,
-              budgets: meta.budgets || {}
-            }, { merge: true })
+              budgets: meta.budgets || {},
+              budgetPlans: meta.budgetPlans || {},
+              dailyLimits: meta.dailyLimits || {}
+            }, {
+              // mergeFields replaces each listed field WHOLESALE. A plain { merge: true } deep-merges maps,
+              // so a deleted budget / month would silently reappear after the next cloud load.
+              mergeFields: ['netWorthOffset', 'savingsBalance', 'initBank', 'initCash', 'budgets', 'budgetPlans', 'dailyLimits']
+            })
             .catch(function (err) {
               console.error('[HubDB] CashFlow Meta write failed:', err);
               throw err;
@@ -552,20 +567,20 @@ const HubDB = (function () {
   /**
    * ═══ SAFE LOAD for CashFlow metadata ═══
    *
-   * Load netWorthOffset + savingsBalance + initBank + initCash + budgets with the same tiered approach:
+   * Load netWorthOffset + savingsBalance + initBank + initCash + budgets + budgetPlans + dailyLimits with the same tiered approach:
    * Cloud → IndexedDB → localStorage → defaults.
    *
-   * @returns {Object} — { netWorthOffset: 0, savingsBalance: 0, initBank: 0, initCash: 0, budgets: {} }
+   * @returns {Object} — { netWorthOffset: 0, savingsBalance: 0, initBank: 0, initCash: 0, budgets: {}, budgetPlans: {}, dailyLimits: {} }
    */
   async function loadCashFlowMeta() {
-    var defaults = { netWorthOffset: 0, savingsBalance: 0, initBank: 0, initCash: 0, budgets: {} };
+    var defaults = { netWorthOffset: 0, savingsBalance: 0, initBank: 0, initCash: 0, budgets: {}, budgetPlans: {}, dailyLimits: {} };
 
     // STEP 1: Offline fast path — check IndexedDB first
     if (navigator.onLine === false) {
       try {
         var idbOffMeta = await _idb.loadCFMeta();
         if (idbOffMeta && typeof idbOffMeta.netWorthOffset !== 'undefined') {
-          if (!idbOffMeta.budgets) idbOffMeta.budgets = {};
+          _cfMetaFill(idbOffMeta);
           return idbOffMeta;
         }
       } catch (_) {}
@@ -573,7 +588,7 @@ const HubDB = (function () {
         var rawL = localStorage.getItem(CF_LOCAL_OFFSET);
         if (rawL) {
           var parsed = JSON.parse(rawL);
-          if (!parsed.budgets) parsed.budgets = {};
+          _cfMetaFill(parsed);
           return parsed;
         }
       } catch (_) {}
@@ -598,7 +613,9 @@ const HubDB = (function () {
               savingsBalance: Number(meta.savingsBalance) || 0,
               initBank: Number(meta.initBank) || 0,
               initCash: Number(meta.initCash) || 0,
-              budgets: meta.budgets || {}
+              budgets: meta.budgets || {},
+              budgetPlans: meta.budgetPlans || {},
+              dailyLimits: meta.dailyLimits || {}
             };
             await _idb.cacheCFMeta(resolved);
             localStorage.setItem(CF_LOCAL_OFFSET, JSON.stringify(resolved));
@@ -608,7 +625,9 @@ const HubDB = (function () {
             savingsBalance: Number(meta.savingsBalance) || 0,
             initBank: Number(meta.initBank) || 0,
             initCash: Number(meta.initCash) || 0,
-            budgets: meta.budgets || {}
+            budgets: meta.budgets || {},
+            budgetPlans: meta.budgetPlans || {},
+            dailyLimits: meta.dailyLimits || {}
           };
         }
         return defaults;
@@ -621,7 +640,7 @@ const HubDB = (function () {
     try {
       var idbMeta = await _idb.loadCFMeta();
       if (idbMeta && typeof idbMeta.netWorthOffset !== 'undefined') {
-        if (!idbMeta.budgets) idbMeta.budgets = {};
+        _cfMetaFill(idbMeta);
         return idbMeta;
       }
     } catch (_) {}
@@ -631,7 +650,7 @@ const HubDB = (function () {
       var raw = localStorage.getItem(CF_LOCAL_OFFSET);
       if (raw) {
         var parsed = JSON.parse(raw);
-        if (!parsed.budgets) parsed.budgets = {};
+        _cfMetaFill(parsed);
         return parsed;
       }
     } catch (_) {}
@@ -934,7 +953,10 @@ const HubDB = (function () {
       if (match && localDeck.cards && localDeck.cards.length) {
         localDeck.cards.forEach(function (localCard) {
           if (!localCard) return;
-          const cardMatch = match.cards.find(function (c) { return c && c.term === localCard.term; });
+          // Prefer the stable card id; fall back to term for cards created before ids existed
+          const cardMatch = match.cards.find(function (c) {
+            return c && ((localCard.id && c.id === localCard.id) || c.term === localCard.term);
+          });
           if (!cardMatch) {
             match.cards.push(localCard);
           } else if (!localCard.term || !localCard.term.trim()) {
@@ -1325,7 +1347,7 @@ const HubDB = (function () {
           }
         }
 
-        const defaultPomodoroData = { ...DEFAULT_POMODORO_DATA };
+        let defaultPomodoroData = { ...DEFAULT_POMODORO_DATA };
 
         try {
           const localRaw = localStorage.getItem(POMODORO_KEY);
@@ -1500,6 +1522,110 @@ const HubDB = (function () {
     return { ...DEFAULT_FLASHCARD_SETTINGS, schema: DEFAULT_FLASHCARD_SETTINGS.schema.map(function (s) { return { ...s }; }) };
   }
 
+  // ── Flashcard review history (compact daily aggregates) ──
+
+  const FLASHCARD_STATS_KEY = 'hub_flashcard_stats';
+
+  /** Path: users/{userId}/flashcard_store/stats — kept out of the (large) decks document. */
+  function _flashcardStatsDocRef() {
+    if (!_isOnline()) return null;
+    return _db.collection('users').doc(_user.uid).collection('flashcard_store').doc('stats');
+  }
+
+  /** Union of two { daily: {...} } histories — per day and per counter the larger value wins. */
+  function _mergeFlashcardStats(a, b) {
+    var out = { daily: {} };
+    [a, b].forEach(function (src) {
+      if (!src || !src.daily) return;
+      Object.keys(src.daily).forEach(function (day) {
+        var from = src.daily[day] || {};
+        var to = out.daily[day] || (out.daily[day] = { decks: {} });
+        Object.keys(from).forEach(function (k) {
+          if (k === 'decks') {
+            Object.keys(from.decks || {}).forEach(function (id) {
+              var dd = from.decks[id] || {};
+              var td = to.decks[id] || (to.decks[id] = {});
+              Object.keys(dd).forEach(function (f) { td[f] = Math.max(td[f] || 0, Number(dd[f]) || 0); });
+            });
+          } else if (typeof from[k] === 'number') {
+            to[k] = Math.max(to[k] || 0, from[k]);
+          }
+        });
+      });
+    });
+    return out;
+  }
+
+  // Last known cloud copy of the stats doc (already merged with what this device wrote).
+  // Lets us merge-before-write without a Firestore read on every single rating.
+  const STATS_BASE_TTL = 30000;           // ms — re-read the cloud copy at most this often
+  var _statsCloudBase = null;
+  var _statsBaseAt    = 0;
+  var _statsBaseUid   = null;
+
+  /**
+   * Save the review history.
+   * Read-merge-write: the cloud copy is merged in (per day / per counter, larger value wins) BEFORE writing,
+   * so a second device can no longer overwrite what the first one recorded.
+   * @param {object}  data
+   * @param {{force?: boolean}} [opts] force = always re-read the cloud copy first (use at end of a session)
+   * @returns {Promise<object|null>} the merged history that now lives in the cloud (null if it could not be synced)
+   */
+  async function saveFlashcardStats(data, opts) {
+    // Always mirror locally first (offline-safe, and merged back in on the next cloud load)
+    try { localStorage.setItem(FLASHCARD_STATS_KEY, JSON.stringify(data)); } catch (_) {}
+
+    await _ensureReady();
+    if (!_isOnline()) return null;
+
+    try {
+      var ref = _flashcardStatsDocRef();
+      var uid = _user.uid;
+      var stale = !_statsCloudBase || _statsBaseUid !== uid || (Date.now() - _statsBaseAt) > STATS_BASE_TTL;
+      if ((opts && opts.force) || stale) {
+        // If this read fails we do NOT write: overwriting a cloud copy we could not see is how data gets lost.
+        var doc = await Promise.race([ref.get(), _timeout(2500)]);
+        _statsCloudBase = (doc && doc.exists && doc.data().payload) || { daily: {} };
+        _statsBaseAt  = Date.now();
+        _statsBaseUid = uid;
+      }
+      var merged = _mergeFlashcardStats(_statsCloudBase, data);
+      await Promise.race([ref.set({ payload: merged }), _timeout(2500)]);
+      _statsCloudBase = merged;
+      try { localStorage.setItem(FLASHCARD_STATS_KEY, JSON.stringify(merged)); } catch (_) {}
+      return merged;
+    } catch (err) {
+      _statsCloudBase = null;               // force a fresh read next time
+      console.error('[HubDB] Flashcard stats sync failed (kept locally, will merge on next save):', err.message || err);
+      return null;
+    }
+  }
+
+  async function loadFlashcardStats() {
+    var local = null;
+    try {
+      var raw = localStorage.getItem(FLASHCARD_STATS_KEY);
+      if (raw) local = JSON.parse(raw);
+    } catch (_) {}
+
+    if (navigator.onLine === false) return local || { daily: {} };
+    await _ensureReady();
+
+    if (_isOnline()) {
+      try {
+        var doc = await Promise.race([
+          _flashcardStatsDocRef().get(),
+          _timeout(2500)
+        ]);
+        var cloud = (doc && doc.exists && doc.data().payload) || null;
+        return _mergeFlashcardStats(cloud, local);
+      } catch (err) {
+        console.warn('[HubDB] Flashcard stats load failed, using local copy:', err.message || err);
+      }
+    }
+    return local || { daily: {} };
+  }
+
   // ── Time Management ──
 
   const TM_LOCAL_KEY = 'hub_tm_data';
@@ -1602,6 +1728,8 @@ const HubDB = (function () {
     loadPomodoroData: loadPomodoroData,
     saveFlashcardSettings: saveFlashcardSettings,
     loadFlashcardSettings: loadFlashcardSettings,
+    saveFlashcardStats: saveFlashcardStats,
+    loadFlashcardStats: loadFlashcardStats,
     saveTimeManagementData: saveTimeManagementData,
     loadTimeManagementData: loadTimeManagementData,
     loginWithGoogle: loginWithGoogle,

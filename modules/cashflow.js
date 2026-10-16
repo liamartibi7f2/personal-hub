@@ -693,6 +693,29 @@ const cashflowModule = (function () {
       optionBank:           'Chuyển khoản (Bank)',
       hintRecoveryNoIncome: 'Tiền nợ sẽ được cộng vào ví bạn chọn. Loại này <strong>không tính vào Thu nhập</strong>.',
       btnConfirm:           'Xác nhận',
+      // Cho vay: trừ tiền ví + lãi
+      labelLendSource:      'Trừ tiền từ',
+      optionLendBank:       'Chuyển khoản (Bank)',
+      optionLendCash:       'Tiền mặt (Cash)',
+      optionLendNone:       'Không trừ ví (ghi lại nợ cũ)',
+      hintLend:             'Số tiền cho vay sẽ <strong>trừ khỏi ví đã chọn</strong> và không tính là Chi tiêu.',
+      labelInterest:        'Tiền lãi (không bắt buộc)',
+      placeholderInterest:  'VD: 5 hoặc 50000',
+      optInterestPct:       '% trên gốc',
+      optInterestFixed:     'Số tiền (₫)',
+      interestPreview:      'Lãi dự kiến: {interest} · Tổng thu về: {total}',
+      labelInterestCollect: 'Tiền lãi thu được',
+      hintInterestCollect:  'Lãi được ghi vào <strong>Thu nhập</strong>. Để 0 nếu không có lãi.',
+      recoveryTotal:        'Gốc {principal} + lãi {interest} = {total} vào ví',
+      dlLendFrom:           'Trừ từ',
+      dlLendBank:           'Bank',
+      dlLendCash:           'Tiền mặt',
+      dlLendNone:           'Không trừ ví',
+      dlInterest:           'Lãi',
+      dlTotalBack:          'Tổng thu',
+      toastLentFrom:        '💸 Đã trừ {amount} từ {wallet}',
+      descLend:             'Cho vay: ',
+      descInterest:         'Lãi cho vay: ',
 
       // Sổ nợ v2
       dlFiltersLabel: 'Lọc theo trạng thái', dlFilterAll: 'Tất cả', dlFilterOverdue: 'Quá hạn', dlFilterSoon: 'Sắp đến hạn', dlFilterPaid: 'Đã trả',
@@ -701,7 +724,17 @@ const cashflowModule = (function () {
       dlOverdueDays: 'Quá hạn {n} ngày', dlDueToday: 'Đến hạn hôm nay', dlDueIn: 'Còn {n} ngày', dlPaidOn: 'Đã thu {d}',
       dlBorrowed: 'Ngày mượn', dlDueDate: 'Hạn trả', dlHeldDays: 'Đã mượn {n} ngày', dlNoNote: 'Không có ghi chú',
       dlProgress: 'Thời gian từ ngày mượn đến hạn trả', dlNoResult: 'Không có khoản nợ nào khớp bộ lọc',
-      dlDeleted: 'Đã xóa khoản nợ của {name}', dlUndo: 'Hoàn tác', dlUndone: 'Đã hoàn tác', dlPaidDone: 'Đã ghi nhận thu {amount} từ {name}'
+      dlDeleted: 'Đã xóa khoản nợ của {name}', dlUndo: 'Hoàn tác', dlUndone: 'Đã hoàn tác', dlPaidDone: 'Đã ghi nhận thu {amount} từ {name}',
+      dlSortName: 'Tên A–Z', dlSubtitle: 'dự kiến thu về · {n} khoản đang chờ', dlPrincipal: 'Số tiền gốc', dlHeldLabel: 'Thời gian cho mượn', dlDaysUnit: '{n} ngày', dlNoteLabel: 'Ghi chú',
+      // Form thêm/sửa nợ v3
+      dfSecBorrower: 'Người vay', dfSecLoan: 'Nguồn tiền & lãi', dfSecSchedule: 'Thời hạn thu hồi', dfQuick: 'Chọn nhanh',
+      dfAvailable: 'Số dư khả dụng', dfLeft: 'Còn lại', dfShort: 'Thiếu {n}', dfWalletNone: 'Không trừ ví — chỉ ghi lại khoản nợ đã có.',
+      dfSegPct: 'Theo %', dfSegFixed: 'Cố định ₫', dfInterestIs: 'Tiền lãi: {interest}', dfDueIn: 'Hạn sau',
+      dfTerm: 'Kỳ hạn {n} ngày', dfTermSame: 'Thu trong ngày', dfChipDays: '+{n} ngày', dfChipMonths: '+{n} tháng', dfChipMonth: '+1 tháng',
+      dfErrDebtor: 'Nhập tên người mượn.', dfErrAmount: 'Nhập số tiền lớn hơn 0.', dfErrDateBorrowed: 'Chọn ngày mượn.',
+      dfErrDateReturn: 'Chọn hạn trả.', dfErrDateOrder: 'Hạn trả không được trước ngày mượn.',
+      dfSumTitle: 'Tóm tắt khoản vay', dfSumEmpty: 'Nhập số tiền để xem tóm tắt.', dfSumPrincipal: 'Tiền gốc', dfSumInterest: 'Tiền lãi',
+      dfSumTotal: 'Tổng thu về', dfSumDue: 'Hạn trả'
     },
     en: {
       debtSummaryTitle:     'POCKET DEBT',
@@ -755,6 +788,29 @@ const cashflowModule = (function () {
       optionBank:           'Bank Transfer',
       hintRecoveryNoIncome: 'Money will be added to selected wallet. This does <strong>not count as Income</strong>.',
       btnConfirm:           'Confirm',
+      // Lending: deduct wallet + interest
+      labelLendSource:      'Deduct from',
+      optionLendBank:       'Bank Transfer',
+      optionLendCash:       'Cash (Physical)',
+      optionLendNone:       'Do not deduct (record old loan)',
+      hintLend:             'The loan amount will be <strong>deducted from the selected wallet</strong> and is not counted as Expense.',
+      labelInterest:        'Interest (optional)',
+      placeholderInterest:  'e.g. 5 or 50000',
+      optInterestPct:       '% of principal',
+      optInterestFixed:     'Fixed amount (₫)',
+      interestPreview:      'Expected interest: {interest} · Total back: {total}',
+      labelInterestCollect: 'Interest received',
+      hintInterestCollect:  'Interest is recorded as <strong>Income</strong>. Leave 0 if none.',
+      recoveryTotal:        'Principal {principal} + interest {interest} = {total} into wallet',
+      dlLendFrom:           'Deducted from',
+      dlLendBank:           'Bank',
+      dlLendCash:           'Cash',
+      dlLendNone:           'Not deducted',
+      dlInterest:           'Interest',
+      dlTotalBack:          'Total back',
+      toastLentFrom:        '💸 Deducted {amount} from {wallet}',
+      descLend:             'Loan to ',
+      descInterest:         'Loan interest: ',
 
       // Debt ledger v2
       dlFiltersLabel: 'Filter by status', dlFilterAll: 'All', dlFilterOverdue: 'Overdue', dlFilterSoon: 'Due soon', dlFilterPaid: 'Paid',
@@ -763,7 +819,17 @@ const cashflowModule = (function () {
       dlOverdueDays: 'Overdue {n} days', dlDueToday: 'Due today', dlDueIn: '{n} days left', dlPaidOn: 'Paid {d}',
       dlBorrowed: 'Borrowed', dlDueDate: 'Due', dlHeldDays: 'Borrowed {n} days', dlNoNote: 'No note',
       dlProgress: 'Time from borrowed date to due date', dlNoResult: 'No debts match this filter',
-      dlDeleted: 'Deleted debt from {name}', dlUndo: 'Undo', dlUndone: 'Undone', dlPaidDone: 'Recorded {amount} collected from {name}'
+      dlDeleted: 'Deleted debt from {name}', dlUndo: 'Undo', dlUndone: 'Undone', dlPaidDone: 'Recorded {amount} collected from {name}',
+      dlSortName: 'Name A–Z', dlSubtitle: 'expected back · {n} pending', dlPrincipal: 'Principal', dlHeldLabel: 'Time lent', dlDaysUnit: '{n} days', dlNoteLabel: 'Note',
+      // Debt form v3
+      dfSecBorrower: 'Borrower', dfSecLoan: 'Funding & interest', dfSecSchedule: 'Repayment schedule', dfQuick: 'Quick pick',
+      dfAvailable: 'Available', dfLeft: 'Left', dfShort: 'Short by {n}', dfWalletNone: 'No wallet deduction — records an existing loan only.',
+      dfSegPct: 'By %', dfSegFixed: 'Fixed ₫', dfInterestIs: 'Interest: {interest}', dfDueIn: 'Due in',
+      dfTerm: 'Term: {n} days', dfTermSame: 'Same-day repayment', dfChipDays: '+{n} days', dfChipMonths: '+{n} months', dfChipMonth: '+1 month',
+      dfErrDebtor: 'Enter the debtor name.', dfErrAmount: 'Enter an amount greater than 0.', dfErrDateBorrowed: 'Pick the borrowed date.',
+      dfErrDateReturn: 'Pick the return date.', dfErrDateOrder: 'Return date cannot be before the borrowed date.',
+      dfSumTitle: 'Loan summary', dfSumEmpty: 'Enter an amount to see the summary.', dfSumPrincipal: 'Principal', dfSumInterest: 'Interest',
+      dfSumTotal: 'Total back', dfSumDue: 'Due'
     }
   };
 
@@ -1067,7 +1133,7 @@ const cashflowModule = (function () {
     txs.forEach(function (tx) {
       if (!tx || typeof tx.category !== 'string' || !tx.category) return;
       var raw = tx.category;
-      if (raw === 'thu-no' || raw === 'Thu nợ') return;           // thu hồi nợ: giữ nguyên (logic riêng)
+      if (raw === 'thu-no' || raw === 'Thu nợ' || raw === 'cho-vay') return;  // thu hồi nợ / cho vay: giữ nguyên (logic riêng)
       var lookup = tx.type === 'income' ? _catLookupIncome : _catLookupExpense;
       var own = function (k) { return Object.prototype.hasOwnProperty.call(lookup, k) ? lookup[k] : undefined; };
       if (own(raw) === raw) return;                                // đã là mã hợp lệ
@@ -1100,6 +1166,19 @@ const cashflowModule = (function () {
   // ══════════════════════════════════════════════════════════════
   // DEBT UTILITIES
   // ══════════════════════════════════════════════════════════════
+
+  /** Khoản chi "Cho vay": tiền rời ví nhưng vẫn là tài sản (khoản phải thu) → không tính là chi tiêu thật */
+  function _isLoanOut(tx) {
+    return !!tx && tx.type === 'expense' && tx.category === 'cho-vay';
+  }
+
+  /** Tính tiền lãi: type 'pct' (% trên gốc) hoặc 'fixed' (số tiền cố định) */
+  function _calcInterest(principal, type, value) {
+    var v = Number(value) || 0;
+    if (v <= 0) return 0;
+    if (type === 'pct') return Math.round((Number(principal) || 0) * v / 100);
+    return Math.round(v);
+  }
 
   function _generateDebtId() {
     return 'debt_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
@@ -1419,7 +1498,7 @@ const cashflowModule = (function () {
   /** Sum expense for a month */
   function _getMonthlyExpense(year, month) {
     const txs = _getMonthTransactions(year, month);
-    return txs.filter(function (tx) { return tx.type === 'expense'; }).reduce(function (sum, tx) { return sum + (tx.amount || 0); }, 0);
+    return txs.filter(function (tx) { return tx.type === 'expense' && !_isLoanOut(tx); }).reduce(function (sum, tx) { return sum + (tx.amount || 0); }, 0);
   }
 
   /** Get ALL transactions sorted by date descending */
@@ -1487,6 +1566,7 @@ const cashflowModule = (function () {
 
   // ── Tên hiển thị cho danh mục hệ thống / không có trong danh sách ──
 var _SYSTEM_CATEGORY_NAMES = {
+    'cho-vay': { en: '💸 Loan Given',      vi: '💸 Cho vay' },
     'thu-no':  { en: '🤝 Debt Collection', vi: '🤝 Thu nợ' },
     'Thu nợ':  { en: '🤝 Debt Collection', vi: '🤝 Thu nợ' },
     'unknown': { en: '🏷️ Uncategorized',   vi: '🏷️ Chưa phân loại' }
@@ -3347,7 +3427,10 @@ function _restoreAIState() {
 <!-- ═══ POCKET DEBT LEDGER ═══ -->
 <div class="hub-cf-debt-ledger glass-card">
   <div class="hub-cf-debt-header">
-    <h4 class="hub-cf-debt-title" data-i18n="ledgerTitle">${_pd_t('ledgerTitle')}</h4>
+    <div class="hub-cf-debt-heading">
+      <h4 class="hub-cf-debt-title" data-i18n="ledgerTitle">${_pd_t('ledgerTitle')}</h4>
+      <p class="hub-cf-debt-subtitle" id="dl-subtitle" aria-live="polite"></p>
+    </div>
     <div class="hub-cf-debt-actions">
       <button class="hub-cf-btn hub-cf-btn--add-debt" id="hub-cf-btn-add-debt">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -3485,34 +3568,109 @@ ${_aiShellHTML()}
     </div>
 
     <div class="hub-cf-modal-body">
-      <form id="hub-cf-debt-form" autocomplete="off">
-        <div class="hub-cf-form-group">
-          <label class="hub-cf-form-label" for="hub-cf-debt-debtor" data-i18n="labelDebtorName">${_pd_t('labelDebtorName')}</label>
-          <input type="text" id="hub-cf-debt-debtor" class="hub-cf-form-input"
-                 data-i18n-placeholder="placeholderDebtor"
-                 placeholder="${_pd_t('placeholderDebtor')}" maxlength="80" required />
-        </div>
-        <div class="hub-cf-form-group">
-          <label class="hub-cf-form-label" for="hub-cf-debt-amount" data-i18n="labelAmount">${_pd_t('labelAmount')}</label>
-          <input type="text" id="hub-cf-debt-amount" class="hub-cf-form-input hub-cf-amount-input"
-                 placeholder="${_pd_t('placeholderAmount')}" required inputmode="numeric" />
-        </div>
-        <div class="hub-cf-form-grid">
+      <form id="hub-cf-debt-form" autocomplete="off" novalidate>
+
+        <!-- ① Người vay + số tiền -->
+        <div class="hub-cf-df-sec" role="group" aria-labelledby="hub-cf-df-t1">
+          <h4 class="hub-cf-df-sec-title" id="hub-cf-df-t1" data-i18n="dfSecBorrower">${_pd_t('dfSecBorrower')}</h4>
           <div class="hub-cf-form-group">
-            <label class="hub-cf-form-label" for="hub-cf-debt-date-borrowed" data-i18n="labelDateBorrowed">${_pd_t('labelDateBorrowed')}</label>
-            <input type="date" id="hub-cf-debt-date-borrowed" class="hub-cf-form-input hub-cf-date-input" required />
+            <label class="hub-cf-form-label" for="hub-cf-debt-debtor" data-i18n="labelDebtorName">${_pd_t('labelDebtorName')}</label>
+            <input type="text" id="hub-cf-debt-debtor" class="hub-cf-form-input" list="hub-cf-debt-debtor-list"
+                   data-i18n-placeholder="placeholderDebtor" placeholder="${_pd_t('placeholderDebtor')}" maxlength="80"
+                   aria-required="true" aria-describedby="hub-cf-debt-err-debtor" />
+            <datalist id="hub-cf-debt-debtor-list"></datalist>
+            <p class="hub-cf-df-err" id="hub-cf-debt-err-debtor" role="alert" hidden></p>
           </div>
           <div class="hub-cf-form-group">
-            <label class="hub-cf-form-label" for="hub-cf-debt-expected-return" data-i18n="labelExpectedReturn">${_pd_t('labelExpectedReturn')}</label>
-            <input type="date" id="hub-cf-debt-expected-return" class="hub-cf-form-input hub-cf-date-input" required />
+            <div class="hub-cf-df-labelrow">
+              <label class="hub-cf-form-label" for="hub-cf-debt-amount" data-i18n="labelAmount">${_pd_t('labelAmount')}</label>
+              <span class="hub-cf-df-live" id="hub-cf-debt-amount-live" aria-live="polite"></span>
+            </div>
+            <div class="hub-cf-df-field">
+              <input type="text" id="hub-cf-debt-amount" class="hub-cf-form-input hub-cf-amount-input"
+                     placeholder="${_pd_t('placeholderAmount')}" inputmode="numeric" aria-required="true" aria-describedby="hub-cf-debt-err-amount" />
+              <span class="hub-cf-df-suffix" aria-hidden="true">₫</span>
+            </div>
+            <div class="hub-cf-df-chips" id="hub-cf-debt-amount-chips" role="group" aria-label="${_pd_t('dfQuick')}">
+              <button type="button" class="hub-cf-df-chip" data-add="500000">+500K</button>
+              <button type="button" class="hub-cf-df-chip" data-add="1000000">+1M</button>
+              <button type="button" class="hub-cf-df-chip" data-add="5000000">+5M</button>
+              <button type="button" class="hub-cf-df-chip" data-add="10000000">+10M</button>
+            </div>
+            <p class="hub-cf-df-err" id="hub-cf-debt-err-amount" role="alert" hidden></p>
           </div>
         </div>
+
+        <!-- ② Nguồn tiền + lãi -->
+        <div class="hub-cf-df-sec" role="group" aria-labelledby="hub-cf-df-t2">
+          <h4 class="hub-cf-df-sec-title" id="hub-cf-df-t2" data-i18n="dfSecLoan">${_pd_t('dfSecLoan')}</h4>
+          <div class="hub-cf-form-group">
+            <label class="hub-cf-form-label" for="hub-cf-debt-lend-source" data-i18n="labelLendSource">${_pd_t('labelLendSource')}</label>
+            <select id="hub-cf-debt-lend-source" class="hub-cf-form-input">
+              <option value="bank" selected data-i18n="optionLendBank">${_pd_t('optionLendBank')}</option>
+              <option value="cash" data-i18n="optionLendCash">${_pd_t('optionLendCash')}</option>
+              <option value="none" data-i18n="optionLendNone">${_pd_t('optionLendNone')}</option>
+            </select>
+            <p class="hub-cf-df-wallet" id="hub-cf-debt-wallet-note" aria-live="polite"></p>
+            <p class="hub-cf-form-hint" data-i18n="hintLend">${_pd_t('hintLend')}</p>
+          </div>
+          <div class="hub-cf-form-group">
+            <label class="hub-cf-form-label" for="hub-cf-debt-interest" data-i18n="labelInterest">${_pd_t('labelInterest')}</label>
+            <div class="hub-cf-debt-interest-row">
+              <div class="hub-cf-df-field">
+                <input type="text" id="hub-cf-debt-interest" class="hub-cf-form-input"
+                       data-i18n-placeholder="placeholderInterest" placeholder="${_pd_t('placeholderInterest')}" inputmode="decimal" />
+                <span class="hub-cf-df-suffix" id="hub-cf-debt-interest-unit" aria-hidden="true">%</span>
+              </div>
+              <div class="hub-cf-df-seg" id="hub-cf-debt-interest-seg" role="radiogroup" aria-label="${_pd_t('labelInterest')}">
+                <button type="button" class="hub-cf-df-seg-btn" role="radio" data-type="pct" aria-checked="true" data-i18n="dfSegPct">${_pd_t('dfSegPct')}</button>
+                <button type="button" class="hub-cf-df-seg-btn" role="radio" data-type="fixed" aria-checked="false" data-i18n="dfSegFixed">${_pd_t('dfSegFixed')}</button>
+              </div>
+            </div>
+            <select id="hub-cf-debt-interest-type" class="hub-cf-df-sr" tabindex="-1" aria-hidden="true">
+              <option value="pct" selected data-i18n="optInterestPct">${_pd_t('optInterestPct')}</option>
+              <option value="fixed" data-i18n="optInterestFixed">${_pd_t('optInterestFixed')}</option>
+            </select>
+            <p class="hub-cf-debt-interest-preview" id="hub-cf-debt-interest-preview" aria-live="polite"></p>
+          </div>
+        </div>
+
+        <!-- ③ Thời hạn -->
+        <div class="hub-cf-df-sec" role="group" aria-labelledby="hub-cf-df-t3">
+          <h4 class="hub-cf-df-sec-title" id="hub-cf-df-t3" data-i18n="dfSecSchedule">${_pd_t('dfSecSchedule')}</h4>
+          <div class="hub-cf-form-grid">
+            <div class="hub-cf-form-group">
+              <label class="hub-cf-form-label" for="hub-cf-debt-date-borrowed" data-i18n="labelDateBorrowed">${_pd_t('labelDateBorrowed')}</label>
+              <input type="date" id="hub-cf-debt-date-borrowed" class="hub-cf-form-input hub-cf-date-input" aria-required="true" />
+            </div>
+            <div class="hub-cf-form-group">
+              <label class="hub-cf-form-label" for="hub-cf-debt-expected-return" data-i18n="labelExpectedReturn">${_pd_t('labelExpectedReturn')}</label>
+              <input type="date" id="hub-cf-debt-expected-return" class="hub-cf-form-input hub-cf-date-input" aria-required="true" aria-describedby="hub-cf-debt-err-dates" />
+            </div>
+          </div>
+          <div class="hub-cf-df-chips" id="hub-cf-debt-due-chips" role="group">
+            <span class="hub-cf-df-chips-label" data-i18n="dfDueIn">${_pd_t('dfDueIn')}</span>
+            <button type="button" class="hub-cf-df-chip" data-days="7" data-months="0"></button>
+            <button type="button" class="hub-cf-df-chip" data-days="14" data-months="0"></button>
+            <button type="button" class="hub-cf-df-chip" data-days="0" data-months="1"></button>
+            <button type="button" class="hub-cf-df-chip" data-days="0" data-months="3"></button>
+          </div>
+          <p class="hub-cf-df-term" id="hub-cf-debt-term" aria-live="polite"></p>
+          <p class="hub-cf-df-err" id="hub-cf-debt-err-dates" role="alert" hidden></p>
+        </div>
+
+        <!-- ④ Ghi chú -->
         <div class="hub-cf-form-group">
           <label class="hub-cf-form-label" for="hub-cf-debt-note" data-i18n="labelNote">${_pd_t('labelNote')}</label>
           <textarea id="hub-cf-debt-note" class="hub-cf-form-input hub-cf-textarea"
                     data-i18n-placeholder="placeholderNote"
                     placeholder="${_pd_t('placeholderNote')}" maxlength="200" rows="2"></textarea>
+          <div class="hub-cf-df-count" id="hub-cf-debt-note-count" aria-hidden="true">0/200</div>
         </div>
+
+        <!-- Tóm tắt trực tiếp -->
+        <div class="hub-cf-df-summary" id="hub-cf-debt-summary" aria-live="polite"></div>
+
         <div class="hub-cf-form-actions">
           <button type="button" class="hub-cf-modal-btn hub-cf-modal-btn--cancel" id="hub-cf-debt-btn-cancel" data-i18n="btnCancel">${_pd_t('btnCancel')}</button>
           <button type="submit" class="hub-cf-modal-btn hub-cf-modal-btn--save" id="hub-cf-debt-btn-save" data-i18n="btnSave">${_pd_t('btnSave')}</button>
@@ -3555,7 +3713,13 @@ ${_aiShellHTML()}
             <option value="bank" selected data-i18n="optionBank">${_pd_t('optionBank')}</option>
           </select>
         </div>
+        <div class="hub-cf-form-group">
+          <label class="hub-cf-form-label" for="debt-recovery-interest" data-i18n="labelInterestCollect">${_pd_t('labelInterestCollect')}</label>
+          <input type="text" id="debt-recovery-interest" class="hub-cf-form-input hub-cf-amount-input" value="0" inputmode="numeric" />
+          <p class="hub-cf-form-hint" data-i18n="hintInterestCollect">${_pd_t('hintInterestCollect')}</p>
+        </div>
         <p class="hub-cf-form-hint" data-i18n="hintRecoveryNoIncome">${_pd_t('hintRecoveryNoIncome')}</p>
+        <p class="hub-cf-debt-interest-preview" id="debt-recovery-total" aria-live="polite"></p>
         <div class="hub-cf-form-actions">
           <button type="button" class="hub-cf-modal-btn hub-cf-modal-btn--cancel" id="hub-cf-debt-recovery-btn-cancel" data-i18n="btnCancel">${_pd_t('btnCancel')}</button>
           <button type="button" class="hub-cf-modal-btn hub-cf-modal-btn--save" id="hub-cf-debt-recovery-btn-confirm" data-i18n="btnConfirm">${_pd_t('btnConfirm')}</button>
@@ -3640,7 +3804,7 @@ ${_aiShellHTML()}
    *
    * @param {'en'|'vi'} lang — the new language code
    */
-  var _HTML_I18N_KEYS = { noTxHint: true, noDebtsHint: true, hintRecoveryNoIncome: true };
+  var _HTML_I18N_KEYS = { noTxHint: true, noDebtsHint: true, hintRecoveryNoIncome: true, hintLend: true, hintInterestCollect: true };
   var _DEBT_SCOPES = '.hub-cf-debt-ledger, #hub-cf-debt-overlay, #hub-cf-debt-history-overlay, #hub-cf-debt-recovery-overlay';
 
   function updateCashFlowLanguage(lang) {
@@ -3756,6 +3920,7 @@ ${_aiShellHTML()}
     _getMonthTransactions(year, month).forEach(function (tx) {
       if (maxDay && (tx.day || 1) > maxDay) return;
       if (_cfdIsSavingsRelated(tx)) return;
+      if (_isLoanOut(tx)) return;   // cho vay không phải chi tiêu
       var amt = Number(tx.amount) || 0;
       if (tx.type === 'income') { if (!_cfdIsDebtRecovery(tx)) agg.income += amt; }
       else { agg.expense += amt; agg.byCat[tx.category] = (agg.byCat[tx.category] || 0) + amt; }
@@ -4043,7 +4208,7 @@ ${_aiShellHTML()}
         else if (tx.source === 'savings') savingsIncome += tx.amount;
       } else {
         // Only count as global expense if NOT an internal savings transfer
-        if (!isSavingsRelated) {
+        if (!isSavingsRelated && !_isLoanOut(tx)) {   // 🔑 cho vay là chuyển tài sản, không phải chi tiêu
           totalExpense += (tx.amount || 0);
         }
         if (tx.source === 'bank') bankExpense += tx.amount;
@@ -4357,7 +4522,7 @@ ${_aiShellHTML()}
     var isSavings = tx.source === 'savings' || tx.category === 'tiet-kiem' ||
       tx.category === 'Tiết kiệm' || tx.category === '🐷 Tiết kiệm';
     var isDebtRecovery = tx.type === 'income' && (tx.category === 'thu-no' || tx.category === 'Thu nợ');
-    if (isSavings || isDebtRecovery) return 'transfer';
+    if (isSavings || isDebtRecovery || _isLoanOut(tx)) return 'transfer';
     return tx.type === 'income' ? 'income' : 'expense';
   }
 
@@ -5085,35 +5250,58 @@ ${_aiShellHTML()}
     return Math.max(0, Math.min(100, (_dlToday() - b) / span * 100));
   }
 
+  function _dlHeldDays(debt) {
+    var b = new Date(String(debt.dateBorrowed || '') + 'T00:00:00');
+    if (isNaN(b.getTime())) return null;
+    var end = _getDebtStatus(debt) === 'paid' && debt.paidAt ? new Date(debt.paidAt) : new Date();
+    end.setHours(0, 0, 0, 0);
+    return Math.max(0, Math.round((end - b) / 86400000));
+  }
+
+  function _dlKV(label, value, cls) {
+    return '<div class="dl-kv' + (cls ? ' ' + cls : '') + '"><span class="dl-kv-l">' + _escHtml(label) + '</span><span class="dl-kv-v">' + value + '</span></div>';
+  }
+
   function _dlRowHTML(debt) {
     var info = _dlStatusInfo(debt), paid = _getDebtStatus(debt) === 'paid';
     var open = !!_dlUI.open[debt.id], id = _escHtml(debt.id);
     var name = String(debt.debtorName || '?');
-    var held = (function () {
-      var b = new Date(String(debt.dateBorrowed || '') + 'T00:00:00');
-      if (isNaN(b.getTime())) return '—';
-      var end = paid && debt.paidAt ? new Date(debt.paidAt) : new Date();
-      end.setHours(0, 0, 0, 0);
-      return _pd_t('dlHeldDays').replace('{n}', Math.max(0, Math.round((end - b) / 86400000)));
-    })();
-    var sub = debt.note ? _escHtml(debt.note) : _escHtml(_pd_t('dlDueDate')) + ' ' + _escHtml(_formatDateISOtoVN(debt.expectedReturnDate));
+    var principal = Number(debt.amount) || 0;
+    var interest = paid ? (Number(debt.interestPaid) || 0) : (Number(debt.interestAmount) || 0);
+    var srcKey = debt.lendSource === 'cash' ? 'dlLendCash' : (debt.lendSource === 'bank' ? 'dlLendBank' : 'dlLendNone');
+    var heldN = _dlHeldDays(debt);
+    var progress = _dlProgress(debt);
 
-    var html = '<div class="dl-item dl-item--' + info.tone + (open ? ' is-open' : '') + '" role="listitem" data-debt-id="' + id + '">' +
+    var sub = _escHtml(_pd_t('dlDueDate')) + ' ' + _escHtml(_formatDateISOtoVN(debt.expectedReturnDate)) +
+      (debt.note ? ' · ' + _escHtml(debt.note) : '');
+    var amtHtml = _escHtml(_formatVND(principal)) +
+      (interest > 0 ? '<small class="dl-amt-plus">+' + _escHtml(_formatVND(interest)) + '</small>' : '');
+
+    var grid = _dlKV(_pd_t('dlPrincipal'), _escHtml(_formatVND(principal)));
+    if (interest > 0) {
+      grid += _dlKV(_pd_t('dlInterest'), '+' + _escHtml(_formatVND(interest)), 'dl-kv--pos') +
+              _dlKV(_pd_t('dlTotalBack'), _escHtml(_formatVND(principal + interest)), 'dl-kv--strong');
+    }
+    grid += _dlKV(_pd_t('dlLendFrom'), _escHtml(_pd_t(srcKey))) +
+            _dlKV(_pd_t('dlHeldLabel'), heldN === null ? '—' : _escHtml(_pd_t('dlDaysUnit').replace('{n}', heldN))) +
+            _dlKV(_pd_t('dlNoteLabel'), debt.note ? _escHtml(debt.note) : '<em>' + _escHtml(_pd_t('dlNoNote')) + '</em>', 'dl-kv--wide');
+
+    return '<div class="dl-item dl-item--' + info.tone + (open ? ' is-open' : '') + '" role="listitem" data-debt-id="' + id + '">' +
       '<button type="button" class="dl-head" aria-expanded="' + (open ? 'true' : 'false') + '" aria-controls="dl-p-' + id + '">' +
         '<span class="dl-avatar" aria-hidden="true">' + _escHtml(name.trim().charAt(0).toUpperCase() || '?') + '</span>' +
         '<span class="dl-who"><span class="dl-name">' + _escHtml(name) + '</span><span class="dl-sub">' + sub + '</span></span>' +
-        '<span class="dl-amt">' + _escHtml(_formatVND(debt.amount)) + '</span>' +
+        '<span class="dl-amt">' + amtHtml + '</span>' +
         '<span class="dl-chip dl-chip--' + info.tone + '">' + info.icon + '<span>' + _escHtml(info.text) + '</span></span>' +
         _DL_ICONS.chev +
+        (paid ? '' : '<i class="dl-bar dl-bar--' + info.tone + '" style="width:' + progress.toFixed(1) + '%" aria-hidden="true"></i>') +
       '</button>' +
       '<div class="dl-panel" id="dl-p-' + id + '" role="region" aria-label="' + _escHtml(name) + '"' + (open ? '' : ' hidden') + '>' +
         '<div class="dl-timeline" role="img" aria-label="' + _escHtml(_pd_t('dlProgress')) + '">' +
-          '<div class="dl-track"><i class="dl-fill dl-fill--' + info.tone + '" style="width:' + _dlProgress(debt).toFixed(1) + '%"></i></div>' +
+          '<div class="dl-track"><i class="dl-fill dl-fill--' + info.tone + '" style="width:' + progress.toFixed(1) + '%"></i></div>' +
           '<div class="dl-tl-labels"><span>' + _escHtml(_pd_t('dlBorrowed')) + ' · ' + _escHtml(_formatDateISOtoVN(debt.dateBorrowed)) + '</span>' +
           '<span>' + _escHtml(_pd_t('dlDueDate')) + ' · ' + _escHtml(_formatDateISOtoVN(debt.expectedReturnDate)) + '</span></div>' +
         '</div>' +
-        '<div class="dl-facts"><span class="dl-fact">' + _escHtml(held) + '</span>' +
-          '<span class="dl-fact dl-fact--note">' + (debt.note ? _escHtml(debt.note) : '<em>' + _escHtml(_pd_t('dlNoNote')) + '</em>') + '</span></div>' +
+        '<div class="dl-grid">' + grid + '</div>' +
         '<div class="dl-acts">' +
           (paid ? '' : '<button type="button" class="dl-act dl-act--primary" data-act="paid" data-debt-id="' + id + '">' + _DL_ICONS.check + '<span>' + _escHtml(_pd_t('btnMarkPaid')) + '</span></button>') +
           (paid ? '' : '<button type="button" class="dl-act" data-act="edit" data-debt-id="' + id + '">' + _DL_ICONS.edit + '<span>' + _escHtml(_pd_t('btnEdit')) + '</span></button>') +
@@ -5121,7 +5309,6 @@ ${_aiShellHTML()}
         '</div>' +
       '</div>' +
     '</div>';
-    return html;
   }
 
   function _dlShowUndo(payload, msg, ms) {
@@ -5142,11 +5329,14 @@ ${_aiShellHTML()}
     _ensureDebtData();
     if (u.kind === 'delete') {
       _data.debts.splice(Math.min(u.index, _data.debts.length), 0, u.debt);
+      if (u.tx) { _data.transactions.push(u.tx); _renderAllViews(); _updateChart(); }
     } else if (u.kind === 'paid') {
       var d = _data.debts.find(function (x) { return x.id === u.debtId; });
-      if (d) { d.status = 'pending'; delete d.paidAt; }
-      var ti = _data.transactions.findIndex(function (t) { return t.id === u.txId; });
-      if (ti !== -1) _data.transactions.splice(ti, 1);
+      if (d) { d.status = 'pending'; delete d.paidAt; delete d.interestPaid; delete d.paidSource; }
+      (u.txIds || [u.txId]).forEach(function (id) {
+        var ti = _data.transactions.findIndex(function (t) { return t.id === id; });
+        if (ti !== -1) _data.transactions.splice(ti, 1);
+      });
       _renderAllViews();
       _updateChart();
     }
@@ -5211,10 +5401,10 @@ ${_aiShellHTML()}
       var p = new Date(d.paidAt);
       return p.getFullYear() === now.getFullYear() && p.getMonth() === now.getMonth();
     });
-    function sum(arr) { return arr.reduce(function (s, d) { return s + (Number(d.amount) || 0); }, 0); }
-    function tile(label, arr, tone) {
+    function sum(arr, withInterest) { return arr.reduce(function (s, d) { return s + (Number(d.amount) || 0) + (withInterest ? (Number(d.interestPaid) || 0) : 0); }, 0); }
+    function tile(label, arr, tone, withInterest) {
       return '<div class="dl-stat dl-stat--' + tone + '"><span class="dl-stat-label">' + _escHtml(label) + '</span>' +
-        '<span class="dl-stat-val">' + _escHtml(_formatVND(sum(arr))) + '</span>' +
+        '<span class="dl-stat-val">' + _escHtml(_formatVND(sum(arr, withInterest))) + '</span>' +
         '<span class="dl-stat-sub">' + _escHtml(_pd_t('dlCount').replace('{n}', arr.length)) + '</span></div>';
     }
     var stats = _qs('#dl-stats'), toolbar = _qs('#dl-toolbar');
@@ -5222,9 +5412,16 @@ ${_aiShellHTML()}
     if (stats) {
       stats.hidden = !hasAny;
       stats.innerHTML = tile(_pd_t('dlStatPending'), active, 'neutral') + tile(_pd_t('dlStatOverdue'), overdue, overdue.length ? 'bad' : 'neutral') +
-        tile(_pd_t('dlStatSoon'), soon, soon.length ? 'warn' : 'neutral') + tile(_pd_t('dlStatCollected'), collected, collected.length ? 'good' : 'neutral');
+        tile(_pd_t('dlStatSoon'), soon, soon.length ? 'warn' : 'neutral') + tile(_pd_t('dlStatCollected'), collected, collected.length ? 'good' : 'neutral', true);
     }
     if (toolbar) toolbar.hidden = !hasAny;
+    var subEl = _qs('#dl-subtitle');
+    if (subEl) {
+      var expectBack = active.reduce(function (s, d) { return s + (Number(d.amount) || 0) + (Number(d.interestAmount) || 0); }, 0);
+      subEl.innerHTML = active.length
+        ? '<strong>' + _escHtml(_formatVND(expectBack)) + '</strong> <span>' + _escHtml(_pd_t('dlSubtitle').replace('{n}', active.length)) + '</span>'
+        : '';
+    }
 
     // ── Bộ lọc (có số lượng) + ô tìm + sắp xếp ──
     var counts = { all: active.length, overdue: overdue.length, soon: soon.length, paid: paid.length };
@@ -5241,7 +5438,7 @@ ${_aiShellHTML()}
     var sortEl = _qs('#dl-sort');
     if (sortEl) {
       sortEl.setAttribute('aria-label', _pd_t('dlSortLabel'));
-      var opts = [['due', 'dlSortDue'], ['amount', 'dlSortAmount'], ['new', 'dlSortNew']];
+      var opts = [['due', 'dlSortDue'], ['amount', 'dlSortAmount'], ['new', 'dlSortNew'], ['name', 'dlSortName']];
       sortEl.innerHTML = opts.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === _dlUI.sort ? ' selected' : '') + '>' + _escHtml(_pd_t(o[1])) + '</option>'; }).join('');
     }
 
@@ -5252,6 +5449,7 @@ ${_aiShellHTML()}
     pool = pool.slice();
     if (_dlUI.sort === 'amount') pool.sort(function (a, b) { return (Number(b.amount) || 0) - (Number(a.amount) || 0); });
     else if (_dlUI.sort === 'new') pool.sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
+    else if (_dlUI.sort === 'name') pool.sort(function (a, b) { return String(a.debtorName || '').localeCompare(String(b.debtorName || ''), 'vi'); });
     // 'due': _getActiveDebts đã xếp quá hạn trước rồi theo ngày hẹn; _getPaidDebts theo ngày thu mới nhất
 
     // ── Hiển thị ──
@@ -6600,8 +6798,30 @@ ${_aiShellHTML()}
   // DEBT OPERATIONS
   // ══════════════════════════════════════════════════════════════
 
-  function _addDebt(debtorName, amount, dateBorrowed, expectedReturnDate, note) {
+  /** Ghi giao dịch "Cho vay" (chi) trừ vào ví bank/cash. Trả về tx hoặc null nếu không trừ ví. */
+  function _createLendTx(debt, source) {
+    if (source !== 'bank' && source !== 'cash') return null;
+    var m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(debt.dateBorrowed || '');
+    var now = new Date();
+    var tx = {
+      id: _uid(),
+      type: 'expense',
+      amount: Number(debt.amount),
+      year: m ? +m[1] : now.getFullYear(),
+      month: m ? +m[2] : now.getMonth() + 1,
+      day: m ? +m[3] : now.getDate(),
+      desc: _pd_t('descLend') + debt.debtorName + (debt.note ? ' - ' + debt.note : ''),
+      category: 'cho-vay',   // "💸 Cho vay" — chuyển tài sản, KHÔNG tính vào Chi tiêu
+      source: source,
+      createdAt: Date.now()
+    };
+    _data.transactions.push(tx);
+    return tx;
+  }
+
+  function _addDebt(debtorName, amount, dateBorrowed, expectedReturnDate, note, opts) {
     _ensureDebtData();
+    opts = opts || {};
 
     var debt = {
       id: _generateDebtId(),
@@ -6611,17 +6831,31 @@ ${_aiShellHTML()}
       expectedReturnDate: expectedReturnDate,
       status: 'pending',
       note: note ? note.trim() : '',
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      lendSource: opts.lendSource || 'none',
+      interestType: opts.interestType || 'pct',
+      interestValue: Number(opts.interestValue) || 0,
+      interestAmount: _calcInterest(amount, opts.interestType, opts.interestValue)
     };
+
+    // Trừ tiền ví khi cho vay
+    var lendTx = _createLendTx(debt, debt.lendSource);
+    if (lendTx) debt.lendTxId = lendTx.id;
 
     _data.debts.push(debt);
     _debouncedPersist();
     _refreshDebtSummary();
     _refreshDebtLedger();
+    if (lendTx) { _renderAllViews(); _updateChart(); }
 
     _showToast(_pd_t('toastDebtAdded')
       .replace('{name}', debt.debtorName)
       .replace('{amount}', _formatVND(debt.amount)));
+    if (lendTx) {
+      _showToast(_pd_t('toastLentFrom')
+        .replace('{amount}', _formatVND(debt.amount))
+        .replace('{wallet}', debt.lendSource === 'cash' ? _pd_t('dlLendCash') : _pd_t('dlLendBank')));
+    }
   }
 
   function _markDebtPaid(debtId) {
@@ -6633,9 +6867,14 @@ ${_aiShellHTML()}
     // Store debtId for the recovery modal to use
     window.currentDebtRecoveryId = debtId;
 
-    // Show the custom Debt Recovery modal
+    // Show the custom Debt Recovery modal (mặc định thu về đúng ví đã trừ + lãi đã hẹn)
     var overlay = _qs('#hub-cf-debt-recovery-overlay');
     if (overlay) {
+      var srcSel = _qs('#debt-recovery-source');
+      if (srcSel) srcSel.value = (debt.lendSource === 'cash' || debt.lendSource === 'bank') ? debt.lendSource : 'bank';
+      var intInput = _qs('#debt-recovery-interest');
+      if (intInput) intInput.value = String(Number(debt.interestAmount) || 0);
+      _updateRecoveryTotal();
       overlay.style.display = 'flex';
       // Focus the select dropdown
       setTimeout(function () {
@@ -6645,6 +6884,24 @@ ${_aiShellHTML()}
     }
   }
 
+  function _readRecoveryInterest() {
+    var el = _qs('#debt-recovery-interest');
+    var v = el ? Number(String(el.value).replace(/[^0-9.]/g, '')) : 0;
+    return isFinite(v) && v > 0 ? Math.round(v) : 0;
+  }
+
+  function _updateRecoveryTotal() {
+    var el = _qs('#debt-recovery-total');
+    if (!el) return;
+    var debt = _data.debts.find(function (d) { return d.id === window.currentDebtRecoveryId; });
+    if (!debt) { el.textContent = ''; return; }
+    var interest = _readRecoveryInterest();
+    el.textContent = _pd_t('recoveryTotal')
+      .replace('{principal}', _formatVND(debt.amount))
+      .replace('{interest}', _formatVND(interest))
+      .replace('{total}', _formatVND(Number(debt.amount) + interest));
+  }
+
   function _executeDebtRecovery(targetSource) {
     var debtId = window.currentDebtRecoveryId;
     if (!debtId) return;
@@ -6652,8 +6909,12 @@ ${_aiShellHTML()}
     var debt = _data.debts.find(function (d) { return d.id === debtId; });
     if (!debt) return;
 
+    var interest = _readRecoveryInterest();
+
     debt.status = 'paid';
     debt.paidAt = Date.now();
+    debt.interestPaid = interest;
+    debt.paidSource = targetSource;
     _debouncedPersist();
     _refreshDebtSummary();
     _refreshDebtLedger();
@@ -6662,31 +6923,51 @@ ${_aiShellHTML()}
       .replace('{name}', debt.debtorName)
       .replace('{amount}', _formatVND(debt.amount)));
 
-    // Auto-generate recovery transaction with category "🤝 Thu nợ"
+    var now = new Date();
+    // Auto-generate recovery transaction with category "🤝 Thu nợ" (tiền gốc)
     // This is an asset transfer, NOT revenue — excluded from global Income
     var tx = {
       id: _uid(),
       type: 'income',
       amount: Number(debt.amount),
-      year: new Date().getFullYear(),
-      month: new Date().getMonth() + 1,
-      day: new Date().getDate(),
+      year: now.getFullYear(),
+      month: now.getMonth() + 1,
+      day: now.getDate(),
       desc: 'Thu nợ: ' + debt.debtorName + (debt.note ? ' - ' + debt.note : ''),
       category: 'thu-no', // "🤝 Thu nợ" — excluded from global Income
       source: targetSource,
       createdAt: Date.now()
     };
-
     _data.transactions.push(tx);
+    var txIds = [tx.id];
+
+    // Tiền lãi = thu nhập thật → ghi riêng vào "Thu nhập khác"
+    if (interest > 0) {
+      var itx = {
+        id: _uid(),
+        type: 'income',
+        amount: interest,
+        year: now.getFullYear(),
+        month: now.getMonth() + 1,
+        day: now.getDate(),
+        desc: _pd_t('descInterest') + debt.debtorName,
+        category: 'thu-nhap-khac',
+        source: targetSource,
+        createdAt: Date.now()
+      };
+      _data.transactions.push(itx);
+      txIds.push(itx.id);
+    }
+
     _debouncedPersist();
     _renderAllViews(); // Updates dashboard totals, ledger, chart
     _updateChart();
-    _dlShowUndo({ kind: 'paid', debtId: debt.id, txId: tx.id },
-      _pd_t('dlPaidDone').replace('{amount}', _formatVND(debt.amount)).replace('{name}', debt.debtorName), 8000);
+    _dlShowUndo({ kind: 'paid', debtId: debt.id, txIds: txIds },
+      _pd_t('dlPaidDone').replace('{amount}', _formatVND(Number(debt.amount) + interest)).replace('{name}', debt.debtorName), 8000);
 
     var walletLabel = targetSource === 'cash' ? _pd_t('optionCash') : _pd_t('optionBank');
     _showToast(_pd_t('toastRecoveryDone')
-      .replace('{amount}', _formatVND(debt.amount))
+      .replace('{amount}', _formatVND(Number(debt.amount) + interest))
       .replace('{wallet}', walletLabel));
 
     // Clear the temp variable
@@ -6721,13 +7002,21 @@ ${_aiShellHTML()}
     var idx = _data.debts.findIndex(function (d) { return d.id === debtId; });
     if (idx === -1) return;
 
+    // Khoản còn đang chờ thu bị xóa = ghi nhầm → hoàn lại tiền vào ví (xóa giao dịch "Cho vay")
+    var removedTx = null;
+    if (_getDebtStatus(debt) !== 'paid' && debt.lendTxId) {
+      var ti = _data.transactions.findIndex(function (t) { return t.id === debt.lendTxId; });
+      if (ti !== -1) removedTx = _data.transactions.splice(ti, 1)[0];
+    }
+
     _data.debts.splice(idx, 1);
     _debouncedPersist();
     _refreshDebtSummary();
     _refreshDebtLedger();
+    if (removedTx) { _renderAllViews(); _updateChart(); }
 
     // Hoàn tác trong 8 giây (thay cho hộp xác nhận)
-    _dlShowUndo({ kind: 'delete', debt: debt, index: idx }, _pd_t('dlDeleted').replace('{name}', debt.debtorName), 8000);
+    _dlShowUndo({ kind: 'delete', debt: debt, index: idx, tx: removedTx }, _pd_t('dlDeleted').replace('{name}', debt.debtorName), 8000);
   }
 
   function _showInput(sel) {
@@ -7779,6 +8068,7 @@ ${_aiShellHTML()}
         var category = col.cat >= 0 ? String(row[col.cat] === undefined || row[col.cat] === null ? '' : row[col.cat]).trim() : '';
         // «🤝 Thu nợ» ở file Excel ↔ mã 'thu-no' trong ứng dụng (ứng dụng loại khoản này khỏi Thu nhập)
         if (type === 'income' && _xlNorm(category) === 'thu no') category = 'thu-no';
+        if (type === 'expense' && _xlNorm(category).indexOf('cho vay') !== -1) category = 'cho-vay';
 
         out.push({
           id: ctx.uid(), type: type, amount: Math.abs(amount), year: year, month: month, day: day,
@@ -7803,13 +8093,14 @@ ${_aiShellHTML()}
     function catLabel(tx) {
       var c = tx.category;
       if (tx.type === 'income' && (c === 'thu-no' || c === 'Thu nợ')) return '🤝 Thu nợ';
+      if (tx.type === 'expense' && c === 'cho-vay') return '💸 Cho vay';
       return _categoryDisplayName(c, tx.type);
     }
     // Cùng quy tắc với thẻ tổng kết của ứng dụng: chuyển tiết kiệm & thu hồi nợ không phải thu/chi thật
     function reported(tx) {
       var isSavings = tx.source === 'savings' || tx.category === 'tiet-kiem' || tx.category === 'Tiết kiệm' || tx.category === '🐷 Tiết kiệm';
       var isDebtRecovery = tx.category === 'thu-no' || tx.category === 'Thu nợ';
-      return !isSavings && !(tx.type === 'income' && isDebtRecovery);
+      return !isSavings && !(tx.type === 'income' && isDebtRecovery) && !_isLoanOut(tx);
     }
     var fallbackYear = _currentMonth ? _currentMonth.year : new Date().getFullYear();
     var rows = _data.transactions.filter(function (tx) { return tx.type === 'income' || tx.type === 'expense'; }).map(function (tx) {
@@ -9414,6 +9705,8 @@ ${_aiShellHTML()}
         if (tx.category !== 'tiet-kiem' && tx.category !== 'thu-no' && tx.category !== 'Thu nợ') agg.income += amt;
       } else if (tx.category === 'tiet-kiem') {
         agg.saved += amt;
+      } else if (tx.category === 'cho-vay') {
+        /* cho vay: không tính là chi */
       } else {
         agg.spent += amt;
         agg.byCat[tx.category] = (agg.byCat[tx.category] || 0) + amt;
@@ -10692,6 +10985,23 @@ ${_aiShellHTML()}
       });
     }
 
+    // Tiền lãi khi thu hồi: cập nhật tổng ngay khi gõ
+    var recInterest = _qs('#debt-recovery-interest');
+    if (recInterest) recInterest.addEventListener('input', function () {
+      this.value = this.value.replace(/[^0-9]/g, '');
+      _updateRecoveryTotal();
+    });
+
+    // Xem trước tiền lãi khi nhập khoản vay
+    ['#hub-cf-debt-amount', '#hub-cf-debt-interest', '#hub-cf-debt-interest-type'].forEach(function (sel) {
+      var el = _qs(sel);
+      if (el) { el.addEventListener('input', _updateInterestPreview); el.addEventListener('change', _updateInterestPreview); }
+    });
+    var interestInput = _qs('#hub-cf-debt-interest');
+    if (interestInput) interestInput.addEventListener('input', function () {
+      this.value = this.value.replace(/[^0-9.]/g, '');
+    });
+
     // Event delegation for Paid History Modal delete buttons (static parent, bound once)
     _bindDebtHistoryModalDelegation();
 
@@ -10714,6 +11024,220 @@ ${_aiShellHTML()}
       });
     }
     applyShorthandLogic('#hub-cf-debt-amount');
+    _bindDebtFormExtras();
+  }
+
+  function _readDebtInterest() {
+    var iv = _qs('#hub-cf-debt-interest'), it = _qs('#hub-cf-debt-interest-type'), am = _qs('#hub-cf-debt-amount');
+    var type = it ? it.value : 'pct';
+    var value = iv ? Number(iv.value) || 0 : 0;
+    var amount = am ? Number(am.value) || 0 : 0;
+    return { type: type, value: value, amount: _calcInterest(amount, type, value), principal: amount };
+  }
+
+  function _updateInterestPreview() {
+    _dfRefresh();   // xem trước lãi + tóm tắt + số dư ví + thời hạn (Debt form v3)
+  }
+
+  // ══════════════════════════════════════════
+  // DEBT FORM v3 — kiểm tra tại chỗ, chọn nhanh, tóm tắt trực tiếp
+  // ══════════════════════════════════════════
+  var _dfLastBorrowed = '';
+  var _DF_FIELDS = { debtor: '#hub-cf-debt-debtor', amount: '#hub-cf-debt-amount', dates: '#hub-cf-debt-expected-return' };
+
+  function _dfParseISO(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+    return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+  }
+  function _dfToISO(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  /** Cộng ngày/tháng vào ISO date (tháng ngắn thì lùi về ngày cuối tháng, vd 31/01 + 1 tháng = 28/02) */
+  function _dfShift(iso, days, months) {
+    var d = _dfParseISO(iso) || _dfParseISO(_todayISO());
+    if (months) {
+      var day = d.getDate();
+      d.setDate(1);
+      d.setMonth(d.getMonth() + months);
+      d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()));
+    }
+    if (days) d.setDate(d.getDate() + days);
+    return _dfToISO(d);
+  }
+  function _dfDiffDays(aIso, bIso) {
+    var a = _dfParseISO(aIso), b = _dfParseISO(bIso);
+    return (a && b) ? Math.round((b - a) / 86400000) : null;
+  }
+
+  /** Số dư khả dụng của ví dùng để cho vay (khi sửa: cộng lại số tiền khoản này đã trừ trước đó) */
+  function _dfAvailable(source) {
+    if (source !== 'bank' && source !== 'cash') return null;
+    var bal = source === 'bank' ? _calcBankBalance() : _calcCashBalance();
+    if (_editingDebtId && _data && Array.isArray(_data.debts)) {
+      var old = _data.debts.find(function (d) { return d.id === _editingDebtId; });
+      if (old && old.lendTxId && old.lendSource === source) bal += Number(old.amount) || 0;
+    }
+    return bal;
+  }
+
+  function _dfSetErr(key, msg) {
+    var p = _qs('#hub-cf-debt-err-' + key), inp = _qs(_DF_FIELDS[key]);
+    if (p) { p.textContent = msg || ''; p.hidden = !msg; }
+    if (inp) { if (msg) inp.setAttribute('aria-invalid', 'true'); else inp.removeAttribute('aria-invalid'); }
+  }
+
+  function _dfValidate() {
+    var first = null;
+    ['debtor', 'amount', 'dates'].forEach(function (k) { _dfSetErr(k, ''); });
+    var debtor = _qs('#hub-cf-debt-debtor'), amount = _qs('#hub-cf-debt-amount');
+    var db = _qs('#hub-cf-debt-date-borrowed'), er = _qs('#hub-cf-debt-expected-return');
+    function fail(key, msgKey, sel) { _dfSetErr(key, _pd_t(msgKey)); if (!first) first = sel; }
+    if (!debtor || !debtor.value.trim()) fail('debtor', 'dfErrDebtor', '#hub-cf-debt-debtor');
+    if (!amount || !(Number(amount.value) > 0)) fail('amount', 'dfErrAmount', '#hub-cf-debt-amount');
+    if (!db || !db.value) fail('dates', 'dfErrDateBorrowed', '#hub-cf-debt-date-borrowed');
+    else if (!er || !er.value) fail('dates', 'dfErrDateReturn', '#hub-cf-debt-expected-return');
+    else if (er.value < db.value) fail('dates', 'dfErrDateOrder', '#hub-cf-debt-expected-return');
+    if (first) _showInput(first);
+    return !first;
+  }
+
+  /** Vẽ lại mọi phần "sống" của form: số tiền, ví, lãi, thời hạn, tóm tắt */
+  function _dfRefresh() {
+    var amountEl = _qs('#hub-cf-debt-amount');
+    if (!amountEl) return;
+    var amount = Number(amountEl.value) || 0;
+    var fmt = _formatVNFull, esc = _escHtml;
+
+    var live = _qs('#hub-cf-debt-amount-live');
+    if (live) live.textContent = amount > 0 ? '= ' + fmt(amount) : '';
+
+    // Loại lãi: nút chọn + đơn vị theo ô nhập
+    var typeSel = _qs('#hub-cf-debt-interest-type'), type = typeSel ? typeSel.value : 'pct';
+    Array.prototype.forEach.call(document.querySelectorAll('#hub-cf-debt-interest-seg .hub-cf-df-seg-btn'), function (b) {
+      b.setAttribute('aria-checked', b.getAttribute('data-type') === type ? 'true' : 'false');
+    });
+    var unit = _qs('#hub-cf-debt-interest-unit'); if (unit) unit.textContent = type === 'pct' ? '%' : '₫';
+    var interest = _readDebtInterest();
+    var prev = _qs('#hub-cf-debt-interest-preview');
+    if (prev) prev.textContent = interest.amount > 0 ? _pd_t('dfInterestIs').replace('{interest}', fmt(interest.amount)) : '';
+
+    // Ví bị trừ
+    var srcEl = _qs('#hub-cf-debt-lend-source'), source = srcEl ? srcEl.value : 'none';
+    var wn = _qs('#hub-cf-debt-wallet-note');
+    if (wn) {
+      var avail = _dfAvailable(source);
+      if (avail === null) {
+        wn.className = 'hub-cf-df-wallet';
+        wn.textContent = _pd_t('dfWalletNone');
+      } else {
+        var left = avail - amount, warn = amount > 0 && left < 0;
+        wn.className = 'hub-cf-df-wallet' + (warn ? ' is-warn' : '');
+        wn.innerHTML = '<span>' + esc(_pd_t('dfAvailable')) + ' <strong>' + esc(fmt(avail)) + '</strong></span>' +
+          (amount > 0 ? '<span>' + (warn ? esc(_pd_t('dfShort').replace('{n}', fmt(-left))) : esc(_pd_t('dfLeft')) + ' <strong>' + esc(fmt(left)) + '</strong>') + '</span>' : '');
+      }
+    }
+
+    // Thời hạn
+    var db = _qs('#hub-cf-debt-date-borrowed'), er = _qs('#hub-cf-debt-expected-return');
+    if (db && er && db.value) er.min = db.value;
+    var days = (db && er) ? _dfDiffDays(db.value, er.value) : null;
+    var term = _qs('#hub-cf-debt-term');
+    if (term) term.textContent = (days === null || days < 0) ? '' : (days === 0 ? _pd_t('dfTermSame') : _pd_t('dfTerm').replace('{n}', days));
+    var base = (db && db.value) || _todayISO();
+    Array.prototype.forEach.call(document.querySelectorAll('#hub-cf-debt-due-chips .hub-cf-df-chip'), function (c) {
+      var d = +c.getAttribute('data-days') || 0, m = +c.getAttribute('data-months') || 0;
+      c.textContent = m === 1 ? _pd_t('dfChipMonth') : (m ? _pd_t('dfChipMonths').replace('{n}', m) : _pd_t('dfChipDays').replace('{n}', d));
+      c.classList.toggle('is-active', !!(er && er.value) && _dfShift(base, d, m) === er.value);
+    });
+
+    // Tóm tắt
+    var sum = _qs('#hub-cf-debt-summary');
+    if (sum) {
+      if (amount <= 0) {
+        sum.innerHTML = '<p class="hub-cf-df-sum-title">' + esc(_pd_t('dfSumTitle')) + '</p><p class="hub-cf-df-sum-empty">' + esc(_pd_t('dfSumEmpty')) + '</p>';
+      } else {
+        var dueTxt = (er && er.value) ? _formatDateISOtoVN(er.value) + (days !== null && days >= 0 ? ' · ' + _pd_t('dlDaysUnit').replace('{n}', days) : '') : '—';
+        sum.innerHTML = '<p class="hub-cf-df-sum-title">' + esc(_pd_t('dfSumTitle')) + '</p>' +
+          '<div class="hub-cf-df-sum-grid">' +
+            '<div class="hub-cf-df-sum-item"><span class="hub-cf-df-sum-k">' + esc(_pd_t('dfSumPrincipal')) + '</span><span class="hub-cf-df-sum-v">' + esc(fmt(amount)) + '</span></div>' +
+            '<div class="hub-cf-df-sum-item"><span class="hub-cf-df-sum-k">' + esc(_pd_t('dfSumInterest')) + '</span><span class="hub-cf-df-sum-v">' + (interest.amount > 0 ? '+' + esc(fmt(interest.amount)) : '—') + '</span></div>' +
+            '<div class="hub-cf-df-sum-item hub-cf-df-sum-item--total"><span class="hub-cf-df-sum-k">' + esc(_pd_t('dfSumTotal')) + '</span><span class="hub-cf-df-sum-v">' + esc(fmt(amount + interest.amount)) + '</span></div>' +
+            '<div class="hub-cf-df-sum-item"><span class="hub-cf-df-sum-k">' + esc(_pd_t('dfSumDue')) + '</span><span class="hub-cf-df-sum-v">' + esc(dueTxt) + '</span></div>' +
+          '</div>';
+      }
+    }
+  }
+
+  /** Chạy mỗi lần mở modal (thêm hoặc sửa), SAU khi đã điền giá trị vào form */
+  function _dfInitForm() {
+    ['debtor', 'amount', 'dates'].forEach(function (k) { _dfSetErr(k, ''); });
+    var db = _qs('#hub-cf-debt-date-borrowed');
+    _dfLastBorrowed = db ? db.value : '';
+    var dl = _qs('#hub-cf-debt-debtor-list');
+    if (dl) {
+      var seen = {}, names = [];
+      (_data && Array.isArray(_data.debts) ? _data.debts.slice().sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); }) : []).forEach(function (d) {
+        var n = (d.debtorName || '').trim(), k = n.toLowerCase();
+        if (n && !seen[k] && names.length < 30) { seen[k] = 1; names.push(n); }
+      });
+      dl.innerHTML = names.map(function (n) { return '<option value="' + _escapeAttr(n) + '"></option>'; }).join('');
+    }
+    var note = _qs('#hub-cf-debt-note'), cnt = _qs('#hub-cf-debt-note-count');
+    if (cnt) cnt.textContent = (note ? note.value.length : 0) + '/200';
+  }
+
+  function _bindDebtFormExtras() {
+    var form = _qs('#hub-cf-debt-form');
+    if (!form || form.dataset.dfBound) return;
+    form.dataset.dfBound = '1';
+    var amountEl = _qs('#hub-cf-debt-amount'), debtorEl = _qs('#hub-cf-debt-debtor');
+    var srcEl = _qs('#hub-cf-debt-lend-source'), typeSel = _qs('#hub-cf-debt-interest-type');
+    var db = _qs('#hub-cf-debt-date-borrowed'), er = _qs('#hub-cf-debt-expected-return'), note = _qs('#hub-cf-debt-note');
+
+    // Số tiền: chọn nhanh cộng dồn; gõ → xóa lỗi + vẽ lại (chạy sau bộ đổi 5k/1m)
+    var amtChips = _qs('#hub-cf-debt-amount-chips');
+    if (amtChips && amountEl) amtChips.addEventListener('click', function (e) {
+      var b = e.target.closest('.hub-cf-df-chip');
+      if (!b) return;
+      amountEl.value = String((Number(amountEl.value) || 0) + (Number(b.getAttribute('data-add')) || 0));
+      _dfSetErr('amount', '');
+      _dfRefresh();
+    });
+    if (amountEl) amountEl.addEventListener('input', function () { _dfSetErr('amount', ''); _dfRefresh(); });
+    if (debtorEl) debtorEl.addEventListener('input', function () { _dfSetErr('debtor', ''); });
+    if (srcEl) srcEl.addEventListener('change', _dfRefresh);
+
+    // Loại lãi: nút chọn đồng bộ với <select> gốc (mã cũ vẫn đọc select)
+    var seg = _qs('#hub-cf-debt-interest-seg');
+    if (seg && typeSel) seg.addEventListener('click', function (e) {
+      var b = e.target.closest('.hub-cf-df-seg-btn');
+      if (!b) return;
+      typeSel.value = b.getAttribute('data-type');
+      typeSel.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    // Ngày: đổi ngày mượn thì dời hạn trả giữ nguyên kỳ hạn
+    if (db) db.addEventListener('change', function () {
+      var delta = _dfDiffDays(_dfLastBorrowed, db.value);
+      if (er && er.value && delta !== null && delta !== 0) er.value = _dfShift(er.value, delta, 0);
+      _dfLastBorrowed = db.value;
+      _dfSetErr('dates', '');
+      _dfRefresh();
+    });
+    if (er) er.addEventListener('change', function () { _dfSetErr('dates', ''); _dfRefresh(); });
+    var dueChips = _qs('#hub-cf-debt-due-chips');
+    if (dueChips && er) dueChips.addEventListener('click', function (e) {
+      var b = e.target.closest('.hub-cf-df-chip');
+      if (!b) return;
+      er.value = _dfShift((db && db.value) || _todayISO(), +b.getAttribute('data-days') || 0, +b.getAttribute('data-months') || 0);
+      _dfSetErr('dates', '');
+      _dfRefresh();
+    });
+
+    if (note) note.addEventListener('input', function () {
+      var cnt = _qs('#hub-cf-debt-note-count');
+      if (cnt) cnt.textContent = note.value.length + '/200';
+    });
   }
 
   function _openDebtModal() {
@@ -10725,7 +11249,11 @@ ${_aiShellHTML()}
     var dateBorrowed = _qs('#hub-cf-debt-date-borrowed');
     var expectedReturn = _qs('#hub-cf-debt-expected-return');
     if (dateBorrowed) dateBorrowed.value = today;
-    if (expectedReturn) expectedReturn.value = today;
+    if (expectedReturn) expectedReturn.value = _dfShift(today, 30, 0);   // hạn mặc định: +30 ngày (thay vì đúng hôm nay)
+    var ls = _qs('#hub-cf-debt-lend-source'); if (ls) ls.value = 'bank';
+    var itp = _qs('#hub-cf-debt-interest-type'); if (itp) itp.value = 'pct';
+    _dfInitForm();
+    _updateInterestPreview();
     overlay.style.display = 'flex';
     setTimeout(function () {
       var debtorInput = _qs('#hub-cf-debt-debtor');
@@ -10814,6 +11342,16 @@ ${_aiShellHTML()}
     if (expectedReturnInput) expectedReturnInput.value = debt.expectedReturnDate || '';
     if (noteInput) noteInput.value = debt.note || '';
 
+    var lendSel = _qs('#hub-cf-debt-lend-source');
+    if (lendSel) lendSel.value = (debt.lendSource === 'cash' || debt.lendSource === 'bank') ? debt.lendSource : 'none';
+    var intType = _qs('#hub-cf-debt-interest-type');
+    var intVal = _qs('#hub-cf-debt-interest');
+    if (intType) intType.value = debt.interestType === 'fixed' ? 'fixed' : 'pct';
+    if (intVal) intVal.value = Number(debt.interestValue) ? String(debt.interestValue) : (Number(debt.interestAmount) ? String(debt.interestAmount) : '');
+    if (intType && !Number(debt.interestValue) && Number(debt.interestAmount)) intType.value = 'fixed';
+    _dfInitForm();
+    _updateInterestPreview();
+
     overlay.style.display = 'flex';
     setTimeout(function () {
       if (debtorInput) debtorInput.focus();
@@ -10831,28 +11369,48 @@ ${_aiShellHTML()}
     var expectedReturn = _qs('#hub-cf-debt-expected-return');
     var note = _qs('#hub-cf-debt-note');
 
-    if (!debtorName || !debtorName.value.trim()) { _showInput('#hub-cf-debt-debtor'); return; }
-    if (!amount || !amount.value || Number(amount.value) <= 0) { _showInput('#hub-cf-debt-amount'); return; }
-    if (!dateBorrowed || !dateBorrowed.value) { _showInput('#hub-cf-debt-date-borrowed'); return; }
-    if (!expectedReturn || !expectedReturn.value) { _showInput('#hub-cf-debt-expected-return'); return; }
-    if (new Date(expectedReturn.value) < new Date(dateBorrowed.value)) {
-      alert(_pd_t('labelExpectedReturn') + ' không thể nhỏ hơn ' + _pd_t('labelDateBorrowed') + '.');
-      _showInput('#hub-cf-debt-expected-return');
-      return;
-    }
+    if (!_dfValidate()) return;   // báo lỗi ngay tại ô nhập (không còn alert)
+
+    var lendSourceEl = _qs('#hub-cf-debt-lend-source');
+    var lendSource = lendSourceEl ? lendSourceEl.value : 'none';
+    var intr = _readDebtInterest();
 
     if (_editingDebtId) {
       // EDIT MODE: Update existing debt
       var debtIndex = _data.debts.findIndex(d => d.id === _editingDebtId);
       if (debtIndex !== -1) {
-        _data.debts[debtIndex] = {
-          ..._data.debts[debtIndex],
+        var old = _data.debts[debtIndex];
+        var upd = {
+          ...old,
           debtorName: debtorName.value.trim(),
           amount: Number(amount.value),
           dateBorrowed: dateBorrowed.value,
           expectedReturnDate: expectedReturn.value,
-          note: note ? note.value.trim() : ''
+          note: note ? note.value.trim() : '',
+          lendSource: lendSource,
+          interestType: intr.type,
+          interestValue: intr.value,
+          interestAmount: intr.amount
         };
+        // Đồng bộ giao dịch "Cho vay" đã trừ ví
+        var lendIdx = old.lendTxId ? _data.transactions.findIndex(function (t) { return t.id === old.lendTxId; }) : -1;
+        if (lendSource === 'none') {
+          if (lendIdx !== -1) _data.transactions.splice(lendIdx, 1);   // bỏ trừ ví → hoàn tiền
+          delete upd.lendTxId;
+        } else if (lendIdx !== -1) {
+          var ltx = _data.transactions[lendIdx];
+          var mm = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(upd.dateBorrowed);
+          ltx.amount = upd.amount;
+          ltx.source = lendSource;
+          ltx.desc = _pd_t('descLend') + upd.debtorName + (upd.note ? ' - ' + upd.note : '');
+          if (mm) { ltx.year = +mm[1]; ltx.month = +mm[2]; ltx.day = +mm[3]; }
+        } else {
+          var ntx = _createLendTx(upd, lendSource);   // khoản cũ chưa trừ ví, nay chọn ví
+          if (ntx) upd.lendTxId = ntx.id;
+        }
+        _data.debts[debtIndex] = upd;
+        _renderAllViews();
+        _updateChart();
       }
       _editingDebtId = null;
     } else {
@@ -10862,7 +11420,8 @@ ${_aiShellHTML()}
         Number(amount.value),
         dateBorrowed.value,
         expectedReturn.value,
-        note ? note.value.trim() : ''
+        note ? note.value.trim() : '',
+        { lendSource: lendSource, interestType: intr.type, interestValue: intr.value }
       );
     }
 

@@ -15841,9 +15841,15 @@ body.theme-optimized *::after {
   transition: none !important;
   animation: none !important;
   backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;   /* Safari / iOS: the unprefixed property alone is not enough */
   box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;                    /* drop-shadow glows on icons / timer rings */
   background-image: none !important;
 }
+/* The one legitimate use of filter: tint the native date-picker icon so it stays visible on black. */
+body.theme-optimized .hub-viz-deadline-input::-webkit-calendar-picker-indicator { filter: invert(0.7) !important; }
+body.theme-optimized .hub-notes-date-input::-webkit-calendar-picker-indicator   { filter: invert(0.7) sepia(1) hue-rotate(160deg) saturate(3) !important; }
 
 /* ── Restore minimal shadow for readability-critical dialogs ── */
 body.theme-optimized .modal-content,
@@ -21769,3 +21775,1148 @@ body.theme-optimized .cfc-kpi, body.theme-optimized .cfc-chip { border-color: #0
   .dl-acts .dl-act { flex: 1 1 auto; justify-content: center; padding: 0 10px; }
 }
 @media (prefers-reduced-motion: reduce) { .dl-chev { transition: none; } }
+
+/* ============================================================
+   DEBT LEDGER v3 — layout & polish
+   Đặt cuối file để ghi đè khối .dl (v2) ở trên; dùng chung token theme.
+   Gồm: thẻ sổ nợ, header, nút, thống kê, bộ lọc, hàng nợ, panel chi tiết,
+        empty state, modal thêm nợ / lịch sử / thu nợ.
+   ============================================================ */
+.hub-cf-debt-ledger {
+  --dl-ac:   var(--accent-primary, var(--primary, #00e676));
+  --dl-tx:   var(--text-primary, #e8e8ed);
+  --dl-mu:   var(--text-secondary, #8b8b9e);
+  --dl-pos:  var(--success, #2ee6a6);
+  --dl-neg:  var(--danger, #ff5c6c);
+  --dl-warn: var(--warning, #f59e0b);
+  --dl-line: color-mix(in srgb, var(--dl-tx) 11%, transparent);
+  --dl-surf: color-mix(in srgb, var(--dl-tx) 4%, transparent);
+  display: flex; flex-direction: column; gap: 18px;
+  padding: clamp(16px, 2.4vw, 28px);
+}
+[data-theme="solar-zen"] .hub-cf-debt-ledger { --dl-warn: #b45309; }
+.hub-cf-debt-ledger.glass-card:hover { transform: none; box-shadow: none; }   /* thẻ lớn: không nhấc lên khi hover */
+.hub-cf-debt-ledger .dl { margin: 0; gap: 16px; }
+.hub-cf-debt-ledger .dl-list-wrap { margin: 0; }
+
+/* ── Header ── */
+.hub-cf-debt-header {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px 20px;
+  padding-bottom: 16px; border-bottom: 1px solid var(--dl-line);
+}
+.hub-cf-debt-heading { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.hub-cf-debt-title {
+  margin: 0; font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.74rem; font-weight: 600;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--dl-mu);
+}
+.hub-cf-debt-subtitle { margin: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; font-size: 0.82rem; color: var(--dl-mu); }
+.hub-cf-debt-subtitle:empty { display: none; }
+.hub-cf-debt-subtitle strong { font-family: var(--font-mono, ui-monospace, monospace); font-size: 1.35rem; font-weight: 700; letter-spacing: -0.01em; color: var(--dl-tx); }
+
+/* ── Nút ── */
+.hub-cf-debt-ledger .hub-cf-btn {
+  min-height: 40px; padding: 0 16px; gap: 8px; border-radius: 12px;
+  font-size: 0.76rem; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.hub-cf-debt-ledger .hub-cf-btn--add-debt {
+  color: var(--dl-ac); background: color-mix(in srgb, var(--dl-ac) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--dl-ac) 60%, transparent); box-shadow: none;
+}
+.hub-cf-debt-ledger .hub-cf-btn--add-debt:hover {
+  background: var(--dl-ac); color: #000; border-color: var(--dl-ac); transform: translateY(-1px);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--dl-ac) 28%, transparent);
+}
+.hub-cf-debt-ledger .hub-cf-btn--ghost {
+  color: var(--dl-tx); background: transparent; border: 1px solid var(--dl-line); text-transform: none; letter-spacing: 0.02em;
+}
+.hub-cf-debt-ledger .hub-cf-btn--ghost:hover { border-color: color-mix(in srgb, var(--dl-tx) 35%, transparent); background: var(--dl-surf); }
+.hub-cf-debt-ledger .hub-cf-btn:focus-visible { outline: 2px solid var(--dl-ac); outline-offset: 2px; }
+.hub-cf-debt-ledger .hub-cf-debt-actions { gap: 10px; }
+
+/* ── Thống kê ── */
+.hub-cf-debt-ledger .dl-stats { gap: 12px; }
+.hub-cf-debt-ledger .dl-stat { padding: 14px 16px 15px; gap: 6px; border-radius: 14px; position: relative; overflow: hidden; }
+.hub-cf-debt-ledger .dl-stat-label { font-size: 0.74rem; letter-spacing: 0.02em; }
+.hub-cf-debt-ledger .dl-stat-val { font-size: 1.3rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.hub-cf-debt-ledger .dl-stat--bad  .dl-stat-val { color: var(--dl-neg); }
+.hub-cf-debt-ledger .dl-stat--warn .dl-stat-val { color: var(--dl-warn); }
+.hub-cf-debt-ledger .dl-stat--good .dl-stat-val { color: var(--dl-pos); }
+.hub-cf-debt-ledger .dl-stat--bad  { background: color-mix(in srgb, var(--dl-neg) 7%, var(--dl-surf)); }
+.hub-cf-debt-ledger .dl-stat--warn { background: color-mix(in srgb, var(--dl-warn) 7%, var(--dl-surf)); }
+.hub-cf-debt-ledger .dl-stat--good { background: color-mix(in srgb, var(--dl-pos) 7%, var(--dl-surf)); }
+
+/* ── Thanh công cụ ── */
+.hub-cf-debt-ledger .dl-toolbar { gap: 12px; padding-top: 2px; }
+.hub-cf-debt-ledger .dl-filters { gap: 6px; padding: 4px; border: 1px solid var(--dl-line); border-radius: 99px; background: var(--dl-surf); }
+.hub-cf-debt-ledger .dl-filter { min-height: 34px; padding: 0 14px; border-color: transparent; font-size: 0.8rem; color: var(--dl-mu); }
+.hub-cf-debt-ledger .dl-filter:hover { color: var(--dl-tx); border-color: transparent; background: color-mix(in srgb, var(--dl-tx) 6%, transparent); }
+.hub-cf-debt-ledger .dl-filter.is-on { color: var(--dl-tx); background: color-mix(in srgb, var(--dl-ac) 16%, transparent); border-color: color-mix(in srgb, var(--dl-ac) 70%, transparent); }
+.hub-cf-debt-ledger .dl-filter.is-on .dl-filter-n { color: var(--dl-ac); }
+.hub-cf-debt-ledger .dl-tools { flex: 1 1 320px; justify-content: flex-end; flex-wrap: nowrap; }
+.hub-cf-debt-ledger .dl-search { flex: 1 1 200px; max-width: 360px; background: var(--dl-surf); }
+.hub-cf-debt-ledger .dl-search input { width: 100%; min-width: 0; }
+.hub-cf-debt-ledger .dl-sort {
+  flex: 0 0 auto; padding-right: 34px; cursor: pointer; background-color: var(--dl-surf);
+  appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238b8b9e' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center;
+}
+.hub-cf-debt-ledger .dl-sort option { background: var(--bg-surface, #12121a); color: var(--dl-tx); }
+
+/* ── Danh sách ── */
+.hub-cf-debt-ledger .dl-list { gap: 10px; }
+.hub-cf-debt-ledger .dl-item {
+  position: relative; border-left-width: 3px; border-radius: 14px;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+.hub-cf-debt-ledger .dl-item:hover { border-color: color-mix(in srgb, var(--dl-tx) 20%, transparent); }
+.hub-cf-debt-ledger .dl-item--bad:hover  { border-left-color: var(--dl-neg); }
+.hub-cf-debt-ledger .dl-item--bad  { background: color-mix(in srgb, var(--dl-neg) 5%, var(--dl-surf)); }
+.hub-cf-debt-ledger .dl-item.is-open { background: color-mix(in srgb, var(--dl-tx) 6%, transparent); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18); }
+.hub-cf-debt-ledger .dl-head {
+  position: relative; min-height: 68px; padding: 12px 18px 14px 16px; gap: 16px;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+}
+.hub-cf-debt-ledger .dl-head:hover { background: color-mix(in srgb, var(--dl-tx) 3%, transparent); }
+.hub-cf-debt-ledger .dl-avatar { width: 42px; height: 42px; font-size: 1rem; background: color-mix(in srgb, var(--dl-ac) 16%, transparent); }
+.hub-cf-debt-ledger .dl-item--bad  .dl-avatar { background: color-mix(in srgb, var(--dl-neg) 18%, transparent); }
+.hub-cf-debt-ledger .dl-item--warn .dl-avatar { background: color-mix(in srgb, var(--dl-warn) 18%, transparent); }
+.hub-cf-debt-ledger .dl-item--good .dl-avatar { background: color-mix(in srgb, var(--dl-pos) 18%, transparent); }
+.hub-cf-debt-ledger .dl-name { font-size: 0.98rem; }
+.hub-cf-debt-ledger .dl-amt { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; font-size: 1rem; font-variant-numeric: tabular-nums; }
+.hub-cf-debt-ledger .dl-amt-plus { font-size: 0.72rem; font-weight: 500; color: var(--dl-pos); }
+.hub-cf-debt-ledger .dl-chip { justify-content: center; padding: 6px 12px; font-weight: 500; }
+.hub-cf-debt-ledger .dl-chip--bad  { background: color-mix(in srgb, var(--dl-neg) 12%, transparent); }
+.hub-cf-debt-ledger .dl-chip--warn { background: color-mix(in srgb, var(--dl-warn) 12%, transparent); }
+.hub-cf-debt-ledger .dl-chip--good { background: color-mix(in srgb, var(--dl-pos) 12%, transparent); }
+.hub-cf-debt-ledger .dl-bar {   /* thanh tiến độ mảnh dưới mỗi hàng: thấy ngay khoản nào sắp tới hạn */
+  position: absolute; left: 0; bottom: 0; height: 2px; max-width: 100%; border-radius: 0 2px 2px 0;
+  background: color-mix(in srgb, var(--dl-tx) 40%, transparent);
+}
+.hub-cf-debt-ledger .dl-bar--bad  { background: var(--dl-neg); }
+.hub-cf-debt-ledger .dl-bar--warn { background: var(--dl-warn); }
+.hub-cf-debt-ledger .dl-item.is-open .dl-bar { opacity: 0; }
+
+/* ── Panel chi tiết ── */
+.hub-cf-debt-ledger .dl-panel { gap: 16px; padding: 16px 18px 18px 74px; }
+.hub-cf-debt-ledger .dl-track { height: 6px; }
+.hub-cf-debt-ledger .dl-tl-labels { font-size: 0.75rem; }
+.hub-cf-debt-ledger .dl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.hub-cf-debt-ledger .dl-kv { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--dl-line); border-radius: 12px; background: var(--dl-surf); min-width: 0; }
+.hub-cf-debt-ledger .dl-kv-l { font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.66rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dl-mu); }
+.hub-cf-debt-ledger .dl-kv-v { font-size: 0.9rem; font-weight: 600; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.hub-cf-debt-ledger .dl-kv-v em { font-weight: 400; color: var(--dl-mu); }
+.hub-cf-debt-ledger .dl-kv--pos .dl-kv-v { color: var(--dl-pos); }
+.hub-cf-debt-ledger .dl-kv--strong { border-color: color-mix(in srgb, var(--dl-ac) 45%, transparent); background: color-mix(in srgb, var(--dl-ac) 8%, transparent); }
+.hub-cf-debt-ledger .dl-kv--wide { grid-column: 1 / -1; }
+.hub-cf-debt-ledger .dl-kv--wide .dl-kv-v { font-weight: 400; color: var(--dl-tx); }
+.hub-cf-debt-ledger .dl-acts { gap: 10px; padding-top: 2px; }
+.hub-cf-debt-ledger .dl-act { min-height: 38px; }
+.hub-cf-debt-ledger .dl-act--primary { background: color-mix(in srgb, var(--dl-ac) 12%, transparent); }
+.hub-cf-debt-ledger .dl-act--danger { margin-left: auto; color: var(--dl-mu); }
+.hub-cf-debt-ledger .dl-noresult { padding: 36px 12px; border: 1px dashed var(--dl-line); border-radius: 14px; }
+.hub-cf-debt-ledger .dl-undo { background: var(--dl-surf); }
+
+/* ── Empty state ── */
+.hub-cf-debt-empty {
+  flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center;
+  padding: 44px 20px; border: 1px dashed var(--dl-line); border-radius: 16px; background: var(--dl-surf);
+}
+.hub-cf-debt-empty-icon { font-size: 2.2rem; line-height: 1; margin-bottom: 6px; opacity: 0.9; }
+.hub-cf-debt-empty-text { margin: 0; font-size: 0.98rem; font-weight: 600; color: var(--dl-tx); }
+.hub-cf-debt-empty-hint { margin: 0; font-size: 0.84rem; color: var(--dl-mu); }
+.hub-cf-debt-empty-hint strong { color: var(--dl-ac); font-weight: 600; }
+
+/* ============================================================
+   MODAL: Thêm nợ · Lịch sử · Thu nợ
+   ============================================================ */
+.hub-cf-debt-modal, .hub-cf-debt-history-modal, .hub-cf-debt-recovery-modal {
+  display: flex; flex-direction: column; overflow: hidden; max-height: min(92vh, 780px);
+}
+.hub-cf-debt-modal { max-width: 520px; }
+.hub-cf-debt-history-modal { max-width: 560px; }
+.hub-cf-debt-recovery-modal { max-width: 480px; }
+[data-theme="solar-zen"] .hub-cf-debt-modal, [data-theme="solar-zen"] .hub-cf-debt-history-modal, [data-theme="solar-zen"] .hub-cf-debt-recovery-modal { color-scheme: light; }
+.hub-cf-debt-modal, .hub-cf-debt-history-modal, .hub-cf-debt-recovery-modal { color-scheme: dark; }
+:is(.hub-cf-debt-modal, .hub-cf-debt-history-modal, .hub-cf-debt-recovery-modal) .hub-cf-modal-header { flex: 0 0 auto; padding: 18px 24px; }
+:is(.hub-cf-debt-modal, .hub-cf-debt-history-modal, .hub-cf-debt-recovery-modal) .hub-cf-modal-title {
+  margin: 0; font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.82rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--accent-primary, #00e676);
+}
+:is(.hub-cf-debt-modal, .hub-cf-debt-recovery-modal) .hub-cf-modal-body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 20px 24px 0; scrollbar-width: thin;
+}
+:is(.hub-cf-debt-modal, .hub-cf-debt-recovery-modal) .hub-cf-form-group { margin-bottom: 18px; }
+:is(.hub-cf-debt-modal, .hub-cf-debt-recovery-modal) .hub-cf-form-input { min-height: 44px; border-radius: 10px; }
+.hub-cf-debt-modal .hub-cf-amount-input, .hub-cf-debt-recovery-modal .hub-cf-amount-input { font-size: 1.1rem; }
+
+/* select: bỏ mũi tên mặc định của trình duyệt */
+:is(.hub-cf-debt-modal, .hub-cf-debt-recovery-modal) select.hub-cf-form-input {
+  appearance: none; -webkit-appearance: none; -moz-appearance: none; cursor: pointer; padding-right: 38px;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238b8b9e' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center;
+}
+:is(.hub-cf-debt-modal, .hub-cf-debt-recovery-modal) select.hub-cf-form-input option { background: var(--bg-surface, #12121a); color: var(--text-primary, #e8e8ed); }
+
+/* lãi: ô nhập + loại lãi cùng một hàng */
+.hub-cf-debt-interest-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(130px, 40%); gap: 10px; }
+.hub-cf-debt-interest-preview {
+  margin: 8px 0 0; font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.76rem; line-height: 1.5; color: var(--accent-primary, #00e676);
+}
+.hub-cf-debt-interest-preview:empty { display: none; }
+
+/* gợi ý dưới ô */
+.hub-cf-form-hint { margin: 8px 0 0; font-size: 0.78rem; line-height: 1.55; font-weight: 400; color: var(--text-secondary, #8b8b9e); }
+.hub-cf-form-hint strong { font-weight: 600; color: var(--text-primary, #e8e8ed); }
+
+/* ngày + ghi chú */
+.hub-cf-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.hub-cf-debt-modal .hub-cf-date-input { font-size: 0.82rem; }
+.hub-cf-debt-modal .hub-cf-date-input::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.7; }
+.hub-cf-debt-modal .hub-cf-date-input::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+.hub-cf-textarea { min-height: 76px; resize: vertical; line-height: 1.5; font-family: var(--font-body, inherit); }
+
+/* nút dưới modal luôn nhìn thấy khi form dài */
+:is(.hub-cf-debt-modal, .hub-cf-debt-recovery-modal) .hub-cf-form-actions {
+  position: sticky; bottom: 0; z-index: 2; margin: 4px -24px 0; padding: 14px 24px 18px;
+  background: var(--bg-surface, #12121a); border-top: 1px solid var(--glass-border, rgba(255,255,255,0.08));
+}
+[data-theme="solar-zen"] :is(.hub-cf-debt-modal, .hub-cf-debt-recovery-modal) .hub-cf-form-actions { background: var(--bg-surface, #fffaf0); }
+:is(.hub-cf-debt-modal, .hub-cf-debt-recovery-modal) .hub-cf-modal-btn { min-height: 42px; padding: 0 22px; }
+
+/* ── Lịch sử đã thu ── */
+.hub-cf-debt-history-modal .hub-cf-modal-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px 24px 24px; scrollbar-width: thin; }
+.hub-cf-debt-history-modal-list { display: flex; flex-direction: column; gap: 8px; }
+.hub-cf-debt-history-modal-item, .hub-cf-debt-history-item {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px;
+  padding: 12px 14px; border: 1px solid var(--glass-border, rgba(255,255,255,0.08)); border-left: 3px solid var(--success, #2ee6a6);
+  border-radius: 12px; background: color-mix(in srgb, var(--text-primary, #e8e8ed) 4%, transparent);
+}
+.hub-cf-debt-history-modal-main { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.hub-cf-debt-history-modal-debtor { font-size: 0.94rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-cf-debt-history-modal-meta, .hub-cf-debt-history-meta { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 0.76rem; color: var(--text-secondary, #8b8b9e); }
+.hub-cf-debt-history-note { overflow-wrap: anywhere; font-style: italic; }
+.hub-cf-debt-history-modal-amount, .hub-cf-debt-history-amount { font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.92rem; font-weight: 600; white-space: nowrap; color: var(--success, #2ee6a6); }
+.hub-cf-debt-btn--delete {
+  width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; cursor: pointer;
+  font-size: 0.8rem; color: var(--text-secondary, #8b8b9e); background: transparent; border: 1px solid var(--glass-border, rgba(255,255,255,0.1));
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+.hub-cf-debt-btn--delete:hover, .hub-cf-debt-btn--delete:focus-visible { color: var(--danger, #ff5c6c); border-color: var(--danger, #ff5c6c); background: color-mix(in srgb, var(--danger, #ff5c6c) 10%, transparent); outline: none; }
+.hub-cf-debt-history-modal-empty { flex-direction: column; align-items: center; gap: 6px; padding: 40px 12px; text-align: center; color: var(--text-secondary, #8b8b9e); }
+.hub-cf-debt-history-modal-empty .hub-cf-debt-empty-text { font-weight: 500; font-size: 0.9rem; color: inherit; }
+
+/* ── Responsive ── */
+@media (max-width: 900px) and (min-width: 641px) {
+  .hub-cf-debt-ledger .dl-head { grid-template-columns: auto minmax(0, 1fr) auto auto auto; gap: 12px; }
+  .hub-cf-debt-ledger .dl-chip { padding: 5px 10px; }
+}
+@media (max-width: 640px) {
+  .hub-cf-debt-ledger { gap: 14px; padding: 14px; }
+  .hub-cf-debt-header { align-items: stretch; }
+  .hub-cf-debt-ledger .hub-cf-debt-actions { width: 100%; }
+  .hub-cf-debt-ledger .hub-cf-debt-actions .hub-cf-btn { flex: 1 1 0; justify-content: center; padding: 0 10px; }
+  .hub-cf-debt-subtitle strong { font-size: 1.15rem; }
+  .hub-cf-debt-ledger .dl-stat-val { font-size: 1.05rem; }
+  .hub-cf-debt-ledger .dl-filters { width: 100%; overflow-x: auto; flex-wrap: nowrap; border-radius: 14px; scrollbar-width: none; }
+  .hub-cf-debt-ledger .dl-filters::-webkit-scrollbar { display: none; }
+  .hub-cf-debt-ledger .dl-filter { flex: 0 0 auto; }
+  .hub-cf-debt-ledger .dl-tools { flex-basis: 100%; }
+  .hub-cf-debt-ledger .dl-search { max-width: none; }
+  .hub-cf-debt-ledger .dl-head { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "av who chev" "av amt chip"; row-gap: 8px; padding: 12px 12px 14px; }
+  .hub-cf-debt-ledger .dl-amt { align-items: flex-start; }
+  .hub-cf-debt-ledger .dl-panel { padding: 14px 12px 14px; }
+  .hub-cf-debt-ledger .dl-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hub-cf-debt-ledger .dl-acts .dl-act { flex: 1 1 auto; justify-content: center; }
+  .hub-cf-debt-ledger .dl-act--danger { margin-left: 0; }
+  .hub-cf-form-grid, .hub-cf-debt-interest-row { grid-template-columns: 1fr; }
+  :is(.hub-cf-debt-modal, .hub-cf-debt-history-modal, .hub-cf-debt-recovery-modal) { width: 96%; max-height: 94vh; }
+  :is(.hub-cf-debt-modal, .hub-cf-debt-recovery-modal) .hub-cf-modal-body { padding: 16px 16px 0; }
+  :is(.hub-cf-debt-modal, .hub-cf-debt-recovery-modal) .hub-cf-form-actions { margin: 4px -16px 0; padding: 12px 16px 16px; }
+  :is(.hub-cf-debt-modal, .hub-cf-debt-history-modal, .hub-cf-debt-recovery-modal) .hub-cf-modal-header { padding: 14px 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-cf-debt-ledger .dl-item, .hub-cf-debt-ledger .hub-cf-btn { transition: none; }
+}
+
+/* ============================================================
+   DEBT FORM v3 — form thêm/sửa nợ: nhóm mục, chọn nhanh, tóm tắt trực tiếp
+   (JS: _dfRefresh / _dfValidate / _bindDebtFormExtras trong cashflow.js)
+   ============================================================ */
+.hub-cf-debt-modal { max-width: 540px; }
+.hub-cf-debt-modal .hub-cf-modal-body { overflow-x: hidden; }          /* không bao giờ hiện thanh cuộn ngang */
+.hub-cf-debt-modal .hub-cf-form-group, .hub-cf-debt-modal .hub-cf-form-grid > * { min-width: 0; }
+.hub-cf-debt-modal select.hub-cf-form-input { text-overflow: ellipsis; }
+
+/* nhóm mục */
+.hub-cf-df-sec { margin: 0; }
+.hub-cf-df-sec + .hub-cf-df-sec, .hub-cf-df-sec + .hub-cf-form-group { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--glass-border, rgba(255,255,255,0.08)); }
+.hub-cf-df-sec .hub-cf-form-grid { gap: 0 12px; }
+.hub-cf-df-sec .hub-cf-form-grid .hub-cf-form-group { margin-bottom: 14px; }
+.hub-cf-df-sec-title {
+  display: flex; align-items: center; gap: 8px; margin: 0 0 14px;
+  font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.68rem; font-weight: 700; line-height: 1; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--accent-primary, #00e676);
+}
+.hub-cf-df-sec-title::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
+
+/* nhãn + giá trị sống cùng hàng */
+.hub-cf-df-labelrow { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.hub-cf-df-labelrow .hub-cf-form-label { margin: 0; }
+.hub-cf-df-live { font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.78rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--accent-primary, #00e676); text-align: right; overflow-wrap: anywhere; }
+
+/* ô nhập có hậu tố ₫ / % */
+.hub-cf-df-field { position: relative; min-width: 0; }
+.hub-cf-df-field .hub-cf-form-input { padding-right: 40px; }
+.hub-cf-df-suffix { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); pointer-events: none; font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.9rem; color: var(--text-secondary, #8b8b9e); }
+
+/* chip chọn nhanh */
+.hub-cf-df-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.hub-cf-df-chips-label { margin-right: 2px; font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.64rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-secondary, #8b8b9e); }
+.hub-cf-df-chip {
+  min-height: 30px; padding: 0 12px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--glass-border, rgba(255,255,255,0.12)); background: transparent; color: var(--text-secondary, #8b8b9e);
+  font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.74rem; font-weight: 600; white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+.hub-cf-df-chip:hover, .hub-cf-df-chip:focus-visible, .hub-cf-df-chip.is-active {
+  color: var(--accent-primary, #00e676); outline: none;
+  border-color: color-mix(in srgb, var(--accent-primary, #00e676) 55%, transparent);
+  background: color-mix(in srgb, var(--accent-primary, #00e676) 10%, transparent);
+}
+.hub-cf-df-chip.is-active { font-weight: 700; }
+
+/* lỗi tại chỗ */
+.hub-cf-df-err { margin: 8px 0 0; font-size: 0.78rem; line-height: 1.4; color: var(--danger, #ff5c6c); }
+.hub-cf-df-err[hidden] { display: none; }
+.hub-cf-debt-modal .hub-cf-form-input[aria-invalid="true"] { border-color: var(--danger, #ff5c6c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger, #ff5c6c) 14%, transparent); }
+
+/* số dư ví */
+.hub-cf-df-wallet {
+  display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 10px 0 0; padding: 9px 12px; border-radius: 10px;
+  font-size: 0.78rem; line-height: 1.4; color: var(--text-secondary, #8b8b9e);
+  background: color-mix(in srgb, var(--text-primary, #e8e8ed) 5%, transparent);
+}
+.hub-cf-df-wallet strong { font-family: var(--font-mono, ui-monospace, monospace); font-weight: 600; color: var(--text-primary, #e8e8ed); }
+.hub-cf-df-wallet.is-warn { color: var(--danger, #ff5c6c); background: color-mix(in srgb, var(--danger, #ff5c6c) 10%, transparent); }
+.hub-cf-df-wallet.is-warn strong { color: inherit; }
+
+/* loại lãi: nút chọn thay cho select */
+.hub-cf-debt-interest-row { grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; }
+.hub-cf-df-seg { display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 3px; padding: 3px; min-height: 44px; border-radius: 10px; border: 1px solid var(--glass-border, rgba(255,255,255,0.1)); background: color-mix(in srgb, var(--text-primary, #e8e8ed) 4%, transparent); }
+.hub-cf-df-seg-btn {
+  padding: 0 14px; border: 0; border-radius: 7px; cursor: pointer; white-space: nowrap; background: transparent; color: var(--text-secondary, #8b8b9e);
+  font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.76rem; font-weight: 600; transition: color 0.15s, background-color 0.15s;
+}
+.hub-cf-df-seg-btn:hover { color: var(--text-primary, #e8e8ed); }
+.hub-cf-df-seg-btn:focus-visible { outline: 2px solid var(--accent-primary, #00e676); outline-offset: 1px; }
+.hub-cf-df-seg-btn[aria-checked="true"] { background: var(--accent-primary, #00e676); color: #04130b; }
+.hub-cf-df-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; opacity: 0; pointer-events: none; }
+.hub-cf-debt-interest-preview { font-weight: 600; }
+
+/* kỳ hạn */
+.hub-cf-df-term { margin: 8px 0 0; min-height: 1.1em; font-size: 0.78rem; color: var(--text-secondary, #8b8b9e); }
+.hub-cf-df-term:empty { display: none; }
+.hub-cf-df-count { margin-top: 4px; text-align: right; font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.68rem; color: var(--text-secondary, #8b8b9e); }
+
+/* tóm tắt khoản vay */
+.hub-cf-df-summary {
+  margin: 6px 0 18px; padding: 14px 16px; border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent-primary, #00e676) 28%, transparent);
+  background: color-mix(in srgb, var(--accent-primary, #00e676) 6%, transparent);
+}
+.hub-cf-df-sum-title { margin: 0 0 10px; font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.66rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-secondary, #8b8b9e); }
+.hub-cf-df-sum-empty { margin: 0; font-size: 0.82rem; color: var(--text-secondary, #8b8b9e); }
+.hub-cf-df-sum-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; }
+.hub-cf-df-sum-item { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.hub-cf-df-sum-k { font-size: 0.72rem; color: var(--text-secondary, #8b8b9e); }
+.hub-cf-df-sum-v { font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.92rem; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; color: var(--text-primary, #e8e8ed); }
+.hub-cf-df-sum-item--total .hub-cf-df-sum-v { font-size: 1.05rem; color: var(--accent-primary, #00e676); }
+
+@media (max-width: 640px) {
+  .hub-cf-debt-interest-row { grid-template-columns: 1fr; }
+  .hub-cf-df-seg { width: 100%; }
+  .hub-cf-df-seg-btn { padding: 0 8px; }
+  .hub-cf-df-sum-grid { gap: 10px 12px; }
+  .hub-cf-debt-modal .hub-cf-form-grid { grid-template-columns: 1fr; }
+  .hub-cf-df-sec .hub-cf-form-grid .hub-cf-form-group { margin-bottom: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-cf-df-chip, .hub-cf-df-seg-btn { transition: none; }
+}
+/* ═══════════════════════════════════════════════════════════════
+   FLASHCARD — Study Stats panel (heatmap, streak, recall, forecast)
+   ═══════════════════════════════════════════════════════════════ */
+.fc-stats {
+  width: 100%;
+  margin: 4px 0 14px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+}
+.fc-stats-title {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+.fc-stats-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.fc-stat { display: grid; gap: 2px; }
+.fc-stat strong {
+  font-family: var(--font-mono);
+  font-size: 1.15rem;
+  line-height: 1.1;
+  color: var(--text-primary);
+}
+.fc-stat span {
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.fc-stats-charts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 22px;
+  align-items: end;
+}
+.fc-stats-cap {
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+/* 12 weeks × 7 days, filled column by column */
+.fc-heat {
+  display: grid;
+  grid-template-rows: repeat(7, 11px);
+  grid-auto-flow: column;
+  grid-auto-columns: 11px;
+  gap: 3px;
+}
+.fc-heat-cell {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--text-muted) 16%, transparent);
+}
+.fc-heat-cell[data-l="f"] { background: transparent; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-muted) 12%, transparent); }
+.fc-heat-cell[data-l="1"] { background: color-mix(in srgb, var(--accent-primary) 28%, transparent); }
+.fc-heat-cell[data-l="2"] { background: color-mix(in srgb, var(--accent-primary) 50%, transparent); }
+.fc-heat-cell[data-l="3"] { background: color-mix(in srgb, var(--accent-primary) 75%, transparent); }
+.fc-heat-cell[data-l="4"] { background: var(--accent-primary); }
+
+/* 7-day due forecast */
+.fc-fc {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  height: 78px;
+  align-items: end;
+}
+.fc-fc-col { display: grid; grid-template-rows: auto 1fr auto; justify-items: center; gap: 3px; height: 100%; }
+.fc-fc-val { font-family: var(--font-mono); font-size: 0.58rem; color: var(--text-secondary); }
+.fc-fc-bar {
+  position: relative;
+  width: 100%;
+  max-width: 22px;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--text-muted) 10%, transparent);
+  overflow: hidden;
+}
+.fc-fc-bar i {
+  display: block;
+  width: 100%;
+  min-height: 2px;
+  border-radius: 4px;
+  background: var(--accent-primary);
+  opacity: 0.85;
+}
+.fc-fc-lab { font-family: var(--font-mono); font-size: 0.54rem; color: var(--text-muted); }
+.fc-stats-empty {
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--text-muted);
+}
+.fc-held-back { color: var(--warning, #ffb300); }
+
+@media (max-width: 560px) {
+  .fc-stats-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fc-stats-charts { grid-template-columns: 1fr; gap: 14px; }
+  .fc-heat { justify-content: start; }
+}
+body.theme-optimized .fc-fc-bar i { opacity: 1; }
+/* ==========================================================
+   FLASHCARD FACE DESIGN  (appended — additive, overrides by cascade)
+   1. Card-state colour + badge     2. Front typography hierarchy
+   3. CJK front + phonetic toggle   4. Back: core view + "Show more"
+   5. Target-word highlight         6. Image thumbnail
+   All colours come from the theme variables, so every theme
+   (dark / solar-zen / …) follows automatically.
+   ========================================================== */
+
+/* ---------- 1. Card state (new · learning · young · mature · struggling) ---------- */
+.card-state-new        { --fc-state: var(--accent-primary); }
+.card-state-learning   { --fc-state: #ff922b; }
+.card-state-young      { --fc-state: var(--success); }
+.card-state-mature     { --fc-state: var(--accent-secondary); }
+.card-state-struggling { --fc-state: var(--danger); }
+
+.card-state-badge {
+  position: absolute;
+  top: var(--space-md);
+  left: var(--space-md);
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px 2px 8px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fc-state, var(--text-secondary));
+  background: var(--glass-highlight);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-full);
+  pointer-events: none;
+}
+.card-state-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+/* cloze front starts with the tip bar at the top → park the badge at the bottom instead */
+.card-front-cloze .card-state-badge {
+  top: auto;
+  bottom: var(--space-md);
+}
+
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  .card-front[class*="card-state-"] {
+    border-color: color-mix(in srgb, var(--fc-state) 38%, var(--glass-border));
+    box-shadow: 0 0 26px -10px color-mix(in srgb, var(--fc-state) 55%, transparent);
+  }
+  .card-back[class*="card-state-"] {
+    border-color: color-mix(in srgb, var(--fc-state) 32%, transparent);
+  }
+  .card-state-badge {
+    background: color-mix(in srgb, var(--fc-state) 12%, transparent);
+    border-color: color-mix(in srgb, var(--fc-state) 32%, transparent);
+  }
+}
+
+/* ---------- 2. Front typography: the word leads, everything else steps back ---------- */
+.card-front .card-term {
+  font-size: clamp(1.7rem, 1.2rem + 2.6vw, 2.9rem);
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+.card-front .card-pos {
+  font-size: 0.68rem;
+  padding: 2px 10px;
+  color: var(--text-secondary);
+  border-color: var(--glass-border);
+  background: transparent;
+}
+.card-front .card-phonetic-front {
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+  margin-top: 0;
+}
+
+/* ---------- 3. CJK front (hanzi) + phonetic/pinyin toggle ---------- */
+.card-front .card-term.card-term--cjk {
+  font-family: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+               'Source Han Sans SC', var(--font-body), sans-serif;
+  font-size: clamp(3rem, 2rem + 4.5vw, 4.6rem);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  line-height: 1.1;
+}
+.card-pinyin-toggle {
+  position: absolute;
+  right: var(--space-md);
+  bottom: var(--space-md);
+  z-index: 3;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 0.85rem;
+  line-height: 1;
+  color: var(--text-secondary);
+  background: var(--glass-highlight);
+  border: 1px solid var(--glass-border);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: color var(--duration-fast), border-color var(--duration-fast), background var(--duration-fast);
+}
+.card-pinyin-toggle:hover,
+.card-pinyin-toggle:focus-visible,
+.card-pinyin-toggle[aria-pressed="true"] {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  outline: none;
+}
+.card-pinyin-toggle[aria-pressed="true"] { text-decoration: line-through; }
+/* visibility (not display) → the layout never jumps when it is toggled */
+.fc-hide-front-phonetic .card-term--cjk ~ .card-phonetic-front { visibility: hidden; }
+
+/* ---------- 4. Back face: core view + collapsible "Show more" ---------- */
+.card-core { display: block; }
+.card-core-main { min-width: 0; }
+
+.card-more {
+  margin-top: var(--space-sm);
+  border-top: 1px dashed var(--glass-border);
+}
+.card-more-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 4px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  border-radius: var(--radius-sm);
+  transition: color var(--duration-fast);
+}
+.card-more-summary::-webkit-details-marker { display: none; }
+.card-more-summary::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  margin: 0 4px 3px 0;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--duration-fast) var(--ease-out-expo);
+}
+.card-more[open] > .card-more-summary::before { transform: rotate(45deg); margin-bottom: 4px; }
+.card-more-summary:hover,
+.card-more-summary:focus-visible { color: var(--accent-primary); outline: none; }
+.card-more-summary:focus-visible { box-shadow: 0 0 0 2px var(--accent-primary); }
+.card-more-count {
+  margin-left: auto;
+  min-width: 22px;
+  padding: 1px 7px;
+  text-align: center;
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  background: var(--glass-highlight);
+  border-radius: var(--radius-full);
+}
+.card-more-when-open { display: none; }
+.card-more[open] .card-more-when-open   { display: inline; }
+.card-more[open] .card-more-when-closed { display: none; }
+.card-more-body { animation: fcMoreIn var(--duration-base) var(--ease-out-expo); }
+@keyframes fcMoreIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Core view is kept compact so meaning + first example fit without scrolling */
+.card-core-lead {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-lg);
+  align-items: flex-start;
+  border-bottom: 1px solid var(--glass-border);
+}
+.card-core-lead > .card-section { border-bottom: none; min-width: 0; }
+.card-core .card-section { padding: 7px 0; }
+.card-core .card-section-label { margin-bottom: 4px; }
+
+/* ---------- 5. Target word highlighted inside example sentences ---------- */
+.card-term-hl {
+  padding: 0 3px;
+  font-style: normal;
+  font-weight: 600;
+  color: var(--accent-primary);
+  background: var(--glass-highlight);
+  border-radius: 3px;
+}
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  .card-term-hl { background: color-mix(in srgb, var(--accent-primary) 14%, transparent); }
+}
+
+/* ---------- 6. Image: shown on the FRONT face (visual memory cue) ---------- */
+.card-front-img {
+  display: block;
+  flex: none;                  /* never shrink → every photo renders at the same size */
+  width: auto;                 /* keep the photo's own aspect ratio */
+  height: 140px;               /* fixed height → same size on every card */
+  max-width: 92%;
+  min-height: 0;
+  margin: 0 auto var(--space-md);
+  object-fit: contain;         /* show the WHOLE photo, never crop it */
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-sm);
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.card-front-img--compact {
+  height: 110px;
+  margin-bottom: var(--space-sm);
+}
+/* A card that has a photo gets a taller stage + tighter padding, so the photo
+   keeps its full size even when the term wraps onto two lines. */
+.card-stage:has(.card-front-img) { aspect-ratio: 4 / 3; }
+.card-face:has(> .card-front-img) { padding: var(--space-lg); }
+.card-front:has(> .card-front-img) { gap: var(--space-sm); }
+
+/* Cloze front is crowded: never clip content, centre only when it fits */
+.card-front-cloze {
+  overflow-y: auto;
+  justify-content: safe center;
+}
+
+@media (max-width: 640px) {
+  .card-front-img           { height: 120px; margin-bottom: var(--space-sm); }
+  .card-front-img--compact  { height: 96px; }
+  .card-stage:has(.card-front-img) { aspect-ratio: 1 / 1; }
+  .card-state-badge  { font-size: 0.58rem; top: var(--space-sm); left: var(--space-sm); }
+  .card-front-cloze .card-state-badge { top: auto; bottom: var(--space-sm); }
+  .card-pinyin-toggle { right: var(--space-sm); bottom: var(--space-sm); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-more-body { animation: none; }
+  .card-more-summary::before { transition: none; }
+}
+/* ═══════════════════════════════════════════════════════════════
+   FLASHCARD — Fading Memory Wall (.fc-wall-*)
+   Photo tiles blur + grey out as estimated recall drops; a review
+   sharpens them again. Driven by one custom property: --fade (0..1).
+   Themes: cyberpunk (default) · solar-zen · lofi-twilight · body.theme-optimized
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Registered so --fade can be transitioned (old → new fade after a review). */
+@property --fade {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+/* ── Tile ── */
+.fc-wall-tile {
+  --fade: 0;
+  --lv-color: var(--accent-primary);
+  position: relative;
+  display: block;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  border-radius: var(--radius-xs, 4px);
+  border: 1px solid color-mix(in srgb, var(--lv-color) 55%, transparent);
+  background: var(--bg-elevated);
+  cursor: inherit;
+  font: inherit;
+  transition: --fade 1.1s var(--ease-out-expo), border-color 0.4s ease, box-shadow 0.4s ease;
+}
+button.fc-wall-tile { cursor: pointer; }
+.fc-wall-tile[data-lv="fresh"]    { --lv-color: var(--success); }
+.fc-wall-tile[data-lv="ok"]       { --lv-color: var(--accent-primary); }
+.fc-wall-tile[data-lv="fading"]   { --lv-color: var(--warning, #ffb347); }
+.fc-wall-tile[data-lv="critical"] { --lv-color: var(--danger); }
+.fc-wall-tile[data-lv="new"]      { --lv-color: var(--text-muted); border-style: dashed; }
+
+.fc-wall-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+  -webkit-user-drag: none;
+  /* hide the soft transparent edge a blur leaves behind */
+  transform: scale(calc(1 + var(--fade) * 0.12));
+  filter:
+    blur(calc(var(--fade) * 5px))
+    grayscale(calc(var(--fade) * 0.95))
+    brightness(calc(1 - var(--fade) * 0.12));
+}
+/* A veil in the theme's own surface colour: dark themes dim, the light theme washes out */
+.fc-wall-fog {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--bg-surface);
+  opacity: calc(var(--fade) * 0.4);
+}
+.fc-wall-grid .fc-wall-tile.is-selected {
+  box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--lv-color);
+}
+button.fc-wall-tile:focus-visible,
+.fc-wall-mini[role="button"]:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+/* ── Grids ── */
+.fc-wall-grid { display: grid; gap: 4px; }
+.fc-wall-grid--mini { grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); }
+.fc-wall-grid--full {
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 8px;
+  max-height: min(46vh, 420px);
+  overflow-y: auto;
+  padding: 4px;
+  margin: 0 -4px;
+}
+.fc-wall-extra {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius-xs, 4px);
+  border: 1px dashed var(--glass-border);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--text-muted);
+}
+
+/* ── Mini wall inside a deck card ── */
+.fc-wall-mini {
+  margin: 12px 0 4px;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--glass-border);
+  cursor: pointer;
+}
+.fc-wall-mini-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  color: var(--text-muted);
+}
+.fc-wall-mini-pct { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.fc-wall-mini:hover .fc-wall-mini-title { color: var(--accent-primary); }
+.fc-wall-mini--empty {
+  cursor: default;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* ── Modal ── */
+.fc-wall-modal {
+  width: min(720px, 92vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 22px 24px 20px;
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+}
+.fc-wall-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.fc-wall-modal-title { margin: 0 0 4px; font-size: 1.15rem; color: var(--text-primary); }
+.fc-wall-modal-sub {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.fc-wall-close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+.fc-wall-close:hover { color: var(--text-primary); border-color: var(--accent-primary); }
+.fc-wall-close:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+.fc-wall-hint {
+  margin: 14px 0 10px;
+  max-width: 62ch;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+.fc-wall-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-bottom: 14px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--text-muted);
+}
+.fc-wall-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.fc-wall-legend-item i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--lv-color, var(--accent-primary));
+}
+.fc-wall-legend-item[data-lv="fresh"]    { --lv-color: var(--success); }
+.fc-wall-legend-item[data-lv="ok"]       { --lv-color: var(--accent-primary); }
+.fc-wall-legend-item[data-lv="fading"]   { --lv-color: var(--warning, #ffb347); }
+.fc-wall-legend-item[data-lv="critical"] { --lv-color: var(--danger); }
+.fc-wall-legend-item[data-lv="new"] i    { background: transparent; border: 1px dashed var(--text-muted); }
+.fc-wall-tilehint {
+  margin: 10px 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--text-muted);
+}
+
+/* ── Expanded tile detail ── */
+.fc-wall-detail {
+  --lv-color: var(--accent-primary);
+  display: flex;
+  gap: 16px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+  border-left: 3px solid var(--lv-color);
+  background: var(--bg-elevated);
+  animation: fcWallDetailIn 0.28s var(--ease-out-expo);
+}
+.fc-wall-detail[hidden] { display: none; }
+.fc-wall-detail[data-lv="fresh"]    { --lv-color: var(--success); }
+.fc-wall-detail[data-lv="fading"]   { --lv-color: var(--warning, #ffb347); }
+.fc-wall-detail[data-lv="critical"] { --lv-color: var(--danger); }
+.fc-wall-detail[data-lv="new"]      { --lv-color: var(--text-muted); }
+.fc-wall-detail-img {
+  flex: none;
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: var(--radius-xs, 4px);
+}
+.fc-wall-detail-body { min-width: 0; flex: 1; }
+.fc-wall-detail-term {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.fc-wall-detail-lv {
+  margin: 2px 0 8px;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  color: var(--lv-color, var(--text-secondary));
+}
+.fc-wall-detail-lv[data-lv="fresh"]    { --lv-color: var(--success); }
+.fc-wall-detail-lv[data-lv="ok"]       { --lv-color: var(--accent-primary); }
+.fc-wall-detail-lv[data-lv="fading"]   { --lv-color: var(--warning, #ffb347); }
+.fc-wall-detail-lv[data-lv="critical"] { --lv-color: var(--danger); }
+.fc-wall-detail-list { display: grid; gap: 3px; margin: 0; }
+.fc-wall-detail-list > div { display: flex; justify-content: space-between; gap: 12px; font-size: 0.78rem; }
+.fc-wall-detail-list dt { color: var(--text-muted); }
+.fc-wall-detail-list dd { margin: 0; color: var(--text-primary); font-variant-numeric: tabular-nums; text-align: right; }
+@keyframes fcWallDetailIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+.fc-wall-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
+.fc-wall-rescue[disabled] { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+
+@media (max-width: 560px) {
+  .fc-wall-modal { padding: 18px 16px 16px; }
+  .fc-wall-grid--full { grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 6px; }
+  .fc-wall-detail { flex-direction: column; }
+  .fc-wall-detail-img { width: 100%; height: 150px; }
+  .fc-wall-rescue { width: 100%; }
+}
+
+/* ── Theme: Cyberpunk (default) — neon glow on healthy memories, red glow on the ones about to go ── */
+.fc-wall-tile[data-lv="fresh"]    { box-shadow: 0 0 8px color-mix(in srgb, var(--success) 35%, transparent); }
+.fc-wall-tile[data-lv="critical"] { box-shadow: 0 0 8px color-mix(in srgb, var(--danger) 35%, transparent); }
+.fc-wall-modal { box-shadow: var(--accent-glow); }
+
+/* ── Theme: Solar Zen (light) — paper-like: soft shadows, no glow, gentler wash ── */
+[data-theme="solar-zen"] .fc-wall-tile,
+[data-theme="solar-zen"] .fc-wall-tile[data-lv="fresh"],
+[data-theme="solar-zen"] .fc-wall-tile[data-lv="critical"] { box-shadow: var(--shadow-sm); }
+[data-theme="solar-zen"] .fc-wall-grid .fc-wall-tile.is-selected { box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--lv-color); }
+[data-theme="solar-zen"] .fc-wall-fog   { opacity: calc(var(--fade) * 0.55); }
+[data-theme="solar-zen"] .fc-wall-modal { box-shadow: var(--shadow-lg); }
+[data-theme="solar-zen"] .fc-wall-detail { background: var(--bg-elevated); }
+
+/* ── Theme: Lo-Fi Twilight (soft dark) — faded-polaroid warmth instead of cold grey ── */
+[data-theme="lofi-twilight"] .fc-wall-img {
+  filter:
+    blur(calc(var(--fade) * 5px))
+    grayscale(calc(var(--fade) * 0.8))
+    sepia(calc(var(--fade) * 0.25))
+    brightness(calc(1 - var(--fade) * 0.12));
+}
+[data-theme="lofi-twilight"] .fc-wall-tile[data-lv="fresh"]    { box-shadow: 0 0 10px color-mix(in srgb, var(--success) 22%, transparent); }
+[data-theme="lofi-twilight"] .fc-wall-tile[data-lv="critical"] { box-shadow: 0 0 10px color-mix(in srgb, var(--danger) 22%, transparent); }
+[data-theme="lofi-twilight"] .fc-wall-modal { box-shadow: var(--shadow-lg); }
+
+/* ── Theme: Optimized (performance mode) — no blur, no glow, no transitions.
+      Fading is conveyed with opacity + the level border, which cost nothing to paint. ── */
+body.theme-optimized .fc-wall-tile {
+  transition: none;
+  box-shadow: none;
+}
+body.theme-optimized .fc-wall-grid .fc-wall-tile.is-selected { box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--lv-color); }
+body.theme-optimized .fc-wall-img {
+  filter: none;
+  transform: none;
+  opacity: calc(1 - var(--fade) * 0.6);
+}
+body.theme-optimized .fc-wall-fog   { opacity: calc(var(--fade) * 0.2); }
+body.theme-optimized .fc-wall-modal { box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+body.theme-optimized .fc-wall-detail { animation: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fc-wall-tile { transition: border-color 0.2s ease; }
+  .fc-wall-detail { animation: none; }
+}
+
+/* ============================================================
+   LITE MODE — body.perf-lite
+   Keeps the active theme's colours (cyberpunk / solar-zen /
+   lofi-twilight) but removes what costs GPU time on weak
+   machines: backdrop blur, glow filters, decorative infinite
+   animations, the full-screen dot grid and hover lifts.
+   Functional motion is kept: spinners, loading dots, alarms and
+   urgent-timer pulses, the 3D card flip.
+   body.theme-optimized (black/green) is stricter and always wins.
+   Toggled by modules/perf-lite.js (Auto / On / Off).
+   ============================================================ */
+
+/* 1) Glass without the blur: make the panels nearly opaque so text stays readable. */
+body.perf-lite {
+  --glass-bg: color-mix(in srgb, var(--bg-surface) 94%, transparent);
+  /* Glow tokens → inert but still valid inside multi-value box-shadow lists */
+  --accent-glow:   0 0 0 0 transparent;
+  --shadow-glow:   0 0 0 0 transparent;
+  --zh-glow:       0 0 0 0 transparent;
+  --zh-glow-gold:  0 0 0 0 transparent;
+  --theme-transition: none;
+}
+body.perf-lite *,
+body.perf-lite *::before,
+body.perf-lite *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  text-shadow: none !important;
+}
+
+/* 2) Static background: no full-screen dot-grid layer, no colour cross-fade on <body>. */
+body.perf-lite { transition: none; }
+body.perf-lite::before { background-image: none !important; }
+
+/* 3) Panels: no animated shadow / lift on hover. */
+body.perf-lite .glass,
+body.perf-lite .glass-card { transition: none; }
+body.perf-lite .glass-card:hover { transform: none; box-shadow: none; }
+
+/* 4) Decorative infinite animations off (functional ones are deliberately NOT listed). */
+body.perf-lite .status-dot--online,
+body.perf-lite .widget-stat-value--due.has-due,
+body.perf-lite .chart-bar--today,
+body.perf-lite .quiz-badge-live,
+body.perf-lite .quiz-option.option-selected,
+body.perf-lite .srs-completion-icon,
+body.perf-lite .trigger-icon,
+body.perf-lite .focus-vibe-play-btn.playing,
+body.perf-lite .status-indicator--auth .status-dot,
+body.perf-lite .cyber-btn-primary:hover:not(:disabled) .cyber-btn-glitch,
+body.perf-lite .hub-quiz-share-code-display,
+body.perf-lite .zh-architect-sigil,
+body.perf-lite .zh-architect-status-dot,
+body.perf-lite .zh-architect-scanline,
+body.perf-lite .hub-notes-locked-icon {
+  animation: none !important;
+}
+
+/* 5) Neon glow filters off. */
+body.perf-lite .widget-v2-icon-ring .widget-icon,
+body.perf-lite .widget-stat-value--cyan,
+body.perf-lite .widget-stat-value--purple,
+body.perf-lite .widget-stat-value--green,
+body.perf-lite .widget-stat-value--due.has-due,
+body.perf-lite .generate-modal-icon svg,
+body.perf-lite .timer-ring-progress,
+body.perf-lite .timer-ring-progress.break-mode,
+body.perf-lite .settings-modal-icon-svg,
+body.perf-lite .backup-modal-icon-svg,
+body.perf-lite .srs-completion-icon,
+body.perf-lite .studio-vibe-card-icon,
+body.perf-lite .hub-notes-timer-progress,
+body.perf-lite .cyber-auth-lock,
+body.perf-lite .hub-flashcard-vault-icon,
+body.perf-lite .hub-flashcard-tip-icon,
+body.perf-lite .hub-notes-locked-icon {
+  filter: none !important;
+}
+
+/* 6) Fading Memory Wall: same approach as Optimize — opacity instead of blur. */
+body.perf-lite .fc-wall-tile { transition: none; box-shadow: none; }
+body.perf-lite .fc-wall-grid .fc-wall-tile.is-selected { box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--lv-color); }
+body.perf-lite .fc-wall-img { filter: none; transform: none; opacity: calc(1 - var(--fade) * 0.6); }
+body.perf-lite .fc-wall-fog { opacity: calc(var(--fade) * 0.25); }
+body.perf-lite .fc-wall-modal { box-shadow: none; }
+body.perf-lite .fc-wall-detail { animation: none; }
+
+/* ── Settings control (static markup in index.html, wired by perf-lite.js) ── */
+.hub-perf-seg {
+  flex-shrink: 0;
+  display: inline-flex;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.hub-perf-seg button {
+  padding: 7px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+.hub-perf-seg button + button { border-left: 1px solid var(--glass-border); }
+.hub-perf-seg button[aria-pressed="true"] { background: var(--accent-primary); color: var(--bg-deep); font-weight: 700; }
+.hub-perf-seg button:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: -2px; }
+.hub-perf-status { display: block; margin-top: 4px; font-family: var(--font-mono); font-size: 0.62rem; color: var(--text-muted); }
+body.theme-optimized .hub-perf-seg button[aria-pressed="true"] { background: #00FF41; color: #000; }
+@media (max-width: 560px) { .hub-perf-seg button { padding: 7px 10px; } }
