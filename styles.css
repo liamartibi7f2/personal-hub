@@ -22920,3 +22920,782 @@ body.perf-lite .fc-wall-detail { animation: none; }
 .hub-perf-status { display: block; margin-top: 4px; font-family: var(--font-mono); font-size: 0.62rem; color: var(--text-muted); }
 body.theme-optimized .hub-perf-seg button[aria-pressed="true"] { background: #00FF41; color: #000; }
 @media (max-width: 560px) { .hub-perf-seg button { padding: 7px 10px; } }
+
+
+/* ============================================================
+   SAVINGS GOALS (.cfg-*) — Mục tiêu tiết kiệm có tiến độ
+   Token riêng cho 4 theme:
+     1) cyberpunk (mặc định, neon tối)   2) solar-zen (sáng)
+     3) lofi-twilight (tối dịu)          4) optimized (Matrix / perf-lite)
+   Mọi màu / bo góc / bóng đổ của khối này đều đi qua --cfg-* nên
+   chỉ cần chỉnh ở phần "THEME TOKENS" bên dưới.
+   ============================================================ */
+
+/* ── Token mặc định = Cyberpunk. Đặt trên cả .cfg (thẻ) và .cfg-overlay (modal nằm ngoài .cfg) ── */
+.cfg, .cfg-overlay {
+  --cfg-accent:      var(--accent-primary, #00f0ff);
+  --cfg-on-accent:   var(--bg-deep, #0a0a0f);
+  --cfg-gold:        #f5c451;
+  --cfg-ok:          var(--success, #44ff88);
+  --cfg-warn:        #ffb347;
+  --cfg-bad:         var(--danger, #ff4466);
+  --cfg-info:        var(--text-muted, #8b8b9e);
+  --cfg-line:        var(--glass-border, rgba(255, 255, 255, 0.09));
+  --cfg-line-strong: rgba(255, 255, 255, 0.14);
+  --cfg-surface:     color-mix(in srgb, var(--bg-elevated, #1a1a26) 55%, transparent);
+  --cfg-field:       color-mix(in srgb, var(--bg-elevated, #1a1a26) 70%, transparent);
+  --cfg-track:       color-mix(in srgb, var(--text-primary, #e8e8ed) 9%, transparent);
+  --cfg-tick:        color-mix(in srgb, var(--bg-deep, #0a0a0f) 70%, transparent);
+  --cfg-card-shadow: none;
+  --cfg-card-hover:  0 8px 28px rgba(0, 0, 0, 0.35);
+  --cfg-achieved-glow: 0 0 28px color-mix(in srgb, var(--cfg-gold) 14%, transparent);
+  --cfg-btn-glow:    0 4px 16px color-mix(in srgb, var(--cfg-accent) 28%, transparent);
+  --cfg-btn-glow-h:  0 6px 22px color-mix(in srgb, var(--cfg-accent) 42%, transparent);
+  --cfg-ring-glow:   drop-shadow(0 0 4px color-mix(in srgb, var(--tone, var(--cfg-accent)) 45%, transparent));
+  --cfg-r-card: 16px;
+  --cfg-r-ctl:  10px;
+  --cfg-r-pill: 99px;
+  --cfg-mono: var(--font-mono, 'JetBrains Mono', monospace);
+}
+.cfg {
+  margin-top: var(--space-lg, 24px);
+  padding: 20px 22px 18px;
+  color: var(--text-primary);
+}
+.cfg *, .cfg *::before, .cfg *::after { box-sizing: border-box; }
+.cfg [hidden] { display: none !important; }
+.cfg button { font-family: inherit; }
+.cfg button:focus-visible, .cfg-overlay button:focus-visible { outline: 2px solid var(--cfg-accent); outline-offset: 2px; }
+
+.cfg .is-ok     { --tone: var(--cfg-ok); }
+.cfg .is-warn   { --tone: var(--cfg-warn); }
+.cfg .is-danger { --tone: var(--cfg-bad); }
+.cfg .is-info   { --tone: var(--cfg-info); }
+.cfg .is-gold   { --tone: var(--cfg-gold); }
+
+/* ── Header ── */
+.cfg-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.cfg-titles h4 { margin: 0; font-family: var(--cfg-mono); font-size: 0.82rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-secondary); font-weight: 600; }
+.cfg-sub { margin: 4px 0 0; font-size: 0.74rem; color: var(--text-muted); }
+
+/* ── Buttons ── */
+.cfg-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 36px; padding: 0 14px;
+  border-radius: var(--cfg-r-ctl); cursor: pointer; font-size: 0.78rem; font-weight: 600; color: var(--text-primary);
+  background: var(--cfg-surface); border: 1px solid var(--cfg-line); transition: all 0.2s;
+}
+.cfg-btn:hover { border-color: color-mix(in srgb, var(--cfg-accent) 50%, transparent); color: var(--cfg-accent); transform: translateY(-1px); }
+.cfg-btn--primary { background: var(--cfg-accent); color: var(--cfg-on-accent); border-color: transparent; box-shadow: var(--cfg-btn-glow); }
+.cfg-btn--primary:hover { color: var(--cfg-on-accent); box-shadow: var(--cfg-btn-glow-h); }
+.cfg-btn--ghost { background: transparent; color: var(--text-secondary); margin-left: auto; }
+.cfg-chev { display: inline-grid; transition: transform 0.2s; }
+.cfg-chev.is-open { transform: rotate(180deg); }
+.cfg-link { display: block; margin: 16px auto 0; background: none; border: 0; color: var(--text-muted); font-size: 0.74rem; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.cfg-link:hover { color: var(--cfg-accent); }
+.cfg-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 30px; height: 30px; padding: 0 7px; border-radius: 8px; cursor: pointer;
+  background: transparent; border: 1px solid transparent; color: var(--text-muted); font-size: 0.7rem; transition: all 0.2s;
+}
+.cfg-icon-btn:hover { color: var(--text-primary); border-color: var(--cfg-line); background: var(--cfg-surface); }
+.cfg-icon-btn--danger:hover, .cfg-icon-btn--danger.is-confirm { color: var(--cfg-bad); border-color: color-mix(in srgb, var(--cfg-bad) 45%, transparent); background: color-mix(in srgb, var(--cfg-bad) 10%, transparent); }
+
+/* ── Summary strip ── */
+.cfg-sum { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.cfg-stat { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 14px 16px; border-radius: calc(var(--cfg-r-card) - 2px); background: var(--cfg-surface); border: 1px solid var(--cfg-line); box-shadow: var(--cfg-card-shadow); }
+.cfg-stat.is-warn { border-color: color-mix(in srgb, var(--cfg-warn) 45%, transparent); }
+.cfg-label { font-family: var(--cfg-mono); font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+.cfg-stat__value { font-family: var(--cfg-mono); font-size: 1.1rem; font-weight: 700; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.cfg-stat--main .cfg-stat__value { color: var(--cfg-accent); font-size: 1.3rem; }
+.cfg-stat__sub { font-size: 0.7rem; line-height: 1.4; color: var(--text-muted); }
+.cfg-stat.is-warn .cfg-stat__sub { color: var(--cfg-warn); }
+
+/* ── Goal cards ── */
+.cfg-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.cfg-grid--archived { margin-top: 14px; opacity: 0.85; }
+.cfg-card {
+  --tone: var(--cfg-info);
+  position: relative; display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 18px 18px 14px; border-radius: var(--cfg-r-card); overflow: hidden;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--tone) 7%, transparent), transparent 55%), var(--cfg-surface);
+  border: 1px solid color-mix(in srgb, var(--tone) 28%, var(--cfg-line));
+  box-shadow: var(--cfg-card-shadow);
+  animation: cfgFadeUp 0.35s ease both; transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+.cfg-card::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--tone); opacity: 0.9; }
+.cfg-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--tone) 55%, transparent); box-shadow: var(--cfg-card-hover); }
+.cfg-card.is-achieved { background: linear-gradient(160deg, color-mix(in srgb, var(--cfg-gold) 14%, transparent), transparent 60%), var(--cfg-surface); box-shadow: var(--cfg-achieved-glow); }
+.cfg-card.is-archived { filter: grayscale(0.6); }
+
+.cfg-card__top { display: flex; align-items: center; gap: 14px; }
+.cfg-ring { position: relative; width: 64px; height: 64px; flex-shrink: 0; }
+.cfg-ring__svg { width: 100%; height: 100%; display: block; }
+.cfg-ring__track { stroke: var(--cfg-track); }
+.cfg-ring__val { stroke: var(--tone); transition: stroke-dasharray 0.7s cubic-bezier(.2,.8,.2,1); filter: var(--cfg-ring-glow); }
+.cfg-ring__icon { position: absolute; inset: 0; display: grid; place-items: center; font-size: 1.5rem; line-height: 1; }
+.cfg-card.is-achieved .cfg-ring { animation: cfgPop 0.6s ease both; }
+.cfg-card__title { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.cfg-card__title h5 { margin: 0; max-width: 100%; font-size: 0.98rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cfg-badge {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 10px; border-radius: var(--cfg-r-pill); font-family: var(--cfg-mono); font-size: 0.62rem; font-weight: 700;
+  letter-spacing: 0.04em; text-transform: uppercase; color: var(--tone); background: color-mix(in srgb, var(--tone) 14%, transparent); border: 1px solid color-mix(in srgb, var(--tone) 38%, transparent);
+}
+.cfg-card__tools { display: flex; align-items: center; gap: 2px; flex-shrink: 0; align-self: flex-start; }
+
+.cfg-amounts { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; }
+.cfg-amounts strong { font-family: var(--cfg-mono); font-size: 1.15rem; font-weight: 700; color: var(--text-primary); }
+.cfg-amounts span { font-family: var(--cfg-mono); font-size: 0.78rem; color: var(--text-muted); }
+.cfg-amounts em { margin-left: auto; font-style: normal; font-family: var(--cfg-mono); font-size: 0.9rem; font-weight: 700; color: var(--tone); }
+
+.cfg-bar { position: relative; height: 10px; border-radius: var(--cfg-r-pill); background: var(--cfg-track); overflow: hidden; }
+.cfg-bar i { display: block; height: 100%; border-radius: var(--cfg-r-pill); background: linear-gradient(90deg, color-mix(in srgb, var(--tone, var(--cfg-accent)) 55%, transparent), var(--tone, var(--cfg-accent))); transition: width 0.7s cubic-bezier(.2,.8,.2,1); }
+.cfg-bar b { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--cfg-tick); }
+.cfg-bar b.is-hit { background: color-mix(in srgb, var(--cfg-tick) 50%, transparent); }
+.cfg-bar--thin { height: 6px; }
+.cfg-stat--main .cfg-bar i { background: linear-gradient(90deg, color-mix(in srgb, var(--cfg-accent) 55%, transparent), var(--cfg-accent)); }
+.cfg-remaining { margin-top: -4px; font-size: 0.72rem; color: var(--text-muted); }
+
+.cfg-rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; padding-top: 12px; border-top: 1px dashed var(--cfg-line-strong); }
+.cfg-row { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cfg-row__label { font-family: var(--cfg-mono); font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+.cfg-row__value { font-size: 0.78rem; line-height: 1.4; color: var(--text-primary); overflow-wrap: anywhere; }
+.cfg-row.is-ok .cfg-row__value, .cfg-row.is-warn .cfg-row__value, .cfg-row.is-danger .cfg-row__value { color: var(--tone); }
+
+.cfg-tip { margin: 0; padding: 9px 12px; border-radius: var(--cfg-r-ctl); font-size: 0.76rem; line-height: 1.45; color: var(--tone); background: color-mix(in srgb, var(--tone) 9%, transparent); border: 1px solid color-mix(in srgb, var(--tone) 24%, transparent); }
+.cfg-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 2px; }
+
+/* ── Icon tùy chỉnh (ảnh) ── */
+.cfg-ico-img { display: block; width: 1em; height: 1em; object-fit: cover; border-radius: 22%; pointer-events: none; user-select: none; }
+.cfg-ring__icon .cfg-ico-img { width: 44px; height: 44px; border-radius: 50%; }
+.cfg-title-ico { display: inline-flex; vertical-align: -0.12em; }
+.cfg-title-ico .cfg-ico-img { width: 1.15em; height: 1.15em; }
+
+/* ── History ── */
+.cfg-hist { display: flex; flex-direction: column; gap: 2px; padding-top: 10px; border-top: 1px dashed var(--cfg-line-strong); max-height: 260px; overflow-y: auto; }
+.cfg-hist__item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 4px; border-bottom: 1px solid var(--cfg-line); }
+.cfg-hist__item:last-child { border-bottom: 0; }
+.cfg-hist__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cfg-hist__main strong { font-family: var(--cfg-mono); font-size: 0.82rem; }
+.cfg-hist__main strong.is-pos { color: var(--cfg-ok); }
+.cfg-hist__main strong.is-neg { color: var(--cfg-bad); }
+.cfg-hist__main span { font-size: 0.7rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.cfg-hist__side { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.cfg-hist__side time { font-family: var(--cfg-mono); font-size: 0.68rem; color: var(--text-muted); }
+.cfg-muted { margin: 0; font-size: 0.74rem; color: var(--text-muted); }
+
+/* ── Empty state ── */
+.cfg-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 26px 12px 8px; text-align: center; }
+.cfg-empty__icon { width: 52px; height: 52px; display: grid; place-items: center; font-size: 1.6rem; border-radius: var(--cfg-r-card); background: color-mix(in srgb, var(--cfg-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--cfg-accent) 30%, transparent); }
+.cfg-empty strong { font-size: 0.95rem; }
+.cfg-empty p { margin: 0 0 8px; max-width: 360px; font-size: 0.78rem; color: var(--text-muted); }
+.cfg-tpls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; width: 100%; max-width: 640px; }
+.cfg-tpl { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 10px; border-radius: calc(var(--cfg-r-card) - 2px); cursor: pointer; color: var(--text-primary); background: var(--cfg-surface); border: 1px solid var(--cfg-line); box-shadow: var(--cfg-card-shadow); transition: all 0.2s; font-family: inherit; }
+.cfg-tpl:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--cfg-accent) 50%, transparent); background: color-mix(in srgb, var(--cfg-accent) 8%, transparent); }
+.cfg-tpl__icon { font-size: 1.5rem; }
+.cfg-tpl strong { font-size: 0.82rem; }
+.cfg-tpl span:last-child { font-family: var(--cfg-mono); font-size: 0.68rem; color: var(--text-muted); }
+
+/* ── Modal (dùng khung .hub-cf-overlay / .hub-cf-modal có sẵn) ── */
+.cfg-overlay { z-index: 10050; }
+.cfg-modal { max-height: 92vh; overflow-y: auto; }
+.cfg-emojis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.cfg-emoji { height: 42px; font-size: 1.3rem; line-height: 1; border-radius: var(--cfg-r-ctl); cursor: pointer; color: var(--text-primary); background: var(--cfg-field); border: 1px solid var(--cfg-line-strong); transition: all 0.15s; }
+.cfg-emoji:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--cfg-accent) 55%, transparent); }
+.cfg-emoji.is-active { border-color: var(--cfg-accent); background: color-mix(in srgb, var(--cfg-accent) 16%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--cfg-accent) 24%, transparent); }
+
+/* Nút mở rộng "Tùy chỉnh biểu tượng" + khung nhập emoji / tải ảnh */
+.cfg-icon-more { display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 8px; padding: 6px 12px 6px 6px; border-radius: var(--cfg-r-ctl); cursor: pointer; text-align: left; font-size: 0.78rem; font-weight: 600; color: var(--text-secondary); background: transparent; border: 1px dashed var(--cfg-line-strong); transition: all 0.15s; font-family: inherit; }
+.cfg-icon-more:hover { color: var(--cfg-accent); border-color: color-mix(in srgb, var(--cfg-accent) 55%, transparent); }
+.cfg-icon-more.is-active { color: var(--text-primary); border-style: solid; border-color: var(--cfg-accent); background: color-mix(in srgb, var(--cfg-accent) 12%, transparent); }
+.cfg-icon-more__text { flex: 1; min-width: 0; }
+.cfg-ic-prev { flex-shrink: 0; width: 46px; height: 46px; display: grid; place-items: center; font-size: 1.6rem; line-height: 1; border-radius: var(--cfg-r-ctl); background: var(--cfg-field); border: 1px solid var(--cfg-line-strong); overflow: hidden; }
+.cfg-ic-prev--sm { width: 30px; height: 30px; font-size: 1.05rem; color: var(--cfg-accent); }
+.cfg-ic-prev .cfg-ico-img { width: 100%; height: 100%; border-radius: inherit; }
+.cfg-icon-custom { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; padding: 12px; border-radius: var(--cfg-r-ctl); background: color-mix(in srgb, var(--cfg-accent) 5%, transparent); border: 1px solid var(--cfg-line-strong); animation: cfgFadeUp 0.22s ease both; }
+.cfg-icon-custom[hidden] { display: none; }
+.cfg-ic-row { display: flex; align-items: center; gap: 10px; }
+.cfg-ic-row--btns { gap: 8px; }
+.cfg-ic-input { flex: 1; min-width: 0; font-size: 1rem; }
+.cfg-overlay .cfg-btn { height: 34px; }
+.cfg-overlay .cfg-btn--ghost { margin-left: 0; }
+.cfg-pal { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; max-height: 132px; overflow-y: auto; padding: 4px; border-radius: 8px; background: var(--cfg-field); border: 1px solid var(--cfg-line); }
+.cfg-pal__btn { height: 32px; font-size: 1.1rem; line-height: 1; border-radius: 6px; cursor: pointer; background: transparent; border: 1px solid transparent; transition: all 0.12s; }
+.cfg-pal__btn:hover { background: color-mix(in srgb, var(--cfg-accent) 16%, transparent); border-color: color-mix(in srgb, var(--cfg-accent) 40%, transparent); transform: scale(1.12); }
+
+.cfg-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.cfg-opt { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 56px; padding: 8px 6px; border-radius: calc(var(--cfg-r-ctl) + 2px); cursor: pointer; text-align: center; color: var(--text-primary); background: var(--cfg-field); border: 1px solid var(--cfg-line-strong); transition: all 0.15s; font-family: inherit; }
+.cfg-opt strong { font-size: 0.78rem; }
+.cfg-opt span { font-family: var(--cfg-mono); font-size: 0.66rem; color: var(--text-muted); }
+.cfg-opt span.is-neg { color: var(--cfg-bad); }
+.cfg-opt:hover { border-color: color-mix(in srgb, var(--cfg-accent) 55%, transparent); }
+.cfg-opt.is-active { border-color: var(--cfg-accent); background: color-mix(in srgb, var(--cfg-accent) 14%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--cfg-accent) 18%, transparent); }
+.hub-cf-df-wallet.is-low { color: var(--cfg-warn, #ffb347); }
+.cfg-chip-suggest { border-style: dashed; }
+
+/* ============================================================
+   THEME TOKENS — chỉ ghi đè biến --cfg-*, không đụng cấu trúc
+   (selector dạng [data-theme] .cfg có độ ưu tiên cao hơn .cfg)
+   ============================================================ */
+
+/* ── 1) Cyberpunk: dùng mặc định ở trên (neon cyan, kính tối, glow) ── */
+
+/* ── 2) Solar Zen (sáng): thẻ trắng nổi nhẹ, không glow, màu chữ tối hơn để đạt AA ── */
+[data-theme="solar-zen"] .cfg,
+[data-theme="solar-zen"] .cfg-overlay {
+  --cfg-accent:      #4f46e5;
+  --cfg-on-accent:   #ffffff;
+  --cfg-gold:        #a16207;
+  --cfg-ok:          #15803d;
+  --cfg-warn:        #b45309;
+  --cfg-bad:         #dc2626;
+  --cfg-info:        #64748b;
+  --cfg-line:        rgba(15, 23, 42, 0.08);
+  --cfg-line-strong: rgba(15, 23, 42, 0.14);
+  --cfg-surface:     #ffffff;
+  --cfg-field:       #f1f5f9;
+  --cfg-track:       rgba(15, 23, 42, 0.08);
+  --cfg-tick:        rgba(255, 255, 255, 0.85);
+  --cfg-card-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 4px 14px rgba(15, 23, 42, 0.05);
+  --cfg-card-hover:  0 2px 4px rgba(15, 23, 42, 0.06), 0 10px 26px rgba(15, 23, 42, 0.10);
+  --cfg-achieved-glow: 0 2px 4px rgba(161, 98, 7, 0.08), 0 8px 24px rgba(161, 98, 7, 0.14);
+  --cfg-btn-glow:    0 2px 8px rgba(79, 70, 229, 0.25);
+  --cfg-btn-glow-h:  0 4px 14px rgba(79, 70, 229, 0.35);
+  --cfg-ring-glow:   none;
+}
+[data-theme="solar-zen"] .cfg-card { background: linear-gradient(160deg, color-mix(in srgb, var(--tone) 6%, #fff), #fff 60%); }
+[data-theme="solar-zen"] .cfg-card.is-achieved { background: linear-gradient(160deg, color-mix(in srgb, var(--cfg-gold) 12%, #fff), #fff 65%); }
+[data-theme="solar-zen"] .cfg-stat--main { background: color-mix(in srgb, var(--cfg-accent) 6%, #fff); }
+[data-theme="solar-zen"] .cfg-tpl:hover { background: color-mix(in srgb, var(--cfg-accent) 7%, #fff); }
+[data-theme="solar-zen"] .cfg-badge { background: color-mix(in srgb, var(--tone) 10%, #fff); border-color: color-mix(in srgb, var(--tone) 32%, transparent); }
+[data-theme="solar-zen"] .cfg-tip { background: color-mix(in srgb, var(--tone) 7%, #fff); }
+[data-theme="solar-zen"] .cfg-emoji.is-active,
+[data-theme="solar-zen"] .cfg-opt.is-active { background: color-mix(in srgb, var(--cfg-accent) 10%, #fff); }
+[data-theme="solar-zen"] .cfg-icon-custom { background: color-mix(in srgb, var(--cfg-accent) 4%, #fff); }
+[data-theme="solar-zen"] .cfg-pal { background: #fff; }
+[data-theme="solar-zen"] .cfg-ic-prev { background: #fff; }
+
+/* ── 3) Lo-Fi Twilight (tối dịu): pastel, bo mềm hơn, bóng đổ ấm thay cho neon ── */
+[data-theme="lofi-twilight"] .cfg,
+[data-theme="lofi-twilight"] .cfg-overlay {
+  --cfg-accent:      #bb9af7;
+  --cfg-on-accent:   #1a1b26;
+  --cfg-gold:        #e0af68;
+  --cfg-ok:          #9ece6a;
+  --cfg-warn:        #ff9e64;
+  --cfg-bad:         #f7768e;
+  --cfg-info:        #7aa2f7;
+  --cfg-line:        rgba(192, 202, 245, 0.08);
+  --cfg-line-strong: rgba(192, 202, 245, 0.16);
+  --cfg-surface:     rgba(47, 51, 72, 0.55);
+  --cfg-field:       rgba(26, 27, 38, 0.55);
+  --cfg-track:       rgba(192, 202, 245, 0.10);
+  --cfg-tick:        rgba(26, 27, 38, 0.65);
+  --cfg-card-shadow: 0 2px 10px rgba(10, 11, 20, 0.25);
+  --cfg-card-hover:  0 10px 30px rgba(10, 11, 20, 0.40);
+  --cfg-achieved-glow: 0 0 26px rgba(224, 175, 104, 0.14);
+  --cfg-btn-glow:    0 4px 14px rgba(187, 154, 247, 0.22);
+  --cfg-btn-glow-h:  0 6px 20px rgba(187, 154, 247, 0.34);
+  --cfg-ring-glow:   drop-shadow(0 0 3px color-mix(in srgb, var(--tone, var(--cfg-accent)) 30%, transparent));
+  --cfg-r-card: 18px;
+  --cfg-r-ctl:  12px;
+}
+[data-theme="lofi-twilight"] .cfg-card { background: linear-gradient(160deg, color-mix(in srgb, var(--tone) 9%, transparent), transparent 60%), var(--cfg-surface); }
+[data-theme="lofi-twilight"] .cfg-stat--main { background: linear-gradient(160deg, color-mix(in srgb, var(--cfg-accent) 10%, transparent), transparent 70%), var(--cfg-surface); }
+
+/* ── 4) Optimized (Matrix / perf-lite): phẳng, góc vuông, không glow / blur / gradient / chuyển động ── */
+body.theme-optimized .cfg,
+body.theme-optimized .cfg-overlay {
+  --cfg-accent:      #00ff41;
+  --cfg-on-accent:   #000000;
+  --cfg-gold:        #ffd400;
+  --cfg-ok:          #00ff41;
+  --cfg-warn:        #ffb000;
+  --cfg-bad:         #ff4444;
+  --cfg-info:        #8a8a8a;
+  --cfg-line:        rgba(0, 255, 65, 0.16);
+  --cfg-line-strong: rgba(0, 255, 65, 0.28);
+  --cfg-surface:     #0a0a0a;
+  --cfg-field:       #050505;
+  --cfg-track:       #1c1c1c;
+  --cfg-tick:        #000000;
+  --cfg-card-shadow: none;
+  --cfg-card-hover:  none;
+  --cfg-achieved-glow: none;
+  --cfg-btn-glow:    none;
+  --cfg-btn-glow-h:  none;
+  --cfg-ring-glow:   none;
+  --cfg-r-card: 6px;
+  --cfg-r-ctl:  4px;
+  --cfg-r-pill: 2px;
+}
+body.theme-optimized .cfg-card,
+body.theme-optimized .cfg-card.is-achieved { background: var(--cfg-surface); }
+body.theme-optimized .cfg-card.is-achieved { border-color: var(--cfg-gold); }
+body.theme-optimized .cfg-bar i,
+body.theme-optimized .cfg-stat--main .cfg-bar i { background: var(--tone, var(--cfg-accent)); }
+body.theme-optimized .cfg-card,
+body.theme-optimized .cfg-card.is-achieved .cfg-ring { animation: none; }
+body.theme-optimized .cfg-card,
+body.theme-optimized .cfg-btn,
+body.theme-optimized .cfg-tpl,
+body.theme-optimized .cfg-emoji,
+body.theme-optimized .cfg-opt,
+body.theme-optimized .cfg-bar i,
+body.theme-optimized .cfg-ring__val { transition: none; }
+body.theme-optimized .cfg-card:hover,
+body.theme-optimized .cfg-btn:hover,
+body.theme-optimized .cfg-tpl:hover,
+body.theme-optimized .cfg-emoji:hover,
+body.theme-optimized .cfg-pal__btn:hover { transform: none; }
+body.theme-optimized .cfg-icon-custom { animation: none; background: var(--cfg-field); }
+body.theme-optimized .cfg-ico-img { border-radius: 2px; }
+body.theme-optimized .cfg-ring__icon .cfg-ico-img { border-radius: 50%; }
+body.theme-optimized .cfg-badge { background: transparent; }
+body.theme-optimized .cfg-tip { background: transparent; }
+
+@keyframes cfgFadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes cfgPop { 0% { transform: scale(0.8); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .cfg-card, .cfg-card.is-achieved .cfg-ring, .cfg-icon-custom { animation: none; }
+  .cfg-card, .cfg-btn, .cfg-tpl, .cfg-bar i, .cfg-ring__val, .cfg-emoji, .cfg-pal__btn { transition: none; }
+}
+
+/* ── Responsive ── */
+@media (max-width: 960px) { .cfg-grid { grid-template-columns: 1fr; } .cfg-sum { grid-template-columns: 1fr 1fr; } .cfg-stat--main { grid-column: 1 / -1; } }
+@media (max-width: 560px) {
+  .cfg { padding: 14px 12px; }
+  .cfg-sum { grid-template-columns: 1fr; }
+  .cfg-rows { grid-template-columns: 1fr; }
+  .cfg-tpls { grid-template-columns: 1fr; }
+  .cfg-btn--ghost { margin-left: 0; }
+  .cfg-emojis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .cfg-pal { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .cfg-opts { grid-template-columns: 1fr; }
+  .cfg-opt { flex-direction: row; justify-content: space-between; min-height: 44px; padding: 0 14px; }
+}
+/* ============================================================
+   CASHFLOW SKINS — mỗi theme một bản sắc riêng (độc lập)
+   ------------------------------------------------------------
+   Cyberpunk  : HUD neon, góc vuông vát, khung ngoặc cyan/magenta
+   Solar Zen  : giấy ấm / mực, bo mềm, khung viền kép, chữ serif
+   Lo-Fi Dusk : hoàng hôn tím–đào, bo tròn, quầng sáng mờ
+   Optimize   : terminal xanh lá phẳng, vuông góc, tiền tố "> "
+   Cách hoạt động:
+     1) Mỗi theme định nghĩa bộ token --cfk-* RIÊNG (không kế thừa nhau).
+     2) Trong phạm vi cashflow, các biến toàn cục (--accent-primary,
+        --success, --danger, --bg-*, --text-*, --radius-*) được ánh xạ
+        sang --cfk-* → mọi khối con (cfd/cfc/cfq/cfg/dl/bs/heatmap…)
+        tự đổi màu mà không ảnh hưởng module khác.
+     3) body.perf-lite: GIỮ màu + hình khối tĩnh, bỏ blur / glow /
+        animation vô hạn / hover-lift / gradient nền nặng.
+        body.theme-optimized: phẳng tuyệt đối (không gradient/bóng).
+   Đặt ở CUỐI file nên thắng các rule cũ cùng độ ưu tiên; tiền tố
+   `:root body` nâng độ ưu tiên hơn <style> do cashflow.js chèn vào.
+   ============================================================ */
+
+/* ───────── 1) TOKEN: CYBERPUNK (mặc định) ───────── */
+:root {
+  --cfk-bg: #07070d;  --cfk-surface: #0d0f1b;  --cfk-elevated: #151829;
+  --cfk-card: #0c0e1a;  --cfk-glass: rgba(12, 14, 26, 0.78);
+  --cfk-line: rgba(0, 240, 255, 0.16);  --cfk-line-strong: rgba(0, 240, 255, 0.38);
+  --cfk-hi: rgba(0, 240, 255, 0.07);
+  --cfk-accent: #00f0ff;  --cfk-accent-2: #ff2bd6;  --cfk-on-accent: #04070d;
+  --cfk-income: #39ff88;  --cfk-expense: #ff3d6e;  --cfk-warn: #ffd23f;
+  --cfk-gold: #ffd23f;    --cfk-info: #00d5ff;
+  --cfk-text: #e8f1ff;  --cfk-text-2: #a6b6d6;  --cfk-muted: #7886a8;
+  --cfk-font-num: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --cfk-label-tt: uppercase;  --cfk-label-ls: 0.12em;  --cfk-label-pre: '';
+  --cfk-r-sm: 3px;  --cfk-r-lg: 6px;  --cfk-r-xl: 8px;  --cfk-r-pill: 4px;
+  --cfk-card-shadow: 0 0 0 1px rgba(0, 240, 255, 0.04), 0 0 26px rgba(0, 240, 255, 0.07);
+  --cfk-card-shadow-lite: none;
+  --cfk-btn-shadow: 0 0 18px rgba(0, 240, 255, 0.35);
+  --cfk-btn-shadow-h: 0 0 28px rgba(0, 240, 255, 0.55);
+  --cfk-ring-glow: drop-shadow(0 0 4px rgba(0, 240, 255, 0.5));
+  --cfk-text-glow: 0 0 10px rgba(0, 240, 255, 0.35);
+  --cfk-lift: translateY(-2px);
+  --cfk-deco:
+    linear-gradient(var(--cfk-accent), var(--cfk-accent)),
+    linear-gradient(var(--cfk-accent), var(--cfk-accent)),
+    linear-gradient(var(--cfk-accent-2), var(--cfk-accent-2)),
+    linear-gradient(var(--cfk-accent-2), var(--cfk-accent-2)),
+    linear-gradient(90deg, var(--cfk-accent), transparent 60%);
+  --cfk-deco-size: 16px 2px, 2px 16px, 16px 2px, 2px 16px, 100% 1px;
+  --cfk-deco-pos: 0 0, 0 0, 100% 100%, 100% 100%, 0 0;
+  --cfk-deco-lite: var(--cfk-deco);
+  --cfk-overlay: rgba(2, 3, 10, 0.72);
+  --cfk-heat-0: #00f0ff; --cfk-heat-1: #ffd23f; --cfk-heat-2: #ff7a3d; --cfk-heat-3: #ff3d6e;
+  --cfk-val-a: linear-gradient(135deg, #39ff88, #00f0ff);
+  --cfk-val-b: linear-gradient(135deg, #00f0ff, #ff2bd6);
+  --cfk-scheme: dark;
+}
+
+/* ───────── 2) TOKEN: SOLAR ZEN — giấy ấm & mực ───────── */
+:root[data-theme="solar-zen"] {
+  --cfk-bg: #f4eee1;  --cfk-surface: #fffdf8;  --cfk-elevated: #f1e9d6;
+  --cfk-card: #fffdf8;  --cfk-glass: rgba(255, 253, 248, 0.92);
+  --cfk-line: rgba(110, 86, 44, 0.18);  --cfk-line-strong: rgba(110, 86, 44, 0.38);
+  --cfk-hi: rgba(110, 86, 44, 0.06);
+  --cfk-accent: #2b6b59;  --cfk-accent-2: #c2703d;  --cfk-on-accent: #fffdf8;
+  --cfk-income: #3a7a4a;  --cfk-expense: #b0463a;  --cfk-warn: #9a6a12;
+  --cfk-gold: #9a7b2f;    --cfk-info: #2f6f8f;
+  --cfk-text: #2b2a26;  --cfk-text-2: #58534a;  --cfk-muted: #766f5f;
+  --cfk-font-num: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+  --cfk-label-tt: none;  --cfk-label-ls: 0.04em;  --cfk-label-pre: '';
+  --cfk-r-sm: 10px;  --cfk-r-lg: 20px;  --cfk-r-xl: 26px;  --cfk-r-pill: 999px;
+  --cfk-card-shadow: inset 0 0 0 4px #fffdf8, inset 0 0 0 5px rgba(110, 86, 44, 0.16), 0 14px 28px -18px rgba(90, 66, 24, 0.35);
+  --cfk-card-shadow-lite: inset 0 0 0 4px #fffdf8, inset 0 0 0 5px rgba(110, 86, 44, 0.16);
+  --cfk-btn-shadow: 0 6px 14px -8px rgba(43, 107, 89, 0.55);
+  --cfk-btn-shadow-h: 0 10px 18px -8px rgba(43, 107, 89, 0.6);
+  --cfk-ring-glow: none;
+  --cfk-text-glow: none;
+  --cfk-lift: translateY(-1px);
+  --cfk-deco:
+    radial-gradient(circle at 22px 22px, rgba(194, 112, 61, 0.28) 0 3px, transparent 4px),
+    linear-gradient(180deg, #fffdf8 0%, #f9f1df 100%);
+  --cfk-deco-size: auto, auto;
+  --cfk-deco-pos: 0 0, 0 0;
+  --cfk-deco-lite: radial-gradient(circle at 22px 22px, rgba(194, 112, 61, 0.28) 0 3px, transparent 4px);
+  --cfk-overlay: rgba(60, 46, 22, 0.42);
+  --cfk-heat-0: #3f8a6c; --cfk-heat-1: #c99a2e; --cfk-heat-2: #c8693a; --cfk-heat-3: #a93a2e;
+  --cfk-val-a: linear-gradient(#3a7a4a, #3a7a4a);
+  --cfk-val-b: linear-gradient(#2b6b59, #2b6b59);
+  --cfk-scheme: light;
+}
+
+/* ───────── 3) TOKEN: LO-FI TWILIGHT — hoàng hôn tím · đào ───────── */
+:root[data-theme="lofi-twilight"] {
+  --cfk-bg: #130f29;  --cfk-surface: #1d1838;  --cfk-elevated: #292250;
+  --cfk-card: #1b1636;  --cfk-glass: rgba(29, 24, 56, 0.8);
+  --cfk-line: rgba(255, 170, 200, 0.16);  --cfk-line-strong: rgba(255, 170, 200, 0.36);
+  --cfk-hi: rgba(255, 170, 200, 0.07);
+  --cfk-accent: #f6a8c4;  --cfk-accent-2: #ffb480;  --cfk-on-accent: #2a1030;
+  --cfk-income: #8fe3b6;  --cfk-expense: #ff8fa3;  --cfk-warn: #ffd08a;
+  --cfk-gold: #ffd9a0;    --cfk-info: #9ad7ff;
+  --cfk-text: #f1e8ff;  --cfk-text-2: #bcb0e0;  --cfk-muted: #8f84b4;
+  --cfk-font-num: ui-rounded, 'SF Pro Rounded', 'Nunito', 'Quicksand', 'Segoe UI', system-ui, sans-serif;
+  --cfk-label-tt: none;  --cfk-label-ls: 0.03em;  --cfk-label-pre: '';
+  --cfk-r-sm: 12px;  --cfk-r-lg: 22px;  --cfk-r-xl: 30px;  --cfk-r-pill: 999px;
+  --cfk-card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 18px 34px -22px rgba(0, 0, 0, 0.7);
+  --cfk-card-shadow-lite: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --cfk-btn-shadow: 0 8px 20px -8px rgba(246, 168, 196, 0.55);
+  --cfk-btn-shadow-h: 0 12px 24px -8px rgba(246, 168, 196, 0.7);
+  --cfk-ring-glow: drop-shadow(0 0 5px rgba(246, 168, 196, 0.4));
+  --cfk-text-glow: none;
+  --cfk-lift: translateY(-2px);
+  --cfk-deco:
+    radial-gradient(120% 90% at 100% 0%, rgba(255, 180, 128, 0.2), transparent 60%),
+    radial-gradient(90% 80% at 0% 100%, rgba(187, 154, 247, 0.18), transparent 62%);
+  --cfk-deco-size: auto, auto;
+  --cfk-deco-pos: 0 0, 0 0;
+  --cfk-deco-lite: linear-gradient(160deg, rgba(255, 180, 128, 0.1), transparent 55%);
+  --cfk-overlay: rgba(10, 6, 28, 0.66);
+  --cfk-heat-0: #9ad7ff; --cfk-heat-1: #ffd08a; --cfk-heat-2: #ffa07a; --cfk-heat-3: #ff7c9c;
+  --cfk-val-a: linear-gradient(135deg, #8fe3b6, #9ad7ff);
+  --cfk-val-b: linear-gradient(135deg, #ffb480, #f6a8c4);
+  --cfk-scheme: dark;
+}
+
+/* ───────── 4) TOKEN: OPTIMIZE — terminal xanh lá phẳng ───────── */
+body.theme-optimized {
+  --cfk-bg: #000000;  --cfk-surface: #030703;  --cfk-elevated: #0a120a;
+  --cfk-card: #030703;  --cfk-glass: #030703;
+  --cfk-line: rgba(0, 255, 65, 0.28);  --cfk-line-strong: #00ff41;
+  --cfk-hi: rgba(0, 255, 65, 0.08);
+  --cfk-accent: #00ff41;  --cfk-accent-2: #7dff9a;  --cfk-on-accent: #000000;
+  --cfk-income: #00ff41;  --cfk-expense: #ff4d4d;  --cfk-warn: #ffb000;
+  --cfk-gold: #ffb000;    --cfk-info: #4dd2ff;
+  --cfk-text: #d8f5de;  --cfk-text-2: #93c4a0;  --cfk-muted: #6fa07b;
+  --cfk-font-num: ui-monospace, 'Courier New', Courier, monospace;
+  --cfk-label-tt: uppercase;  --cfk-label-ls: 0.08em;  --cfk-label-pre: '> ';
+  --cfk-r-sm: 0; --cfk-r-lg: 0; --cfk-r-xl: 0; --cfk-r-pill: 0;
+  --cfk-card-shadow: none; --cfk-card-shadow-lite: none;
+  --cfk-btn-shadow: none; --cfk-btn-shadow-h: none;
+  --cfk-ring-glow: none; --cfk-text-glow: none; --cfk-lift: none;
+  --cfk-deco: none; --cfk-deco-lite: none; --cfk-deco-size: auto; --cfk-deco-pos: 0 0;
+  --cfk-overlay: rgba(0, 0, 0, 0.88);
+  --cfk-heat-0: #00ff41; --cfk-heat-1: #ffb000; --cfk-heat-2: #ff7a00; --cfk-heat-3: #ff4d4d;
+  --cfk-val-a: none; --cfk-val-b: none;
+  --cfk-scheme: dark;
+}
+
+/* ───────── 5) LITE: giữ màu + hình khối, bỏ glow / blur / lift / nền nặng ───────── */
+body.perf-lite {
+  --cfk-glass: color-mix(in srgb, var(--cfk-surface) 96%, transparent);
+  --cfk-card-shadow: var(--cfk-card-shadow-lite);
+  --cfk-btn-shadow: none; --cfk-btn-shadow-h: none;
+  --cfk-ring-glow: none; --cfk-text-glow: none; --cfk-lift: none;
+  --cfk-deco: var(--cfk-deco-lite);
+  --cfk-overlay: color-mix(in srgb, var(--cfk-bg) 82%, transparent);
+}
+
+/* ───────── 6) ÁNH XẠ biến toàn cục → token skin (chỉ trong cashflow) ───────── */
+:root body .hub-cf-container,
+:root body .cfd-host, :root body .cfg, :root body .cfq, :root body .dl, :root body .dl-list-wrap,
+:root body .hub-cf-overlay, :root body .cfg-overlay,
+:root body .hub-cf-bs-overlay, :root body .hub-cf-bs-backdrop, :root body .hub-cf-bs-panel,
+:root body .hub-cf-ai-key-modal, :root body .hub-cf-filter-popover,
+:root body .hub-cf-heatmap-picker, :root body [class*="hub-cf-heatmap-tooltip"], :root body .hub-cf-toast {
+  --bg-deep: var(--cfk-bg);  --bg-surface: var(--cfk-surface);  --bg-elevated: var(--cfk-elevated);
+  --glass-bg: var(--cfk-glass);  --glass-border: var(--cfk-line);  --glass-highlight: var(--cfk-hi);
+  --accent-primary: var(--cfk-accent);  --primary: var(--cfk-accent);  --accent-secondary: var(--cfk-accent-2);
+  --success: var(--cfk-income);  --danger: var(--cfk-expense);  --warning: var(--cfk-warn);
+  --text-primary: var(--cfk-text);  --text-secondary: var(--cfk-text-2);  --text-muted: var(--cfk-muted);
+  --font-mono: var(--cfk-font-num);
+  --radius-sm: var(--cfk-r-sm);  --radius-lg: var(--cfk-r-lg);  --radius-xl: var(--cfk-r-xl);  --radius-full: var(--cfk-r-pill);
+  --accent-glow: none;  --shadow-glow: none;
+  --cf-gold: var(--cfk-gold);
+  --cfg-gold: var(--cfk-gold);  --cfg-warn: var(--cfk-warn);  --cfg-on-accent: var(--cfk-on-accent);
+  --cfg-line: var(--cfk-line);  --cfg-line-strong: var(--cfk-line-strong);
+  --cfg-surface: color-mix(in srgb, var(--cfk-elevated) 60%, transparent);
+  --cfg-field: color-mix(in srgb, var(--cfk-elevated) 78%, transparent);
+  --cfg-track: color-mix(in srgb, var(--cfk-text) 10%, transparent);
+  --cfg-tick: color-mix(in srgb, var(--cfk-bg) 70%, transparent);
+  --cfg-card-shadow: none;  --cfg-card-hover: var(--cfk-card-shadow);
+  --cfg-btn-glow: var(--cfk-btn-shadow);  --cfg-btn-glow-h: var(--cfk-btn-shadow-h);
+  --cfg-ring-glow: var(--cfk-ring-glow);  --cfg-achieved-glow: none;
+  --cfg-r-card: var(--cfk-r-lg);  --cfg-r-ctl: var(--cfk-r-sm);  --cfg-r-pill: var(--cfk-r-pill);
+  --cfg-mono: var(--cfk-font-num);
+}
+:root body .cfq, :root body .dl { color-scheme: var(--cfk-scheme); }
+
+/* ───────── 7) BỀ MẶT (thẻ / panel) — hình khối riêng từng theme ───────── */
+:root body .hub-cf-card,
+:root body .hub-cf-chart-section,
+:root body .hub-cf-ledger,
+:root body .hub-cf-debt-summary-card,
+:root body .hub-cf-budget-overview,
+:root body .cfd-card,
+:root body .cfg-card,
+:root body .hub-cf-heatmap-wrap {
+  position: relative;
+  background-color: var(--cfk-card);
+  background-image: var(--cfk-deco);
+  background-size: var(--cfk-deco-size);
+  background-position: var(--cfk-deco-pos);
+  background-repeat: no-repeat;
+  border: 1px solid var(--cfk-line);
+  border-radius: var(--cfk-r-lg);
+  box-shadow: var(--cfk-card-shadow);
+}
+:root body .cfd-card, :root body .cfq-bar, :root body .cfg-stat, :root body .dl-stat { border-radius: var(--cfk-r-lg); }
+:root body .cfq-bar, :root body .cfg-stat, :root body .dl-stat, :root body .cfc-kpi {
+  background-color: color-mix(in srgb, var(--cfk-elevated) 70%, var(--cfk-card));
+  border-color: var(--cfk-line);
+}
+:root body .hub-cf-card:hover { transform: var(--cfk-lift); border-color: var(--cfk-line-strong); }
+:root body .hub-cf-card--income  { --cfk-tone: var(--cfk-income); }
+:root body .hub-cf-card--expense { --cfk-tone: var(--cfk-expense); }
+:root body .hub-cf-card--income, :root body .hub-cf-card--expense {
+  border-color: color-mix(in srgb, var(--cfk-tone) 38%, var(--cfk-line));
+}
+
+/* Nhãn: kiểu chữ & tiền tố riêng từng theme */
+:root body .hub-cf-card-label, :root body .hub-cf-chart-title, :root body .hub-cf-ledger-title,
+:root body .hub-cf-table th, :root body .cfd-label, :root body .cfg-label, :root body .cfg-titles h4,
+:root body .hub-cf-breakdown-section-label, :root body .hub-cf-heatmap-day-header {
+  text-transform: var(--cfk-label-tt);
+  letter-spacing: var(--cfk-label-ls);
+}
+:root body .hub-cf-card-label::before { content: var(--cfk-label-pre); }
+
+/* Số liệu lớn */
+:root body .hub-cf-card-value { text-shadow: var(--cfk-text-glow); }
+:root body .hub-cf-card-value--networth { background-image: var(--cfk-val-a); }
+:root body .hub-cf-card-value--savings  { background-image: var(--cfk-val-b); }
+:root body .cfd-hero-val, :root body .cfg-stat__value { font-family: var(--cfk-font-num); }
+
+/* ───────── 8) ĐIỀU KHIỂN: nút · tab · ô nhập · chip ───────── */
+:root body .hub-cf-btn--add,
+:root body .hub-cf-modal-btn--save,
+:root body .cfg-btn--primary {
+  background-color: var(--cfk-accent);
+  background-image: none;
+  color: var(--cfk-on-accent);
+  border-color: transparent;
+  box-shadow: var(--cfk-btn-shadow);
+}
+:root body .hub-cf-btn--add:hover,
+:root body .hub-cf-modal-btn--save:hover,
+:root body .cfg-btn--primary:hover {
+  background-color: color-mix(in srgb, var(--cfk-accent) 88%, #fff);
+  color: var(--cfk-on-accent);
+  box-shadow: var(--cfk-btn-shadow-h);
+  transform: var(--cfk-lift);
+}
+:root body .hub-cf-btn--export, :root body .hub-cf-btn--import, :root body .hub-cf-modal-btn--cancel {
+  background: transparent; color: var(--cfk-text); border: 1px solid var(--cfk-line);
+}
+:root body .hub-cf-btn--export:hover { border-color: var(--cfk-accent); background: var(--cfk-hi); color: var(--cfk-accent); }
+:root body .hub-cf-btn--import:hover { border-color: var(--cfk-warn); background: color-mix(in srgb, var(--cfk-warn) 10%, transparent); color: var(--cfk-text); }
+:root body .hub-cf-modal-btn--cancel:hover { border-color: var(--cfk-line-strong); color: var(--cfk-text); }
+
+:root body .hub-cf-tab-switcher,
+:root body .hub-cf-tab-group { background: var(--cfk-elevated); border: 1px solid var(--cfk-line); border-radius: var(--cfk-r-pill); }
+:root body .hub-cf-tab-switcher-btn[aria-selected="true"] { color: var(--cfk-on-accent); }
+:root body .hub-cf-tab-switcher-btn[aria-selected="true"]::before {
+  background: var(--cfk-accent); box-shadow: var(--cfk-btn-shadow);
+}
+:root body .hub-cf-tab--active { color: var(--cfk-text); background: var(--cfk-hi); box-shadow: inset 0 0 0 1px var(--cfk-line-strong); }
+
+:root body .hub-cf-form-input, :root body .hub-cf-category-select, :root body .hub-cf-textarea {
+  background: color-mix(in srgb, var(--cfk-elevated) 72%, transparent);
+  border: 1px solid var(--cfk-line); color: var(--cfk-text); border-radius: var(--cfk-r-sm);
+}
+:root body .hub-cf-form-input:focus, :root body .hub-cf-category-select:focus, :root body .hub-cf-textarea:focus {
+  border-color: var(--cfk-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cfk-accent) 18%, transparent);
+}
+:root body .hub-cf-cat-chip, :root body .hub-cf-df-chip {
+  color: var(--cfk-accent);
+  background: color-mix(in srgb, var(--cfk-accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cfk-accent) 28%, transparent);
+}
+:root body .hub-cf-card-edit-btn:hover {
+  color: var(--cfk-accent); border-color: var(--cfk-accent);
+  background: color-mix(in srgb, var(--cfk-accent) 10%, transparent); box-shadow: none;
+}
+:root body .hub-cf-delete-btn { background: color-mix(in srgb, var(--cfk-expense) 8%, transparent); }
+:root body .hub-cf-delete-btn:hover { color: var(--cfk-expense); border-color: color-mix(in srgb, var(--cfk-expense) 45%, transparent); }
+
+/* ───────── 9) BẢNG & MODAL ───────── */
+:root body .hub-cf-table th { background: var(--cfk-surface); color: var(--cfk-muted); border-bottom: 1px solid var(--cfk-line-strong); }
+:root body .hub-cf-table td { border-bottom: 1px solid var(--cfk-line); }
+:root body .hub-cf-table tbody tr:hover td { background: var(--cfk-hi); }
+:root body .hub-cf-overlay, :root body .cfg-overlay { background: var(--cfk-overlay); }
+:root body .hub-cf-modal, :root body .hub-cf-ai-key-modal-content, :root body .hub-cf-bs-panel, :root body .hub-cf-filter-popover {
+  background-color: var(--cfk-surface);
+  background-image: var(--cfk-deco);
+  background-size: var(--cfk-deco-size); background-position: var(--cfk-deco-pos); background-repeat: no-repeat;
+  border: 1px solid var(--cfk-line-strong);
+  border-radius: var(--cfk-r-xl);
+  box-shadow: var(--cfk-card-shadow);
+  color: var(--cfk-text);
+}
+:root body .hub-cf-modal-header, :root body .hub-cf-form-actions { border-color: var(--cfk-line); }
+:root body .hub-cf-modal-title { font-family: var(--cfk-font-num); color: var(--cfk-text); }
+:root body .hub-cf-modal-close { color: var(--cfk-muted); border-radius: var(--cfk-r-pill); }
+:root body .hub-cf-modal-close:hover { color: var(--cfk-expense); background: color-mix(in srgb, var(--cfk-expense) 10%, transparent); }
+
+/* Thanh tiến độ / phân bổ — màu theo token, không phụ thuộc gradient */
+:root body .hub-cf-breakdown-bar-track, :root body .cfd-track, :root body .cfg-bar, :root body .hub-cf-budget-meter {
+  background: color-mix(in srgb, var(--cfk-text) 10%, transparent);
+  border-radius: var(--cfk-r-pill);
+}
+:root body .hub-cf-breakdown-bar-fill--income { background: var(--cfk-income); }
+:root body .hub-cf-breakdown-bar-fill--expense { background: var(--cfk-expense); }
+:root body .hub-cf-budget-meter span { background: var(--cfk-income); }
+:root body .hub-cf-budget-overview.is-watch .hub-cf-budget-meter span { background: var(--cfk-warn); }
+:root body .hub-cf-budget-overview.is-over .hub-cf-budget-meter span { background: var(--cfk-expense); }
+
+/* ───────── 10) HEATMAP — mỗi theme một dải màu & kiểu ô ───────── */
+:root body .hub-cf-heatmap-cell--level-0 { --hc: var(--cfk-heat-0); }
+:root body .hub-cf-heatmap-cell--level-1 { --hc: var(--cfk-heat-1); }
+:root body .hub-cf-heatmap-cell--level-2 { --hc: var(--cfk-heat-2); }
+:root body .hub-cf-heatmap-cell--level-3 { --hc: var(--cfk-heat-3); }
+:root body .hub-cf-heatmap-cell--level-0,
+:root body .hub-cf-heatmap-cell--level-1,
+:root body .hub-cf-heatmap-cell--level-2,
+:root body .hub-cf-heatmap-cell--level-3 {
+  background: color-mix(in srgb, var(--hc) 14%, var(--cfk-surface));
+  border: 1px solid color-mix(in srgb, var(--hc) 48%, transparent);
+  border-radius: var(--cfk-r-sm);
+  box-shadow: none;
+}
+:root body .hub-cf-heatmap-cell--level-3 { background: color-mix(in srgb, var(--hc) 28%, var(--cfk-surface)); border-width: 2px; border-color: var(--hc); }
+:root body .hub-cf-heatmap-cell--level-0 .hub-cf-heatmap-cell-day,
+:root body .hub-cf-heatmap-cell--level-1 .hub-cf-heatmap-cell-day,
+:root body .hub-cf-heatmap-cell--level-2 .hub-cf-heatmap-cell-day,
+:root body .hub-cf-heatmap-cell--level-3 .hub-cf-heatmap-cell-day { color: var(--hc); text-shadow: none; }
+:root body .hub-cf-heatmap-cell--level-3 .hub-cf-heatmap-cell-day { color: var(--cfk-text); }
+:root body .hub-cf-heatmap-cell--level-3 .hub-cf-heatmap-cell-amount { color: var(--cfk-text-2); }
+:root body .hub-cf-heatmap-cell:hover { box-shadow: 0 0 0 1px var(--hc, var(--cfk-line-strong)); transform: var(--cfk-lift); }
+:root body .hub-cf-heatmap-cell--today::before { background: var(--cfk-accent-2); box-shadow: none; }
+:root body .hub-cf-heatmap-cell--selected { outline-color: var(--cfk-accent-2); box-shadow: 0 0 0 2px var(--cfk-accent-2) !important; }
+
+/* ───────── 11) ĐẶC TRƯNG RIÊNG TỪNG THEME (động + chi tiết đồ họa) ───────── */
+
+/* Cyberpunk: ô vượt hạn mức nhấp nháy neon; tiêu đề thẻ có vạch scan */
+:root:not([data-theme="solar-zen"]):not([data-theme="lofi-twilight"]) body:not(.theme-optimized):not(.perf-lite) .hub-cf-heatmap-cell--level-3 {
+  box-shadow: 0 0 16px color-mix(in srgb, var(--hc) 50%, transparent), inset 0 0 18px color-mix(in srgb, var(--hc) 16%, transparent);
+  animation: cfkNeonPulse 2.2s ease-in-out infinite;
+}
+@keyframes cfkNeonPulse { 50% { box-shadow: 0 0 26px color-mix(in srgb, var(--hc) 70%, transparent), inset 0 0 26px color-mix(in srgb, var(--hc) 26%, transparent); } }
+:root:not([data-theme="solar-zen"]):not([data-theme="lofi-twilight"]) body:not(.theme-optimized) .hub-cf-chart-title::before {
+  content: '//'; margin-right: 8px; color: var(--cfk-accent-2);
+}
+
+/* Solar Zen: tiêu đề kiểu sổ tay, đường kẻ mực dưới tab đang chọn */
+[data-theme="solar-zen"] body:not(.theme-optimized) .hub-cf-chart-title { font-style: italic; font-weight: 600; }
+[data-theme="solar-zen"] body:not(.theme-optimized) .hub-cf-table th { font-variant: small-caps; font-size: 0.7rem; }
+[data-theme="solar-zen"] body:not(.theme-optimized) .hub-cf-tab-switcher-btn[aria-selected="true"]::before {
+  background: var(--cfk-accent); border-radius: var(--cfk-r-pill);
+}
+
+/* Lo-Fi: viền thẻ mềm, chip pastel, tab chuyển sắc đào → hồng */
+[data-theme="lofi-twilight"] body:not(.theme-optimized) .hub-cf-tab-switcher-btn[aria-selected="true"]::before {
+  background: linear-gradient(135deg, var(--cfk-accent-2), var(--cfk-accent));
+}
+[data-theme="lofi-twilight"] body:not(.theme-optimized) .hub-cf-btn--add,
+[data-theme="lofi-twilight"] body:not(.theme-optimized) .hub-cf-modal-btn--save {
+  background-image: linear-gradient(135deg, var(--cfk-accent-2), var(--cfk-accent));
+}
+[data-theme="lofi-twilight"] body.perf-lite .hub-cf-tab-switcher-btn[aria-selected="true"]::before { background: var(--cfk-accent); }
+[data-theme="lofi-twilight"] body.perf-lite .hub-cf-btn--add,
+[data-theme="lofi-twilight"] body.perf-lite .hub-cf-modal-btn--save { background-image: none; }
+
+/* Optimize: tuyệt đối phẳng — viền vuông, vạch trạng thái trái, tiền tố "> " */
+:root body.theme-optimized .hub-cf-card,
+:root body.theme-optimized .hub-cf-chart-section,
+:root body.theme-optimized .hub-cf-ledger,
+:root body.theme-optimized .hub-cf-debt-summary-card,
+:root body.theme-optimized .hub-cf-budget-overview,
+:root body.theme-optimized .cfd-card,
+:root body.theme-optimized .cfg-card,
+:root body.theme-optimized .hub-cf-heatmap-wrap {
+  background-image: none !important;
+  background-color: var(--cfk-card);
+  border: 1px solid var(--cfk-line);
+  border-left: 3px solid var(--cfk-accent);
+  border-left-color: var(--cfk-accent) !important;   /* thắng rule .glass { border-color:… !important } */
+  border-radius: 0;
+  box-shadow: none !important;
+}
+:root body.theme-optimized .hub-cf-card--income  { border-left-color: var(--cfk-income) !important; }
+:root body.theme-optimized .hub-cf-card--expense { border-left-color: var(--cfk-expense) !important; }
+:root body.theme-optimized .hub-cf-card-value--networth,
+:root body.theme-optimized .hub-cf-card-value--savings {
+  background: none; -webkit-background-clip: border-box; background-clip: border-box;
+  -webkit-text-fill-color: var(--cfk-accent); color: var(--cfk-accent);
+}
+:root body.theme-optimized .hub-cf-card-value--savings { -webkit-text-fill-color: var(--cfk-info); color: var(--cfk-info); }
+:root body.theme-optimized .hub-cf-heatmap-cell--level-0,
+:root body.theme-optimized .hub-cf-heatmap-cell--level-1,
+:root body.theme-optimized .hub-cf-heatmap-cell--level-2,
+:root body.theme-optimized .hub-cf-heatmap-cell--level-3 { border-radius: 0; background-image: none !important; }
+:root body.theme-optimized .hub-cf-heatmap-cell--level-3 { border-style: double; border-width: 3px; }
+:root body.theme-optimized .hub-cf-tab-switcher-btn[aria-selected="true"]::before { background: var(--cfk-accent); }
+:root body.theme-optimized .hub-cf-btn--add, :root body.theme-optimized .hub-cf-modal-btn--save,
+:root body.theme-optimized .cfg-btn--primary { background-color: var(--cfk-accent); color: #000; border: 1px solid var(--cfk-accent); }
+:root body.theme-optimized .hub-cf-btn--export, :root body.theme-optimized .hub-cf-btn--import,
+:root body.theme-optimized .hub-cf-modal-btn--cancel { border-style: dashed; }
+:root body.theme-optimized .hub-cf-modal, :root body.theme-optimized .hub-cf-ai-key-modal-content,
+:root body.theme-optimized .hub-cf-bs-panel { border: 1px solid var(--cfk-accent); background-image: none !important; }
+
+/* ───────── 12) LITE: tắt chuyển động trang trí của cashflow ───────── */
+body.perf-lite .hub-cf-heatmap-cell--level-3,
+body.perf-lite .hub-cf-heatmap-cell--today::before { animation: none !important; }
+body.perf-lite .hub-cf-card:hover,
+body.perf-lite .hub-cf-heatmap-cell:hover,
+body.perf-lite .hub-cf-btn:hover,
+body.perf-lite .hub-cf-modal-btn:hover,
+body.perf-lite .cfg-btn:hover { transform: none !important; }
+body.perf-lite .hub-cf-card, body.perf-lite .hub-cf-heatmap-cell,
+body.perf-lite .hub-cf-btn, body.perf-lite .hub-cf-modal-btn { transition: none; }
+
+/* ───────── 13) Giảm chuyển động & màn hình nhỏ ───────── */
+@media (prefers-reduced-motion: reduce) {
+  :root body .hub-cf-heatmap-cell--level-3, :root body .hub-cf-heatmap-cell--today::before { animation: none !important; }
+  :root body .hub-cf-card:hover, :root body .hub-cf-heatmap-cell:hover { transform: none; }
+}
+@media (max-width: 560px) {
+  :root body .hub-cf-card, :root body .cfd-card, :root body .hub-cf-chart-section { border-radius: var(--cfk-r-sm); }
+  :root[data-theme="solar-zen"] body .hub-cf-card { --cfk-card-shadow: inset 0 0 0 3px #fffdf8, inset 0 0 0 4px rgba(110, 86, 44, 0.16); }
+}

@@ -956,7 +956,8 @@ const cashflowModule = (function () {
       startingBalance: 0,
       balanceSnapshots: [],  // { year, month, accountId, amount }
       transactions: [],       // { id, type, amount, day, month, year, desc, category, source, createdAt }
-      debts: []               // { id, debtorName, amount, dateBorrowed, expectedReturnDate, status, note, paidAt, createdAt }
+      debts: [],              // { id, debtorName, amount, dateBorrowed, expectedReturnDate, status, note, paidAt, createdAt }
+      goals: []               // { id, name, icon, target, deadline, status, contribs: [{ id, amount, date, wallet, txIds, note }] }
     };
   }
 
@@ -1152,6 +1153,7 @@ const cashflowModule = (function () {
     if (!Array.isArray(_data.transactions)) _data.transactions = [];
     if (!Array.isArray(_data.balanceSnapshots)) _data.balanceSnapshots = [];
     if (!Array.isArray(_data.debts)) _data.debts = [];
+    _glEnsure();   // mục tiêu tiết kiệm (khôi phục từ bản dự phòng nếu lớp lưu trữ bỏ qua trường lạ)
     if (typeof _data.startingBalance !== 'number') _data.startingBalance = 0;
 
     // 🔑 BACKWARD COMPATIBILITY: Default missing source to 'uncategorized'
@@ -3174,6 +3176,10 @@ function _restoreAIState() {
     <div class="cfq-hint" id="cfq-hint" data-i18n="cfqHint">${_t('cfqHint')}</div>
   </div>
 
+  <!-- ═══ SAVINGS GOALS ═══ -->
+  <section class="cfg glass-card" id="cfg-goals" aria-labelledby="cfg-title"></section>
+  <div id="cfg-modal-root"></div>
+
   <!-- ═══ REAL-TIME CHART / HEATMAP ═══ -->
   <div class="hub-cf-chart-section glass-card cfc">
     <div class="hub-cf-chart-header cfc-head">
@@ -3750,6 +3756,7 @@ ${_aiShellHTML()}
       // BIND EVENT HANDLERS
       // ══════════════════════════════════════════
       _bindEvents();
+      _bindGoalEvents();
 
       // ══════════════════════════════════════════
       // SET UP MODAL
@@ -3793,6 +3800,7 @@ ${_aiShellHTML()}
     _refreshDebtLedger();
     _refreshHeatmap();
     _renderSpendingPlan();
+    _renderGoals();
   }
 
   /**
@@ -3856,6 +3864,7 @@ ${_aiShellHTML()}
     updateDashboardTotals();
     _cfqRender();
     _renderSpendingPlan();
+    _renderGoals();
     _renderAIQuickChips();
     _updateAIStatus();
 
@@ -8424,7 +8433,9 @@ ${_aiShellHTML()}
   }
 
   function _cfcPalette() {
-    var st = getComputedStyle(document.documentElement);
+    // Đọc từ .hub-cf-container: skin cashflow ánh xạ --success/--danger/... theo từng theme tại đây
+    var host = document.querySelector('.hub-cf-container') || document.documentElement;
+    var st = getComputedStyle(host);
     function v(name, fb) { return st.getPropertyValue(name).trim() || fb; }
     return {
       income: v('--success', '#44ff88'),
@@ -9615,7 +9626,8 @@ ${_aiShellHTML()}
       forecast: 'Dự báo chi tiêu và số tiền để dành được đến cuối tháng này, và cho tôi biết cần điều chỉnh gì.',
       cash:     'Phân tích dòng tiền mặt và ngân hàng của tôi. Tôi nên giữ bao nhiêu tiền mặt?',
       savings:  'Tôi đang có một khoản tiền tiết kiệm. Tôi nên làm gì để nó phát huy hiệu quả và không bị tiêu hao dần?',
-      overCap:  'Tôi đã vượt trần chi tiêu tháng này. Hãy đưa ra phương án cứu vãn cụ thể cho những ngày còn lại.'
+      overCap:  'Tôi đã vượt trần chi tiêu tháng này. Hãy đưa ra phương án cứu vãn cụ thể cho những ngày còn lại.',
+      goals:    'Các mục tiêu tiết kiệm của tôi có kịp hạn không? Với tốc độ hiện tại tôi cần điều chỉnh gì cho từng mục tiêu?'
     },
     en: {
       summary:  'Summarize my income and expenses this month and highlight the most notable insight.',
@@ -9624,7 +9636,8 @@ ${_aiShellHTML()}
       forecast: 'Forecast my month-end spending and savings, and tell me what adjustments I should make now.',
       cash:     'Analyze my cash vs. bank flow. How much physical cash should I keep on hand?',
       savings:  'I have a savings balance. How should I allocate and protect it effectively?',
-      overCap:  'I have exceeded my spending cap this month. Give me a concrete recovery plan for the remaining days.'
+      overCap:  'I have exceeded my spending cap this month. Give me a concrete recovery plan for the remaining days.',
+      goals:    'Are my savings goals on track? Based on my current pace, what should I adjust for each goal?'
     }
   };
 
@@ -9635,7 +9648,8 @@ ${_aiShellHTML()}
       ['Cắt giảm ở đâu?', 'cut'],
       ['Dự báo cuối tháng', 'forecast'],
       ['Tiền mặt vs Ngân hàng', 'cash'],
-      ['Quản lý tiền tiết kiệm', 'savings']
+      ['Quản lý tiền tiết kiệm', 'savings'],
+      ['Mục tiêu tiết kiệm', 'goals']
     ],
     en: [
       ['Summarize this month', 'summary'],
@@ -9643,7 +9657,8 @@ ${_aiShellHTML()}
       ['Where to cut?', 'cut'],
       ['Month-end forecast', 'forecast'],
       ['Cash vs. Bank', 'cash'],
-      ['Manage savings', 'savings']
+      ['Manage savings', 'savings'],
+      ['Savings goals', 'goals']
     ]
   };
 
@@ -9704,7 +9719,7 @@ ${_aiShellHTML()}
       if (tx.type === 'income') {
         if (tx.category !== 'tiet-kiem' && tx.category !== 'thu-no' && tx.category !== 'Thu nợ') agg.income += amt;
       } else if (tx.category === 'tiet-kiem') {
-        agg.saved += amt;
+        if (tx.source !== 'savings') agg.saved += amt;   // chân 'rút khỏi quỹ' của mục tiêu không phải tiền mới để dành
       } else if (tx.category === 'cho-vay') {
         /* cho vay: không tính là chi */
       } else {
@@ -9931,6 +9946,26 @@ ${_aiShellHTML()}
         prompt: _getAIPrompt('cash')
       });
     }
+
+    // Mục tiêu tiết kiệm chậm tiến độ / quá hạn
+    try {
+      var _lag = _glActive().map(function (g) { return { g: g, m: _glMetrics(g) }; })
+        .filter(function (x) { return x.m.status === 'overdue' || x.m.status === 'behind' || x.m.status === 'stalled'; })
+        .sort(function (a, b) { return (a.m.status === 'overdue' ? 0 : 1) - (b.m.status === 'overdue' ? 0 : 1); })[0];
+      if (_lag) {
+        var _gm = _lag.m, _gn = _lag.g.name;
+        A.push({
+          level: _gm.status === 'overdue' ? 'danger' : 'warn',
+          title: _gm.status === 'overdue'
+            ? (en ? ('Goal “' + _gn + '” is overdue') : ('Mục tiêu “' + _gn + '” đã quá hạn'))
+            : (en ? ('Goal “' + _gn + '” is falling behind') : ('Mục tiêu “' + _gn + '” đang chậm tiến độ')),
+          body: _gm.needMonth !== null
+            ? (en ? ('Needs about ' + F(_gm.needMonth) + '/month; current pace is ' + F(_gm.paceMonth) + '/month.') : ('Cần khoảng ' + F(_gm.needMonth) + '/tháng, hiện đang để dành ' + F(_gm.paceMonth) + '/tháng.'))
+            : (en ? ('Still ' + F(_gm.remaining) + ' to go.') : ('Còn thiếu ' + F(_gm.remaining) + '.')),
+          prompt: _getAIPrompt('goals')
+        });
+      }
+    } catch (_) {}
 
     var rank = { danger: 0, warn: 1, info: 2, ok: 3 };
     A.sort(function (a, b) { return rank[a.level] - rank[b.level]; });
@@ -10217,6 +10252,7 @@ ${_aiShellHTML()}
       categoryBudgets: budgets,
       previousMonth: { income: R(plan.prev.income), spent: R(plan.prev.spent), spentByCategory: prevByCat },
       debtsToCollect: plan.debts.list.map(function (d) { return { debtor: d.debtor, amount: d.amount, dueDate: d.due, overdue: d.overdue }; }),
+      savingsGoals: _glAIContext(),
       balances: balances,
       transactions: txs.map(function (tx) {
         return {
@@ -10237,7 +10273,8 @@ ${_aiShellHTML()}
         'DATA RULES\n' +
         '1. Use ONLY the numbers provided in the FINANCIAL DATA JSON block. Do NOT invent or recalculate aggregate totals: use the exact pre-computed values in plan, categoryTotals, previousMonth, and balances. Simple illustrative estimates (e.g. trimming 15% of a category) are allowed if marked with (≈).\n' +
         '2. Format currency in VND (e.g. 1.250.000 ₫). Never fabricate transactions, categories, or balances.\n' +
-        '3. plan.targetSavingsRatePct is the user’s chosen savings target; plan.spendCap is the spending cap to reach that target.\n\n' +
+        '3. plan.targetSavingsRatePct is the user’s chosen savings target; plan.spendCap is the spending cap to reach that target.\n' +
+        '4. savingsGoals lists the user’s savings goals. Use the pre-computed neededPerMonth, currentPacePerMonth, status and projectedFinishDate as-is; when advising on saving, prioritise goals whose status is behind, stalled or overdue.\n\n' +
         'RESPONSE STYLE\n' +
         '- Lead with a 1-sentence conclusion, followed by concise bullet points with concrete VND amounts and actionable steps.\n' +
         '- When asked for a spending plan or next month’s budget: provide (1) Current status in 2–3 lines; (2) A Markdown table with columns Category | This Month | Proposed | Notes (total proposed ≤ plan.spendCap); (3) 3 spending rules; (4) A 7-day action checklist.\n' +
@@ -10250,7 +10287,8 @@ ${_aiShellHTML()}
       '1. Chỉ dùng số liệu trong khối DỮ LIỆU. KHÔNG tự cộng/trừ để tạo ra con số tổng hợp mới: dùng đúng giá trị có sẵn trong plan, categoryTotals, previousMonth, balances. Phép tính đơn giản để minh hoạ (ví dụ giảm 15% một hạng mục) được phép nhưng phải ghi rõ là ước tính (≈).\n' +
       '2. Định dạng tiền kiểu Việt Nam: 1.250.000 ₫. Không bịa giao dịch, hạng mục hay số dư không có trong dữ liệu; thiếu dữ liệu thì nói rõ.\n' +
       '3. plan.targetSavingsRatePct là mục tiêu tiết kiệm người dùng đã chọn; plan.spendCap là trần chi để đạt mục tiêu đó. Mọi kế hoạch ngân sách phải nằm trong spendCap.\n' +
-      '4. Giao dịch có trường s: "cash" (tiền mặt) hoặc "bank" (ngân hàng). Chỉ phân tích riêng hai nguồn này khi liên quan.\n\n' +
+      '4. Giao dịch có trường s: "cash" (tiền mặt) hoặc "bank" (ngân hàng). Chỉ phân tích riêng hai nguồn này khi liên quan.\n' +
+      '5. savingsGoals là các mục tiêu tiết kiệm của người dùng: dùng nguyên neededPerMonth, currentPacePerMonth, status, projectedFinishDate đã tính sẵn; khi tư vấn tiết kiệm hãy ưu tiên mục tiêu có status behind, stalled hoặc overdue.\n\n' +
       'CÁCH TRẢ LỜI\n' +
       '- Mở đầu bằng kết luận 1 câu. Sau đó là các ý chính dạng gạch đầu dòng; mỗi ý có con số cụ thể và hành động cụ thể (làm gì, bao nhiêu, khi nào).\n' +
       '- Yêu cầu lập kế hoạch chi tiêu/ngân sách/tháng sau: trả lời theo cấu trúc (1) Hiện trạng 2–3 dòng; (2) Bảng markdown ngân sách đề xuất với các cột Hạng mục | Tháng này | Đề xuất | Ghi chú, tổng đề xuất không vượt plan.spendCap; (3) 3 quy tắc chi tiêu; (4) Việc cần làm trong 7 ngày tới.\n' +
@@ -10489,14 +10527,15 @@ ${_aiShellHTML()}
         '<div class="cfx-plan" id="cfx-plan"></div>' +
       '</div>' +
 
-      '<div class="cfx-panel" id="cfx-panel-chat" role="tabpanel" aria-labelledby="cfx-tab-chat" hidden>' +
-        '<div class="cfx-chips" id="cfx-chips">' + _buildAIChipsHTML() + '</div>' +
-        '<div class="cfx-chat" id="cf-ai-chat-history" role="log" aria-live="polite"></div>' +
-        '<form class="cfx-composer" id="cfx-composer" autocomplete="off">' +
-          '<textarea id="cf-ai-input" class="cfx-input" rows="1" data-i18n-placeholder="aiChatPlaceholder" placeholder="' + _escHtml(_t('aiChatPlaceholder')) + '"></textarea>' +
-          '<button type="button" id="cf-ai-stop-btn" class="cfx-send cfx-send--stop" style="display:none;" title="' + _escHtml(_t('aiBtnStop')) + '" aria-label="' + _escHtml(_t('aiBtnStop')) + '">' + AI_ICON.stop + '</button>' +
-          '<button type="submit" id="cf-ai-send-btn" class="cfx-send" title="' + _escHtml(_t('aiBtnSend')) + '" aria-label="' + _escHtml(_t('aiBtnSend')) + '">' + AI_ICON.send + '</button>' +
-        '</form>' +
+      '<div class="cfx-panel cfx-chat" id="cfx-panel-chat" role="tabpanel" aria-labelledby="cfx-tab-chat" hidden>' +
+        '<div class="cfx-chat__scroll" id="hub-cf-ai-output" aria-live="polite"></div>' +
+        '<div class="cfx-chat__composer">' +
+          '<div class="cfx-chips" id="cfx-chips">' + _buildAIChipsHTML() + '</div>' +
+          '<div class="cfx-input">' +
+            '<textarea id="cf-ai-prompt" class="cfx-input__field" rows="1" maxlength="1500" autocomplete="off" data-i18n-placeholder="aiChatPlaceholder" placeholder="' + _escHtml(_t('aiChatPlaceholder')) + '" aria-label="' + _escHtml(_t('aiChatPlaceholder')) + '"></textarea>' +
+            '<button type="button" id="cf-ai-ask-btn" class="cfx-send" title="' + _escHtml(_t('aiBtnSend')) + '" aria-label="' + _escHtml(_t('aiBtnSend')) + '">' + AI_ICON.send + '</button>' +
+          '</div>' +
+        '</div>' +
       '</div>' +
     '</section>';
   }
@@ -10505,21 +10544,37 @@ ${_aiShellHTML()}
   //  Chat UI
   // ─────────────────────────────────────────────────────────────
 
+  var AI_ADDRESS = 'Thiếu gia';   // cách AI xưng hô trong lời chào (tiếng Việt)
+
+  function _aiStatusSteps() {
+    return _getCFLang() === 'en'
+      ? ['Reading your transactions…', 'Checking against your budget…', 'Drafting recommendations…']
+      : ['Đọc dữ liệu giao dịch…', 'Đối chiếu với ngân sách…', 'Soạn khuyến nghị…'];
+  }
+
   function _aiEmptyStateHTML() {
+    var en = _getCFLang() === 'en';
     var ym = _currentMonth || _currentYearMonth();
-    var tiles = [
-      ['Lập kế hoạch tháng sau', 'Ngân sách từng hạng mục + việc cần làm tuần đầu', AI_PROMPTS.plan],
-      ['Cắt giảm ở đâu?', 'Số tiền cụ thể cho từng khoản nên giảm', AI_PROMPTS.cut],
-      ['Dự báo cuối tháng', 'Chi bao nhiêu, để dành được bao nhiêu', AI_PROMPTS.forecast],
-      ['Quản lý tiền tiết kiệm', 'Giữ và làm tiền tiết kiệm sinh lời', AI_PROMPTS.savings]
-    ].map(function (t) {
-      return '<button type="button" class="cfx-tile" data-ai-prompt="' + _escHtml(t[2]) + '"><strong>' + _escHtml(t[0]) + '</strong><span>' + _escHtml(t[1]) + '</span></button>';
+    var tiles = (en ? [
+      ['Plan next month', 'Category budgets + a first-week checklist', 'plan'],
+      ['Where to cut?', 'Specific amounts for each category to trim', 'cut'],
+      ['Month-end forecast', 'How much you will spend and save', 'forecast'],
+      ['Savings goals', 'Are you on track for each goal?', 'goals']
+    ] : [
+      ['Lập kế hoạch tháng sau', 'Ngân sách từng hạng mục + việc cần làm tuần đầu', 'plan'],
+      ['Cắt giảm ở đâu?', 'Số tiền cụ thể cho từng khoản nên giảm', 'cut'],
+      ['Dự báo cuối tháng', 'Chi bao nhiêu, để dành được bao nhiêu', 'forecast'],
+      ['Mục tiêu tiết kiệm', 'Từng mục tiêu có kịp hạn không?', 'goals']
+    ]).map(function (t) {
+      return '<button type="button" class="cfx-tile" data-ai-prompt="' + _escHtml(_getAIPrompt(t[2])) + '"><strong>' + _escHtml(t[0]) + '</strong><span>' + _escHtml(t[1]) + '</span></button>';
     }).join('');
 
     return '<div class="cfx-empty">' +
       '<div class="cfx-empty__logo">' + AI_ICON.spark + '</div>' +
-      '<h5>Xin chào ' + _escHtml(AI_ADDRESS) + '</h5>' +
-      '<p>Mình đã đọc dữ liệu tháng ' + ym.month + '/' + ym.year + ' của bạn. Hỏi gì cũng được, hoặc chọn một gợi ý:</p>' +
+      '<h5>' + (en ? 'Hello' : 'Xin chào ' + _escHtml(AI_ADDRESS)) + '</h5>' +
+      '<p>' + (en
+        ? 'I have read your data for ' + ym.month + '/' + ym.year + '. Ask anything, or pick a suggestion:'
+        : 'Mình đã đọc dữ liệu tháng ' + ym.month + '/' + ym.year + ' của bạn. Hỏi gì cũng được, hoặc chọn một gợi ý:') + '</p>' +
       '<div class="cfx-tiles">' + tiles + '</div>' +
     '</div>';
   }
@@ -10574,7 +10629,7 @@ ${_aiShellHTML()}
         '<div class="cfx-msg__avatar">' + AI_ICON.spark + '</div>' +
         '<div class="cfx-msg__body">' +
           '<div class="cfx-msg__meta"><span>Advisor</span></div>' +
-          '<div class="cfx-msg__bubble cfx-typing"><span class="cfx-typing__dots"><i></i><i></i><i></i></span><span class="cfx-typing__text">' + _escHtml(message || AI_STATUS_STEPS[0]) + '</span></div>' +
+          '<div class="cfx-msg__bubble cfx-typing"><span class="cfx-typing__dots"><i></i><i></i><i></i></span><span class="cfx-typing__text">' + _escHtml(message || _aiStatusSteps()[0]) + '</span></div>' +
         '</div>' +
       '</div>');
     out.scrollTop = out.scrollHeight;
@@ -10583,8 +10638,9 @@ ${_aiShellHTML()}
     _aiState._loadingTimer = setInterval(function () {
       var t = _qs('.cfx-typing__text');
       if (!t) return;
-      step = (step + 1) % AI_STATUS_STEPS.length;
-      t.textContent = AI_STATUS_STEPS[step];
+      var steps = _aiStatusSteps();
+      step = (step + 1) % steps.length;
+      t.textContent = steps[step];
     }, 2200);
   }
 
@@ -10898,6 +10954,1028 @@ ${_aiShellHTML()}
         if (e.key !== 'Escape') return;
         var m = document.getElementById('cf-ai-key-modal');
         if (m && m.style.display === 'flex') _closeAIKeyModal();
+      });
+    }
+  }
+
+  // ============================================================
+  //   SAVINGS GOALS — Mục tiêu tiết kiệm có tiến độ
+  //   • Dữ liệu: _data.goals = [{ id, name, icon, target, deadline, status, contribs[] }]
+  //   • Nạp/rút có thể chuyển tiền thật giữa ví (Bank/Cash) ⇄ quỹ tiết kiệm
+  //     bằng 2 giao dịch "chuyển khoản nội bộ" (không tính vào Thu/Chi).
+  // ============================================================
+
+  var GL_ICONS = ['🎯', '💻', '✈️', '🏠', '🚗', '📱', '🎓', '💍', '💰', '🎁', '🏖️', '📈'];
+  // Bảng emoji mở rộng (chỉ dùng emoji phổ biến, hiển thị được trên hầu hết hệ điều hành)
+  var GL_ICONS_MORE = ['🏍️', '🚲', '⌚', '🎧', '🎮', '📷', '🎸', '🎹', '🎨', '📚', '☕', '🍜', '🍕', '🐶', '🐱', '🐷',
+    '🌴', '⛰️', '🏕️', '🎡', '🏋️', '⚽', '🏸', '👟', '👗', '👜', '💄', '💎', '🏦', '💳', '👶', '🧳',
+    '🛋️', '🔧', '🏡', '🎂', '💒', '🩺', '🌏', '🚀', '🔥', '⭐', '❤️', '🛡️'];
+  var GL_ICON_IMG_PX = 96;            // ảnh tùy chỉnh được thu về 96×96
+  var GL_ICON_IMG_MAX_BYTES = 6 * 1024 * 1024;
+  var GL_ICON_DATA_MAX = 60000;       // chặn data-URL quá lớn khi đọc từ dữ liệu cũ/đồng bộ
+
+  /** Ảnh tùy chỉnh được lưu dưới dạng data-URL (đã kiểm tra chặt nên chèn thẳng vào src là an toàn) */
+  function _glIsImgIcon(ic) {
+    return typeof ic === 'string' && ic.length < GL_ICON_DATA_MAX && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+\/=]+$/.test(ic);
+  }
+  /** Chuẩn hóa icon: giữ ảnh hợp lệ, hoặc cắt chuỗi còn tối đa 2 ký tự/emoji */
+  function _glNormIcon(raw) {
+    var s = String(raw == null ? '' : raw).trim();
+    if (_glIsImgIcon(s)) return s;
+    s = s.replace(/[<>&"'`]/g, '');
+    var segs;
+    if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+      segs = Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(s), function (x) { return x.segment; });
+    } else { segs = Array.from(s); }
+    return segs.slice(0, 2).join('');
+  }
+  function _glIconHTML(ic) {
+    if (_glIsImgIcon(ic)) return '<img class="cfg-ico-img" src="' + ic + '" alt="" draggable="false">';
+    return _escHtml(_glNormIcon(ic) || '🎯');
+  }
+  /** Đọc file ảnh → cắt vuông giữa ảnh → 96×96 → data-URL (webp nếu trình duyệt hỗ trợ, ngược lại png) */
+  function _glImageToIcon(file) {
+    return new Promise(function (resolve, reject) {
+      if (!file || !/^image\//.test(file.type)) return reject(new Error('type'));
+      if (file.size > GL_ICON_IMG_MAX_BYTES) return reject(new Error('size'));
+      var fr = new FileReader();
+      fr.onerror = function () { reject(new Error('read')); };
+      fr.onload = function () {
+        var img = new Image();
+        img.onerror = function () { reject(new Error('read')); };
+        img.onload = function () {
+          try {
+            var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+            if (!w || !h) return reject(new Error('read'));
+            var side = Math.min(w, h), sx = (w - side) / 2, sy = (h - side) / 2;
+            var cv = document.createElement('canvas'); cv.width = cv.height = GL_ICON_IMG_PX;
+            var cx = cv.getContext('2d');
+            cx.imageSmoothingQuality = 'high';
+            cx.drawImage(img, sx, sy, side, side, 0, 0, GL_ICON_IMG_PX, GL_ICON_IMG_PX);
+            var out = cv.toDataURL('image/webp', 0.88);
+            if (out.indexOf('data:image/webp') !== 0) out = cv.toDataURL('image/png');
+            resolve(out);
+          } catch (err) { reject(new Error('read')); }
+        };
+        img.src = fr.result;
+      };
+      fr.readAsDataURL(file);
+    });
+  }
+  var GL_BACKUP_KEY = 'hub_cf_goals_backup_v1';
+  var GL_DAYS_PER_MONTH = 30.4375;
+
+  var GOALS_I18N = {
+    vi: {
+      title: 'Mục tiêu tiết kiệm', subActive: '{n} mục tiêu đang thực hiện', subEmpty: 'Đặt mục tiêu để biết mỗi tháng cần để dành bao nhiêu',
+      btnNew: 'Mục tiêu mới',
+      sumSaved: 'Đã tích lũy', sumOf: 'trên tổng mục tiêu {v}',
+      sumPool: 'Quỹ tiết kiệm', sumPoolFree: 'Đã gán {a} · chưa gán {f}',
+      sumPoolOver: 'Mục tiêu đang vượt quỹ {v} — kiểm tra số dư tiết kiệm',
+      sumMonth: 'Nạp trong tháng này', sumMonthSub: 'Cần khoảng {v}/tháng cho tất cả mục tiêu có hạn',
+      sumMonthSubNone: 'Đặt hạn cho mục tiêu để có con số cần nạp mỗi tháng',
+      stAchieved: 'Hoàn thành', stAhead: 'Vượt kế hoạch', stOnTrack: 'Đúng tiến độ', stBehind: 'Chậm tiến độ',
+      stStalled: 'Chưa nạp gần đây', stOverdue: 'Quá hạn', stOpen: 'Không đặt hạn', stNew: 'Mới bắt đầu',
+      tipNew: 'Mục tiêu mới! Nạp khoảng {v}/tháng để về đích đúng hạn.', tipNewOpen: 'Mục tiêu mới! Nạp khoản đầu tiên để bắt đầu theo dõi tốc độ.',
+      lblDeadline: 'Thời hạn', lblNeed: 'Cần để dành', lblPace: 'Đang để dành', lblProjected: 'Dự kiến đạt', lblThisMonth: 'Tháng này',
+      dueDaysLeft: '{d} · còn {n} ngày', dueToday: '{d} · hôm nay là hạn chót', dueOverdue: '{d} · quá hạn {n} ngày', dueNone: 'Không đặt hạn',
+      needMonth: '{m}/tháng · ≈ {w}/tuần', needShort: '{t} trong {n} ngày · ≈ {w}/tuần',
+      paceNone: 'Chưa có dữ liệu', paceVal: '{v}/tháng',
+      projNone: 'Chưa đủ dữ liệu', projDone: 'Đã đạt',
+      monthVal: 'Đã nạp {a}', monthValNeed: 'Đã nạp {a} / cần {n}',
+      tipBehind: 'Nạp thêm khoảng {v}/tháng để kịp hạn.', tipStalled: 'Hãy nạp một khoản nhỏ tháng này để giữ nhịp.',
+      tipOverdue: 'Hãy dời hạn hoặc tăng số tiền nạp. Còn thiếu {v}.', tipAhead: 'Bạn đang vượt kế hoạch. Có thể hoàn thành sớm hơn hạn.',
+      tipAchieved: 'Hoàn thành ngày {d}. Chúc mừng bạn!', tipOk: 'Giữ nhịp này là bạn sẽ về đích đúng hạn.',
+      remaining: 'Còn thiếu {v}',
+      btnDeposit: 'Nạp tiền', btnWithdraw: 'Rút', btnHistory: 'Lịch sử', btnHistoryHide: 'Ẩn lịch sử',
+      btnEdit: 'Sửa', btnArchive: 'Lưu trữ', btnRestore: 'Khôi phục', btnDelete: 'Xóa', btnDeleteConfirm: 'Bấm lần nữa để xóa',
+      archivedShow: 'Mục tiêu đã lưu trữ ({n})', archivedHide: 'Ẩn mục tiêu đã lưu trữ',
+      histEmpty: 'Chưa có lần nạp nào.', histDeposit: 'Nạp', histWithdraw: 'Rút', histInitial: 'Số dư ban đầu',
+      histFromBank: 'từ Ngân hàng', histFromCash: 'từ Tiền mặt', histToBank: 'về Ngân hàng', histToCash: 'về Tiền mặt', histNoWallet: 'không đổi ví',
+      histRemove: 'Xóa lần này',
+      emptyTitle: 'Chưa có mục tiêu nào', emptyBody: 'Bắt đầu nhanh với một mẫu bên dưới, hoặc tự tạo mục tiêu của riêng bạn.',
+      tplEmergency: 'Quỹ khẩn cấp', tplTravel: 'Du lịch', tplGadget: 'Mua sắm lớn',
+      tplEmergencyHint: '3 tháng chi tiêu ≈ {v}',
+      mNewTitle: 'Mục tiêu mới', mEditTitle: 'Sửa mục tiêu',
+      lblName: 'Tên mục tiêu', phName: 'VD: Laptop mới, Du lịch Nhật…', lblIcon: 'Biểu tượng',
+      icoCustom: 'Tùy chỉnh biểu tượng', icoTextPh: 'Nhập hoặc dán emoji / ký tự (tối đa 2)…', icoTextLbl: 'Emoji hoặc ký tự',
+      icoUpload: 'Tải ảnh lên', icoReset: 'Mặc định', icoPalette: 'Chọn thêm emoji',
+      icoHint: 'Ảnh được cắt vuông, thu nhỏ 96×96 và lưu cùng dữ liệu mục tiêu.',
+      icoErrType: 'Vui lòng chọn một file ảnh (PNG, JPG, WEBP, SVG…).', icoErrSize: 'Ảnh quá lớn (tối đa 6 MB).', icoErrRead: 'Không đọc được ảnh này, hãy thử ảnh khác.',
+      lblTarget: 'Số tiền mục tiêu', phAmount: 'VD: 25000000 hoặc 25m', lblDeadlineOpt: 'Thời hạn (tuỳ chọn)',
+      chipNoDeadline: 'Không đặt hạn', chip3m: '+3 tháng', chip6m: '+6 tháng', chip1y: '+1 năm', chip2y: '+2 năm',
+      lblInitial: 'Đã có sẵn trong quỹ tiết kiệm', hintInitial: 'Số tiền bạn đã để dành từ trước cho mục tiêu này. Không trừ vào ví.',
+      sumNeed: 'Cần để dành khoảng {m}/tháng trong {n} tháng', sumNoDeadline: 'Không đặt hạn — app sẽ dự báo ngày đạt theo tốc độ bạn nạp.',
+      errName: 'Hãy đặt tên cho mục tiêu', errTarget: 'Số tiền mục tiêu phải lớn hơn 0', errDeadline: 'Hạn phải sau hôm nay',
+      errInitial: 'Số tiền đã có không được vượt mục tiêu',
+      cDepositTitle: 'Nạp tiền vào “{name}”', cWithdrawTitle: 'Rút tiền từ “{name}”',
+      lblAmount: 'Số tiền', lblFrom: 'Lấy tiền từ', lblTo: 'Trả tiền về', lblDate: 'Ngày', lblNote: 'Ghi chú (tuỳ chọn)',
+      optBank: 'Ngân hàng', optCash: 'Tiền mặt', optNoneDeposit: 'Không đổi ví', optNoneWithdraw: 'Không đổi ví',
+      walletBal: 'Số dư {w}: {v}', walletLow: 'Số dư {w} không đủ ({v}). Vẫn có thể ghi nhận nếu số dư chưa đồng bộ.',
+      hintNoneDeposit: 'Tiền đã nằm sẵn trong quỹ tiết kiệm — chỉ tăng số dư của mục tiêu.',
+      hintNoneWithdraw: 'Chỉ giảm số dư của mục tiêu, không chuyển tiền về ví.',
+      hintTransferDeposit: 'Chuyển {w} → quỹ tiết kiệm. Không tính là chi tiêu.', hintTransferWithdraw: 'Chuyển quỹ tiết kiệm → {w}. Không tính là thu nhập.',
+      prevAfter: 'Sau khi lưu: {s} / {t} ({p}%)', prevDone: 'Sau khi lưu: đạt mục tiêu 🎉',
+      errAmount: 'Nhập số tiền lớn hơn 0', errWithdrawMax: 'Không thể rút quá số đã tích lũy ({v})', errDate: 'Chọn ngày hợp lệ',
+      chipSuggest: 'Gợi ý tháng này: {v}',
+      btnCancel: 'Huỷ', btnSave: 'Lưu', btnSaveDeposit: 'Nạp tiền', btnSaveWithdraw: 'Rút tiền', btnCreate: 'Tạo mục tiêu',
+      txDeposit: 'Nạp mục tiêu: {name}', txWithdraw: 'Rút từ mục tiêu: {name}',
+      toastCreated: '🎯 Đã tạo mục tiêu “{name}”', toastUpdated: '✅ Đã cập nhật “{name}”',
+      toastDeposited: '✅ Đã nạp {v} vào “{name}”', toastWithdrawn: '✅ Đã rút {v} từ “{name}”',
+      toastAchieved: '🎉 Chúc mừng! Bạn đã hoàn thành “{name}”', toastDeleted: '🗑️ Đã xóa mục tiêu “{name}” (tiền vẫn nằm trong quỹ tiết kiệm)',
+      toastArchived: '📦 Đã lưu trữ “{name}”', toastRestored: '♻️ Đã khôi phục “{name}”', toastContribRemoved: '🗑️ Đã xóa lần nạp/rút này',
+      ariaProgress: '{name}: đạt {p}%', close: 'Đóng'
+    },
+    en: {
+      title: 'Savings goals', subActive: '{n} active goals', subEmpty: 'Set a goal to see how much to save each month',
+      btnNew: 'New goal',
+      sumSaved: 'Saved so far', sumOf: 'of {v} total target',
+      sumPool: 'Savings pool', sumPoolFree: 'Assigned {a} · unassigned {f}',
+      sumPoolOver: 'Goals exceed the savings pool by {v} — check your savings balance',
+      sumMonth: 'Added this month', sumMonthSub: 'About {v}/month needed across goals with a deadline',
+      sumMonthSubNone: 'Add a deadline to a goal to get a monthly amount',
+      stAchieved: 'Achieved', stAhead: 'Ahead of plan', stOnTrack: 'On track', stBehind: 'Behind schedule',
+      stStalled: 'No recent deposits', stOverdue: 'Overdue', stOpen: 'No deadline', stNew: 'Just started',
+      tipNew: 'New goal! Save about {v}/month to finish on time.', tipNewOpen: 'New goal! Add your first deposit to start tracking your pace.',
+      lblDeadline: 'Deadline', lblNeed: 'Needed', lblPace: 'Current pace', lblProjected: 'Projected', lblThisMonth: 'This month',
+      dueDaysLeft: '{d} · {n} days left', dueToday: '{d} · due today', dueOverdue: '{d} · {n} days overdue', dueNone: 'No deadline',
+      needMonth: '{m}/month · ≈ {w}/week', needShort: '{t} in {n} days · ≈ {w}/week',
+      paceNone: 'No data yet', paceVal: '{v}/month',
+      projNone: 'Not enough data', projDone: 'Reached',
+      monthVal: 'Added {a}', monthValNeed: 'Added {a} / need {n}',
+      tipBehind: 'Add about {v} more per month to meet the deadline.', tipStalled: 'Add a small amount this month to keep the habit.',
+      tipOverdue: 'Extend the deadline or save more. {v} still to go.', tipAhead: 'You are ahead of plan — you could finish early.',
+      tipAchieved: 'Completed on {d}. Congratulations!', tipOk: 'Keep this pace and you will finish on time.',
+      remaining: '{v} to go',
+      btnDeposit: 'Add money', btnWithdraw: 'Withdraw', btnHistory: 'History', btnHistoryHide: 'Hide history',
+      btnEdit: 'Edit', btnArchive: 'Archive', btnRestore: 'Restore', btnDelete: 'Delete', btnDeleteConfirm: 'Click again to delete',
+      archivedShow: 'Archived goals ({n})', archivedHide: 'Hide archived goals',
+      histEmpty: 'No deposits yet.', histDeposit: 'Deposit', histWithdraw: 'Withdraw', histInitial: 'Starting balance',
+      histFromBank: 'from Bank', histFromCash: 'from Cash', histToBank: 'to Bank', histToCash: 'to Cash', histNoWallet: 'no wallet change',
+      histRemove: 'Remove this entry',
+      emptyTitle: 'No goals yet', emptyBody: 'Start quickly with a template below, or create your own goal.',
+      tplEmergency: 'Emergency fund', tplTravel: 'Travel', tplGadget: 'Big purchase',
+      tplEmergencyHint: '3 months of spending ≈ {v}',
+      mNewTitle: 'New goal', mEditTitle: 'Edit goal',
+      lblName: 'Goal name', phName: 'e.g. New laptop, Japan trip…', lblIcon: 'Icon',
+      icoCustom: 'Custom icon', icoTextPh: 'Type or paste an emoji / character (max 2)…', icoTextLbl: 'Emoji or character',
+      icoUpload: 'Upload image', icoReset: 'Default', icoPalette: 'More emoji',
+      icoHint: 'Images are center-cropped, resized to 96×96 and stored with the goal.',
+      icoErrType: 'Please choose an image file (PNG, JPG, WEBP, SVG…).', icoErrSize: 'Image is too large (max 6 MB).', icoErrRead: 'Could not read this image, try another one.',
+      lblTarget: 'Target amount', phAmount: 'e.g. 25000000 or 25m', lblDeadlineOpt: 'Deadline (optional)',
+      chipNoDeadline: 'No deadline', chip3m: '+3 months', chip6m: '+6 months', chip1y: '+1 year', chip2y: '+2 years',
+      lblInitial: 'Already in your savings', hintInitial: 'Money you have already set aside for this goal. It will not be deducted from a wallet.',
+      sumNeed: 'You need to save about {m}/month for {n} months', sumNoDeadline: 'No deadline — the app will project your finish date from your pace.',
+      errName: 'Give your goal a name', errTarget: 'Target must be greater than 0', errDeadline: 'Deadline must be after today',
+      errInitial: 'Starting amount cannot exceed the target',
+      cDepositTitle: 'Add money to “{name}”', cWithdrawTitle: 'Withdraw from “{name}”',
+      lblAmount: 'Amount', lblFrom: 'Take money from', lblTo: 'Return money to', lblDate: 'Date', lblNote: 'Note (optional)',
+      optBank: 'Bank', optCash: 'Cash', optNoneDeposit: 'No wallet change', optNoneWithdraw: 'No wallet change',
+      walletBal: '{w} balance: {v}', walletLow: '{w} balance is not enough ({v}). You can still record it if your balance is out of sync.',
+      hintNoneDeposit: 'Money is already in your savings — only the goal balance increases.',
+      hintNoneWithdraw: 'Only lowers the goal balance; no money moves back to a wallet.',
+      hintTransferDeposit: 'Transfer {w} → savings pool. Not counted as spending.', hintTransferWithdraw: 'Transfer savings pool → {w}. Not counted as income.',
+      prevAfter: 'After saving: {s} / {t} ({p}%)', prevDone: 'After saving: goal reached 🎉',
+      errAmount: 'Enter an amount greater than 0', errWithdrawMax: 'Cannot withdraw more than saved ({v})', errDate: 'Pick a valid date',
+      chipSuggest: 'Suggested this month: {v}',
+      btnCancel: 'Cancel', btnSave: 'Save', btnSaveDeposit: 'Add money', btnSaveWithdraw: 'Withdraw', btnCreate: 'Create goal',
+      txDeposit: 'Goal deposit: {name}', txWithdraw: 'Goal withdrawal: {name}',
+      toastCreated: '🎯 Goal “{name}” created', toastUpdated: '✅ “{name}” updated',
+      toastDeposited: '✅ Added {v} to “{name}”', toastWithdrawn: '✅ Withdrew {v} from “{name}”',
+      toastAchieved: '🎉 Congratulations! You completed “{name}”', toastDeleted: '🗑️ Goal “{name}” deleted (money stays in your savings)',
+      toastArchived: '📦 “{name}” archived', toastRestored: '♻️ “{name}” restored', toastContribRemoved: '🗑️ Entry removed',
+      ariaProgress: '{name}: {p}% complete', close: 'Close'
+    }
+  };
+
+  function _gl_t(key, vars) {
+    var lang = _getCFLang();
+    var dict = GOALS_I18N[lang] || GOALS_I18N.vi;
+    var s = dict[key];
+    if (s === undefined) s = GOALS_I18N.vi[key];
+    if (s === undefined) return key;
+    if (vars) s = s.replace(/\{(\w+)\}/g, function (_, k) { return vars[k] !== undefined ? vars[k] : ''; });
+    return s;
+  }
+
+  // ── Trạng thái giao diện (giữ qua các lần render lại) ──
+  var _glUI = { expanded: {}, showArchived: false, confirmDelete: null, modal: null, cWallet: 'bank', iconPick: GL_ICONS[0], lastFocus: null };
+  var _glEscBound = false;
+
+  // ─────────────────────────────────────────────────────────────
+  //  Dữ liệu & lưu trữ
+  // ─────────────────────────────────────────────────────────────
+
+  function _glEnsure() {
+    if (!_data) return [];
+    if (!Array.isArray(_data.goals)) {
+      var restored = null;
+      try { restored = JSON.parse(localStorage.getItem(GL_BACKUP_KEY) || 'null'); } catch (_) {}
+      _data.goals = Array.isArray(restored) ? restored : [];
+    }
+    return _data.goals;
+  }
+
+  /** Bản sao dự phòng trên máy: phòng khi lớp lưu đám mây bỏ qua trường `goals` lạ */
+  function _glBackup() {
+    try { localStorage.setItem(GL_BACKUP_KEY, JSON.stringify(_data.goals || [])); } catch (_) {}
+  }
+
+  function _glSave() {
+    _glBackup();
+    _debouncedPersist();
+    _renderAllViews();
+    _updateChart();
+  }
+
+  function _glId(prefix) { return prefix + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7); }
+  function _glFind(id) { return _glEnsure().find(function (g) { return g.id === id; }) || null; }
+  function _glSaved(g) { return (g.contribs || []).reduce(function (s, c) { return s + (Number(c.amount) || 0); }, 0); }
+  function _glWalletName(w) { return w === 'cash' ? _gl_t('optCash') : _gl_t('optBank'); }
+  function _glIso(day, month, year) { return year + '-' + String(month).padStart(2, '0') + '-' + String(day).padStart(2, '0'); }
+
+  // ─────────────────────────────────────────────────────────────
+  //  ENGINE: tiến độ, tốc độ, dự báo (thuần tính toán)
+  // ─────────────────────────────────────────────────────────────
+
+  function _glMetrics(g) {
+    var today = _todayISO();
+    var target = Number(g.target) || 0;
+    var saved = Math.max(0, _glSaved(g));
+    var remaining = Math.max(0, target - saved);
+    var m = {
+      saved: saved, target: target, remaining: remaining,
+      pct: target > 0 ? Math.min(100, (saved / target) * 100) : 0,
+      achieved: target > 0 && saved >= target,
+      daysLeft: null, monthsLeft: null, needMonth: null, needWeek: null, short: false,
+      paceMonth: 0, projectedISO: null, thisMonth: 0, status: 'open', tone: 'info'
+    };
+
+    // Tốc độ để dành: các lần nạp (trừ số dư ban đầu) trong tối đa 90 ngày gần nhất
+    var created = g.createdAt ? new Date(g.createdAt) : new Date();
+    var createdISO = _dfToISO(created);
+    var age = Math.max(0, _dfDiffDays(createdISO, today) || 0) + 1;
+    var win = Math.min(90, Math.max(30, age));
+    var fromISO = _dfShift(today, -win, 0);
+    var ym = today.slice(0, 7), net = 0, thisMonth = 0, realContribs = 0;
+    (g.contribs || []).forEach(function (c) {
+      if (c.initial) return;
+      realContribs++;
+      var amt = Number(c.amount) || 0;
+      if (c.date >= fromISO && c.date <= today) net += amt;
+      if (c.date && c.date.slice(0, 7) === ym) thisMonth += amt;
+    });
+    m.thisMonth = Math.max(0, thisMonth);
+    m.paceMonth = net > 0 ? net / (win / GL_DAYS_PER_MONTH) : 0;
+
+    // Dự báo ngày đạt
+    if (!m.achieved && m.paceMonth > 0) {
+      var monthsToGo = remaining / m.paceMonth;
+      if (monthsToGo <= 600) m.projectedISO = _dfShift(today, Math.ceil(monthsToGo * GL_DAYS_PER_MONTH), 0);
+    }
+
+    // Cần để dành theo hạn
+    if (g.deadline) {
+      m.daysLeft = _dfDiffDays(today, g.deadline);
+      if (!m.achieved && m.daysLeft !== null && m.daysLeft > 0) {
+        m.monthsLeft = m.daysLeft / GL_DAYS_PER_MONTH;
+        m.short = m.monthsLeft < 1;
+        m.needMonth = remaining / Math.max(m.monthsLeft, 1);
+        m.needWeek = remaining / Math.max(m.daysLeft / 7, 1);
+      }
+    }
+
+    // Trạng thái
+    if (m.achieved) { m.status = 'achieved'; m.tone = 'gold'; }
+    else if (!g.deadline) { m.status = 'open'; m.tone = 'info'; }
+    else if (m.daysLeft !== null && m.daysLeft < 0) { m.status = 'overdue'; m.tone = 'danger'; }
+    else if (realContribs === 0 && age <= 14) { m.status = 'new'; m.tone = 'info'; }   // vừa tạo: chưa đánh giá chậm/nhanh
+    else if (m.paceMonth <= 0) { m.status = 'stalled'; m.tone = 'warn'; }
+    else if (m.needMonth && m.paceMonth >= m.needMonth * 1.25) { m.status = 'ahead'; m.tone = 'ok'; }
+    else if (m.needMonth && m.paceMonth >= m.needMonth * 0.9) { m.status = 'onTrack'; m.tone = 'ok'; }
+    else { m.status = 'behind'; m.tone = 'warn'; }
+    return m;
+  }
+
+  function _glStatusLabel(status) {
+    return _gl_t({ achieved: 'stAchieved', ahead: 'stAhead', onTrack: 'stOnTrack', behind: 'stBehind', stalled: 'stStalled', overdue: 'stOverdue', open: 'stOpen', 'new': 'stNew' }[status] || 'stOpen');
+  }
+
+  function _glActive() { return _glEnsure().filter(function (g) { return g.status !== 'archived'; }); }
+
+  /** Chi tiêu trung bình tháng (3 tháng gần nhất có phát sinh) — dùng gợi ý "Quỹ khẩn cấp" */
+  function _glAvgMonthlySpend() {
+    var now = _currentYearMonth(), vals = [];
+    for (var k = 0; k < 4 && vals.length < 3; k++) {
+      var s = _aiShiftMonth(now, -k), a = _aiMonthAgg(s.year, s.month);
+      if (a.spent > 0 && !(k === 0 && vals.length === 0 && a.count < 3)) vals.push(a.spent);
+    }
+    return vals.length ? vals.reduce(function (x, y) { return x + y; }, 0) / vals.length : 0;
+  }
+
+  function _glFormatAmount(n) { return _formatVNFull(n); }
+
+  // Dữ liệu cho AI Advisor
+  function _glAIContext() {
+    return _glActive().map(function (g) {
+      var m = _glMetrics(g), R = Math.round;
+      return {
+        name: g.name, target: R(m.target), saved: R(m.saved), remaining: R(m.remaining), progressPct: +m.pct.toFixed(1),
+        deadline: g.deadline || null, daysLeft: m.daysLeft,
+        neededPerMonth: m.needMonth === null ? null : R(m.needMonth),
+        currentPacePerMonth: R(m.paceMonth), addedThisMonth: R(m.thisMonth),
+        projectedFinishDate: m.projectedISO, status: m.status
+      };
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  Thao tác: tạo / sửa / nạp / rút / xóa
+  // ─────────────────────────────────────────────────────────────
+
+  function _glRecheckStatus(g) {
+    var m = _glMetrics(g);
+    if (g.status === 'archived') return false;
+    if (m.achieved && g.status !== 'achieved') { g.status = 'achieved'; g.achievedAt = Date.now(); return true; }
+    if (!m.achieved && g.status === 'achieved') { g.status = 'active'; delete g.achievedAt; }
+    return false;
+  }
+
+  function _glCreateGoal(f) {
+    var goals = _glEnsure();
+    var g = { id: _glId('goal'), name: f.name, icon: f.icon, target: f.target, deadline: f.deadline || '', createdAt: Date.now(), status: 'active', contribs: [] };
+    if (f.initial > 0) {
+      g.contribs.push({ id: _glId('c'), amount: f.initial, date: _todayISO(), wallet: 'none', txIds: [], note: '', initial: true, createdAt: Date.now() });
+    }
+    goals.push(g);
+    var achieved = _glRecheckStatus(g);
+    _glSave();
+    _showToast(_gl_t('toastCreated', { name: g.name }));
+    if (achieved) _showToast(_gl_t('toastAchieved', { name: g.name }));
+  }
+
+  function _glUpdateGoal(id, f) {
+    var g = _glFind(id); if (!g) return;
+    g.name = f.name; g.icon = f.icon; g.target = f.target; g.deadline = f.deadline || '';
+    var achieved = _glRecheckStatus(g);
+    _glSave();
+    _showToast(_gl_t('toastUpdated', { name: g.name }));
+    if (achieved) _showToast(_gl_t('toastAchieved', { name: g.name }));
+  }
+
+  function _glMakeTx(type, wallet, amount, iso, desc, goalId) {
+    var p = iso.split('-');
+    return { id: _uid(), type: type, amount: amount, year: +p[0], month: +p[1], day: +p[2], desc: desc, category: 'tiet-kiem', source: wallet, goalId: goalId, createdAt: Date.now() };
+  }
+
+  /** kind: 'deposit' | 'withdraw'; wallet: 'bank' | 'cash' | 'none' */
+  function _glContribute(id, o) {
+    var g = _glFind(id); if (!g) return;
+    var sign = o.kind === 'withdraw' ? -1 : 1;
+    var txIds = [];
+    if (o.wallet === 'bank' || o.wallet === 'cash') {
+      var desc = _gl_t(o.kind === 'withdraw' ? 'txWithdraw' : 'txDeposit', { name: g.name }) + (o.note ? ' — ' + o.note : '');
+      var walletTx = _glMakeTx(o.kind === 'withdraw' ? 'income' : 'expense', o.wallet, o.amount, o.date, desc, g.id);
+      var poolTx = _glMakeTx(o.kind === 'withdraw' ? 'expense' : 'income', 'savings', o.amount, o.date, desc, g.id);
+      _data.transactions.push(walletTx, poolTx);
+      txIds = [walletTx.id, poolTx.id];
+    }
+    g.contribs.push({ id: _glId('c'), amount: sign * o.amount, date: o.date, wallet: o.wallet, txIds: txIds, note: o.note || '', createdAt: Date.now() });
+    var achieved = _glRecheckStatus(g);
+    _glSave();
+    _showToast(_gl_t(o.kind === 'withdraw' ? 'toastWithdrawn' : 'toastDeposited', { v: _formatVNFull(o.amount), name: g.name }));
+    if (achieved) _showToast(_gl_t('toastAchieved', { name: g.name }));
+  }
+
+  function _glRemoveContrib(goalId, cid) {
+    var g = _glFind(goalId); if (!g) return;
+    var idx = g.contribs.findIndex(function (c) { return c.id === cid; });
+    if (idx === -1) return;
+    var c = g.contribs[idx];
+    if (Array.isArray(c.txIds) && c.txIds.length) {
+      _data.transactions = _data.transactions.filter(function (t) { return c.txIds.indexOf(t.id) === -1; });
+    }
+    g.contribs.splice(idx, 1);
+    _glRecheckStatus(g);
+    _glSave();
+    _showToast(_gl_t('toastContribRemoved'));
+  }
+
+  function _glSetArchived(id, archived) {
+    var g = _glFind(id); if (!g) return;
+    g.status = archived ? 'archived' : 'active';
+    if (!archived) _glRecheckStatus(g);
+    _glSave();
+    _showToast(_gl_t(archived ? 'toastArchived' : 'toastRestored', { name: g.name }));
+  }
+
+  function _glDeleteGoal(id) {
+    var goals = _glEnsure();
+    var i = goals.findIndex(function (g) { return g.id === id; });
+    if (i === -1) return;
+    var name = goals[i].name;
+    goals.splice(i, 1);
+    delete _glUI.expanded[id];
+    _glUI.confirmDelete = null;
+    _glSave();
+    _showToast(_gl_t('toastDeleted', { name: name }));
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  Render: khu vực Mục tiêu
+  // ─────────────────────────────────────────────────────────────
+
+  var GL_ICON_SVG = {
+    plus: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+    edit: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+    archive: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/></svg>',
+    trash: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>',
+    restore: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>',
+    chev: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>'
+  };
+
+  function _glRingSVG(pct) {
+    var r = 26, c = 2 * Math.PI * r, dash = (Math.max(0, Math.min(100, pct)) / 100) * c;
+    return '<svg class="cfg-ring__svg" viewBox="0 0 64 64" aria-hidden="true">' +
+      '<circle class="cfg-ring__track" cx="32" cy="32" r="' + r + '" fill="none" stroke-width="6"/>' +
+      '<circle class="cfg-ring__val" cx="32" cy="32" r="' + r + '" fill="none" stroke-width="6" stroke-linecap="round" ' +
+      'stroke-dasharray="' + dash.toFixed(2) + ' ' + c.toFixed(2) + '" transform="rotate(-90 32 32)"/></svg>';
+  }
+
+  function _glMetaRow(label, value, tone) {
+    return '<div class="cfg-row' + (tone ? ' is-' + tone : '') + '"><span class="cfg-row__label">' + _escHtml(label) + '</span><span class="cfg-row__value">' + value + '</span></div>';
+  }
+
+  function _glCardHTML(g) {
+    var e = _escHtml, m = _glMetrics(g), F = _formatVNFull, C = _formatCompactVND;
+    var expanded = !!_glUI.expanded[g.id];
+    var archived = g.status === 'archived';
+    var tone = archived ? 'info' : m.tone;
+
+    // Hạn
+    var due;
+    if (!g.deadline) due = e(_gl_t('dueNone'));
+    else {
+      var d = _formatDateISOtoVN(g.deadline);
+      if (m.achieved) due = e(d);
+      else if (m.daysLeft < 0) due = e(_gl_t('dueOverdue', { d: d, n: Math.abs(m.daysLeft) }));
+      else if (m.daysLeft === 0) due = e(_gl_t('dueToday', { d: d }));
+      else due = e(_gl_t('dueDaysLeft', { d: d, n: m.daysLeft }));
+    }
+
+    var rows = _glMetaRow(_gl_t('lblDeadline'), due, g.deadline && !m.achieved && m.daysLeft !== null && m.daysLeft < 0 ? 'danger' : '');
+
+    if (!m.achieved) {
+      if (m.needMonth !== null) {
+        rows += _glMetaRow(_gl_t('lblNeed'), e(m.short
+          ? _gl_t('needShort', { t: C(m.remaining), n: m.daysLeft, w: C(m.needWeek) })
+          : _gl_t('needMonth', { m: C(m.needMonth), w: C(m.needWeek) })));
+      }
+      rows += _glMetaRow(_gl_t('lblPace'), e(m.paceMonth > 0 ? _gl_t('paceVal', { v: C(m.paceMonth) }) : _gl_t('paceNone')),
+        m.needMonth !== null && m.paceMonth > 0 ? (m.paceMonth >= m.needMonth * 0.9 ? 'ok' : 'warn') : '');
+      rows += _glMetaRow(_gl_t('lblProjected'), e(m.projectedISO ? _formatDateISOtoVN(m.projectedISO) : _gl_t('projNone')),
+        m.projectedISO && g.deadline ? (m.projectedISO <= g.deadline ? 'ok' : 'warn') : '');
+      rows += _glMetaRow(_gl_t('lblThisMonth'), e(m.needMonth !== null && !m.short
+        ? _gl_t('monthValNeed', { a: C(m.thisMonth), n: C(m.needMonth) }) : _gl_t('monthVal', { a: C(m.thisMonth) })));
+    }
+
+    // Lời khuyên một dòng
+    var tip = '';
+    if (m.status === 'achieved') tip = _gl_t('tipAchieved', { d: _formatDateISOtoVN(_dfToISO(new Date(g.achievedAt || Date.now()))) });
+    else if (m.status === 'behind') tip = _gl_t('tipBehind', { v: C(Math.max(0, m.needMonth - m.paceMonth)) });
+    else if (m.status === 'stalled') tip = _gl_t('tipStalled');
+    else if (m.status === 'overdue') tip = _gl_t('tipOverdue', { v: C(m.remaining) });
+    else if (m.status === 'ahead') tip = _gl_t('tipAhead');
+    else if (m.status === 'onTrack') tip = _gl_t('tipOk');
+    else if (m.status === 'new') tip = m.needMonth !== null ? _gl_t('tipNew', { v: C(m.needMonth) }) : _gl_t('tipNewOpen');
+
+    // Mốc 25/50/75
+    var ticks = [25, 50, 75].map(function (p) { return '<b class="' + (m.pct >= p ? 'is-hit' : '') + '" style="left:' + p + '%"></b>'; }).join('');
+
+    // Lịch sử
+    var hist = '';
+    if (expanded) {
+      var list = (g.contribs || []).slice().sort(function (a, b) { return (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0); });
+      hist = '<div class="cfg-hist" id="cfg-hist-' + e(g.id) + '">' + (list.length ? list.map(function (c) {
+        var neg = Number(c.amount) < 0;
+        var where = c.initial ? _gl_t('histInitial')
+          : (c.wallet === 'bank' ? _gl_t(neg ? 'histToBank' : 'histFromBank')
+            : c.wallet === 'cash' ? _gl_t(neg ? 'histToCash' : 'histFromCash') : _gl_t('histNoWallet'));
+        return '<div class="cfg-hist__item"><div class="cfg-hist__main"><strong class="' + (neg ? 'is-neg' : 'is-pos') + '">' + (neg ? '−' : '+') + F(Math.abs(c.amount)) + '</strong>' +
+          '<span>' + e(_gl_t(neg ? 'histWithdraw' : 'histDeposit')) + ' · ' + e(where) + (c.note ? ' · ' + e(c.note) : '') + '</span></div>' +
+          '<div class="cfg-hist__side"><time>' + e(_formatDateISOtoVN(c.date)) + '</time>' +
+          '<button type="button" class="cfg-icon-btn" data-act="rm-contrib" data-id="' + e(g.id) + '" data-cid="' + e(c.id) + '" title="' + e(_gl_t('histRemove')) + '" aria-label="' + e(_gl_t('histRemove')) + '">' + GL_ICON_SVG.trash + '</button></div></div>';
+      }).join('') : '<p class="cfg-muted">' + e(_gl_t('histEmpty')) + '</p>') + '</div>';
+    }
+
+    var confirming = _glUI.confirmDelete === g.id;
+    var tools = archived
+      ? '<button type="button" class="cfg-icon-btn" data-act="restore" data-id="' + e(g.id) + '" title="' + e(_gl_t('btnRestore')) + '" aria-label="' + e(_gl_t('btnRestore')) + '">' + GL_ICON_SVG.restore + '</button>'
+      : '<button type="button" class="cfg-icon-btn" data-act="edit" data-id="' + e(g.id) + '" title="' + e(_gl_t('btnEdit')) + '" aria-label="' + e(_gl_t('btnEdit')) + '">' + GL_ICON_SVG.edit + '</button>' +
+        '<button type="button" class="cfg-icon-btn" data-act="archive" data-id="' + e(g.id) + '" title="' + e(_gl_t('btnArchive')) + '" aria-label="' + e(_gl_t('btnArchive')) + '">' + GL_ICON_SVG.archive + '</button>';
+    tools += '<button type="button" class="cfg-icon-btn cfg-icon-btn--danger' + (confirming ? ' is-confirm' : '') + '" data-act="delete" data-id="' + e(g.id) + '" title="' +
+      e(confirming ? _gl_t('btnDeleteConfirm') : _gl_t('btnDelete')) + '" aria-label="' + e(confirming ? _gl_t('btnDeleteConfirm') : _gl_t('btnDelete')) + '">' + GL_ICON_SVG.trash +
+      (confirming ? '<span>' + e(_gl_t('btnDeleteConfirm')) + '</span>' : '') + '</button>';
+
+    return '<article class="cfg-card is-' + tone + (m.achieved ? ' is-achieved' : '') + (archived ? ' is-archived' : '') + '" data-id="' + e(g.id) + '">' +
+      '<div class="cfg-card__top">' +
+        '<div class="cfg-ring" role="img" aria-label="' + e(_gl_t('ariaProgress', { name: g.name, p: Math.round(m.pct) })) + '">' + _glRingSVG(m.pct) +
+          '<span class="cfg-ring__icon">' + _glIconHTML(g.icon) + '</span></div>' +
+        '<div class="cfg-card__title"><h5 title="' + e(g.name) + '">' + e(g.name) + '</h5>' +
+          '<span class="cfg-badge is-' + tone + '">' + e(archived ? _gl_t('btnArchive') : _glStatusLabel(m.status)) + '</span></div>' +
+        '<div class="cfg-card__tools">' + tools + '</div>' +
+      '</div>' +
+      '<div class="cfg-amounts"><strong>' + F(m.saved) + '</strong><span>/ ' + F(m.target) + '</span><em>' + Math.round(m.pct) + '%</em></div>' +
+      '<div class="cfg-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(m.pct) + '"><i style="width:' + m.pct.toFixed(1) + '%"></i>' + ticks + '</div>' +
+      (m.achieved ? '' : '<div class="cfg-remaining">' + e(_gl_t('remaining', { v: F(m.remaining) })) + '</div>') +
+      '<div class="cfg-rows">' + rows + '</div>' +
+      (tip ? '<p class="cfg-tip is-' + tone + '">' + e(tip) + '</p>' : '') +
+      '<div class="cfg-actions">' +
+        (archived ? '' :
+          '<button type="button" class="cfg-btn cfg-btn--primary" data-act="deposit" data-id="' + e(g.id) + '">' + GL_ICON_SVG.plus + '<span>' + e(_gl_t('btnDeposit')) + '</span></button>' +
+          ((m.saved > 0) ? '<button type="button" class="cfg-btn" data-act="withdraw" data-id="' + e(g.id) + '"><span>' + e(_gl_t('btnWithdraw')) + '</span></button>' : '')) +
+        '<button type="button" class="cfg-btn cfg-btn--ghost" data-act="history" data-id="' + e(g.id) + '" aria-expanded="' + expanded + '" aria-controls="cfg-hist-' + e(g.id) + '"><span>' + e(expanded ? _gl_t('btnHistoryHide') : _gl_t('btnHistory')) + '</span>' +
+          '<span class="cfg-chev' + (expanded ? ' is-open' : '') + '">' + GL_ICON_SVG.chev + '</span></button>' +
+      '</div>' + hist +
+    '</article>';
+  }
+
+  function _glEmptyHTML() {
+    var e = _escHtml, avg = _glAvgMonthlySpend();
+    var emergency = avg > 0 ? Math.ceil((avg * 3) / 100000) * 100000 : 10000000;
+    var tpl = [
+      ['emergency', '🛟', _gl_t('tplEmergency'), avg > 0 ? _gl_t('tplEmergencyHint', { v: _formatCompactVND(emergency) }) : _formatCompactVND(emergency)],
+      ['travel', '✈️', _gl_t('tplTravel'), _formatCompactVND(15000000)],
+      ['gadget', '💻', _gl_t('tplGadget'), _formatCompactVND(25000000)]
+    ].map(function (t) {
+      return '<button type="button" class="cfg-tpl" data-act="tpl" data-tpl="' + t[0] + '"><span class="cfg-tpl__icon">' + t[1] + '</span><strong>' + e(t[2]) + '</strong><span>' + e(t[3]) + '</span></button>';
+    }).join('');
+    return '<div class="cfg-empty"><div class="cfg-empty__icon">🎯</div><strong>' + e(_gl_t('emptyTitle')) + '</strong><p>' + e(_gl_t('emptyBody')) + '</p><div class="cfg-tpls">' + tpl + '</div></div>';
+  }
+
+  function _renderGoals() {
+    var root = _qs('#cfg-goals');
+    if (!root) return;
+    var e = _escHtml, F = _formatVNFull, C = _formatCompactVND;
+    var all = _glEnsure();
+    var active = all.filter(function (g) { return g.status !== 'archived'; });
+    var archived = all.filter(function (g) { return g.status === 'archived'; });
+    var open = active.filter(function (g) { return g.status !== 'achieved'; });
+
+    var head =
+      '<div class="cfg-head"><div class="cfg-titles"><h4 id="cfg-title">' + e(_gl_t('title')) + '</h4>' +
+        '<p class="cfg-sub">' + e(open.length ? _gl_t('subActive', { n: open.length }) : _gl_t('subEmpty')) + '</p></div>' +
+        '<button type="button" class="cfg-btn cfg-btn--primary" data-act="new">' + GL_ICON_SVG.plus + '<span>' + e(_gl_t('btnNew')) + '</span></button></div>';
+
+    var body = '';
+    if (!all.length) {
+      body = _glEmptyHTML();
+    } else {
+      if (active.length) {
+        var totSaved = 0, totTarget = 0, needSum = 0, monthAdded = 0, hasNeed = false;
+        active.forEach(function (g) {
+          var m = _glMetrics(g);
+          totSaved += m.saved; totTarget += Number(g.target) || 0; monthAdded += m.thisMonth;
+          if (m.needMonth !== null && !m.achieved) { needSum += m.needMonth; hasNeed = true; }
+        });
+        var pool = _calcSavingsBalance(), free = pool - totSaved;
+        var over = totSaved > pool && pool >= 0 ? totSaved - pool : 0;
+        var overallPct = totTarget > 0 ? Math.min(100, (totSaved / totTarget) * 100) : 0;
+        body += '<div class="cfg-sum">' +
+          '<div class="cfg-stat cfg-stat--main"><span class="cfg-label">' + e(_gl_t('sumSaved')) + '</span><strong class="cfg-stat__value">' + F(totSaved) + '</strong>' +
+            '<div class="cfg-bar cfg-bar--thin"><i style="width:' + overallPct.toFixed(1) + '%"></i></div>' +
+            '<span class="cfg-stat__sub">' + e(_gl_t('sumOf', { v: F(totTarget) })) + ' · ' + Math.round(overallPct) + '%</span></div>' +
+          '<div class="cfg-stat' + (over ? ' is-warn' : '') + '"><span class="cfg-label">' + e(_gl_t('sumPool')) + '</span><strong class="cfg-stat__value">' + F(pool) + '</strong>' +
+            '<span class="cfg-stat__sub">' + e(over ? _gl_t('sumPoolOver', { v: F(over) }) : _gl_t('sumPoolFree', { a: C(totSaved), f: C(Math.max(0, free)) })) + '</span></div>' +
+          '<div class="cfg-stat"><span class="cfg-label">' + e(_gl_t('sumMonth')) + '</span><strong class="cfg-stat__value">' + F(monthAdded) + '</strong>' +
+            '<span class="cfg-stat__sub">' + e(hasNeed ? _gl_t('sumMonthSub', { v: C(needSum) }) : _gl_t('sumMonthSubNone')) + '</span></div>' +
+        '</div>';
+        // Chưa hoàn thành trước, hoàn thành sau; trong nhóm: gần hạn trước
+        var order = { overdue: 0, stalled: 1, behind: 2, 'new': 3, onTrack: 4, ahead: 5, open: 6, achieved: 7 };
+        var sorted = active.slice().sort(function (a, b) {
+          var ma = _glMetrics(a), mb = _glMetrics(b);
+          if (order[ma.status] !== order[mb.status]) return order[ma.status] - order[mb.status];
+          return (a.deadline || '9999').localeCompare(b.deadline || '9999');
+        });
+        body += '<div class="cfg-grid">' + sorted.map(_glCardHTML).join('') + '</div>';
+      }
+      if (archived.length) {
+        body += '<button type="button" class="cfg-link" data-act="toggle-archived" aria-expanded="' + _glUI.showArchived + '">' +
+          e(_glUI.showArchived ? _gl_t('archivedHide') : _gl_t('archivedShow', { n: archived.length })) + '</button>';
+        if (_glUI.showArchived) body += '<div class="cfg-grid cfg-grid--archived">' + archived.map(_glCardHTML).join('') + '</div>';
+      }
+    }
+    root.innerHTML = head + body;
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  Modal (dựng khi mở → luôn đúng ngôn ngữ hiện tại)
+  // ─────────────────────────────────────────────────────────────
+
+  function _glParseMoney(str) {
+    var s = String(str || '').trim().toLowerCase().replace(/,/g, '.').replace(/\s+/g, '');
+    if (!s) return 0;
+    var mult = 1;
+    if (/(tr|m)$/.test(s)) { mult = 1e6; s = s.replace(/(tr|m)$/, ''); }
+    else if (/k$/.test(s)) { mult = 1e3; s = s.replace(/k$/, ''); }
+    else if (/(ty|b)$/.test(s)) { mult = 1e9; s = s.replace(/(ty|b)$/, ''); }
+    var n = parseFloat(s.replace(/[^0-9.]/g, ''));
+    return isNaN(n) ? 0 : Math.round(n * mult);
+  }
+
+  /** Ô nhập tiền: gõ 5k / 2tr / 1.5m tự đổi thành số; chỉ giữ chữ số */
+  function _glBindMoney(input, onChange) {
+    if (!input) return;
+    input.addEventListener('input', function () {
+      var raw = this.value.toLowerCase();
+      if (/(k|m|tr|b|ty)$/.test(raw) && /\d/.test(raw)) {
+        var n = _glParseMoney(raw);
+        if (n > 0) this.value = String(n);
+      } else {
+        this.value = this.value.replace(/[^0-9]/g, '');
+      }
+      if (onChange) onChange();
+    });
+  }
+
+  function _glWalletBalance(w) { return w === 'bank' ? _calcBankBalance() : (w === 'cash' ? _calcCashBalance() : null); }
+
+  function _glOverlay(inner, labelledBy) {
+    return '<div class="hub-cf-overlay cfg-overlay" id="cfg-overlay" role="dialog" aria-modal="true" aria-labelledby="' + labelledBy + '" style="display:flex;">' +
+      '<div class="hub-cf-modal hub-cf-debt-modal glass cfg-modal">' + inner + '</div></div>';
+  }
+
+  function _glOpenGoalModal(goalId, preset) {
+    var root = _qs('#cfg-modal-root'); if (!root) return;
+    var g = goalId ? _glFind(goalId) : null;
+    if (goalId && !g) return;
+    var e = _escHtml;
+    var v = g ? { name: g.name, icon: g.icon, target: g.target, deadline: g.deadline } : (preset || {});
+    _glUI.iconPick = _glNormIcon(v.icon) || GL_ICONS[0];
+    var isCustomIcon = GL_ICONS.indexOf(_glUI.iconPick) < 0;
+    var iconIsText = isCustomIcon && !_glIsImgIcon(_glUI.iconPick);
+    _glUI.modal = { type: 'goal', id: goalId || null };
+    _glUI.lastFocus = document.activeElement;
+
+    var icons = GL_ICONS.map(function (ic) {
+      return '<button type="button" class="cfg-emoji' + (ic === _glUI.iconPick ? ' is-active' : '') + '" data-icon="' + e(ic) + '" role="radio" aria-checked="' + (ic === _glUI.iconPick) + '">' + e(ic) + '</button>';
+    }).join('');
+
+    var inner =
+      '<div class="hub-cf-modal-header"><h3 class="hub-cf-modal-title" id="cfg-m-title">' + e(g ? _gl_t('mEditTitle') : _gl_t('mNewTitle')) + '</h3>' +
+        '<button type="button" class="hub-cf-modal-close" data-act="close-modal" aria-label="' + e(_gl_t('close')) + '">✕</button></div>' +
+      '<div class="hub-cf-modal-body"><form id="cfg-goal-form" autocomplete="off" novalidate>' +
+        '<div class="hub-cf-form-group"><label class="hub-cf-form-label" for="cfg-f-name">' + e(_gl_t('lblName')) + '</label>' +
+          '<input type="text" id="cfg-f-name" class="hub-cf-form-input" maxlength="60" placeholder="' + e(_gl_t('phName')) + '" value="' + e(v.name || '') + '" aria-describedby="cfg-err-name" />' +
+          '<p class="hub-cf-df-err" id="cfg-err-name" role="alert" hidden></p></div>' +
+        '<div class="hub-cf-form-group"><span class="hub-cf-form-label" id="cfg-icon-label">' + e(_gl_t('lblIcon')) + '</span>' +
+          '<div class="cfg-emojis" id="cfg-icons" role="radiogroup" aria-labelledby="cfg-icon-label">' + icons + '</div>' +
+          '<button type="button" class="cfg-icon-more' + (isCustomIcon ? ' is-active' : '') + '" id="cfg-icon-more" aria-expanded="' + isCustomIcon + '" aria-controls="cfg-icon-custom">' +
+            '<span class="cfg-ic-prev cfg-ic-prev--sm" id="cfg-icon-prev">' + (isCustomIcon ? _glIconHTML(_glUI.iconPick) : '＋') + '</span>' +
+            '<span class="cfg-icon-more__text">' + e(_gl_t('icoCustom')) + '</span>' +
+            '<span class="cfg-chev' + (isCustomIcon ? ' is-open' : '') + '" id="cfg-icon-chev">' + GL_ICON_SVG.chev + '</span></button>' +
+          '<div class="cfg-icon-custom" id="cfg-icon-custom"' + (isCustomIcon ? '' : ' hidden') + '>' +
+            '<div class="cfg-ic-row"><span class="cfg-ic-prev" id="cfg-icon-big" aria-hidden="true">' + _glIconHTML(_glUI.iconPick) + '</span>' +
+              '<input type="text" id="cfg-icon-text" class="hub-cf-form-input cfg-ic-input" maxlength="16" autocomplete="off" placeholder="' + e(_gl_t('icoTextPh')) + '" aria-label="' + e(_gl_t('icoTextLbl')) + '" value="' + (iconIsText ? e(_glUI.iconPick) : '') + '" /></div>' +
+            '<div class="cfg-ic-row cfg-ic-row--btns">' +
+              '<button type="button" class="cfg-btn" id="cfg-icon-upload">' + e(_gl_t('icoUpload')) + '</button>' +
+              '<button type="button" class="cfg-btn cfg-btn--ghost" id="cfg-icon-reset">' + e(_gl_t('icoReset')) + '</button>' +
+              '<input type="file" id="cfg-icon-file" accept="image/*" hidden /></div>' +
+            '<p class="hub-cf-df-err" id="cfg-err-icon" role="alert" hidden></p>' +
+            '<div class="cfg-pal" id="cfg-icon-pal" role="group" aria-label="' + e(_gl_t('icoPalette')) + '">' +
+              GL_ICONS_MORE.map(function (ic) { return '<button type="button" class="cfg-pal__btn" data-icon="' + e(ic) + '" aria-label="' + e(ic) + '">' + e(ic) + '</button>'; }).join('') + '</div>' +
+            '<p class="hub-cf-form-hint">' + e(_gl_t('icoHint')) + '</p>' +
+          '</div></div>' +
+        '<div class="hub-cf-form-group"><div class="hub-cf-df-labelrow"><label class="hub-cf-form-label" for="cfg-f-target">' + e(_gl_t('lblTarget')) + '</label>' +
+          '<span class="hub-cf-df-live" id="cfg-f-target-live" aria-live="polite"></span></div>' +
+          '<div class="hub-cf-df-field"><input type="text" id="cfg-f-target" class="hub-cf-form-input hub-cf-amount-input" inputmode="numeric" placeholder="' + e(_gl_t('phAmount')) + '" value="' + (v.target ? String(v.target) : '') + '" aria-describedby="cfg-err-target" /><span class="hub-cf-df-suffix" aria-hidden="true">₫</span></div>' +
+          '<div class="hub-cf-df-chips" id="cfg-target-chips" role="group"><button type="button" class="hub-cf-df-chip" data-add="1000000">+1M</button><button type="button" class="hub-cf-df-chip" data-add="5000000">+5M</button><button type="button" class="hub-cf-df-chip" data-add="10000000">+10M</button><button type="button" class="hub-cf-df-chip" data-add="50000000">+50M</button></div>' +
+          '<p class="hub-cf-df-err" id="cfg-err-target" role="alert" hidden></p></div>' +
+        '<div class="hub-cf-form-group"><label class="hub-cf-form-label" for="cfg-f-deadline">' + e(_gl_t('lblDeadlineOpt')) + '</label>' +
+          '<input type="date" id="cfg-f-deadline" class="hub-cf-form-input hub-cf-date-input" value="' + e(v.deadline || '') + '" aria-describedby="cfg-err-deadline" />' +
+          '<div class="hub-cf-df-chips" id="cfg-deadline-chips" role="group">' +
+            '<button type="button" class="hub-cf-df-chip" data-months="3">' + e(_gl_t('chip3m')) + '</button><button type="button" class="hub-cf-df-chip" data-months="6">' + e(_gl_t('chip6m')) + '</button>' +
+            '<button type="button" class="hub-cf-df-chip" data-months="12">' + e(_gl_t('chip1y')) + '</button><button type="button" class="hub-cf-df-chip" data-months="24">' + e(_gl_t('chip2y')) + '</button>' +
+            '<button type="button" class="hub-cf-df-chip" data-months="0">' + e(_gl_t('chipNoDeadline')) + '</button></div>' +
+          '<p class="hub-cf-df-err" id="cfg-err-deadline" role="alert" hidden></p></div>' +
+        (g ? '' :
+          '<div class="hub-cf-form-group"><div class="hub-cf-df-labelrow"><label class="hub-cf-form-label" for="cfg-f-initial">' + e(_gl_t('lblInitial')) + '</label><span class="hub-cf-df-live" id="cfg-f-initial-live" aria-live="polite"></span></div>' +
+          '<div class="hub-cf-df-field"><input type="text" id="cfg-f-initial" class="hub-cf-form-input hub-cf-amount-input" inputmode="numeric" placeholder="0" aria-describedby="cfg-err-initial" /><span class="hub-cf-df-suffix" aria-hidden="true">₫</span></div>' +
+          '<p class="hub-cf-form-hint">' + e(_gl_t('hintInitial')) + '</p><p class="hub-cf-df-err" id="cfg-err-initial" role="alert" hidden></p></div>') +
+        '<div class="hub-cf-df-summary" id="cfg-f-summary" aria-live="polite"></div>' +
+        '<div class="hub-cf-form-actions"><button type="button" class="hub-cf-modal-btn hub-cf-modal-btn--cancel" data-act="close-modal">' + e(_gl_t('btnCancel')) + '</button>' +
+          '<button type="submit" class="hub-cf-modal-btn hub-cf-modal-btn--save">' + e(g ? _gl_t('btnSave') : _gl_t('btnCreate')) + '</button></div>' +
+      '</form></div>';
+
+    root.innerHTML = _glOverlay(inner, 'cfg-m-title');
+    _glWireGoalForm(g);
+    _glRefreshGoalForm(g);
+    setTimeout(function () { var el = _qs('#cfg-f-name'); if (el) el.focus(); }, 60);
+  }
+
+  function _glGoalFormValues() {
+    var n = _qs('#cfg-f-name'), t = _qs('#cfg-f-target'), d = _qs('#cfg-f-deadline'), i = _qs('#cfg-f-initial');
+    return {
+      name: n ? n.value.trim() : '', icon: _glNormIcon(_glUI.iconPick) || GL_ICONS[0], target: t ? _glParseMoney(t.value) : 0,
+      deadline: d ? d.value : '', initial: i ? _glParseMoney(i.value) : 0
+    };
+  }
+
+  function _glRefreshGoalForm(g) {
+    var f = _glGoalFormValues(), e = _escHtml;
+    var tl = _qs('#cfg-f-target-live'); if (tl) tl.textContent = f.target > 0 ? _formatVNFull(f.target) : '';
+    var il = _qs('#cfg-f-initial-live'); if (il) il.textContent = f.initial > 0 ? _formatVNFull(f.initial) : '';
+    var sum = _qs('#cfg-f-summary'); if (!sum) return;
+    var already = g ? Math.max(0, _glSaved(g)) : f.initial;
+    var remaining = Math.max(0, f.target - already);
+    if (!f.target) { sum.innerHTML = ''; return; }
+    if (!f.deadline) { sum.innerHTML = '<span>' + e(_gl_t('sumNoDeadline')) + '</span>'; return; }
+    var days = _dfDiffDays(_todayISO(), f.deadline);
+    if (days === null || days <= 0) { sum.innerHTML = ''; return; }
+    var months = Math.max(1, Math.round(days / GL_DAYS_PER_MONTH));
+    var per = remaining / Math.max(days / GL_DAYS_PER_MONTH, 1);
+    sum.innerHTML = '<span>' + e(_gl_t('sumNeed', { m: _formatVNFull(Math.ceil(per / 1000) * 1000), n: months })) + '</span>';
+  }
+
+  function _glWireGoalForm(g) {
+    var form = _qs('#cfg-goal-form'); if (!form) return;
+    var target = _qs('#cfg-f-target'), initial = _qs('#cfg-f-initial'), dl = _qs('#cfg-f-deadline'), name = _qs('#cfg-f-name');
+    function refresh() { _glRefreshGoalForm(g); }
+    _glBindMoney(target, function () { _glSetErr('target', ''); refresh(); });
+    _glBindMoney(initial, function () { _glSetErr('initial', ''); refresh(); });
+    if (name) name.addEventListener('input', function () { _glSetErr('name', ''); });
+    if (dl) dl.addEventListener('change', function () { _glSetErr('deadline', ''); refresh(); });
+
+    var tchips = _qs('#cfg-target-chips');
+    if (tchips && target) tchips.addEventListener('click', function (ev) {
+      var b = ev.target.closest('.hub-cf-df-chip'); if (!b) return;
+      target.value = String((_glParseMoney(target.value) || 0) + (Number(b.getAttribute('data-add')) || 0));
+      _glSetErr('target', ''); refresh();
+    });
+    var dchips = _qs('#cfg-deadline-chips');
+    if (dchips && dl) dchips.addEventListener('click', function (ev) {
+      var b = ev.target.closest('.hub-cf-df-chip'); if (!b) return;
+      var mo = Number(b.getAttribute('data-months')) || 0;
+      dl.value = mo ? _dfShift(_todayISO(), 0, mo) : '';
+      _glSetErr('deadline', ''); refresh();
+    });
+    var icons = _qs('#cfg-icons');
+    var icTxt = _qs('#cfg-icon-text'), icFile = _qs('#cfg-icon-file'), icPanel = _qs('#cfg-icon-custom'), icMore = _qs('#cfg-icon-more');
+    // Cập nhật toàn bộ UI chọn icon theo giá trị hiện tại; keepText=true khi người dùng đang gõ trong ô nhập
+    function setIcon(ic, keepText) {
+      ic = _glNormIcon(ic) || GL_ICONS[0];
+      _glUI.iconPick = ic;
+      var custom = GL_ICONS.indexOf(ic) < 0;
+      if (icons) Array.prototype.forEach.call(icons.querySelectorAll('.cfg-emoji'), function (x) {
+        var on = x.getAttribute('data-icon') === ic; x.classList.toggle('is-active', on); x.setAttribute('aria-checked', String(on));
+      });
+      var big = _qs('#cfg-icon-big'); if (big) big.innerHTML = _glIconHTML(ic);
+      var prev = _qs('#cfg-icon-prev'); if (prev) prev.innerHTML = custom ? _glIconHTML(ic) : '＋';
+      if (icMore) icMore.classList.toggle('is-active', custom);
+      if (icTxt && !keepText) icTxt.value = (custom && !_glIsImgIcon(ic)) ? ic : '';
+      _glSetErr('icon', '');
+    }
+    function togglePanel(open) {
+      if (!icPanel || !icMore) return;
+      var show = typeof open === 'boolean' ? open : icPanel.hidden;
+      icPanel.hidden = !show;
+      icMore.setAttribute('aria-expanded', String(show));
+      var chev = _qs('#cfg-icon-chev'); if (chev) chev.classList.toggle('is-open', show);
+    }
+    if (icons) icons.addEventListener('click', function (ev) {
+      var b = ev.target.closest('.cfg-emoji'); if (!b) return;
+      setIcon(b.getAttribute('data-icon'));
+    });
+    if (icMore) icMore.addEventListener('click', function () { togglePanel(); if (!icPanel.hidden && icTxt) icTxt.focus(); });
+    var pal = _qs('#cfg-icon-pal');
+    if (pal) pal.addEventListener('click', function (ev) {
+      var b = ev.target.closest('.cfg-pal__btn'); if (!b) return;
+      setIcon(b.getAttribute('data-icon'));
+    });
+    if (icTxt) {
+      icTxt.addEventListener('input', function () {
+        var v = _glNormIcon(icTxt.value);
+        if (v) setIcon(v, true); else setIcon(GL_ICONS[0], true);
+      });
+      icTxt.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') ev.preventDefault(); });
+    }
+    var upBtn = _qs('#cfg-icon-upload');
+    if (upBtn && icFile) {
+      upBtn.addEventListener('click', function () { icFile.click(); });
+      icFile.addEventListener('change', function () {
+        var file = icFile.files && icFile.files[0]; icFile.value = '';
+        if (!file) return;
+        _glImageToIcon(file).then(function (data) { setIcon(data); }, function (err) {
+          var k = err && err.message === 'type' ? 'icoErrType' : (err && err.message === 'size' ? 'icoErrSize' : 'icoErrRead');
+          _glSetErr('icon', _gl_t(k));
+        });
+      });
+    }
+    var rsBtn = _qs('#cfg-icon-reset');
+    if (rsBtn) rsBtn.addEventListener('click', function () { setIcon(GL_ICONS[0]); });
+
+    form.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var f = _glGoalFormValues(), bad = null;
+      ['name', 'target', 'deadline', 'initial'].forEach(function (k) { _glSetErr(k, ''); });
+      if (!f.name) { _glSetErr('name', _gl_t('errName')); bad = bad || '#cfg-f-name'; }
+      if (!(f.target > 0)) { _glSetErr('target', _gl_t('errTarget')); bad = bad || '#cfg-f-target'; }
+      if (f.deadline && f.deadline <= _todayISO()) { _glSetErr('deadline', _gl_t('errDeadline')); bad = bad || '#cfg-f-deadline'; }
+      if (!g && f.initial > f.target && f.target > 0) { _glSetErr('initial', _gl_t('errInitial')); bad = bad || '#cfg-f-initial'; }
+      if (bad) { var el = _qs(bad); if (el) el.focus(); return; }
+      _glCloseModal();
+      if (g) _glUpdateGoal(g.id, f); else _glCreateGoal(f);
+    });
+  }
+
+  function _glSetErr(key, msg) {
+    var p = _qs('#cfg-err-' + key); if (p) { p.textContent = msg || ''; p.hidden = !msg; }
+    var map = { name: '#cfg-f-name', target: '#cfg-f-target', deadline: '#cfg-f-deadline', initial: '#cfg-f-initial', amount: '#cfg-c-amount', date: '#cfg-c-date' };
+    var inp = _qs(map[key]);
+    if (inp) { if (msg) inp.setAttribute('aria-invalid', 'true'); else inp.removeAttribute('aria-invalid'); }
+  }
+
+  function _glOpenContribModal(goalId, kind) {
+    var root = _qs('#cfg-modal-root'); if (!root) return;
+    var g = _glFind(goalId); if (!g) return;
+    var e = _escHtml, m = _glMetrics(g);
+    var isW = kind === 'withdraw';
+    _glUI.modal = { type: 'contrib', id: goalId, kind: kind };
+    _glUI.cWallet = isW ? 'none' : 'bank';
+    _glUI.lastFocus = document.activeElement;
+
+    var suggest = (!isW && m.needMonth !== null && !m.short) ? Math.max(0, Math.round(m.needMonth - m.thisMonth)) : 0;
+    var chips = '<button type="button" class="hub-cf-df-chip" data-add="500000">+500K</button><button type="button" class="hub-cf-df-chip" data-add="1000000">+1M</button><button type="button" class="hub-cf-df-chip" data-add="5000000">+5M</button>' +
+      (suggest > 0 ? '<button type="button" class="hub-cf-df-chip cfg-chip-suggest" data-set="' + suggest + '">' + e(_gl_t('chipSuggest', { v: _formatCompactVND(suggest) })) + '</button>' : '') +
+      (isW ? '<button type="button" class="hub-cf-df-chip" data-set="' + Math.round(m.saved) + '">Max</button>' : '');
+
+    var opts = [['bank', _gl_t('optBank')], ['cash', _gl_t('optCash')], ['none', _gl_t(isW ? 'optNoneWithdraw' : 'optNoneDeposit')]].map(function (o) {
+      var bal = _glWalletBalance(o[0]);
+      return '<button type="button" class="cfg-opt' + (o[0] === _glUI.cWallet ? ' is-active' : '') + '" role="radio" aria-checked="' + (o[0] === _glUI.cWallet) + '" data-wallet="' + o[0] + '">' +
+        '<strong>' + e(o[1]) + '</strong>' + (bal !== null ? '<span' + (bal < 0 ? ' class="is-neg"' : '') + '>' + e((bal < 0 ? '−' : '') + _formatCompactVND(bal)) + '</span>' : '') + '</button>';
+    }).join('');
+
+    var inner =
+      '<div class="hub-cf-modal-header"><h3 class="hub-cf-modal-title" id="cfg-m-title"><span class="cfg-title-ico">' + _glIconHTML(g.icon) + '</span> ' + e(_gl_t(isW ? 'cWithdrawTitle' : 'cDepositTitle', { name: g.name })) + '</h3>' +
+        '<button type="button" class="hub-cf-modal-close" data-act="close-modal" aria-label="' + e(_gl_t('close')) + '">✕</button></div>' +
+      '<div class="hub-cf-modal-body"><form id="cfg-contrib-form" autocomplete="off" novalidate>' +
+        '<div class="hub-cf-form-group"><div class="hub-cf-df-labelrow"><label class="hub-cf-form-label" for="cfg-c-amount">' + e(_gl_t('lblAmount')) + '</label><span class="hub-cf-df-live" id="cfg-c-amount-live" aria-live="polite"></span></div>' +
+          '<div class="hub-cf-df-field"><input type="text" id="cfg-c-amount" class="hub-cf-form-input hub-cf-amount-input" inputmode="numeric" placeholder="' + e(_gl_t('phAmount')) + '" aria-describedby="cfg-err-amount" /><span class="hub-cf-df-suffix" aria-hidden="true">₫</span></div>' +
+          '<div class="hub-cf-df-chips" id="cfg-c-chips" role="group">' + chips + '</div>' +
+          '<p class="hub-cf-df-err" id="cfg-err-amount" role="alert" hidden></p></div>' +
+        '<div class="hub-cf-form-group"><span class="hub-cf-form-label" id="cfg-c-wallet-label">' + e(_gl_t(isW ? 'lblTo' : 'lblFrom')) + '</span>' +
+          '<div class="cfg-opts" id="cfg-c-wallets" role="radiogroup" aria-labelledby="cfg-c-wallet-label">' + opts + '</div>' +
+          '<p class="hub-cf-df-wallet" id="cfg-c-walletnote" aria-live="polite"></p></div>' +
+        '<div class="hub-cf-form-grid"><div class="hub-cf-form-group"><label class="hub-cf-form-label" for="cfg-c-date">' + e(_gl_t('lblDate')) + '</label>' +
+          '<input type="date" id="cfg-c-date" class="hub-cf-form-input hub-cf-date-input" value="' + _todayISO() + '" aria-describedby="cfg-err-date" /><p class="hub-cf-df-err" id="cfg-err-date" role="alert" hidden></p></div>' +
+          '<div class="hub-cf-form-group"><label class="hub-cf-form-label" for="cfg-c-note">' + e(_gl_t('lblNote')) + '</label>' +
+          '<input type="text" id="cfg-c-note" class="hub-cf-form-input" maxlength="80" /></div></div>' +
+        '<div class="hub-cf-df-summary" id="cfg-c-preview" aria-live="polite"></div>' +
+        '<div class="hub-cf-form-actions"><button type="button" class="hub-cf-modal-btn hub-cf-modal-btn--cancel" data-act="close-modal">' + e(_gl_t('btnCancel')) + '</button>' +
+          '<button type="submit" class="hub-cf-modal-btn hub-cf-modal-btn--save">' + e(_gl_t(isW ? 'btnSaveWithdraw' : 'btnSaveDeposit')) + '</button></div>' +
+      '</form></div>';
+
+    root.innerHTML = _glOverlay(inner, 'cfg-m-title');
+    _glWireContribForm(g, kind);
+    _glRefreshContribForm(g, kind);
+    setTimeout(function () { var el = _qs('#cfg-c-amount'); if (el) el.focus(); }, 60);
+  }
+
+  function _glRefreshContribForm(g, kind) {
+    var e = _escHtml, isW = kind === 'withdraw';
+    var amtEl = _qs('#cfg-c-amount'), amount = amtEl ? _glParseMoney(amtEl.value) : 0;
+    var live = _qs('#cfg-c-amount-live'); if (live) live.textContent = amount > 0 ? _formatVNFull(amount) : '';
+    var w = _glUI.cWallet, saved = Math.max(0, _glSaved(g)), target = Number(g.target) || 0;
+
+    var note = _qs('#cfg-c-walletnote');
+    if (note) {
+      var html = '', low = false;
+      if (w === 'none') html = _gl_t(isW ? 'hintNoneWithdraw' : 'hintNoneDeposit');
+      else {
+        var bal = _glWalletBalance(w);
+        html = _gl_t('walletBal', { w: _glWalletName(w), v: _formatVNFull(bal) }) + ' · ' + _gl_t(isW ? 'hintTransferWithdraw' : 'hintTransferDeposit', { w: _glWalletName(w) });
+        if (!isW && amount > bal) { low = true; html = _gl_t('walletLow', { w: _glWalletName(w), v: _formatVNFull(bal) }); }
+      }
+      note.textContent = html;
+      note.classList.toggle('is-low', low);
+    }
+
+    var pv = _qs('#cfg-c-preview');
+    if (pv) {
+      if (!(amount > 0)) pv.innerHTML = '';
+      else {
+        var after = Math.max(0, saved + (isW ? -amount : amount));
+        var pct = target > 0 ? Math.min(100, after / target * 100) : 0;
+        pv.innerHTML = '<span>' + e(after >= target && !isW ? _gl_t('prevDone') : _gl_t('prevAfter', { s: _formatVNFull(after), t: _formatVNFull(target), p: Math.round(pct) })) + '</span>';
+      }
+    }
+  }
+
+  function _glWireContribForm(g, kind) {
+    var form = _qs('#cfg-contrib-form'); if (!form) return;
+    var isW = kind === 'withdraw';
+    var amtEl = _qs('#cfg-c-amount');
+    _glBindMoney(amtEl, function () { _glSetErr('amount', ''); _glRefreshContribForm(g, kind); });
+
+    var chips = _qs('#cfg-c-chips');
+    if (chips && amtEl) chips.addEventListener('click', function (ev) {
+      var b = ev.target.closest('.hub-cf-df-chip'); if (!b) return;
+      if (b.hasAttribute('data-set')) amtEl.value = String(Number(b.getAttribute('data-set')) || 0);
+      else amtEl.value = String((_glParseMoney(amtEl.value) || 0) + (Number(b.getAttribute('data-add')) || 0));
+      _glSetErr('amount', ''); _glRefreshContribForm(g, kind);
+    });
+
+    var wallets = _qs('#cfg-c-wallets');
+    if (wallets) wallets.addEventListener('click', function (ev) {
+      var b = ev.target.closest('.cfg-opt'); if (!b) return;
+      _glUI.cWallet = b.getAttribute('data-wallet');
+      Array.prototype.forEach.call(wallets.querySelectorAll('.cfg-opt'), function (x) {
+        var on = x === b; x.classList.toggle('is-active', on); x.setAttribute('aria-checked', String(on));
+      });
+      _glRefreshContribForm(g, kind);
+    });
+
+    form.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var amount = _glParseMoney(amtEl.value), date = (_qs('#cfg-c-date') || {}).value, note = ((_qs('#cfg-c-note') || {}).value || '').trim();
+      var saved = Math.max(0, _glSaved(g)), bad = null;
+      _glSetErr('amount', ''); _glSetErr('date', '');
+      if (!(amount > 0)) { _glSetErr('amount', _gl_t('errAmount')); bad = '#cfg-c-amount'; }
+      else if (isW && amount > saved) { _glSetErr('amount', _gl_t('errWithdrawMax', { v: _formatVNFull(saved) })); bad = '#cfg-c-amount'; }
+      if (!_dfParseISO(date)) { _glSetErr('date', _gl_t('errDate')); bad = bad || '#cfg-c-date'; }
+      if (bad) { var el = _qs(bad); if (el) el.focus(); return; }
+      _glCloseModal();
+      _glContribute(g.id, { kind: kind, amount: amount, wallet: _glUI.cWallet, date: date, note: note });
+    });
+  }
+
+  function _glCloseModal() {
+    var root = _qs('#cfg-modal-root');
+    if (root) root.innerHTML = '';
+    _glUI.modal = null;
+    var f = _glUI.lastFocus;
+    _glUI.lastFocus = null;
+    if (f && typeof f.focus === 'function' && document.contains(f)) { try { f.focus(); } catch (_) {} }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  Sự kiện (delegation)
+  // ─────────────────────────────────────────────────────────────
+
+  function _glTemplate(key) {
+    var avg = _glAvgMonthlySpend();
+    var emergency = avg > 0 ? Math.ceil((avg * 3) / 100000) * 100000 : 10000000;
+    var presets = {
+      emergency: { name: _gl_t('tplEmergency'), icon: '💰', target: emergency, deadline: _dfShift(_todayISO(), 0, 12) },
+      travel:    { name: _gl_t('tplTravel'),    icon: '✈️', target: 15000000, deadline: _dfShift(_todayISO(), 0, 6) },
+      gadget:    { name: _gl_t('tplGadget'),    icon: '💻', target: 25000000, deadline: _dfShift(_todayISO(), 0, 9) }
+    };
+    return presets[key] || null;
+  }
+
+  function _bindGoalEvents() {
+    var root = _qs('#cfg-goals'), modal = _qs('#cfg-modal-root');
+
+    if (root && !root.dataset.bound) {
+      root.dataset.bound = '1';
+      root.addEventListener('click', function (ev) {
+        var b = ev.target.closest('[data-act]'); if (!b || !root.contains(b)) return;
+        var act = b.getAttribute('data-act'), id = b.getAttribute('data-id');
+        if (act !== 'delete') _glUI.confirmDelete = null;
+        switch (act) {
+          case 'new': _glOpenGoalModal(null, null); break;
+          case 'tpl': _glOpenGoalModal(null, _glTemplate(b.getAttribute('data-tpl'))); break;
+          case 'edit': _glOpenGoalModal(id, null); break;
+          case 'deposit': _glOpenContribModal(id, 'deposit'); break;
+          case 'withdraw': _glOpenContribModal(id, 'withdraw'); break;
+          case 'history': _glUI.expanded[id] = !_glUI.expanded[id]; _renderGoals(); break;
+          case 'archive': _glSetArchived(id, true); break;
+          case 'restore': _glSetArchived(id, false); break;
+          case 'toggle-archived': _glUI.showArchived = !_glUI.showArchived; _renderGoals(); break;
+          case 'rm-contrib': _glRemoveContrib(id, b.getAttribute('data-cid')); break;
+          case 'delete':
+            if (_glUI.confirmDelete === id) { _glDeleteGoal(id); }
+            else {
+              _glUI.confirmDelete = id; _renderGoals();
+              setTimeout(function () { if (_glUI.confirmDelete === id) { _glUI.confirmDelete = null; _renderGoals(); } }, 4000);
+            }
+            break;
+        }
+      });
+    }
+
+    if (modal && !modal.dataset.bound) {
+      modal.dataset.bound = '1';
+      modal.addEventListener('click', function (ev) {
+        if (ev.target.closest('[data-act="close-modal"]')) { _glCloseModal(); return; }
+        if (ev.target.id === 'cfg-overlay') _glCloseModal();
+      });
+    }
+
+    if (!_glEscBound) {
+      _glEscBound = true;
+      document.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Escape' && _glUI.modal) _glCloseModal();
       });
     }
   }
