@@ -1,0 +1,181 @@
+
+/* ============================================================
+   TU TIÊN — Flashcard cultivation system (fc-cult-*)
+   Thẻ gọn trong thư viện · Trang Tu luyện · Hiệu ứng đột phá
+   Dùng các biến theme có sẵn; vàng cảnh giới khai báo cục bộ.
+   ============================================================ */
+.fc-cult-mini, .fc-cult-page, .fc-cult-ov {
+  --fc-gold: #f2c14e;
+  --fc-gold-soft: rgba(242, 193, 78, 0.14);
+}
+
+.fc-cult-kicker {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.14em;
+  color: var(--text-secondary); text-transform: uppercase;
+}
+.fc-cult-realm-name {
+  font-family: 'Noto Serif', Georgia, serif; font-weight: 700;
+  color: var(--fc-gold); font-size: 1.6rem; line-height: 1.1;
+}
+.fc-cult-realm-name--big { font-size: 2.6rem; }
+.fc-cult-chip {
+  display: inline-block; padding: 2px 12px; border-radius: 999px;
+  border: 1px solid var(--fc-gold); color: var(--fc-gold);
+  font-size: 0.8rem; white-space: nowrap;
+}
+.fc-cult-chip--ready {
+  border-color: var(--accent-primary); color: var(--accent-primary);
+  background: rgba(0, 240, 255, 0.08); animation: fcCultPulse 1.8s ease-in-out infinite;
+}
+@keyframes fcCultPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(0,240,255,.35); } 50% { box-shadow: 0 0 0 6px rgba(0,240,255,0); } }
+
+.fc-cult-bar { height: 8px; background: var(--bg-elevated); border-radius: 999px; overflow: hidden; }
+.fc-cult-bar > i { display: block; height: 100%; background: var(--accent-primary); border-radius: 999px; transition: width 400ms var(--ease-out-expo, ease-out); }
+.fc-cult-bar--thin { height: 6px; }
+
+/* ── Thẻ gọn trong thư viện ── */
+.fc-cult-mini {
+  display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap;
+  padding: 18px 22px; margin-bottom: 16px; border-left: 3px solid var(--fc-gold);
+}
+.fc-cult-mini[data-state="ready"] { border-left-color: var(--accent-primary); }
+.fc-cult-mini-main { flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.fc-cult-mini-realm { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.fc-cult-mini-sub { font-size: 0.85rem; color: var(--text-secondary); }
+.fc-cult-mini-side { flex: 0 1 260px; min-width: 200px; display: flex; flex-direction: column; gap: 8px; }
+.fc-cult-mini-num { font-family: var(--font-mono, monospace); font-size: 0.75rem; color: var(--text-secondary); }
+.fc-cult-open { align-self: flex-start; min-height: 40px; }
+
+/* ── Trang Tu luyện ── */
+.fc-cult-page { display: flex; flex-direction: column; gap: 20px; width: 100%; max-width: 1100px; margin: 0 auto; }
+.fc-cult-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.fc-cult-greet h2 { margin: 4px 0 0; font-size: 1.6rem; color: var(--text-primary); }
+.fc-cult-back { min-height: 40px; }
+.fc-cult-qi {
+  background: var(--bg-surface); border: 1px solid var(--glass-border); border-radius: var(--radius-md, 14px);
+  padding: 12px 16px; max-width: 440px; font-size: 0.9rem; color: var(--text-secondary);
+}
+.fc-cult-qi b { color: var(--accent-primary); font-weight: 600; }
+
+.fc-cult-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; }
+.fc-cult-grid--even { grid-template-columns: 1fr 1fr; }
+.fc-cult-card {
+  background: var(--bg-surface); border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg, 20px); padding: 24px 26px;
+  display: flex; flex-direction: column; gap: 14px; min-width: 0;
+}
+.fc-cult-realm-line { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.fc-cult-meta { font-size: 0.85rem; color: var(--text-secondary); }
+.fc-cult-axes { display: flex; flex-direction: column; gap: 14px; }
+.fc-cult-axis-head { display: flex; justify-content: space-between; gap: 10px; font-size: 0.9rem; margin-bottom: 6px; }
+.fc-cult-axis-val { font-family: var(--font-mono, monospace); }
+.fc-cult-axis[data-state="ok"] .fc-cult-bar > i { background: var(--success); }
+.fc-cult-axis[data-state="ok"] .fc-cult-axis-val { color: var(--success); }
+.fc-cult-axis[data-state="off"] { opacity: 0.55; }
+.fc-cult-muted { color: var(--text-muted); }
+.fc-cult-missing { font-size: 0.85rem; color: var(--text-secondary); }
+.fc-cult-note { margin: 0; font-size: 0.82rem; color: var(--text-secondary); }
+.fc-cult-break { align-self: flex-start; min-height: 46px; }
+.fc-cult-break[disabled], .fc-cult-relight[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+.fc-cult-radar { align-items: center; }
+.fc-cult-radar .fc-cult-kicker { align-self: flex-start; }
+.fc-cult-radar-svg { width: 100%; max-width: 300px; height: auto; }
+.fc-cult-ring { fill: none; stroke: var(--glass-border); stroke-width: 1.5; }
+.fc-cult-shape { fill: rgba(0, 240, 255, 0.2); stroke: var(--accent-primary); stroke-width: 2; }
+.fc-cult-radar-lab { font-family: var(--font-body, sans-serif); font-size: 12px; font-weight: 600; }
+
+.fc-cult-steps { display: flex; gap: 6px; flex-wrap: wrap; }
+.fc-cult-step {
+  flex: 1 1 110px; border-top: 4px solid var(--bg-elevated); padding-top: 8px;
+  font-size: 0.8rem; color: var(--text-muted);
+}
+.fc-cult-step[data-st="done"] { border-top-color: var(--accent-primary); color: var(--text-secondary); }
+.fc-cult-step[data-st="now"] { border-top-color: var(--fc-gold); color: var(--fc-gold); font-weight: 600; }
+.fc-cult-step[data-st="lock"] { border-top-style: dashed; }
+
+.fc-cult-lamp-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; }
+.fc-cult-lamp-row i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 10px; background: currentColor; box-shadow: 0 0 8px currentColor; }
+.fc-cult-lamp-row[data-lv="fresh"] { color: var(--accent-primary); }
+.fc-cult-lamp-row[data-lv="ok"] { color: var(--success); }
+.fc-cult-lamp-row[data-lv="fading"] { color: var(--fc-gold); }
+.fc-cult-lamp-row[data-lv="critical"] { color: var(--danger); }
+.fc-cult-lamp-row span, .fc-cult-lamp-row b { color: inherit; }
+.fc-cult-lamp-row b { font-family: var(--font-mono, monospace); }
+.fc-cult-relight { align-self: flex-start; min-height: 44px; margin-top: 4px; }
+
+.fc-cult-badge { display: flex; flex-direction: column; gap: 8px; padding-bottom: 14px; border-bottom: 1px solid var(--glass-border); }
+.fc-cult-badge:last-child { border-bottom: 0; padding-bottom: 0; }
+.fc-cult-badge-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fc-cult-badge-name { font-size: 0.92rem; font-weight: 600; color: var(--text-primary); }
+.fc-cult-grades { display: inline-flex; gap: 4px; }
+.fc-cult-grade {
+  font-size: 0.68rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--glass-border);
+  color: var(--text-muted);
+}
+.fc-cult-grade[data-on="1"][data-g="1"] { color: #d9b45a; border-color: #d9b45a; background: rgba(217,180,90,.12); }
+.fc-cult-grade[data-on="1"][data-g="2"] { color: #a78bfa; border-color: #a78bfa; background: rgba(167,139,250,.12); }
+.fc-cult-grade[data-on="1"][data-g="3"] { color: #34d399; border-color: #34d399; background: rgba(52,211,153,.12); }
+.fc-cult-grade[data-on="1"][data-g="4"] { color: #fff; border-color: #fff; background: rgba(255,255,255,.14); font-weight: 700; }
+.fc-cult-badge-num { font-family: var(--font-mono, monospace); font-size: 0.75rem; color: var(--text-secondary); }
+.fc-cult-badge-done { font-size: 0.8rem; color: var(--text-secondary); }
+
+.fc-cult-gain {
+  margin: 4px 0 0; font-family: var(--font-mono, monospace); font-weight: 700;
+  color: var(--fc-gold, #f2c14e); letter-spacing: 0.06em;
+}
+
+@media (max-width: 760px) {
+  .fc-cult-grid, .fc-cult-grid--even { grid-template-columns: 1fr; }
+  .fc-cult-realm-name--big { font-size: 2.1rem; }
+  .fc-cult-card { padding: 20px; }
+}
+
+/* ── Hiệu ứng đột phá (4 nhịp, ~5 giây) ── */
+.fc-cult-ov {
+  position: fixed; inset: 0; z-index: 10050; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 50% 46%, rgba(10,10,15,.88), rgba(0,0,0,.97));
+  color: var(--text-primary); overflow: hidden;
+}
+.fc-cult-ov-skip {
+  position: absolute; top: 18px; right: 18px; z-index: 3; background: transparent; color: var(--text-secondary);
+  border: 1px solid var(--glass-border); border-radius: 999px; padding: 8px 16px; cursor: pointer; min-height: 40px;
+}
+.fc-cult-ov-rings i {
+  position: absolute; left: 50%; top: 46%; border: 2px solid var(--accent-primary); border-radius: 50%;
+  opacity: 0; transform: translate(-50%, -50%) scale(1.8); animation: fcCultRing 1.2s ease-in both;
+}
+.fc-cult-ov-rings i:nth-child(1) { width: 360px; height: 360px; }
+.fc-cult-ov-rings i:nth-child(2) { width: 280px; height: 280px; animation-delay: .1s; }
+.fc-cult-ov-rings i:nth-child(3) { width: 200px; height: 200px; animation-delay: .2s; }
+.fc-cult-ov-rings i:nth-child(4) { width: 120px; height: 120px; animation-delay: .3s; }
+@keyframes fcCultRing { 0% { opacity: 0; transform: translate(-50%,-50%) scale(1.8); } 30% { opacity: .85; } 100% { opacity: 0; transform: translate(-50%,-50%) scale(.2); } }
+.fc-cult-ov-bolts {
+  position: absolute; left: 50%; top: 46%; width: min(520px, 80vw); transform: translate(-50%, -50%);
+  opacity: 0; animation: fcCultBolt 1.6s steps(1, end) 1.2s both;
+}
+.fc-cult-ov-bolts polyline { fill: none; stroke: var(--fc-gold); stroke-width: 3; }
+.fc-cult-ov-bolts polyline:nth-child(2) { stroke: #fff; stroke-width: 2.5; }
+@keyframes fcCultBolt { 0% { opacity: 0; } 10% { opacity: 1; } 20% { opacity: 0; } 35% { opacity: 1; } 45% { opacity: 0; } 60% { opacity: 1; } 75% { opacity: 0; } 100% { opacity: 0; } }
+.fc-cult-ov-flash { position: absolute; inset: 0; background: #fff; opacity: 0; animation: fcCultFlash .4s ease-out 2.8s both; pointer-events: none; }
+@keyframes fcCultFlash { 0% { opacity: 0; } 30% { opacity: .9; } 100% { opacity: 0; } }
+.fc-cult-ov-final {
+  position: relative; z-index: 2; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 24px; opacity: 0; transform: scale(.92); animation: fcCultReveal 1.4s ease-out 3.2s both;
+}
+.fc-cult-ov:not(.is-done) .fc-cult-ov-final { pointer-events: none; }
+@keyframes fcCultReveal { to { opacity: 1; transform: scale(1); } }
+.fc-cult-ov-from { font-size: 1rem; color: var(--text-secondary); }
+.fc-cult-ov-name { font-family: 'Noto Serif', Georgia, serif; font-weight: 700; font-size: clamp(2.4rem, 8vw, 4rem); color: var(--fc-gold); text-shadow: 0 0 28px rgba(242,193,78,.45); }
+.fc-cult-ov-sub { font-size: 1.1rem; color: var(--accent-primary); }
+.fc-cult-ov-honor { font-size: 0.95rem; color: var(--text-secondary); margin: 6px 0 12px; }
+.fc-cult-ov.is-done .fc-cult-ov-rings, .fc-cult-ov.is-done .fc-cult-ov-bolts,
+.fc-cult-ov.is-done .fc-cult-ov-flash, .fc-cult-ov.is-done .fc-cult-ov-skip { display: none; }
+.fc-cult-ov.is-done .fc-cult-ov-final { animation: none; opacity: 1; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fc-cult-chip--ready { animation: none; }
+  .fc-cult-ov-rings, .fc-cult-ov-bolts, .fc-cult-ov-flash, .fc-cult-ov-skip { display: none; }
+  .fc-cult-ov-final { animation: none; opacity: 1; transform: none; pointer-events: auto; }
+}
