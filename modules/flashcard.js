@@ -2586,23 +2586,30 @@ const prompt = buildAIPrompt(word, _aiSchema);
   const CULT_STORE_KEY = 'hub_flashcard_cult';
   const CULT_VALID_DAY_MIN = 10;          // lượt ôn để một ngày được tính là "ngày tu luyện"
   const CULT_GRADES = ['Hoàng', 'Huyền', 'Địa', 'Thiên'];
+  const CULT_GRADES_EN = ['Yellow', 'Mysterious', 'Earth', 'Heaven']; // <-- Thêm mới
   const CULT_ELEMENTS = ['moc', 'hoa', 'tho', 'kim', 'thuy'];   // thứ tự tương sinh, theo chiều kim đồng hồ từ đỉnh
 
   /** Bảng cảnh giới Nhất Bộ. major=true: phải bấm "Đột phá"; major=false (các tầng Ngưng Khí): tự lên. */
   function _cultBuildRealms() {
-    var R = [{ name: 'Phàm Nhân', tier: 0, tu: 0, dao: 0, ngo: 0, major: false }];
+    var R = [{ name: 'Phàm Nhân', en: 'Mortal', tier: 0, tu: 0, dao: 0, ngo: 0, major: false }]; // <-- Thêm en
     for (var k = 1; k <= 15; k++) {
-      R.push({ name: 'Ngưng Khí', tier: k, tu: Math.ceil(250 * Math.pow(k / 15, 2)), dao: 0, ngo: 0, major: false });
+      R.push({ name: 'Ngưng Khí', en: 'Qi Condensation', tier: k, tu: Math.ceil(250 * Math.pow(k / 15, 2)), dao: 0, ngo: 0, major: false }); // <-- Thêm en
     }
-    [['Trúc Cơ', 250, 25, 0], ['Kết Đan', 1350, 65, 0], ['Nguyên Anh', 4000, 115, 80],
-     ['Hóa Thần', 8800, 180, 82], ['Anh Biến', 15700, 255, 85], ['Vấn Đỉnh', 23700, 345, 87]].forEach(function (r) {
-      R.push({ name: r[0], tier: 0, tu: r[1], dao: r[2], ngo: r[3], major: true });
+    [
+      ['Trúc Cơ', 250, 25, 0, 'Foundation Establishment'],
+      ['Kết Đan', 1350, 65, 0, 'Golden Core'],
+      ['Nguyên Anh', 4000, 115, 80, 'Nascent Soul'],
+      ['Hóa Thần', 8800, 180, 82, 'Spirit Transformation'],
+      ['Anh Biến', 15700, 255, 85, 'Void Refinement'],
+      ['Vấn Đỉnh', 23700, 345, 87, 'Dao Seeking']
+    ].forEach(function (r) {
+      R.push({ name: r[0], en: r[4], tier: 0, tu: r[1], dao: r[2], ngo: r[3], major: true });
     });
     return R;
   }
   const CULT_REALMS = _cultBuildRealms();
-  const CULT_LAST_OPEN = CULT_REALMS.length - 1;      // Vấn Đỉnh — các cảnh giới sau cần Độ kiếp (chưa mở)
-  const CULT_NEXT_LOCKED = { name: 'Âm Hư – Dương Thực', tu: 33000, dao: 450, ngo: 88 };
+  const CULT_LAST_OPEN = CULT_REALMS.length - 1;
+  const CULT_NEXT_LOCKED = { name: 'Âm Hư – Dương Thực', en: 'Yin Void - Yang Real', tu: 33000, dao: 450, ngo: 88 }; // <-- Thêm en
 
   /** Xưng hô của Khí Linh theo cảnh giới. */
   function _cultRealmSlug(idx) {
@@ -2626,20 +2633,26 @@ const prompt = buildAIPrompt(word, _aiSchema);
     return ' data-realm="' + _cultRealmSlug(idx) + '"' + (inTier ? ' data-tier="' + idx + '"' : '') + (stage > 0 ? ' data-stage="' + stage + '"' : '') + (st ? ' style="' + st + '"' : '');
   }
   function _cultHonorific(idx) {
-    if (idx <= 15) return 'Tiểu hữu';
-    if (idx <= 17) return 'Đạo hữu';
-    if (idx === 18) return 'Chân nhân';
-    return 'Tiền bối';
+    var lang = _cultLang();
+    if (idx <= 15) return lang === 'en' ? 'Junior' : 'Tiểu hữu';
+    if (idx <= 17) return lang === 'en' ? 'Fellow Daoist' : 'Đạo hữu';
+    if (idx === 18) return lang === 'en' ? 'True Person' : 'Chân nhân';
+    return lang === 'en' ? 'Senior' : 'Tiền bối';
   }
 
-  /** Nhãn hiển thị: { name, sub } — Ngưng Khí: "tầng k"; các cảnh giới sau: Sơ / Trung / Hậu kỳ / Viên mãn. */
+  /** Helper: Lấy tên cảnh giới theo ngôn ngữ hiện tại */
+  function _rName(r) {
+    return (_cultLang() === 'en' && r.en) ? r.en : r.name;
+  }
+
   function _cultRealmLabel(idx, tuVi) {
     var r = CULT_REALMS[idx];
-    if (idx === 0) return { name: r.name, sub: '' };
-    if (r.name === 'Ngưng Khí') return { name: r.name, sub: 'tầng ' + r.tier };
+    var rName = _rName(r);
+    if (idx === 0) return { name: rName, sub: '' };
+    if (r.name === 'Ngưng Khí') return { name: rName, sub: 'tầng ' + r.tier };
     var next = CULT_REALMS[idx + 1] || CULT_NEXT_LOCKED;
     var f = next.tu > r.tu ? (tuVi - r.tu) / (next.tu - r.tu) : 1;
-    return { name: r.name, sub: f < 0.25 ? 'Sơ kỳ' : (f < 0.5 ? 'Trung kỳ' : (f < 0.75 ? 'Hậu kỳ' : 'Viên mãn')) };
+    return { name: rName, sub: f < 0.25 ? 'Sơ kỳ' : (f < 0.5 ? 'Trung kỳ' : (f < 0.75 ? 'Hậu kỳ' : 'Viên mãn')) };
   }
 
   function _cultBlank() {
@@ -2975,7 +2988,10 @@ const prompt = buildAIPrompt(word, _aiSchema);
     return CULT_SUB_EN[sub] || sub;
   }
   function _cultFmt(n) { return Number(n).toLocaleString(_cultLang() === 'en' ? 'en-US' : 'vi-VN'); }
-  function _cultGradeName(g) { return CULT_GRADES[g - 1] || ''; }
+  function _cultGradeName(g) {
+    if (!g || g < 1 || g > 4) return '';
+    return _cultLang() === 'en' ? CULT_GRADES_EN[g - 1] : CULT_GRADES[g - 1];
+  }
 
   // ── Dữ liệu & lưu trữ ──────────────────────────────────────────
 
@@ -3112,8 +3128,8 @@ const prompt = buildAIPrompt(word, _aiSchema);
 
   function _cultBadgeRow(v) {
     var def = v.def, ev = v.ev, lang = _cultLang();
-    var chips = CULT_GRADES.map(function (g, i) {
-      return '<span class="fc-cult-grade" data-on="' + (i < ev.grade ? '1' : '0') + '" data-g="' + (i + 1) + '">' + _esc(g) + '</span>';
+    var chips = [1, 2, 3, 4].map(function (g) {
+      return '<span class="fc-cult-grade" data-on="' + (g <= ev.grade ? '1' : '0') + '" data-g="' + g + '">' + _esc(_cultGradeName(g)) + '</span>';
     }).join('');
     var unit = def.unit ? def.unit[lang] : '';
     var prog = ev.target === null
@@ -3148,13 +3164,13 @@ const prompt = buildAIPrompt(word, _aiSchema);
     // ── Nút đột phá ──
     var btn;
     if (res.pending !== null) {
-      btn = '<button type="button" class="btn btn-primary fc-cult-break" data-cult="break">⚡ ' + _esc(_ct('btnBreak', { r: CULT_REALMS[res.pending].name })) + '</button>';
+      btn = '<button type="button" class="btn btn-primary fc-cult-break" data-cult="break">⚡ ' + _esc(_ct('btnBreak', { r: _rName(CULT_REALMS[res.pending]) })) + '</button>';
     } else if (atEnd) {
       btn = '<button type="button" class="btn fc-cult-break" disabled>' + _esc(_ct('btnDone')) + '</button><p class="fc-cult-note">' + _esc(_ct('soon')) + '</p>';
     } else if (!next.major) {
       btn = '<p class="fc-cult-note">' + _esc(_ct('autoTier')) + '</p>';
     } else {
-      btn = '<button type="button" class="btn fc-cult-break" disabled>' + _esc(_ct('btnNotReady', { r: next.name })) + '</button>';
+      btn = '<button type="button" class="btn fc-cult-break" disabled>' + _esc(_ct('btnNotReady', { r: _rName(next) })) + '</button>';
     }
 
     // ── Linh căn ──
@@ -3173,7 +3189,12 @@ const prompt = buildAIPrompt(word, _aiSchema);
     var curG = groups.indexOf(r.name);
     var path = groups.map(function (g, i) {
       var st = i < curG ? 'done' : (i === curG ? 'now' : 'todo');
-      return '<div class="fc-cult-step" data-st="' + st + '">' + _esc(g) + (st === 'now' ? ' <b>' + _esc(_ct('you')) + '</b>' : '') + '</div>';
+      var dispG = g;
+      if (_cultLang() === 'en') {
+        var found = CULT_REALMS.find(function(x){ return x.name === g; });
+        if (found && found.en) dispG = found.en;
+      }
+      return '<div class="fc-cult-step" data-st="' + st + '">' + _esc(dispG) + (st === 'now' ? ' <b>' + _esc(_ct('you')) + '</b>' : '') + '</div>';
     }).join('') + '<div class="fc-cult-step" data-st="lock">' + _esc(_ct('lockedStep')) + '</div>';
 
     // ── Hồn đăng ──
@@ -3189,8 +3210,22 @@ const prompt = buildAIPrompt(word, _aiSchema);
 
     var badges = res.views.map(_cultBadgeRow).join('');
 
+    var _stage = _cultStage(_cult.realm, res.axes.tu);
+    var _realmSlug = _cultRealmSlug(_cult.realm);
+    var _danGlow = (_realmSlug === 'truc-co' && _stage === 4)
+      ? '<div class="fc-cult-dan-glow" aria-hidden="true"></div>'
+      : '';
+    var _dan = (_realmSlug === 'ket-dan')
+      ? '<div class="fc-cult-dan" data-veins="' + _cultDanVeins() + '" aria-hidden="true"></div>'
+      : '';
+    var _anh = (_realmSlug === 'nguyen-anh')
+      ? '<div class="fc-cult-anh" style="--na-glow:' + _cultGetAuraColor() + '" aria-hidden="true">' + _cultAnhSVG(_cult.badges.linh_dai || 0) + '</div>'
+      : '';
     _container.innerHTML =
-      '<div class="tab-content flashcard-app fc-cult-page"' + _cultRealmAttr(_cult.realm, 'align-items:stretch;', _cultStage(_cult.realm, res.axes.tu)) + '>' +
+      '<div class="tab-content flashcard-app fc-cult-page"' + _cultRealmAttr(_cult.realm, 'align-items:stretch;', _stage) + '>' +
+        _danGlow +
+        _dan +
+        _anh +
         '<div class="fc-cult-top">' +
           '<button type="button" class="btn fc-cult-back" data-cult="back">' + _esc(_ct('back')) + '</button>' +
           '<div class="fc-cult-greet"><div class="fc-cult-kicker">' + _esc(_ct('kicker')) + '</div><h2>' + _esc(_ct('greet', { h: honor.toLowerCase() })) + '</h2></div>' +
@@ -3289,11 +3324,134 @@ const prompt = buildAIPrompt(word, _aiSchema);
   function _cultZhuOverlayFx() {
     var h = '<div class="fc-cult-ov-pillars" aria-hidden="true"><i></i><i></i><i></i><i></i></div><div class="fc-cult-ov-dust" aria-hidden="true">';
     for (var i = 0; i < 14; i++) {
-      var x = 6 + i * 6.7, dl = 1.4 + ((i * 37) % 100) / 100 * 1.2, dur = 1.8 + (i % 4) * 0.3, dx = (i % 2 ? 18 : -18);
+      var x = 6 + i * 6.7, dl = 1.4 + ((i * 37) % 100) / 100 * 0.6, dur = 1.6 + (i % 4) * 0.2, dx = (i % 2 ? 18 : -18);
       h += '<i style="--x:' + x.toFixed(1) + '%;--dl:' + dl.toFixed(2) + 's;--dur:' + dur.toFixed(1) + 's;--dx:' + dx + 'px"></i>';
     }
     return h + '</div>';
   }
+
+  /* ═══════════ BẮT ĐẦU DÁN TỪ ĐÂY ═══════════ */
+  /** Trả về SVG outline của Anh Nhi (ngồi kiết già) + chấm sáng trước ngực */
+  function _cultAnhSVG(dots, noGhost) {
+    dots = dots || 0;
+    var dotHtml = '';
+    for (var i = 0; i < dots; i++) {
+      var angle = -45 + (i * 30);
+      var rad = angle * Math.PI / 180;
+      var r = 12;
+      var cx = 50 + Math.sin(rad) * r;
+      var cy = 60 - Math.cos(rad) * r + 5;
+      dotHtml += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="2.5" class="na-dot" style="animation-delay: ' + (i * 0.2) + 's"/>';
+    }
+    
+    var baseSvg = '<svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg">' +
+           '<circle cx="50" cy="30" r="12" class="na-head"/>' +
+           '<path d="M 35,45 Q 50,40 65,45 L 75,85 Q 50,95 25,85 Z" class="na-body"/>' +
+           '<path d="M 25,85 Q 50,105 75,85 Q 50,115 25,85 Z" class="na-body"/>' +
+           dotHtml + '</svg>';
+
+    // noGhost (overlay đột phá): chỉ trả 1 SVG, tránh nhân đôi hình/độ sáng
+    if (noGhost) return baseSvg;
+    // Trả về bản gốc + bản Ghost (sẽ được CSS ẩn đi ở các kỳ thấp, chỉ hiện ở Viên Mãn)
+    return baseSvg + '<div class="na-ghost">' + baseSvg + '</div>';
+  }
+
+  /** Overlay đột phá Nguyên Anh (~5,3 giây):
+      trận pháp mở + khí tụ → đan rung nứt → vỡ mảnh + sóng → anh nhi hiện từ đầu xuống chân.
+      perf-lite → giảm 8 hạt khí / 6 mảnh vỡ (mặc định 14 / 10). */
+  function _cultNaOverlayFx() {
+    var isLite = document.body.classList.contains('perf-lite');
+    var nMote = isLite ? 8 : 14;
+    var nShard = isLite ? 6 : 10;
+    var i, a, d, r;
+
+    var motes = '<div class="fc-cult-ov-na-motes" aria-hidden="true">';
+    for (i = 0; i < nMote; i++) {
+      a = Math.round(i * 360 / nMote + (i % 3) * 9);
+      d = 250 + (i * 47) % 170;
+      motes += '<i style="--a:' + a + 'deg;--d:' + d + 'px;--dl:' + ((((i * 41) % 100) / 100) * 0.5).toFixed(2) + 's"></i>';
+    }
+    motes += '</div>';
+
+    var cracks = ['50,50 40,35 44,20 38,8', '50,50 63,40 72,44 90,38', '50,50 56,66 48,78 56,94',
+                  '50,50 36,58 22,56 8,66', '50,50 66,62 80,74'];
+    var crack = '<svg class="fc-cult-ov-na-crack" viewBox="0 0 100 100" aria-hidden="true">';
+    cracks.forEach(function (p, k) {
+      crack += '<path d="M' + p + '" style="--d:' + (0.9 + k * 0.15).toFixed(2) + 's"/>';
+    });
+    crack += '</svg>';
+
+    var clips = ['polygon(0 0,100% 20%,40% 100%)', 'polygon(20% 0,100% 0,70% 100%)', 'polygon(0 30%,100% 0,60% 100%)',
+                 'polygon(10% 0,90% 40%,0 100%)', 'polygon(30% 0,100% 60%,0 80%)'];
+    var shards = '<div class="fc-cult-ov-na-shards" aria-hidden="true">';
+    for (i = 0; i < nShard; i++) {
+      a = i * 360 / nShard + (i % 2) * 10;
+      d = 150 + (i * 37) % 110;
+      r = a * Math.PI / 180;
+      shards += '<i style="--dx:' + (Math.cos(r) * d).toFixed(0) + 'px;--dy:' + (Math.sin(r) * d).toFixed(0) +
+                'px;--rot:' + ((i % 2 ? 1 : -1) * (200 + i * 30)) + 'deg;--s:' + (38 + (i * 7) % 22) +
+                'px;clip-path:' + clips[i % 5] + '"></i>';
+    }
+    shards += '</div>';
+
+    var dots = _cult.badges.linh_dai || 0;
+    return '<div class="fc-cult-ov-na-mand" aria-hidden="true"><i></i></div>' +
+           '<div class="fc-cult-ov-na-nebula" aria-hidden="true"></div>' +
+           motes +
+           '<div class="fc-cult-ov-na-core" aria-hidden="true"></div>' +
+           crack +
+           '<div class="fc-cult-ov-na-shock" aria-hidden="true"><i></i><i></i></div>' +
+           shards +
+           '<div class="fc-cult-ov-na-bloom" aria-hidden="true"></div>' +
+           '<div class="fc-cult-ov-na-soul" aria-hidden="true">' + _cultAnhSVG(dots, true) + '</div>';
+  }
+
+  /** Lấy màu hào quang theo Linh căn (fallback tím) */
+  function _cultGetAuraColor() {
+    var lc = _cultLinhCan(_cultCtx(), _cultAxes(_cultCtx()));
+    if (!lc.ready || !lc.top) return '183, 156, 255'; // Tím mặc định
+    var map = { moc: '52, 211, 153', hoa: '255, 122, 69', tho: '212, 163, 115', kim: '232, 232, 237', thuy: '0, 240, 255' };
+    return map[lc.top] || '183, 156, 255';
+  }
+  /* ═══════════ KẾT THÚC DÁN ═══════════ */
+  /** Số vân đan hiển thị: 0 = chưa có Linh Đài (vân rất mờ), 1–4 = Hoàng→Thiên. */
+  function _cultDanVeins() {
+    var grade = (_cult.badges && _cult.badges.linh_dai) || 0;
+    return Math.min(4, Math.max(0, grade));
+  }
+
+  /** Hạt khí hút vào (motes) + sóng (wave) + hạt văng (burst) cho overlay Kết Đan.
+      perf-lite → giảm 8/6 để nhẹ DOM (mặc định 16/12). */
+  function _cultDanOverlayFx() {
+    var isLite = document.body.classList.contains('perf-lite');
+    var nIn  = isLite ? 8 : 16;
+    var nOut = isLite ? 6 : 12;
+
+    var motes = '<div class="fc-cult-ov-motes" aria-hidden="true">';
+    for (var i = 0; i < nIn; i++) {
+      var a  = Math.round(i * 360 / nIn + (i % 3) * 8);
+      var d  = 260 + (i * 47) % 180;
+      var dl = ((i * 41) % 100) / 100 * 0.3;
+      motes += '<i style="--a:' + a + 'deg;--d:' + d + 'px;--dl:' + dl.toFixed(2) + 's"></i>';
+    }
+    motes += '</div>';
+
+    var wave = '<div class="fc-cult-ov-wave" aria-hidden="true">' +
+               '<i style="--wd:0s"></i>' +
+               '<i style="--wd:0.18s"></i>' +
+               '</div>';
+
+    var burst = '<div class="fc-cult-ov-burst" aria-hidden="true">';
+    for (var j = 0; j < nOut; j++) {
+      var a2 = Math.round(j * 360 / nOut + (j % 2) * 12);
+      var d2 = 180 + (j * 53) % 140;
+      burst += '<i style="--a:' + a2 + 'deg;--d:' + d2 + 'px"></i>';
+    }
+    burst += '</div>';
+
+    return motes + wave + burst;
+  }
+
   function _cultShowOverlay(from, to, tuVi) {
     _cultCloseOverlay();
     var a = _cultRealmLabel(from, tuVi), b = _cultRealmLabel(to, tuVi);
@@ -3313,6 +3471,8 @@ const prompt = buildAIPrompt(word, _aiSchema);
       '<div class="fc-cult-ov-rings" aria-hidden="true"><i></i><i></i><i></i><i></i></div>' +
       (qiTier ? _cultQiOverlayFx(qiTier) : '') +
       (_cultRealmSlug(to) === 'truc-co' ? _cultZhuOverlayFx() : '') +
+      (_cultRealmSlug(to) === 'ket-dan' ? _cultDanOverlayFx() : '') +
+	  (_cultRealmSlug(to) === 'nguyen-anh' ? _cultNaOverlayFx() : '') +
       '<svg class="fc-cult-ov-bolts" viewBox="0 0 400 220" aria-hidden="true">' + bolts + '</svg>' +
       '<div class="fc-cult-ov-flash" aria-hidden="true"></div>' +
       '<div class="fc-cult-ov-final">' +
@@ -3326,7 +3486,7 @@ const prompt = buildAIPrompt(word, _aiSchema);
     document.body.appendChild(o);
 
     var finish = function () { o.classList.add('is-done'); var c = o.querySelector('#fc-cult-ov-close'); if (c) c.focus(); };
-    var done = false, timer = setTimeout(function () { done = true; finish(); }, 4600);
+    var timer = setTimeout(finish, _cultRealmSlug(to) === 'nguyen-anh' ? 5400 : 4600);   // Nguyên Anh dài hơn (~5,3s)
     var close = function () {
       clearTimeout(timer); _cultCloseOverlay();
       if (_container && _mode === 'cultivate') _renderCultivationPage();

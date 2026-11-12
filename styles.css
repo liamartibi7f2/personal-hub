@@ -22864,7 +22864,8 @@ body.perf-lite .hub-quiz-share-code-display,
 body.perf-lite .zh-architect-sigil,
 body.perf-lite .zh-architect-status-dot,
 body.perf-lite .zh-architect-scanline,
-body.perf-lite .hub-notes-locked-icon {
+body.perf-lite .hub-notes-locked-icon,
+body.perf-lite .fc-cult-dan-glow {
   animation: none !important;
 }
 
@@ -23943,7 +23944,7 @@ body.perf-lite .hub-cf-btn, body.perf-lite .hub-cf-modal-btn { transition: none;
       transparent 33%, rgba(138,160,196,.10) 33.5%, rgba(138,160,196,.02) 36%, transparent 36.5%,
       transparent 60%, rgba(201,161,92,.10) 60.5%, rgba(201,161,92,.02) 63%, transparent 63.5%,
       transparent 86%, rgba(138,160,196,.10) 86.5%, rgba(138,160,196,.02) 89%, transparent 89.5%);
-  animation: fcRealmRiseCols 22s linear infinite;
+  animation: fcRealmRiseCols 22s ease-in-out infinite alternate;
 }
 
 /* Kết Đan — lò đan, quả cầu thở, tàn lửa */
@@ -23956,6 +23957,195 @@ body.perf-lite .hub-cf-btn, body.perf-lite .hub-cf-modal-btn { transition: none;
     radial-gradient(circle 2px at 58% 92%, #ffd27a, transparent), radial-gradient(circle 2px at 78% 96%, #ff9f43, transparent),
     radial-gradient(circle 1.5px at 90% 90%, #ffd27a, transparent);
   animation: fcRealmEmbers 12s linear infinite;
+}
+
+/* ── Kết Đan — viên đan ở tâm, 4 kỳ ── */
+.fc-cult-page[data-realm="ket-dan"] { position: relative; }
+
+/* Stage 3–4: quầng cam mạnh hơn ở nền (đè ::before breathing mặc định) */
+.fc-cult-page[data-realm="ket-dan"][data-stage="3"]::before {
+  background: radial-gradient(ellipse at 50% 38%, rgba(255, 159, 67, 0.18), transparent 65%);
+  animation-duration: 4s;
+}
+.fc-cult-page[data-realm="ket-dan"][data-stage="4"]::before {
+  background: radial-gradient(ellipse at 50% 38%, rgba(255, 159, 67, 0.25), transparent 68%);
+  animation-duration: 3s;
+}
+
+/* Element đan — mặc định = Sơ kỳ (đốm sáng mờ) */
+.fc-cult-dan {
+  --dan-c1: 255, 255, 255;
+  --dan-c2: 255, 210, 122;
+  --dan-c3: 255, 159, 67;
+  --v1: transparent; --v2: transparent; --v3: transparent; --v4: transparent;
+
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  z-index: -1;
+  width: 40px;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  will-change: opacity, transform;
+  background: radial-gradient(circle closest-side, rgb(var(--dan-c2)), rgb(var(--dan-c3)) 55%, transparent 80%);
+  opacity: .5;
+  filter: blur(2px);
+  animation: fcDanPulse 4s cubic-bezier(.4, 0, .6, 1) infinite;
+}
+@keyframes fcDanPulse {
+  0%, 100% { opacity: .45; transform: translate(-50%, -50%) scale(.9); }
+  50%      { opacity: .6;  transform: translate(-50%, -50%) scale(1.1); }
+}
+
+/* Vân đan (data-veins từ JS: 0=mờ guard, 1-4=Hoàng→Thiên) */
+.fc-cult-dan[data-veins="0"] { --v1: rgba(var(--dan-c2), .22); }
+.fc-cult-dan[data-veins="1"] { --v1: rgba(var(--dan-c2), .85); }
+.fc-cult-dan[data-veins="2"] { --v1: rgba(var(--dan-c2), .85); --v2: rgba(var(--dan-c2), .85); }
+.fc-cult-dan[data-veins="3"] { --v1: rgba(var(--dan-c2), .85); --v2: rgba(var(--dan-c2), .85); --v3: rgba(var(--dan-c2), .85); }
+.fc-cult-dan[data-veins="4"] { --v1: rgba(var(--dan-c2), .85); --v2: rgba(var(--dan-c2), .85); --v3: rgba(var(--dan-c2), .85); --v4: rgba(var(--dan-c2), .85); }
+
+/* Trung kỳ — cầu mờ + vân + 1 vòng quỹ đạo */
+.fc-cult-page[data-realm="ket-dan"][data-stage="2"] .fc-cult-dan {
+  width: 100px;
+  filter: blur(.5px);
+  opacity: .55;
+  background:
+    conic-gradient(from 10deg,  var(--v1) 0 6deg, transparent 6deg),
+    conic-gradient(from 100deg, var(--v2) 0 6deg, transparent 6deg),
+    conic-gradient(from 190deg, var(--v3) 0 6deg, transparent 6deg),
+    conic-gradient(from 280deg, var(--v4) 0 6deg, transparent 6deg),
+    radial-gradient(circle closest-side, rgb(var(--dan-c1)) 0%, rgb(var(--dan-c2)) 22%, rgb(var(--dan-c3)) 62%, transparent 78%);
+  -webkit-mask-image: radial-gradient(circle, #000 70%, transparent 100%);
+          mask-image: radial-gradient(circle, #000 70%, transparent 100%);
+  animation: fcDanPulse 3.5s cubic-bezier(.4, 0, .6, 1) infinite;
+}
+.fc-cult-page[data-realm="ket-dan"][data-stage="2"] .fc-cult-dan::after {
+  content: "";
+  position: absolute;
+  inset: -30px;
+  border-radius: 50%;
+  border: 1px dashed rgba(var(--dan-c2), .45);
+  animation: fcDanOrbit 8s linear infinite;
+}
+@keyframes fcDanOrbit { to { transform: rotate(360deg); } }
+
+/* Hậu kỳ — sáng rõ, nhịp tim, quầng cam, quỹ đạo nhanh hơn */
+.fc-cult-page[data-realm="ket-dan"][data-stage="3"] .fc-cult-dan {
+  width: 140px;
+  filter: none;
+  opacity: .8;
+  background:
+    conic-gradient(from 10deg,  var(--v1) 0 6deg, transparent 6deg),
+    conic-gradient(from 100deg, var(--v2) 0 6deg, transparent 6deg),
+    conic-gradient(from 190deg, var(--v3) 0 6deg, transparent 6deg),
+    conic-gradient(from 280deg, var(--v4) 0 6deg, transparent 6deg),
+    radial-gradient(circle closest-side, rgb(var(--dan-c1)) 0%, rgb(var(--dan-c2)) 22%, rgb(var(--dan-c3)) 62%, transparent 78%);
+  -webkit-mask-image: radial-gradient(circle, #000 70%, transparent 100%);
+          mask-image: radial-gradient(circle, #000 70%, transparent 100%);
+  box-shadow: 0 0 40px 10px rgba(var(--dan-c3), .30);
+  animation: fcDanHeartbeat 1.8s cubic-bezier(.4, 0, .6, 1) infinite;
+}
+@keyframes fcDanHeartbeat {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  15%      { transform: translate(-50%, -50%) scale(1.08); }
+  30%      { transform: translate(-50%, -50%) scale(1); }
+  45%      { transform: translate(-50%, -50%) scale(1.05); }
+  60%      { transform: translate(-50%, -50%) scale(1); }
+}
+.fc-cult-page[data-realm="ket-dan"][data-stage="3"] .fc-cult-dan::after {
+  content: "";
+  position: absolute;
+  inset: -40px;
+  border-radius: 50%;
+  border: 1px dashed rgba(var(--dan-c2), .55);
+  animation: fcDanOrbit 5s linear infinite;
+}
+
+/* Viên mãn — tròn đầy, đập mạnh, quầng rộng, 2 quỹ đạo ngược chiều */
+.fc-cult-page[data-realm="ket-dan"][data-stage="4"] .fc-cult-dan {
+  width: 180px;
+  filter: none;
+  opacity: .95;
+  background:
+    conic-gradient(from 10deg,  var(--v1) 0 6deg, transparent 6deg),
+    conic-gradient(from 100deg, var(--v2) 0 6deg, transparent 6deg),
+    conic-gradient(from 190deg, var(--v3) 0 6deg, transparent 6deg),
+    conic-gradient(from 280deg, var(--v4) 0 6deg, transparent 6deg),
+    radial-gradient(circle closest-side, rgb(var(--dan-c1)) 0%, rgb(var(--dan-c2)) 22%, rgb(var(--dan-c3)) 62%, transparent 78%);
+  -webkit-mask-image: radial-gradient(circle, #000 70%, transparent 100%);
+          mask-image: radial-gradient(circle, #000 70%, transparent 100%);
+  box-shadow:
+    0 0 60px 20px rgba(var(--dan-c3), .40),
+    0 0 120px 40px rgba(var(--dan-c3), .15);
+  animation: fcDanHeartbeatStrong 1.4s cubic-bezier(.4, 0, .6, 1) infinite;
+}
+@keyframes fcDanHeartbeatStrong {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  15%      { transform: translate(-50%, -50%) scale(1.12); }
+  30%      { transform: translate(-50%, -50%) scale(1); }
+  45%      { transform: translate(-50%, -50%) scale(1.07); }
+  60%      { transform: translate(-50%, -50%) scale(1); }
+}
+.fc-cult-page[data-realm="ket-dan"][data-stage="4"] .fc-cult-dan::after {
+  content: "";
+  position: absolute;
+  inset: -50px;
+  border-radius: 50%;
+  border: 1px dashed rgba(var(--dan-c2), .65);
+  animation: fcDanOrbit 4s linear infinite;
+}
+.fc-cult-page[data-realm="ket-dan"][data-stage="4"] .fc-cult-dan::before {
+  content: "";
+  position: absolute;
+  inset: -70px;
+  border-radius: 50%;
+  border: 1px solid rgba(var(--dan-c2), .30);
+  animation: fcDanOrbit 6s linear infinite reverse;
+}
+
+/* Viên mãn — tên cảnh giới ánh sáng chạy (đồng bộ với Trúc Cơ VM) */
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+  .fc-cult-page[data-realm="ket-dan"][data-stage="4"] .fc-cult-realm-name {
+    background: linear-gradient(100deg, var(--fc-gold) 0 40%, #fff 50%, var(--fc-gold) 60% 100%) 0 0 / 250% 100%;
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent; -webkit-text-fill-color: transparent;
+    text-shadow: none;
+    filter: drop-shadow(0 0 6px rgba(var(--dan-c3), .65));
+    animation: fcQiShimmer 5.5s ease-in-out infinite;
+  }
+}
+
+/* ── Thẻ gọn trong thư viện — chấm đan ở góc, tĩnh ── */
+.fc-cult-mini[data-realm="ket-dan"] { position: relative; }
+.fc-cult-mini[data-realm="ket-dan"]::after {
+  content: "";
+  position: absolute;
+  top: 12px; right: 12px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle closest-side, #fff, #ffd27a 30%, #ff9f43 70%, transparent 100%);
+  box-shadow: 0 0 8px rgba(255, 159, 67, .6);
+  opacity: .5;
+  pointer-events: none;
+}
+.fc-cult-mini[data-realm="ket-dan"][data-stage="2"]::after { width: 16px; height: 16px; opacity: .65; box-shadow: 0 0 10px rgba(255, 159, 67, .7); }
+.fc-cult-mini[data-realm="ket-dan"][data-stage="3"]::after { width: 20px; height: 20px; opacity: .8;  box-shadow: 0 0 14px rgba(255, 159, 67, .8); }
+.fc-cult-mini[data-realm="ket-dan"][data-stage="4"]::after { width: 24px; height: 24px; opacity: 1;   box-shadow: 0 0 18px rgba(255, 159, 67, .9), 0 0 30px rgba(255, 159, 67, .4); }
+
+/* Solar Zen — đan đậm hơn để đủ tương phản trên nền sáng */
+[data-theme="solar-zen"] .fc-cult-dan {
+  --dan-c1: 255, 251, 235;
+  --dan-c2: 250, 204, 21;
+  --dan-c3: 217, 119, 6;
+}
+[data-theme="solar-zen"] .fc-cult-page[data-realm="ket-dan"][data-stage="3"]::before {
+  background: radial-gradient(ellipse at 50% 38%, rgba(217, 119, 6, 0.14), transparent 65%);
+}
+[data-theme="solar-zen"] .fc-cult-page[data-realm="ket-dan"][data-stage="4"]::before {
+  background: radial-gradient(ellipse at 50% 38%, rgba(217, 119, 6, 0.20), transparent 68%);
 }
 
 /* Nguyên Anh — bóng anh nhi trong vòng sáng */
@@ -24398,7 +24588,27 @@ body.theme-optimized .fc-cult-mini[data-realm] { background-image: none !importa
   from { transform: translate(-50%, -50%) scaleY(.22) rotate(0deg); }
   to   { transform: translate(-50%, -50%) scaleY(.22) rotate(360deg); }
 }
-
+/* Viên mãn — đan quang nhấp nháy trên đỉnh 4 trụ
+   Vị trí X khớp tâm 4 cột (9.75 / 34.75 / 61.75 / 87.75%),
+   Y = 100% − var(--ph) = đúng đỉnh cột (15% top khi --ph = 85%). */
+.fc-cult-page[data-realm="truc-co"][data-stage="4"] .fc-cult-dan-glow {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  will-change: opacity, filter;
+  background:
+    radial-gradient(circle 8px at 9.75%  calc(100% - var(--ph, 85%)), #fff, rgba(var(--zc1), .95) 35%, rgba(var(--zc1), .30) 70%, transparent 100%),
+    radial-gradient(circle 8px at 34.75% calc(100% - var(--ph, 85%)), #fff, rgba(var(--zc1), .95) 35%, rgba(var(--zc1), .30) 70%, transparent 100%),
+    radial-gradient(circle 8px at 61.75% calc(100% - var(--ph, 85%)), #fff, rgba(var(--zc1), .95) 35%, rgba(var(--zc1), .30) 70%, transparent 100%),
+    radial-gradient(circle 8px at 87.75% calc(100% - var(--ph, 85%)), #fff, rgba(var(--zc1), .95) 35%, rgba(var(--zc1), .30) 70%, transparent 100%);
+  opacity: .65;
+  animation: fcZhuDanGlow 3.2s ease-in-out infinite;
+}
+@keyframes fcZhuDanGlow {
+  0%, 100% { opacity: .45; filter: brightness(1); }
+  50%      { opacity: 1;   filter: brightness(1.5); }
+}
 /* Quầng chữ + viền theo kỳ */
 .fc-cult-page[data-realm="truc-co"][data-stage] .fc-cult-realm-name {
   text-shadow: 0 0 calc(var(--stg) * 5px) rgba(var(--zc1), calc(.1 + var(--stg) * .08));
@@ -24430,8 +24640,10 @@ body.theme-optimized .fc-cult-mini[data-realm] { background-image: none !importa
 @media (prefers-reduced-motion: reduce) {
   .fc-cult-page[data-realm="truc-co"]::before, .fc-cult-page[data-realm="truc-co"]::after,
   .fc-cult-page[data-realm="truc-co"] .fc-cult-top::after,
+  .fc-cult-page[data-realm="truc-co"] .fc-cult-dan-glow,
   .fc-cult-page[data-realm="truc-co"] .fc-cult-realm-name { animation: none !important; }
   .fc-cult-page[data-realm="truc-co"] .fc-cult-top::before { display: none; }
+  .fc-cult-page[data-realm="truc-co"] .fc-cult-dan-glow { opacity: .7; }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -24515,4 +24727,575 @@ body.theme-optimized .fc-cult-mini[data-realm] { background-image: none !importa
   .fc-cult-ov[data-realm="truc-co"]::after { animation: none; opacity: .4; }
   .fc-cult-ov[data-realm="truc-co"] .fc-cult-ov-pillars i { animation: none; opacity: .3; }
   .fc-cult-ov[data-realm="truc-co"] .fc-cult-ov-dust { display: none; }
+}
+/* ═══════════════════════════════════════════════════════════════
+   Tu Tiên · Đột phá Kết Đan — "hút → nén → nổ → hiện"
+   Tái dùng .fc-cult-ov-motes (fcQiMote), .fc-cult-ov-wave, .fc-cult-ov-flash.
+   Thêm .fc-cult-ov-burst (hạt văng ra) và ::before (nén đan).
+   ═══════════════════════════════════════════════════════════════ */
+.fc-cult-ov[data-realm="ket-dan"] {
+  --fc-gold: #ffd27a;
+  --qi-c1: 255, 210, 122;
+  --qi-c2: 255, 159, 67;
+}
+.fc-cult-ov[data-realm="ket-dan"] .fc-cult-ov-bolts { display: none; }
+
+/* Nhịp 1 — hút khí: nhanh hơn Ngưng Khí (1.3s thay vì 1.9s) */
+.fc-cult-ov[data-realm="ket-dan"] .fc-cult-ov-motes i {
+  animation-duration: 1.3s;
+}
+
+/* Nhịp 2 — nén đan: cầu nhỏ lại + rung nhẹ (::before) */
+.fc-cult-ov[data-realm="ket-dan"]::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: 220px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle closest-side, #fff, #ffd27a 20%, #ff9f43 55%, transparent 78%);
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: fcDanCompress 1.3s cubic-bezier(.6, 0, .9, .5) 1.5s both;
+}
+@keyframes fcDanCompress {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(1.8); }
+  20%  { opacity: 1; transform: translate(-50%, -50%) scale(1.4); }
+  40%  { transform: translate(calc(-50% + 3px), -50%) scale(1.0); }
+  45%  { transform: translate(calc(-50% - 3px), -50%) scale(.95); }
+  50%  { transform: translate(calc(-50% + 2px), -50%) scale(.90); }
+  55%  { transform: translate(calc(-50% - 2px), -50%) scale(.85); }
+  60%  { transform: translate(calc(-50% + 1px), -50%) scale(.80); }
+  70%  { opacity: 1; transform: translate(-50%, -50%) scale(.50); }
+  95%  { opacity: 1; transform: translate(-50%, -50%) scale(.15); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0); }
+}
+
+/* Nhịp 3 — flash cam */
+.fc-cult-ov[data-realm="ket-dan"] .fc-cult-ov-flash {
+  background: radial-gradient(circle at 50% 46%, #fff 0, rgba(255, 210, 122, .90) 30%, rgba(255, 159, 67, .30) 75%);
+}
+
+/* Nhịp 3 — sóng xung kích cam */
+.fc-cult-ov[data-realm="ket-dan"] .fc-cult-ov-wave i {
+  border-color: rgba(255, 210, 122, .85);
+  box-shadow: 0 0 20px rgba(255, 159, 67, .55);
+}
+
+/* Nhịp 3 — hạt văng ra từ tâm */
+.fc-cult-ov-burst i {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 50%;
+  background: #ffd27a;
+  box-shadow: 0 0 8px rgba(255, 159, 67, .9);
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: fcDanBurst 1.3s cubic-bezier(.2, .7, .4, 1) 2.9s both;
+}
+@keyframes fcDanBurst {
+  0%   { opacity: 1; transform: rotate(var(--a)) translateX(0) scale(1); }
+  70%  { opacity: .9; }
+  100% { opacity: 0; transform: rotate(var(--a)) translateX(var(--d)) scale(.3); }
+}
+
+/* Nhịp 4 — đan nền đập chậm sau chữ tên cảnh giới */
+.fc-cult-ov[data-realm="ket-dan"] .fc-cult-ov-final::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: -1;
+  width: 260px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(.95);
+  background: radial-gradient(circle closest-side, rgba(255, 210, 122, .45), rgba(255, 159, 67, .20) 50%, transparent 78%);
+  opacity: 0;
+  animation: fcDanFinalPulse 3.5s cubic-bezier(.4, 0, .6, 1) 3.4s infinite;
+}
+@keyframes fcDanFinalPulse {
+  0%, 100% { opacity: .6; transform: translate(-50%, -50%) scale(.95); }
+  50%      { opacity: 1;  transform: translate(-50%, -50%) scale(1.08); }
+}
+
+/* Nhịp 4 — chữ tên cảnh giới */
+.fc-cult-ov[data-realm="ket-dan"] .fc-cult-ov-name {
+  text-shadow: 0 0 30px rgba(255, 159, 67, .65);
+}
+
+/* Tầng thấp (Sơ–Trung kỳ) — bớt sóng cho nhẹ (đỡ "quá tay") */
+.fc-cult-ov[data-realm="ket-dan"] .fc-cult-ov-wave i:nth-child(2) {
+  animation-delay: calc(2.8s + var(--wd, 0s) + .18s);
+}
+
+/* ── perf-lite: tắt mọi animation của Kết Đan, giữ trạng thái tĩnh ── */
+body.perf-lite .fc-cult-page[data-realm="ket-dan"] .fc-cult-dan,
+body.perf-lite .fc-cult-page[data-realm="ket-dan"] .fc-cult-dan::after,
+body.perf-lite .fc-cult-page[data-realm="ket-dan"] .fc-cult-dan::before,
+body.perf-lite .fc-cult-page[data-realm="ket-dan"][data-stage="4"] .fc-cult-realm-name,
+body.perf-lite .fc-cult-ov[data-realm="ket-dan"] .fc-cult-ov-motes i,
+body.perf-lite .fc-cult-ov[data-realm="ket-dan"] .fc-cult-ov-burst i,
+body.perf-lite .fc-cult-ov[data-realm="ket-dan"] .fc-cult-ov-wave i,
+body.perf-lite .fc-cult-ov[data-realm="ket-dan"] .fc-cult-ov-final::before {
+  animation: none !important;
+}
+body.perf-lite .fc-cult-page[data-realm="ket-dan"] .fc-cult-dan { filter: none !important; opacity: .85; }
+body.perf-lite .fc-cult-ov[data-realm="ket-dan"]::before { display: none; }
+body.perf-lite .fc-cult-ov[data-realm="ket-dan"] .fc-cult-ov-final::before {
+  opacity: .8;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* ── prefers-reduced-motion: tắt animation, giữ hình tĩnh ── */
+@media (prefers-reduced-motion: reduce) {
+  .fc-cult-page[data-realm="ket-dan"] .fc-cult-dan,
+  .fc-cult-page[data-realm="ket-dan"] .fc-cult-dan::after,
+  .fc-cult-page[data-realm="ket-dan"] .fc-cult-dan::before,
+  .fc-cult-page[data-realm="ket-dan"][data-stage="4"] .fc-cult-realm-name,
+  .fc-cult-ov[data-realm="ket-dan"] .fc-cult-ov-motes,
+  .fc-cult-ov[data-realm="ket-dan"] .fc-cult-ov-burst,
+  .fc-cult-ov[data-realm="ket-dan"] .fc-cult-ov-wave,
+  .fc-cult-ov[data-realm="ket-dan"] .fc-cult-ov-final::before {
+    animation: none !important;
+  }
+  .fc-cult-ov[data-realm="ket-dan"]::before { display: none; }
+  .fc-cult-ov[data-realm="ket-dan"] .fc-cult-ov-final::before {
+    opacity: .8;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  .fc-cult-page[data-realm="ket-dan"] .fc-cult-dan { filter: none; opacity: .85; }
+}
+/* ═══════════════════════════════════════════════════════════════
+   Tu Tiên · Nguyên Anh — Bản nâng cấp "Ngầu Hơn" (Trận Pháp + Tinh Vân)
+   ═══════════════════════════════════════════════════════════════ */
+.fc-cult-page[data-realm="nguyen-anh"],
+.fc-cult-mini[data-realm="nguyen-anh"],
+.fc-cult-ov[data-realm="nguyen-anh"] {
+  --na-c1: 159, 240, 214; /* #9ff0d6 - Xanh ngọc */
+  --na-c2: 183, 156, 255; /* #b79cff - Tím */
+}
+
+/* ── Nền trang Tu luyện ── */
+.fc-cult-page[data-realm="nguyen-anh"] { position: relative; }
+
+/* ── Khung chứa Anh Nhi ── */
+.fc-cult-anh {
+  position: absolute; left: 50%; top: 35%;
+  transform: translate(-50%, -50%);
+  width: 200px; height: 200px;
+  z-index: -1; pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.5s ease-out;
+}
+
+/* ── 1. HIỆU ỨNG TRẬN PHÁP (Mandala) ── */
+.fc-cult-anh::before {
+  content: ""; position: absolute; inset: 0; border-radius: 50%;
+  opacity: 0.3; transition: all 0.8s ease-out;
+  /* Vẽ vòng tròn nét đứt bằng conic-gradient */
+  background: repeating-conic-gradient(
+    from 0deg,
+    rgba(var(--na-c1), 0.8) 0deg 2deg,
+    transparent 2deg 15deg
+  );
+  -webkit-mask-image: radial-gradient(circle, transparent 65%, #000 66%, #000 70%, transparent 71%);
+          mask-image: radial-gradient(circle, transparent 65%, #000 66%, #000 70%, transparent 71%);
+  animation: naOrbit 20s linear infinite;
+}
+
+/* ── 2. HIỆU ỨNG TINH VÂN (Nebula) ── */
+.fc-cult-anh::after {
+  content: ""; position: absolute; inset: -30px; border-radius: 50%;
+  opacity: 0.2; transition: all 0.8s ease-out;
+  background: radial-gradient(circle at 30% 30%, rgba(var(--na-c2), 0.5), transparent 50%),
+              radial-gradient(circle at 70% 70%, rgba(var(--na-c1), 0.5), transparent 50%);
+  filter: blur(15px);
+  animation: naNebula 8s ease-in-out infinite alternate;
+}
+@keyframes naNebula {
+  0% { transform: scale(1) rotate(0deg); opacity: 0.2; }
+  100% { transform: scale(1.1) rotate(15deg); opacity: 0.4; }
+}
+
+/* ── Hình bóng Anh Nhi (SVG) ── */
+.fc-cult-anh svg { 
+  width: 40%; height: 40%; 
+  fill: rgba(var(--na-c1), 0.2);
+  filter: blur(4px); 
+  opacity: 0.7; 
+  z-index: 1; /* Nổi lên trên trận pháp */
+  transition: all 0.5s ease-out; 
+}
+
+/* ── 3. HIỆU ỨNG ĐAN QUANG TRƯỚC NGỰC (từ Linh Đài) ── */
+.na-dot {
+  fill: #fff;
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 1)) drop-shadow(0 0 10px rgba(var(--na-c1), 0.8));
+  animation: naDotPulse 2.5s ease-in-out infinite;
+}
+@keyframes naDotPulse {
+  0%, 100% { opacity: .6; transform: scale(.9); transform-origin: center; }
+  50%      { opacity: 1; transform: scale(1.2); transform-origin: center; }
+}
+
+@keyframes naOrbit { to { transform: rotate(360deg); } }
+
+/* ── TIẾN TRÌNH THEO 4 KỲ ── */
+
+/* Trung kỳ (Stage 2): Trận pháp hiện rõ, bóng đậm lên */
+.fc-cult-page[data-realm="nguyen-anh"][data-stage="2"] .fc-cult-anh::before { opacity: 0.5; animation-duration: 15s; }
+.fc-cult-page[data-realm="nguyen-anh"][data-stage="2"] .fc-cult-anh::after { opacity: 0.3; }
+.fc-cult-page[data-realm="nguyen-anh"][data-stage="2"] .fc-cult-anh svg {
+  width: 55%; height: 55%; fill: rgba(var(--na-c1), 0.5); filter: blur(2px);
+  animation: naBreathe 3s ease-in-out infinite;
+}
+
+/* Hậu kỳ (Stage 3): Trận pháp xoay nhanh + vòng thứ 2, bóng trắng sáng */
+.fc-cult-page[data-realm="nguyen-anh"][data-stage="3"] .fc-cult-anh::before { 
+  opacity: 0.8; animation-duration: 8s;
+  /* Thêm vòng nét liền thứ 2 */
+  box-shadow: inset 0 0 0 1px rgba(var(--na-c2), 0.5);
+}
+.fc-cult-page[data-realm="nguyen-anh"][data-stage="3"] .fc-cult-anh::after { opacity: 0.5; filter: blur(20px); }
+.fc-cult-page[data-realm="nguyen-anh"][data-stage="3"] .fc-cult-anh svg {
+  width: 65%; height: 65%; fill: rgba(255, 255, 255, 0.8); filter: blur(1px) drop-shadow(0 0 15px rgba(var(--na-c1), 0.6));
+  animation: naBreathe 2s ease-in-out infinite;
+}
+
+/* Viên mãn (Stage 4): Đại trận pháp, Tinh vân rực rỡ, Xuất Khiếu (Đa bóng) */
+.fc-cult-page[data-realm="nguyen-anh"][data-stage="4"] .fc-cult-anh::before { 
+  opacity: 1; animation-duration: 4s;
+  box-shadow: inset 0 0 0 2px rgba(var(--na-c2), 0.8), 0 0 30px rgba(var(--na-c1), 0.3);
+}
+.fc-cult-page[data-realm="nguyen-anh"][data-stage="4"] .fc-cult-anh::after { opacity: 0.7; filter: blur(25px); }
+.fc-cult-page[data-realm="nguyen-anh"][data-stage="4"] .fc-cult-anh svg {
+  width: 75%; height: 75%; fill: #fff; filter: drop-shadow(0 0 25px rgba(var(--na-c1), 1));
+  animation: naBreathe 1.5s ease-in-out infinite;
+}
+
+/* Hiệu ứng Xuất Khiếu: Tạo bóng ma thứ 2 (Ghost) lệch lên trên */
+.fc-cult-page[data-realm="nguyen-anh"][data-stage="4"] .fc-cult-anh .na-ghost {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  opacity: 0.4; filter: blur(3px);
+  transform: translateY(-20px) scale(0.95);
+  animation: naSpiritOut 3s ease-in-out infinite alternate;
+}
+@keyframes naSpiritOut { 
+  0% { transform: translateY(-15px) scale(0.9); opacity: 0.2; } 
+  100% { transform: translateY(-30px) scale(1); opacity: 0.6; } 
+}
+
+/* Chữ Viên Mãn ánh sáng chạy */
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+  .fc-cult-page[data-realm="nguyen-anh"][data-stage="4"] .fc-cult-realm-name {
+    background: linear-gradient(100deg, var(--fc-gold) 0 40%, #fff 50%, var(--fc-gold) 60% 100%) 0 0 / 250% 100%;
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent; -webkit-text-fill-color: transparent; text-shadow: none;
+    filter: drop-shadow(0 0 8px rgba(var(--na-c2), .8));
+    animation: fcQiShimmer 5.5s ease-in-out infinite;
+  }
+}
+
+/* ── Cập nhật hiệu ứng thở ── */
+@keyframes naBreathe { 0%, 100% { transform: scale(1); opacity: .7; } 50% { transform: scale(1.05); opacity: 1; } }
+
+/* (Giữ nguyên phần Overlay Đột Phá, Solar Zen, Perf-lite ở bên dưới...) */
+/* ═══════════════════════════════════════════════════════════════
+   Tu Tiên · Nguyên Anh — Bản chuẩn (Đã fix lỗi đè hình)
+   ═══════════════════════════════════════════════════════════════ */
+.fc-cult-page[data-realm="nguyen-anh"],
+.fc-cult-mini[data-realm="nguyen-anh"],
+.fc-cult-ov[data-realm="nguyen-anh"] {
+  --na-c1: 159, 240, 214;
+  --na-c2: 183, 156, 255;
+}
+
+/* Khung chứa (Mặc định 200px, Trận pháp) */
+.fc-cult-anh {
+  position: absolute; left: 50%; top: 35%;
+  transform: translate(-50%, -50%);
+  width: 200px; height: 200px;
+  z-index: -1; pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.5s ease-out;
+}
+
+/* 1. Trận pháp */
+.fc-cult-anh::before {
+  content: ""; position: absolute; inset: 0; border-radius: 50%;
+  opacity: 0.3; transition: all 0.8s ease-out;
+  background: repeating-conic-gradient(from 0deg, rgba(var(--na-c1), 0.8) 0deg 2deg, transparent 2deg 15deg);
+  -webkit-mask-image: radial-gradient(circle, transparent 65%, #000 66%, #000 70%, transparent 71%);
+          mask-image: radial-gradient(circle, transparent 65%, #000 66%, #000 70%, transparent 71%);
+  animation: naOrbit 20s linear infinite;
+}
+
+/* 2. Tinh vân */
+.fc-cult-anh::after {
+  content: ""; position: absolute; inset: -30px; border-radius: 50%;
+  opacity: 0.2; transition: all 0.8s ease-out;
+  background: radial-gradient(circle at 30% 30%, rgba(var(--na-c2), 0.5), transparent 50%),
+              radial-gradient(circle at 70% 70%, rgba(var(--na-c1), 0.5), transparent 50%);
+  filter: blur(15px);
+  animation: naNebula 8s ease-in-out infinite alternate;
+}
+
+/* Chấm sáng trước ngực */
+.na-dot {
+  fill: #fff;
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 1)) drop-shadow(0 0 10px rgba(var(--na-c1), 0.8));
+  animation: naDotPulse 2.5s ease-in-out infinite;
+}
+@keyframes naDotPulse { 0%,100% { opacity: .6; transform: scale(.9); transform-origin: center; } 50% { opacity: 1; transform: scale(1.2); transform-origin: center; } }
+@keyframes naOrbit { to { transform: rotate(360deg); } }
+@keyframes naNebula { 0% { transform: scale(1) rotate(0deg); opacity: 0.2; } 100% { transform: scale(1.1) rotate(15deg); opacity: 0.4; } }
+@keyframes naBreathe { 0%, 100% { transform: scale(1); opacity: .7; } 50% { transform: scale(1.05); opacity: 1; } }
+
+/* HÌNH BÓNG CHÍNH (Sơ kỳ - Mờ ảo, trong suốt) */
+.fc-cult-anh svg { 
+  width: 40%; height: 40%; 
+  fill: rgba(var(--na-c1), 0.15); 
+  filter: blur(4px); 
+  opacity: 0.6; 
+  z-index: 1; transition: all 0.5s ease-out; 
+}
+
+/* ẨN BÓNG XUẤT KHIẾU Ở CÁC KỲ THẤP (Fix lỗi đè hình) */
+.fc-cult-anh .na-ghost { display: none; }
+
+/* Trung kỳ (Stage 2): Rõ hơn một chút */
+.fc-cult-page[data-realm="nguyen-anh"][data-stage="2"] .fc-cult-anh::before { opacity: 0.5; animation-duration: 15s; }
+.fc-cult-page[data-realm="nguyen-anh"][data-stage="2"] .fc-cult-anh::after { opacity: 0.3; }
+.fc-cult-page[data-realm="nguyen-anh"][data-stage="2"] .fc-cult-anh svg {
+  width: 55%; height: 55%; fill: rgba(var(--na-c1), 0.35); filter: blur(2px);
+  animation: naBreathe 3s ease-in-out infinite;
+}
+
+/* Hậu kỳ (Stage 3): Trắng sữa, sáng dần */
+.fc-cult-page[data-realm="nguyen-anh"][data-stage="3"] .fc-cult-anh::before { 
+  opacity: 0.8; animation-duration: 8s; box-shadow: inset 0 0 0 1px rgba(var(--na-c2), 0.5);
+}
+.fc-cult-page[data-realm="nguyen-anh"][data-stage="3"] .fc-cult-anh::after { opacity: 0.5; filter: blur(20px); }
+.fc-cult-page[data-realm="nguyen-anh"][data-stage="3"] .fc-cult-anh svg {
+  width: 65%; height: 65%; fill: rgba(255, 255, 255, 0.6); filter: blur(1px) drop-shadow(0 0 15px rgba(var(--na-c1), 0.6));
+  animation: naBreathe 2s ease-in-out infinite;
+}
+
+/* Viên mãn (Stage 4): Xuất khiếu (Hiển thị bóng thứ 2) */
+.fc-cult-page[data-realm="nguyen-anh"][data-stage="4"] .fc-cult-anh::before { 
+  opacity: 1; animation-duration: 4s; box-shadow: inset 0 0 0 2px rgba(var(--na-c2), 0.8), 0 0 30px rgba(var(--na-c1), 0.3);
+}
+.fc-cult-page[data-realm="nguyen-anh"][data-stage="4"] .fc-cult-anh::after { opacity: 0.7; filter: blur(25px); }
+.fc-cult-page[data-realm="nguyen-anh"][data-stage="4"] .fc-cult-anh svg {
+  width: 75%; height: 75%; fill: #fff; filter: drop-shadow(0 0 25px rgba(var(--na-c1), 0.8));
+  animation: naBreathe 1.5s ease-in-out infinite;
+}
+
+/* Bóng xuất khiếu xuất hiện ở Viên mãn */
+.fc-cult-page[data-realm="nguyen-anh"][data-stage="4"] .fc-cult-anh .na-ghost {
+  display: flex; position: absolute; inset: 0; align-items: center; justify-content: center;
+  opacity: 0.3; filter: blur(4px);
+  transform: translateY(-25px) scale(0.95);
+  animation: naSpiritOut 3s ease-in-out infinite alternate;
+}
+.fc-cult-page[data-realm="nguyen-anh"][data-stage="4"] .fc-cult-anh .na-ghost svg {
+  filter: none; /* Bỏ drop-shadow để không bị chói */
+  animation: none; /* Không dùng nhịp thở cho bóng ma */
+}
+
+@keyframes naSpiritOut { 
+  0% { transform: translateY(-20px) scale(0.95); opacity: 0.2; } 
+  100% { transform: translateY(-35px) scale(1.05); opacity: 0.5; } 
+}
+
+/* ── Hiệu ứng đột phá Nguyên Anh (~5,3s): trận pháp mở → đan rung nứt → vỡ mảnh → anh nhi hiện ──
+   Chỉ animate transform/opacity/clip-path. Chớp trắng toàn màn hình được thay bằng .fc-cult-ov-na-bloom (mềm hơn). */
+.fc-cult-ov[data-realm="nguyen-anh"] .fc-cult-ov-bolts,
+.fc-cult-ov[data-realm="nguyen-anh"] .fc-cult-ov-rings,
+.fc-cult-ov[data-realm="nguyen-anh"] .fc-cult-ov-flash { display: none; }
+
+.fc-cult-ov-na-mand, .fc-cult-ov-na-nebula, .fc-cult-ov-na-core, .fc-cult-ov-na-crack,
+.fc-cult-ov-na-shock i, .fc-cult-ov-na-shards i, .fc-cult-ov-na-soul, .fc-cult-ov-na-motes i {
+  position: absolute; left: 50%; top: 36%; pointer-events: none;
+}
+
+/* Nhịp 1 — trận pháp mở (thu từ ngoài vào, xoay mãi), sau đó phồng theo nhịp vỡ rồi lắng lại */
+.fc-cult-ov-na-mand {
+  width: 380px; aspect-ratio: 1; border-radius: 50%;
+  border: 1px solid rgba(var(--na-c2), .5);
+  opacity: 0; transform: translate(-50%, -50%) scale(1.6);
+  will-change: transform, opacity;
+  animation: naMandIn 5s ease-out both;
+}
+.fc-cult-ov-na-mand i {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: repeating-conic-gradient(rgba(var(--na-c1), .85) 0 2deg, transparent 2deg 12deg);
+  -webkit-mask-image: radial-gradient(circle, transparent 62%, #000 63%, #000 67%, transparent 68%);
+          mask-image: radial-gradient(circle, transparent 62%, #000 63%, #000 67%, transparent 68%);
+  animation: naOrbit 24s linear infinite;
+}
+@keyframes naMandIn {
+  0%        { opacity: 0;  transform: translate(-50%, -50%) scale(1.6); }
+  25%, 55%  { opacity: .8; transform: translate(-50%, -50%) scale(1); }
+  65%       { opacity: 1;  transform: translate(-50%, -50%) scale(1.15); }
+  100%      { opacity: .45; transform: translate(-50%, -50%) scale(1.25); }
+}
+
+/* Nhịp 1 — khí xoáy vào tâm */
+.fc-cult-ov-na-motes i {
+  width: 3.5px; aspect-ratio: 1; margin: -2px 0 0 -2px; border-radius: 50%;
+  background: rgb(var(--na-c1)); box-shadow: 0 0 6px 1px rgba(var(--na-c2), .9);
+  opacity: 0; will-change: transform, opacity;
+  animation: naMote 1.7s cubic-bezier(.45, 0, .9, .6) var(--dl, 0s) forwards;
+}
+@keyframes naMote {
+  0%        { opacity: 0; transform: rotate(calc(var(--a) - 60deg)) translateX(min(var(--d), 46vmin)) scale(.6); }
+  20%, 85%  { opacity: 1; }
+  100%      { opacity: 0; transform: rotate(calc(var(--a) + 40deg)) translateX(6px) scale(1.2); }
+}
+
+/* Nhịp 2 — đan cam (từ Kết Đan) hiện lên, rung mạnh dần rồi sáng chói */
+.fc-cult-ov-na-core {
+  width: 130px; aspect-ratio: 1; border-radius: 50%; opacity: 0; will-change: transform, opacity;
+  background: radial-gradient(circle closest-side, #fff, #ffd27a 22%, #ff9f43 62%, transparent 80%);
+  animation: naCore 2.4s ease-in-out .5s both;
+}
+@keyframes naCore {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(.2); }
+  12%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  40%  { transform: translate(calc(-50% + 2px), -50%) scale(1.02); filter: brightness(1.2); }
+  48%  { transform: translate(calc(-50% - 3px), calc(-50% + 1px)) scale(1.04); }
+  56%  { transform: translate(calc(-50% + 3px), -50%) scale(1.06); filter: brightness(1.6); }
+  64%  { transform: translate(calc(-50% - 2px), calc(-50% - 2px)) scale(1.1); filter: brightness(1.9); }
+  78%  { opacity: 1; transform: translate(-50%, -50%) scale(1.3); filter: brightness(2.6); }
+  84%  { opacity: 0; transform: translate(-50%, -50%) scale(1.7); filter: brightness(3); }
+  100% { opacity: 0; }
+}
+
+/* Nhịp 2 — vết nứt trắng vẽ lan ra từ tâm (mỗi vết trễ --d) */
+.fc-cult-ov-na-crack { width: 130px; height: 130px; transform: translate(-50%, -50%); animation: naCFade .2s ease-out 2.5s forwards; }
+.fc-cult-ov-na-crack path {
+  fill: none; stroke: #fff; stroke-width: 1.6; stroke-linecap: round;
+  stroke-dasharray: 60; stroke-dashoffset: 60;
+  filter: drop-shadow(0 0 3px #fff);
+  animation: naDraw .7s ease-out var(--d, 1s) forwards;
+}
+@keyframes naDraw  { to { stroke-dashoffset: 0; } }
+@keyframes naCFade { to { opacity: 0; } }
+
+/* Nhịp 3 — đan vỡ thành mảnh, hai vòng sóng (tím rồi xanh ngọc), vầng sáng mềm */
+.fc-cult-ov-na-shards i {
+  width: var(--s); height: var(--s); opacity: 0; will-change: transform, opacity;
+  background: linear-gradient(135deg, #ffd27a, #ff9f43 55%, rgb(var(--na-c2)));
+  filter: drop-shadow(0 0 6px rgba(255, 159, 67, .8));
+  animation: naShard 1.5s cubic-bezier(.15, .7, .3, 1) 2.5s forwards;
+}
+@keyframes naShard {
+  0%   { opacity: 1; transform: translate(-50%, -50%) rotate(0) scale(1); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--rot)) scale(.3); }
+}
+.fc-cult-ov-na-shock i {
+  width: 260px; aspect-ratio: 1; border-radius: 50%; opacity: 0; will-change: transform, opacity;
+  border: 2px solid rgba(var(--na-c2), .9);
+  box-shadow: 0 0 24px rgba(var(--na-c2), .6), inset 0 0 24px rgba(var(--na-c1), .4);
+  transform: translate(-50%, -50%) scale(.2);
+  animation: naShock 1.6s ease-out 2.5s forwards;
+}
+.fc-cult-ov-na-shock i:nth-child(2) { border-color: rgba(var(--na-c1), .85); animation-delay: 2.7s; }
+@keyframes naShock {
+  0%   { opacity: .95; transform: translate(-50%, -50%) scale(.2); }
+  100% { opacity: 0;   transform: translate(-50%, -50%) scale(3); }
+}
+.fc-cult-ov-na-bloom {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: radial-gradient(circle at 50% 36%, rgba(255, 255, 255, .9), rgba(var(--na-c2), .45) 30%, transparent 62%);
+  animation: naBloom 1.1s ease-out 2.5s forwards;
+}
+@keyframes naBloom { 0% { opacity: 0; } 25% { opacity: .85; } 100% { opacity: 0; } }
+
+/* Nhịp 4 — tinh vân nở sau lưng, anh nhi hiện từ đầu xuống chân rồi lơ lửng, chữ tách rộng rồi khép lại */
+.fc-cult-ov-na-nebula {
+  width: 560px; aspect-ratio: 1; border-radius: 50%; opacity: 0; filter: blur(22px);
+  transform: translate(-50%, -50%) scale(.4); will-change: transform, opacity;
+  background: radial-gradient(circle at 35% 35%, rgba(var(--na-c2), .55), transparent 55%),
+              radial-gradient(circle at 65% 65%, rgba(var(--na-c1), .45), transparent 55%);
+  animation: naNebulaIn 2.2s ease-out 2.7s both;
+}
+@keyframes naNebulaIn { to { opacity: .85; transform: translate(-50%, -50%) scale(1); } }
+.fc-cult-ov-na-soul {
+  width: 140px; height: 168px; transform: translate(-50%, -50%);
+  filter: drop-shadow(0 0 18px rgba(var(--na-c1), .9)) drop-shadow(0 0 40px rgba(var(--na-c2), .6));
+  animation: naFloat 4s ease-in-out 4.3s infinite alternate;
+}
+.fc-cult-ov-na-soul svg {
+  width: 100%; height: 100%; fill: #fff;
+  clip-path: inset(100% 0 0 0);
+  animation: naRevealUp 1.4s cubic-bezier(.3, .7, .2, 1) 2.9s forwards;
+}
+@keyframes naRevealUp { to { clip-path: inset(0 0 0 0); } }
+@keyframes naFloat { from { transform: translate(-50%, -50%); } to { transform: translate(-50%, calc(-50% - 8px)); } }
+
+/* Khối chữ nằm dưới anh nhi (không đè lên nhau) */
+.fc-cult-ov[data-realm="nguyen-anh"] .fc-cult-ov-final { margin-top: 230px; animation-delay: 3.5s; }
+.fc-cult-ov[data-realm="nguyen-anh"] .fc-cult-ov-name {
+  text-shadow: 0 0 28px rgba(var(--na-c2), .55);
+  animation: naTitleIn 1.8s ease-out 3.5s both;
+}
+@keyframes naTitleIn { 0% { opacity: 0; letter-spacing: .35em; } 100% { opacity: 1; letter-spacing: .04em; } }
+
+/* Trạng thái xong / bấm Bỏ qua: bỏ phần chuyển tiếp, giữ anh nhi + trận pháp + tinh vân làm nền */
+.fc-cult-ov[data-realm="nguyen-anh"].is-done .fc-cult-ov-na-core,
+.fc-cult-ov[data-realm="nguyen-anh"].is-done .fc-cult-ov-na-crack,
+.fc-cult-ov[data-realm="nguyen-anh"].is-done .fc-cult-ov-na-shards,
+.fc-cult-ov[data-realm="nguyen-anh"].is-done .fc-cult-ov-na-shock,
+.fc-cult-ov[data-realm="nguyen-anh"].is-done .fc-cult-ov-na-bloom,
+.fc-cult-ov[data-realm="nguyen-anh"].is-done .fc-cult-ov-na-motes { display: none; }
+.fc-cult-ov[data-realm="nguyen-anh"].is-done .fc-cult-ov-na-soul svg { animation: none; clip-path: none; }
+.fc-cult-ov[data-realm="nguyen-anh"].is-done .fc-cult-ov-name { animation: none; }
+.fc-cult-ov[data-realm="nguyen-anh"].is-done .fc-cult-ov-na-nebula { animation: none; opacity: .85; transform: translate(-50%, -50%) scale(1); }
+.fc-cult-ov[data-realm="nguyen-anh"].is-done .fc-cult-ov-na-mand { animation: none; opacity: .45; transform: translate(-50%, -50%) scale(1.25); }
+
+/* Solar Zen */
+[data-theme="solar-zen"] .fc-cult-page[data-realm="nguyen-anh"],
+[data-theme="solar-zen"] .fc-cult-mini[data-realm="nguyen-anh"],
+[data-theme="solar-zen"] .fc-cult-ov[data-realm="nguyen-anh"] {
+  --na-c1: 31, 143, 102; --na-c2: 106, 70, 201;
+}
+[data-theme="solar-zen"] .fc-cult-page[data-realm="nguyen-anh"][data-stage="3"] .fc-cult-anh svg,
+[data-theme="solar-zen"] .fc-cult-page[data-realm="nguyen-anh"][data-stage="4"] .fc-cult-anh svg { fill: var(--na-c2); }
+
+/* Performance / Reduced Motion */
+body.perf-lite .fc-cult-page[data-realm="nguyen-anh"] .fc-cult-anh svg,
+body.perf-lite .fc-cult-page[data-realm="nguyen-anh"] .fc-cult-anh::before,
+body.perf-lite .fc-cult-page[data-realm="nguyen-anh"] .fc-cult-anh::after,
+body.perf-lite .na-dot,
+body.perf-lite .fc-cult-anh .na-ghost,
+body.perf-lite .fc-cult-ov-na-mand, body.perf-lite .fc-cult-ov-na-mand i,
+body.perf-lite .fc-cult-ov-na-nebula,
+body.perf-lite .fc-cult-ov-na-soul, body.perf-lite .fc-cult-ov-na-soul svg { animation: none !important; }
+body.perf-lite .fc-cult-ov-na-core, body.perf-lite .fc-cult-ov-na-crack, body.perf-lite .fc-cult-ov-na-shock,
+body.perf-lite .fc-cult-ov-na-shards, body.perf-lite .fc-cult-ov-na-bloom, body.perf-lite .fc-cult-ov-na-motes { display: none; }
+body.perf-lite .fc-cult-ov-na-mand { opacity: .45; transform: translate(-50%, -50%) scale(1.25); }
+body.perf-lite .fc-cult-ov-na-nebula { opacity: .6; filter: none; transform: translate(-50%, -50%) scale(1); }
+body.perf-lite .fc-cult-ov-na-soul svg { clip-path: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fc-cult-page[data-realm="nguyen-anh"] .fc-cult-anh svg,
+  .fc-cult-page[data-realm="nguyen-anh"] .fc-cult-anh::before,
+  .fc-cult-page[data-realm="nguyen-anh"] .fc-cult-anh::after,
+  .fc-cult-page[data-realm="nguyen-anh"] .fc-cult-anh .na-ghost,
+  .na-dot,
+  .fc-cult-ov-na-mand, .fc-cult-ov-na-mand i, .fc-cult-ov-na-nebula,
+  .fc-cult-ov-na-soul, .fc-cult-ov-na-soul svg { animation: none !important; }
+  .fc-cult-ov-na-core, .fc-cult-ov-na-crack, .fc-cult-ov-na-shock,
+  .fc-cult-ov-na-shards, .fc-cult-ov-na-bloom, .fc-cult-ov-na-motes { display: none; }
+  .fc-cult-ov-na-mand { opacity: .45; transform: translate(-50%, -50%) scale(1.25); }
+  .fc-cult-ov-na-nebula { opacity: .85; transform: translate(-50%, -50%) scale(1); }
+  .fc-cult-ov-na-soul svg { clip-path: none; }
 }
