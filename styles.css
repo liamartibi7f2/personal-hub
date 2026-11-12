@@ -25299,3 +25299,484 @@ body.perf-lite .fc-cult-ov-na-soul svg { clip-path: none; }
   .fc-cult-ov-na-nebula { opacity: .85; transform: translate(-50%, -50%) scale(1); }
   .fc-cult-ov-na-soul svg { clip-path: none; }
 }
+
+/* ============================================================
+   CASHFLOW — MODAL "NEW TRANSACTION" v2  (#hub-cf-overlay)
+   ------------------------------------------------------------
+   Expense / Income / Transfer — mỗi loại một "tông" (--cfx-tone)
+   điều khiển: thanh nhấn dưới header, ô trượt của tab, màu số tiền,
+   viền focus và nút Lưu.
+     Expense  → --cfk-expense      Income → --cfk-income
+     Transfer → --cfk-info
+   Bản sắc từng theme dùng lại token --cfk-* (đặt ở cuối file):
+     Cyberpunk : HUD neon, góc vuông vát, ký hiệu ◢
+     Solar Zen : giấy / mực, chữ serif, bo mềm, ký hiệu ❖
+     Lo-Fi     : hoàng hôn, bo tròn, nút chuyển sắc, ký hiệu ✦
+     Optimize  : terminal phẳng, viền đứt nét, tiền tố "> "
+     Lite      : giữ màu + hình khối, bỏ glow / blur / animation
+   Không cần sửa JS: trạng thái lấy từ .hub-cf-tab--active qua :has().
+   Mọi chữ vẫn đi qua i18n (không thêm chuỗi mới).
+   ============================================================ */
+
+/* ───────── 0) TÔNG THEO LOẠI GIAO DỊCH ───────── */
+#hub-cf-overlay {
+  --cfx-tone: var(--cfk-expense, var(--danger, #ff3d6e));
+  --cfx-idx: 0;
+  --cfx-glyph: '◢';
+  --cfx-ease: cubic-bezier(.22, 1, .36, 1);
+}
+#hub-cf-overlay:has(#hub-cf-tab-income.hub-cf-tab--active) {
+  --cfx-tone: var(--cfk-income, var(--success, #39ff88));
+  --cfx-idx: 1;
+}
+#hub-cf-overlay:has(#hub-cf-tab-transfer.hub-cf-tab--active) {
+  --cfx-tone: var(--cfk-info, #00d5ff);
+  --cfx-idx: 2;
+}
+:root[data-theme="solar-zen"] #hub-cf-overlay { --cfx-glyph: '❖'; }
+:root[data-theme="lofi-twilight"] #hub-cf-overlay { --cfx-glyph: '✦'; }
+body.theme-optimized #hub-cf-overlay { --cfx-glyph: '>'; }
+
+/* ───────── 1) KHUNG MODAL ───────── */
+:root body #hub-cf-overlay .hub-cf-modal {
+  max-width: 480px;
+  max-height: min(92vh, 760px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--cfx-tone) 40%, transparent) transparent;
+  color-scheme: var(--cfk-scheme, dark);
+  animation: cfxModalIn 340ms var(--cfx-ease);
+}
+@keyframes cfxModalIn {
+  from { opacity: 0; transform: translateY(14px) scale(.97); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ───────── 2) HEADER: tiêu đề + đóng ở hàng 1, tab chiếm hàng 2 ───────── */
+:root body #hub-cf-overlay .hub-cf-modal-header {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "title close" "tabs tabs";
+  align-items: center;
+  gap: 16px 12px;
+  padding: 20px 24px 18px;
+  border-bottom: 1px solid var(--cfk-line, var(--glass-border));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--cfx-tone) 7%, transparent), transparent 90%);
+}
+/* thanh nhấn đổi màu theo loại */
+:root body #hub-cf-overlay .hub-cf-modal-header::after {
+  content: '';
+  position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+  background: linear-gradient(90deg, var(--cfx-tone), color-mix(in srgb, var(--cfx-tone) 0%, transparent) 78%);
+  transition: background .3s var(--cfx-ease);
+}
+:root body #hub-cf-overlay .hub-cf-modal-title {
+  grid-area: title;
+  margin: 0;
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--cfk-font-num, var(--font-mono));
+  font-size: .92rem; font-weight: 700; line-height: 1.25;
+  letter-spacing: var(--cfk-label-ls, .1em);
+  text-transform: var(--cfk-label-tt, uppercase);
+  color: var(--cfk-text, var(--text-primary));
+}
+:root body #hub-cf-overlay .hub-cf-modal-title::before {
+  content: var(--cfx-glyph);
+  flex: none;
+  font-size: .8em; line-height: 1;
+  color: var(--cfx-tone);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--cfx-tone) 70%, transparent);
+  transition: color .3s var(--cfx-ease);
+}
+:root body #hub-cf-overlay .hub-cf-modal-close {
+  grid-area: close;
+  width: 34px; height: 34px;
+  border: 1px solid var(--cfk-line, var(--glass-border));
+  background: transparent;
+  color: var(--cfk-muted, var(--text-muted));
+  transition: color .2s, border-color .2s, background .2s, transform .35s var(--cfx-ease);
+}
+:root body #hub-cf-overlay .hub-cf-modal-close:hover {
+  transform: rotate(90deg);
+  color: var(--cfk-expense, var(--danger));
+  border-color: color-mix(in srgb, var(--cfk-expense, var(--danger)) 55%, transparent);
+  background: color-mix(in srgb, var(--cfk-expense, var(--danger)) 10%, transparent);
+}
+
+/* ───────── 3) TAB: thanh phân đoạn có ô trượt ───────── */
+:root body #hub-cf-overlay .hub-cf-tab-group {
+  grid-area: tabs;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  width: 100%;
+  padding: 4px;
+  background: color-mix(in srgb, var(--cfk-elevated, #151829) 82%, transparent);
+  border: 1px solid var(--cfk-line, var(--glass-border));
+  border-radius: calc(var(--cfk-r-pill, 999px) + 2px);
+  isolation: isolate;
+}
+/* ô trượt */
+:root body #hub-cf-overlay .hub-cf-tab-group::before {
+  content: '';
+  position: absolute; z-index: -1;
+  top: 4px; bottom: 4px; left: 4px;
+  width: calc((100% - 8px) / 3);
+  transform: translateX(calc(var(--cfx-idx) * 100%));
+  border-radius: var(--cfk-r-pill, 999px);
+  background: color-mix(in srgb, var(--cfx-tone) 15%, var(--cfk-surface, #0d0f1b));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cfx-tone) 60%, transparent),
+              0 6px 16px -8px color-mix(in srgb, var(--cfx-tone) 70%, transparent);
+  transition: transform .38s var(--cfx-ease), background .3s, box-shadow .3s;
+}
+:root body #hub-cf-overlay .hub-cf-tab {
+  position: relative;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  min-width: 0;
+  padding: 10px 6px;
+  border: 0; border-radius: var(--cfk-r-pill, 999px);
+  background: transparent; box-shadow: none;
+  font-family: var(--cfk-font-num, var(--font-mono));
+  font-size: .72rem; font-weight: 600; letter-spacing: .04em;
+  color: var(--cfk-muted, var(--text-muted));
+  transition: color .25s;
+}
+:root body #hub-cf-overlay .hub-cf-tab > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:root body #hub-cf-overlay .hub-cf-tab:hover { color: var(--cfk-text-2, var(--text-secondary)); }
+:root body #hub-cf-overlay .hub-cf-tab--active,
+:root body #hub-cf-overlay .hub-cf-tab--active:hover {
+  background: transparent; box-shadow: none;
+  color: var(--cfk-text, var(--text-primary));
+}
+:root body #hub-cf-overlay .hub-cf-tab:focus-visible {
+  outline: 2px solid var(--cfx-tone); outline-offset: -2px;
+}
+/* chấm màu của 3 loại (transfer trước đây chưa có style) */
+:root body #hub-cf-overlay .hub-cf-tab-dot { width: 8px; height: 8px; transition: transform .3s var(--cfx-ease); }
+:root body #hub-cf-overlay .hub-cf-tab-dot--expense  { background: var(--cfk-expense, var(--danger)); box-shadow: 0 0 8px var(--cfk-expense, var(--danger)); }
+:root body #hub-cf-overlay .hub-cf-tab-dot--income   { background: var(--cfk-income, var(--success));  box-shadow: 0 0 8px var(--cfk-income, var(--success)); }
+:root body #hub-cf-overlay .hub-cf-tab-dot--transfer { background: var(--cfk-info, #00d5ff);           box-shadow: 0 0 8px var(--cfk-info, #00d5ff); }
+:root body #hub-cf-overlay .hub-cf-tab--active .hub-cf-tab-dot { transform: scale(1.35); }
+
+/* ───────── 4) THÂN FORM ───────── */
+:root body #hub-cf-overlay .hub-cf-modal-body { padding: 22px 24px 0; }
+:root body #hub-cf-overlay .hub-cf-form-group { margin-bottom: 18px; position: relative; }
+:root body #hub-cf-overlay .hub-cf-form-label {
+  display: flex; align-items: center; gap: 6px;
+  margin-bottom: 8px;
+  font-family: var(--cfk-font-num, var(--font-mono));
+  font-size: .66rem; font-weight: 600;
+  letter-spacing: var(--cfk-label-ls, .1em);
+  text-transform: var(--cfk-label-tt, uppercase);
+  color: var(--cfk-muted, var(--text-muted));
+}
+:root body #hub-cf-overlay .hub-cf-form-label::before { content: var(--cfk-label-pre, ''); color: var(--cfx-tone); }
+
+:root body #hub-cf-overlay .hub-cf-form-input {
+  min-height: 46px;
+  padding: 11px 14px;
+  border-radius: var(--cfk-r-sm, 10px);
+  background: color-mix(in srgb, var(--cfk-elevated, #151829) 70%, transparent);
+  border: 1px solid var(--cfk-line, var(--glass-border));
+  color: var(--cfk-text, var(--text-primary));
+  transition: border-color .2s, box-shadow .2s, background .2s;
+}
+:root body #hub-cf-overlay .hub-cf-form-input:hover { border-color: var(--cfk-line-strong, var(--glass-border)); }
+:root body #hub-cf-overlay .hub-cf-form-input:focus {
+  outline: none;
+  border-color: var(--cfx-tone);
+  background: color-mix(in srgb, var(--cfx-tone) 5%, var(--cfk-elevated, #151829));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cfx-tone) 20%, transparent);
+}
+:root body #hub-cf-overlay .hub-cf-form-input::placeholder { color: var(--cfk-muted, var(--text-muted)); opacity: .75; }
+
+/* Ô số tiền "hero" */
+:root body #hub-cf-overlay .hub-cf-amount-input {
+  min-height: 66px;
+  padding: 12px 56px 12px 18px;
+  font-family: var(--cfk-font-num, var(--font-mono));
+  font-size: 1.85rem; font-weight: 700; letter-spacing: .01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--cfx-tone);
+  caret-color: var(--cfx-tone);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--cfx-tone) 9%, transparent), transparent 70%),
+              color-mix(in srgb, var(--cfk-elevated, #151829) 70%, transparent);
+  border-color: color-mix(in srgb, var(--cfx-tone) 32%, var(--cfk-line, transparent));
+}
+:root body #hub-cf-overlay .hub-cf-amount-input::placeholder { color: color-mix(in srgb, var(--cfx-tone) 35%, transparent); opacity: 1; }
+:root body #hub-cf-overlay .hub-cf-form-group:has(#hub-cf-amount)::after {
+  content: '₫';
+  position: absolute; right: 20px; bottom: 21px;
+  font-family: var(--cfk-font-num, var(--font-mono));
+  font-size: 1.15rem; font-weight: 700;
+  color: color-mix(in srgb, var(--cfx-tone) 70%, var(--cfk-muted, #888));
+  pointer-events: none;
+}
+
+/* Ngày: icon lịch theo màu theme */
+:root body #hub-cf-overlay .hub-cf-date-input { font-size: .86rem; }
+:root body #hub-cf-overlay .hub-cf-date-input::-webkit-calendar-picker-indicator { cursor: pointer; opacity: .65; border-radius: 4px; transition: opacity .2s; }
+:root body #hub-cf-overlay .hub-cf-date-input::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+
+/* Select: mũi tên riêng (cả ô nguồn / hạng mục / từ ví / đến ví) */
+:root body #hub-cf-overlay select.hub-cf-form-input {
+  appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  cursor: pointer;
+  padding-right: 40px;
+  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1.5 1.5l4.5 4.5 4.5-4.5' stroke='%238b93ad' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+}
+:root body #hub-cf-overlay select.hub-cf-form-input option { background: var(--cfk-surface, #0d0f1b); color: var(--cfk-text, #e8e8ed); }
+
+/* ───────── 5) CHUYỂN VÍ: hai "thẻ ví" nối bằng nút đổi chiều ───────── */
+:root body #hub-cf-overlay .hub-cf-transfer-group { animation: cfxRise .4s var(--cfx-ease); }
+@keyframes cfxRise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+:root body #hub-cf-overlay .hub-cf-transfer-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 10px;
+}
+/* đường nối nét đứt phía sau nút đổi chiều */
+:root body #hub-cf-overlay .hub-cf-transfer-row::before {
+  content: '';
+  position: absolute; z-index: 0;
+  left: 20%; right: 20%; top: 50%;
+  border-top: 1px dashed color-mix(in srgb, var(--cfx-tone) 55%, transparent);
+}
+:root body #hub-cf-overlay .hub-cf-transfer-col {
+  position: relative; z-index: 1;
+  min-width: 0;
+  padding: 12px 12px 12px;
+  background: color-mix(in srgb, var(--cfk-elevated, #151829) 78%, var(--cfk-surface, #0d0f1b));
+  border: 1px solid var(--cfk-line, var(--glass-border));
+  border-top: 2px solid var(--cfx-tone);
+  border-radius: var(--cfk-r-sm, 10px);
+  transition: border-color .2s, box-shadow .2s;
+}
+:root body #hub-cf-overlay .hub-cf-transfer-col:focus-within {
+  border-color: var(--cfx-tone);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cfx-tone) 16%, transparent);
+}
+:root body #hub-cf-overlay .hub-cf-transfer-col .hub-cf-form-label { margin-bottom: 6px; }
+:root body #hub-cf-overlay .hub-cf-transfer-col .hub-cf-form-input {
+  min-height: 40px; padding: 8px 32px 8px 10px;
+  background-color: transparent;
+  background-position: right 10px center;
+  border-color: transparent;
+  font-size: .86rem; font-weight: 600;
+}
+:root body #hub-cf-overlay .hub-cf-transfer-col .hub-cf-form-input:focus { box-shadow: none; background-color: transparent; border-color: transparent; }
+
+:root body #hub-cf-overlay .hub-cf-transfer-swap {
+  position: relative; z-index: 2;
+  align-self: center;
+  width: 40px; height: 40px;
+  display: grid; place-items: center;
+  padding: 0;
+  font: 700 1.05rem/1 var(--cfk-font-num, var(--font-mono));
+  color: var(--cfx-tone);
+  background: var(--cfk-surface, #0d0f1b);
+  border: 1px solid color-mix(in srgb, var(--cfx-tone) 60%, transparent);
+  border-radius: var(--cfk-r-pill, 999px);
+  cursor: pointer;
+  box-shadow: 0 6px 14px -8px color-mix(in srgb, var(--cfx-tone) 70%, transparent);
+  transition: transform .45s var(--cfx-ease), background .2s, color .2s, box-shadow .2s;
+}
+:root body #hub-cf-overlay .hub-cf-transfer-swap:hover {
+  transform: rotate(180deg);
+  color: var(--cfk-on-accent, #04070d);
+  background: var(--cfx-tone);
+}
+:root body #hub-cf-overlay .hub-cf-transfer-swap:active { transform: rotate(180deg) scale(.92); }
+:root body #hub-cf-overlay .hub-cf-transfer-swap:focus-visible { outline: 2px solid var(--cfx-tone); outline-offset: 3px; }
+
+/* gợi ý / cảnh báo dưới cặp ví */
+:root body #hub-cf-overlay .hub-cf-transfer-group .hub-cf-form-hint {
+  display: flex; align-items: flex-start; gap: 10px;
+  margin: 12px 0 0; padding: 10px 14px;
+  font-size: .78rem; line-height: 1.55; font-weight: 400;
+  color: var(--cfk-text-2, var(--text-secondary));
+  background: color-mix(in srgb, var(--cfx-tone) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cfx-tone) 26%, transparent);
+  border-left: 3px solid var(--cfx-tone);
+  border-radius: var(--cfk-r-sm, 10px);
+}
+:root body #hub-cf-overlay .hub-cf-transfer-group .hub-cf-form-hint::before {
+  content: 'i'; flex: none;
+  width: 18px; height: 18px; margin-top: 1px;
+  display: grid; place-items: center;
+  font: italic 700 .7rem/1 Georgia, serif;
+  color: var(--cfk-on-accent, #04070d);
+  background: var(--cfx-tone);
+  border-radius: 50%;
+}
+:root body #hub-cf-overlay .hub-cf-transfer-group .hub-cf-form-hint.is-warn {
+  color: var(--cfk-text, var(--text-primary));
+  background: color-mix(in srgb, var(--cfk-warn, #ffd23f) 11%, transparent);
+  border-color: color-mix(in srgb, var(--cfk-warn, #ffd23f) 40%, transparent);
+  border-left-color: var(--cfk-warn, #ffd23f);
+}
+:root body #hub-cf-overlay .hub-cf-transfer-group .hub-cf-form-hint.is-warn::before { content: '!'; font-style: normal; background: var(--cfk-warn, #ffd23f); }
+:root body #hub-cf-overlay .hub-cf-transfer-group .hub-cf-form-hint.is-error {
+  color: var(--cfk-text, var(--text-primary));
+  background: color-mix(in srgb, var(--cfk-expense, #ff3d6e) 11%, transparent);
+  border-color: color-mix(in srgb, var(--cfk-expense, #ff3d6e) 42%, transparent);
+  border-left-color: var(--cfk-expense, #ff3d6e);
+}
+:root body #hub-cf-overlay .hub-cf-transfer-group .hub-cf-form-hint.is-error::before { content: '×'; font-style: normal; font-size: .9rem; background: var(--cfk-expense, #ff3d6e); }
+:root body #hub-cf-overlay .hub-cf-transfer-group:has(.is-error) .hub-cf-transfer-col { border-top-color: var(--cfk-expense, #ff3d6e); }
+
+/* ───────── 6) THANH NÚT: dính đáy, Lưu mang màu loại giao dịch ───────── */
+:root body #hub-cf-overlay .hub-cf-form-actions {
+  position: sticky; bottom: 0; z-index: 3;
+  display: flex; justify-content: flex-end; gap: 10px;
+  margin: 6px -24px 0; padding: 16px 24px 20px;
+  background: var(--cfk-surface, #0d0f1b);
+  border-top: 1px solid var(--cfk-line, var(--glass-border));
+}
+:root body #hub-cf-overlay .hub-cf-modal-btn { min-height: 44px; padding: 0 26px; font-size: .76rem; letter-spacing: .06em; }
+:root body #hub-cf-overlay .hub-cf-modal-btn--cancel { background: transparent; color: var(--cfk-text-2, var(--text-secondary)); }
+:root body #hub-cf-overlay .hub-cf-modal-btn--save {
+  min-width: 120px;
+  background-color: var(--cfx-tone);
+  color: var(--cfk-on-accent, #04070d);
+  box-shadow: 0 10px 22px -10px color-mix(in srgb, var(--cfx-tone) 85%, transparent);
+  transition: background-color .3s, box-shadow .25s, transform .2s;
+}
+:root body #hub-cf-overlay .hub-cf-modal-btn--save:hover {
+  background-color: color-mix(in srgb, var(--cfx-tone) 86%, #fff);
+  box-shadow: 0 14px 26px -10px color-mix(in srgb, var(--cfx-tone) 95%, transparent);
+  transform: translateY(-1px);
+}
+:root body #hub-cf-overlay .hub-cf-modal-btn--save:active { transform: translateY(0); }
+
+/* ───────── 7) BẢN SẮC TỪNG THEME ───────── */
+
+/* Cyberpunk: tab & ô vát góc, ô số tiền có vạch quét, nút có chữ nổi neon */
+:root:not([data-theme="solar-zen"]):not([data-theme="lofi-twilight"]) body:not(.theme-optimized) #hub-cf-overlay .hub-cf-modal-btn--save,
+:root:not([data-theme="solar-zen"]):not([data-theme="lofi-twilight"]) body:not(.theme-optimized) #hub-cf-overlay .hub-cf-transfer-col {
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+}
+:root:not([data-theme="solar-zen"]):not([data-theme="lofi-twilight"]) body:not(.theme-optimized) #hub-cf-overlay .hub-cf-amount-input {
+  background-image: repeating-linear-gradient(0deg, color-mix(in srgb, var(--cfx-tone) 6%, transparent) 0 1px, transparent 1px 4px),
+                    linear-gradient(135deg, color-mix(in srgb, var(--cfx-tone) 10%, transparent), transparent 70%);
+  text-shadow: 0 0 14px color-mix(in srgb, var(--cfx-tone) 55%, transparent);
+}
+:root:not([data-theme="solar-zen"]):not([data-theme="lofi-twilight"]) body:not(.theme-optimized) #hub-cf-overlay .hub-cf-modal-btn--save {
+  font-weight: 800;
+  box-shadow: 0 0 20px color-mix(in srgb, var(--cfx-tone) 55%, transparent);
+}
+:root:not([data-theme="solar-zen"]):not([data-theme="lofi-twilight"]) body:not(.theme-optimized) #hub-cf-overlay .hub-cf-modal-btn--save:hover {
+  box-shadow: 0 0 32px color-mix(in srgb, var(--cfx-tone) 80%, transparent);
+}
+/* clip-path cắt mất box-shadow → thay bằng drop-shadow ở phần tử cha khi cần */
+:root:not([data-theme="solar-zen"]):not([data-theme="lofi-twilight"]) body:not(.theme-optimized) #hub-cf-overlay .hub-cf-modal-btn--save { box-shadow: none; }
+:root:not([data-theme="solar-zen"]):not([data-theme="lofi-twilight"]) body:not(.theme-optimized):not(.perf-lite) #hub-cf-overlay .hub-cf-modal-btn--save {
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--cfx-tone) 55%, transparent));
+}
+
+/* Solar Zen: giấy ấm, tiêu đề serif nghiêng, đường kẻ mực dưới header */
+:root[data-theme="solar-zen"] body #hub-cf-overlay .hub-cf-modal-title { font-style: italic; font-size: 1.05rem; font-weight: 600; }
+:root[data-theme="solar-zen"] body #hub-cf-overlay .hub-cf-modal-title::before { text-shadow: none; }
+:root[data-theme="solar-zen"] body #hub-cf-overlay .hub-cf-modal-header { background: linear-gradient(180deg, color-mix(in srgb, var(--cfx-tone) 9%, transparent), transparent); }
+:root[data-theme="solar-zen"] body #hub-cf-overlay .hub-cf-modal-header::after { height: 1px; background: color-mix(in srgb, var(--cfx-tone) 55%, transparent); left: 24px; right: 24px; }
+:root[data-theme="solar-zen"] body #hub-cf-overlay .hub-cf-tab-group::before { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cfx-tone) 55%, transparent), 0 4px 10px -6px color-mix(in srgb, var(--cfx-tone) 55%, transparent); background: color-mix(in srgb, var(--cfx-tone) 12%, #fffdf8); }
+:root[data-theme="solar-zen"] body #hub-cf-overlay .hub-cf-tab-dot { box-shadow: none !important; }
+:root[data-theme="solar-zen"] body #hub-cf-overlay .hub-cf-form-label { font-variant: small-caps; font-size: .74rem; font-weight: 700; }
+:root[data-theme="solar-zen"] body #hub-cf-overlay .hub-cf-amount-input { font-weight: 600; background-color: #fffdf8; }
+:root[data-theme="solar-zen"] body #hub-cf-overlay .hub-cf-form-input { background-color: #fffdf8; }
+:root[data-theme="solar-zen"] body #hub-cf-overlay .hub-cf-transfer-col { background: #fbf5e6; }
+:root[data-theme="solar-zen"] body #hub-cf-overlay .hub-cf-transfer-swap { background: #fffdf8; box-shadow: none; }
+:root[data-theme="solar-zen"] body #hub-cf-overlay .hub-cf-form-actions { background: #fffdf8; }
+
+/* Lo-Fi Twilight: pastel, nút & ô trượt chuyển sắc, hào quang mờ */
+:root[data-theme="lofi-twilight"] body #hub-cf-overlay .hub-cf-modal-header {
+  background: radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--cfx-tone) 16%, transparent), transparent 62%);
+}
+:root[data-theme="lofi-twilight"] body body:not(.theme-optimized) #hub-cf-overlay .hub-cf-tab-group::before {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--cfx-tone) 26%, var(--cfk-surface)), color-mix(in srgb, var(--cfk-accent-2) 20%, var(--cfk-surface)));
+}
+:root[data-theme="lofi-twilight"] body body:not(.theme-optimized) #hub-cf-overlay .hub-cf-modal-btn--save {
+  background-image: linear-gradient(135deg, var(--cfx-tone), color-mix(in srgb, var(--cfx-tone) 55%, var(--cfk-accent-2)));
+}
+:root[data-theme="lofi-twilight"] body #hub-cf-overlay .hub-cf-transfer-col { border-top-width: 0; box-shadow: inset 0 3px 0 -1px var(--cfx-tone); }
+
+/* Optimize: terminal phẳng tuyệt đối, viền đứt, không glow */
+:root body.theme-optimized #hub-cf-overlay .hub-cf-modal { animation: none; }
+:root body.theme-optimized #hub-cf-overlay .hub-cf-modal-header { background: none; }
+:root body.theme-optimized #hub-cf-overlay .hub-cf-modal-header::after { height: 1px; background: var(--cfx-tone); }
+:root body.theme-optimized #hub-cf-overlay .hub-cf-modal-title::before { text-shadow: none; }
+:root body.theme-optimized #hub-cf-overlay .hub-cf-tab-group,
+:root body.theme-optimized #hub-cf-overlay .hub-cf-tab-group::before,
+:root body.theme-optimized #hub-cf-overlay .hub-cf-tab,
+:root body.theme-optimized #hub-cf-overlay .hub-cf-form-input,
+:root body.theme-optimized #hub-cf-overlay .hub-cf-transfer-col,
+:root body.theme-optimized #hub-cf-overlay .hub-cf-transfer-swap,
+:root body.theme-optimized #hub-cf-overlay .hub-cf-modal-btn,
+:root body.theme-optimized #hub-cf-overlay .hub-cf-modal-close,
+:root body.theme-optimized #hub-cf-overlay .hub-cf-form-hint { border-radius: 0 !important; }
+:root body.theme-optimized #hub-cf-overlay .hub-cf-tab-group::before { box-shadow: none; background: transparent; border: 1px solid var(--cfx-tone); }
+:root body.theme-optimized #hub-cf-overlay .hub-cf-tab-dot { box-shadow: none; border-radius: 0; }
+:root body.theme-optimized #hub-cf-overlay .hub-cf-amount-input { background-image: none; background-color: var(--cfk-surface); border-style: dashed; text-shadow: none; }
+:root body.theme-optimized #hub-cf-overlay .hub-cf-form-input:focus { box-shadow: none; outline: 1px solid var(--cfx-tone); outline-offset: 1px; }
+:root body.theme-optimized #hub-cf-overlay .hub-cf-transfer-col { border-style: dashed; border-top: 2px solid var(--cfx-tone); }
+:root body.theme-optimized #hub-cf-overlay .hub-cf-transfer-col:focus-within { box-shadow: none; }
+:root body.theme-optimized #hub-cf-overlay .hub-cf-transfer-swap { box-shadow: none; border-style: dashed; }
+:root body.theme-optimized #hub-cf-overlay .hub-cf-transfer-group .hub-cf-form-hint { background: transparent; border-style: dashed; border-left-style: solid; }
+:root body.theme-optimized #hub-cf-overlay .hub-cf-transfer-group .hub-cf-form-hint::before { border-radius: 0; }
+:root body.theme-optimized #hub-cf-overlay .hub-cf-modal-btn--save { box-shadow: none; border: 1px solid var(--cfx-tone); }
+:root body.theme-optimized #hub-cf-overlay .hub-cf-modal-btn--cancel { border-style: dashed; }
+:root body.theme-optimized #hub-cf-overlay .hub-cf-form-actions { border-top-style: dashed; }
+
+/* ───────── 8) LITE: giữ màu + hình khối, bỏ blur / glow / animation ───────── */
+:root body.perf-lite #hub-cf-overlay,
+:root body.perf-lite #hub-cf-overlay .hub-cf-modal,
+:root body.perf-lite #hub-cf-overlay .hub-cf-transfer-group { animation: none !important; }
+:root body.perf-lite #hub-cf-overlay { backdrop-filter: none; -webkit-backdrop-filter: none; }
+:root body.perf-lite #hub-cf-overlay * { transition: none !important; }
+:root body.perf-lite #hub-cf-overlay .hub-cf-modal-title::before,
+:root body.perf-lite #hub-cf-overlay .hub-cf-tab-dot { text-shadow: none; box-shadow: none; }
+:root body.perf-lite #hub-cf-overlay .hub-cf-tab-group::before,
+:root body.perf-lite #hub-cf-overlay .hub-cf-transfer-swap,
+:root body.perf-lite #hub-cf-overlay .hub-cf-modal-btn--save,
+:root body.perf-lite #hub-cf-overlay .hub-cf-modal-btn--save:hover { box-shadow: none; }
+:root body.perf-lite #hub-cf-overlay .hub-cf-amount-input { text-shadow: none; background-image: none; }
+:root body.perf-lite #hub-cf-overlay .hub-cf-modal-btn--save { filter: none !important; }
+:root body.perf-lite #hub-cf-overlay .hub-cf-modal-btn--save:hover,
+:root body.perf-lite #hub-cf-overlay .hub-cf-modal-close:hover,
+:root body.perf-lite #hub-cf-overlay .hub-cf-transfer-swap:hover { transform: none; }
+:root body.perf-lite #hub-cf-overlay .hub-cf-modal-header { background: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  #hub-cf-overlay .hub-cf-modal, #hub-cf-overlay .hub-cf-transfer-group { animation: none !important; }
+  #hub-cf-overlay *, #hub-cf-overlay *::before { transition: none !important; }
+  :root body :root body #hub-cf-overlay .hub-cf-modal-close:hover, :root body #hub-cf-overlay .hub-cf-transfer-swap:hover { transform: none; }
+}
+
+/* ───────── 9) MÀN HÌNH NHỎ: bottom-sheet, cặp ví xếp dọc ───────── */
+@media (max-width: 560px) {
+  :root body #hub-cf-overlay { align-items: flex-end; }
+  :root body #hub-cf-overlay .hub-cf-modal {
+    width: 100%; max-width: 100%; margin: 0; max-height: 94vh;
+    border-radius: var(--cfk-r-xl, 20px) var(--cfk-r-xl, 20px) 0 0;
+    animation-name: cfxSheetIn;
+  }
+  @keyframes cfxSheetIn { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
+  :root body #hub-cf-overlay .hub-cf-modal-header { padding: 16px 18px 14px; }
+  :root body #hub-cf-overlay .hub-cf-modal-body { padding: 18px 18px 0; }
+  :root body #hub-cf-overlay .hub-cf-form-actions { margin: 6px -18px 0; padding: 14px 18px calc(16px + env(safe-area-inset-bottom, 0px)); }
+  :root body #hub-cf-overlay .hub-cf-modal-btn { flex: 1; }
+  :root body #hub-cf-overlay .hub-cf-amount-input { font-size: 1.6rem; }
+  :root body #hub-cf-overlay .hub-cf-tab { font-size: .68rem; gap: 6px; padding: 10px 4px; }
+  :root body #hub-cf-overlay .hub-cf-transfer-row { grid-template-columns: 1fr; gap: 8px; }
+  :root body #hub-cf-overlay .hub-cf-transfer-row::before { left: 50%; right: auto; top: 20%; bottom: 20%; border-top: 0; border-left: 1px dashed color-mix(in srgb, var(--cfx-tone) 55%, transparent); }
+  :root body #hub-cf-overlay .hub-cf-transfer-swap { justify-self: center; transform: rotate(90deg); }
+  :root body #hub-cf-overlay .hub-cf-transfer-swap:hover { transform: rotate(270deg); }
+}
