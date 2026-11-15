@@ -25780,3 +25780,324 @@ body.theme-optimized #hub-cf-overlay { --cfx-glyph: '>'; }
   :root body #hub-cf-overlay .hub-cf-transfer-swap { justify-self: center; transform: rotate(90deg); }
   :root body #hub-cf-overlay .hub-cf-transfer-swap:hover { transform: rotate(270deg); }
 }
+
+/* ============================================================
+   DASHBOARD v3 (.dsh-*)
+   Dán khối này vào CUỐI styles.css (sau phần token --cfk-*).
+
+   Đồng bộ 4 theme bằng đúng bộ token --cfk-* mà CashFlow đang dùng:
+     1) Cyberpunk      (mặc định)           2) Solar Zen  [data-theme]
+     3) Lo-Fi Twilight [data-theme]         4) Optimize   body.theme-optimized
+   Màu, bo góc, bóng, glow, nhãn, font số đều lấy từ token nên
+   đổi theme là cả dashboard đổi theo — không còn màu hard-code.
+   body.perf-lite tự giảm glow/lift vì token đã được ghi đè sẵn.
+   ============================================================ */
+
+/* ───────── 0) TOKEN CỤC BỘ + cầu nối biến cũ (cho modal Habit) ───────── */
+:root body .dsh {
+  --d-card: var(--cfk-card);        --d-elev: var(--cfk-elevated);
+  --d-line: var(--cfk-line);        --d-line-2: var(--cfk-line-strong);
+  --d-text: var(--cfk-text);        --d-text-2: var(--cfk-text-2);   --d-muted: var(--cfk-muted);
+  --d-accent: var(--cfk-accent);    --d-accent-2: var(--cfk-accent-2); --d-on-accent: var(--cfk-on-accent);
+  --d-ok: var(--cfk-income);        --d-info: var(--cfk-info);       --d-warn: var(--cfk-warn);
+  --d-num: var(--cfk-font-num);
+  --d-bank: var(--cfk-gold);
+  --d-r-sm: var(--cfk-r-sm);        --d-r-lg: var(--cfk-r-lg);       --d-r-pill: var(--cfk-r-pill);
+
+  /* thang khoảng cách 4 / 8 / 12 / 16 / 24 / 32 / 48 */
+  --d-1: 4px; --d-2: 8px; --d-3: 12px; --d-4: 16px; --d-5: 24px; --d-6: 32px; --d-7: 48px;
+
+  /* biến toàn cục cũ → token skin (để modal .glass, input, toggle… đúng theme) */
+  --bg-deep: var(--cfk-bg);  --bg-surface: var(--cfk-surface);  --bg-elevated: var(--cfk-elevated);
+  --glass-bg: var(--cfk-glass);  --glass-border: var(--cfk-line);  --glass-highlight: var(--cfk-hi);
+  --accent-primary: var(--cfk-accent);  --accent-secondary: var(--cfk-accent-2);
+  --text-primary: var(--cfk-text);  --text-secondary: var(--cfk-text-2);  --text-muted: var(--cfk-muted);
+  --success: var(--cfk-income);  --danger: var(--cfk-expense);
+  --font-mono: var(--cfk-font-num);
+  --radius-sm: var(--cfk-r-sm);  --radius-lg: var(--cfk-r-lg);  --radius-xl: var(--cfk-r-xl);  --radius-full: var(--cfk-r-pill);
+  --accent-glow: none;  --shadow-glow: none;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--d-6);
+  width: 100%;
+  max-width: 1180px;
+  color: var(--d-text);
+  color-scheme: var(--cfk-scheme);
+}
+:root[data-theme="solar-zen"] body .dsh,
+:root[data-theme="lofi-twilight"] body .dsh,
+body.theme-optimized .dsh { --d-bank: var(--cfk-info); }
+.dsh [hidden] { display: none !important; }
+.dsh h1, .dsh h2, .dsh h3, .dsh p, .dsh dl, .dsh dd { margin: 0; }
+.dsh button { font-family: inherit; }
+.dsh :focus-visible { outline: 2px solid var(--d-accent); outline-offset: 2px; }
+
+/* ───────── 1) BỀ MẶT — hình khối riêng từng theme ───────── */
+.dsh .dsh-surface {
+  position: relative;
+  background-color: var(--d-card);
+  background-image: var(--cfk-deco);
+  background-size: var(--cfk-deco-size);
+  background-position: var(--cfk-deco-pos);
+  background-repeat: no-repeat;
+  border: 1px solid var(--d-line);
+  border-radius: var(--d-r-lg);
+  box-shadow: var(--cfk-card-shadow);
+}
+
+/* ───────── 2) NÚT ───────── */
+.dsh .dsh-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--d-2);
+  min-height: 40px; padding: 0 var(--d-4);
+  font: 600 0.875rem/1 var(--font-body);
+  border: 1px solid transparent; border-radius: var(--d-r-sm);
+  cursor: pointer;
+  transition: background-color .15s, border-color .15s, box-shadow .15s, transform .15s;
+}
+.dsh .dsh-btn svg { flex: none; }
+.dsh .dsh-btn--primary { background: var(--d-accent); color: var(--d-on-accent); box-shadow: var(--cfk-btn-shadow); }
+.dsh .dsh-btn--primary:hover { box-shadow: var(--cfk-btn-shadow-h); transform: var(--cfk-lift); }
+.dsh .dsh-btn--ghost { background: transparent; color: var(--d-accent); border-color: var(--d-line-2); }
+.dsh .dsh-btn--ghost:hover { background: var(--cfk-hi); border-color: var(--d-accent); }
+
+/* ───────── 3) TIÊU ĐỀ KHU VỰC ───────── */
+.dsh .dsh-section-title {
+  display: flex; align-items: center; gap: var(--d-3);
+  margin-bottom: var(--d-3);
+  font-size: 0.8125rem; font-weight: 600; color: var(--d-text-2);
+  text-transform: var(--cfk-label-tt); letter-spacing: var(--cfk-label-ls);
+}
+.dsh .dsh-section-title::before { content: var(--cfk-label-pre); margin-right: calc(var(--d-1) * -1); }
+.dsh .dsh-section-title::after { content: ''; flex: 1; height: 1px; background: var(--d-line); }
+
+/* ───────── 4) HERO: hôm nay + thói quen ───────── */
+.dsh .dsh-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: var(--d-5);
+  align-items: stretch;
+}
+.dsh .dsh-today {
+  display: flex; flex-direction: column; gap: var(--d-1);
+  padding: var(--d-6);
+}
+.dsh .dsh-greeting { font-size: 0.9375rem; color: var(--d-text-2); }
+.dsh .dsh-clock {
+  font-family: var(--d-num);
+  font-size: clamp(3.25rem, 7vw, 5rem);
+  font-weight: 700; line-height: 1;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: var(--cfk-text-glow);
+  margin: var(--d-2) 0 var(--d-1);
+}
+.dsh .dsh-date { font-size: 0.9375rem; color: var(--d-text-2); }
+.dsh .dsh-next {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  gap: var(--d-3) var(--d-4);
+  margin-top: auto; padding-top: var(--d-4);
+  border-top: 1px solid var(--d-line);
+}
+.dsh .dsh-today > .dsh-next { margin-top: var(--d-5); }
+.dsh .dsh-next-text { font-size: 0.9375rem; font-weight: 500; line-height: 1.4; min-width: 0; }
+
+/* ───────── 5) BẢNG THÓI QUEN ───────── */
+.dsh .dsh-habits { display: flex; flex-direction: column; gap: var(--d-3); padding: var(--d-5); min-width: 0; }
+.dsh .dsh-hb-head { display: flex; align-items: center; gap: var(--d-3); }
+.dsh .dsh-hb-title { font-size: 1rem; font-weight: 600; }
+.dsh .dsh-hb-count { margin-left: auto; font-size: 0.8125rem; color: var(--d-text-2); font-variant-numeric: tabular-nums; }
+.dsh .dsh-hb-gear {
+  flex: none; width: 32px; height: 32px; display: grid; place-items: center; padding: 0;
+  color: var(--d-muted); background: transparent;
+  border: 1px solid transparent; border-radius: var(--d-r-sm); cursor: pointer;
+  transition: color .15s, border-color .15s, background-color .15s;
+}
+.dsh .dsh-hb-count + .dsh-hb-gear { margin-left: 0; }
+.dsh .dsh-hb-title + .dsh-hb-gear { margin-left: auto; }
+.dsh .dsh-hb-gear:hover { color: var(--d-accent); border-color: var(--d-line); background: var(--cfk-hi); }
+
+.dsh .dsh-bar {
+  height: 6px; overflow: hidden;
+  border-radius: var(--d-r-pill);
+  background: color-mix(in srgb, var(--d-text) 10%, transparent);
+}
+.dsh .dsh-bar > span {
+  display: block; height: 100%; width: 0;
+  background: var(--tone, var(--d-accent));
+  border-radius: inherit;
+  transition: width .4s ease;
+}
+
+.dsh .dsh-hb-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--d-2); }
+.dsh .dsh-hb-item {
+  display: flex; align-items: center; gap: var(--d-3);
+  min-height: 48px; padding: var(--d-2) var(--d-4);
+  background: color-mix(in srgb, var(--d-elev) 70%, var(--d-card));
+  border: 1px solid var(--d-line);
+  border-radius: var(--d-r-sm);
+  transition: border-color .15s;
+}
+.dsh .dsh-hb-item:hover { border-color: var(--d-line-2); }
+.dsh .dsh-hb-name { flex: 1; min-width: 0; font-size: 0.9375rem; overflow-wrap: anywhere; }
+.dsh .dsh-hb-item.is-done .dsh-hb-name { color: var(--d-muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+
+.dsh .dsh-check {
+  position: relative; flex: none; width: 24px; height: 24px;
+  display: grid; place-items: center; padding: 0;
+  color: var(--d-on-accent); background: transparent;
+  border: 2px solid var(--d-line-2); border-radius: var(--d-r-pill);
+  cursor: pointer;
+  transition: background-color .15s, border-color .15s;
+}
+.dsh .dsh-check::after { content: ''; position: absolute; inset: -10px; } /* vùng chạm 44px */
+.dsh .dsh-check svg { opacity: 0; transition: opacity .15s; }
+.dsh .dsh-check:hover { border-color: var(--d-accent); }
+.dsh .dsh-check.is-on { background: var(--d-accent); border-color: var(--d-accent); }
+.dsh .dsh-check.is-on svg { opacity: 1; }
+
+.dsh .dsh-hb-reward, .dsh .dsh-hb-dl {
+  flex: none; display: inline-flex; align-items: center; gap: 6px;
+  max-width: 40%; padding: 2px var(--d-2);
+  font-size: 0.75rem; line-height: 1.5;
+  border: 1px solid var(--d-line); border-radius: var(--d-r-pill);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dsh .dsh-hb-reward { color: var(--cfk-gold); border-color: color-mix(in srgb, var(--cfk-gold) 40%, var(--d-line)); }
+.dsh .dsh-hb-dl { color: var(--d-text-2); font-variant-numeric: tabular-nums; }
+.dsh .dsh-hb-dl.is-urgent { color: var(--d-warn); border-color: color-mix(in srgb, var(--d-warn) 50%, var(--d-line)); }
+.dsh .dsh-hb-dl.is-done { color: var(--d-ok); border-color: color-mix(in srgb, var(--d-ok) 45%, var(--d-line)); }
+
+.dsh .dsh-hb-empty { display: flex; flex-direction: column; align-items: flex-start; gap: var(--d-3); padding: var(--d-2) 0; }
+
+/* chế độ "đang theo dõi" một thói quen */
+.dsh .dsh-hb-meta { display: flex; flex-wrap: wrap; gap: var(--d-2); max-width: 100%; }
+.dsh .dsh-hb-meta > * { max-width: 100%; }
+.dsh .dsh-hb-focus { display: flex; flex-direction: column; align-items: flex-start; gap: var(--d-3); padding: var(--d-2) 0; }
+.dsh .dsh-hb-focus-label { font-size: 0.8125rem; color: var(--d-text-2); text-transform: var(--cfk-label-tt); letter-spacing: var(--cfk-label-ls); }
+.dsh .dsh-hb-focus-row { display: flex; align-items: center; gap: var(--d-4); min-width: 0; max-width: 100%; }
+.dsh .dsh-hb-focus-title { font-size: 1.5rem; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.dsh .dsh-hb-focus-row.is-done .dsh-hb-focus-title { color: var(--d-muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+
+/* hiệu ứng khi hoàn thành bằng hết giờ (JS không thêm class này ở Optimize / perf-lite) */
+.dsh .dsh-habits.is-pulse { animation: dshPulse 1.2s ease-out 2; }
+@keyframes dshPulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--d-accent) 55%, transparent); }
+  100% { box-shadow: 0 0 0 14px transparent; }
+}
+
+/* ───────── 6) LƯỚI THẺ ───────── */
+.dsh .dsh-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--d-5); }
+
+.dsh .dsh-card { display: flex; flex-direction: column; gap: var(--d-4); padding: var(--d-5); min-width: 0; }
+.dsh .dsh-card--focus { --tone: var(--d-accent); }
+.dsh .dsh-card--cards { --tone: var(--d-accent-2); }
+.dsh .dsh-card--quiz  { --tone: var(--d-ok); }
+
+.dsh .dsh-card-head { display: flex; align-items: center; gap: var(--d-3); }
+.dsh .dsh-icon {
+  flex: none; width: 40px; height: 40px; display: grid; place-items: center;
+  color: var(--tone, var(--d-accent));
+  background: color-mix(in srgb, var(--tone, var(--d-accent)) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tone, var(--d-accent)) 32%, transparent);
+  border-radius: var(--d-r-sm);
+}
+.dsh .dsh-card-title { font-size: 1rem; font-weight: 600; line-height: 1.25; }
+.dsh .dsh-card-sub { font-size: 0.75rem; color: var(--d-muted); }
+
+.dsh .dsh-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: var(--d-4); }
+.dsh .dsh-metric { display: flex; flex-direction: column-reverse; justify-content: flex-end; gap: var(--d-1); min-width: 0; }
+.dsh .dsh-metric + .dsh-metric { padding-left: var(--d-4); border-left: 1px solid var(--d-line); }
+.dsh .dsh-metric dd {
+  font-family: var(--d-num); font-size: 2rem; font-weight: 700; line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.dsh .dsh-metric dd.is-due { color: var(--tone); text-shadow: var(--cfk-text-glow); }
+.dsh .dsh-metric dt {
+  font-size: 0.75rem; color: var(--d-muted);
+  text-transform: var(--cfk-label-tt); letter-spacing: var(--cfk-label-ls);
+}
+.dsh .dsh-metric dt::before { content: var(--cfk-label-pre); }
+
+.dsh .dsh-meter-note { margin-top: var(--d-2); font-size: 0.75rem; color: var(--d-muted); font-variant-numeric: tabular-nums; }
+.dsh .dsh-empty { font-size: 0.8125rem; line-height: 1.5; color: var(--d-muted); }
+.dsh .dsh-card-foot { margin-top: auto; padding-top: var(--d-4); border-top: 1px solid var(--d-line); }
+.dsh .dsh-card-foot .dsh-btn { width: 100%; }
+
+/* ───────── 7) TÀI CHÍNH ───────── */
+.dsh .dsh-money {
+  display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--d-6);
+  padding: var(--d-6); cursor: pointer;
+  transition: border-color .15s, transform .15s, box-shadow .15s;
+}
+.dsh .dsh-money:hover { border-color: var(--d-line-2); transform: var(--cfk-lift); }
+.dsh .dsh-money-main { display: flex; flex-direction: column; align-items: flex-start; gap: var(--d-2); }
+.dsh .dsh-money-label { font-size: 0.875rem; color: var(--d-text-2); }
+.dsh .dsh-money-total {
+  font-family: var(--d-num); font-size: clamp(2rem, 4.5vw, 2.875rem); font-weight: 700; line-height: 1.1;
+  font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+  text-shadow: var(--cfk-text-glow);
+}
+.dsh .dsh-money-main .dsh-btn { margin-top: var(--d-4); }
+.dsh .dsh-money-side { display: flex; flex-direction: column; justify-content: center; gap: var(--d-4); min-width: 0; }
+
+.dsh .dsh-mix { display: flex; gap: 2px; height: 10px; overflow: hidden; border-radius: var(--d-r-pill); background: color-mix(in srgb, var(--d-text) 8%, transparent); }
+.dsh .dsh-mix-seg { flex: 0 1 0; min-width: 0; }
+.dsh .dsh-mix-seg--cash { background: var(--d-accent); }
+.dsh .dsh-mix-seg--bank { background: var(--d-bank); }
+.dsh .dsh-mix-seg--save { background: var(--d-accent-2); }
+
+.dsh .dsh-acct { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.dsh .dsh-acct li { display: flex; align-items: center; gap: var(--d-3); padding: var(--d-3) 0; border-top: 1px solid var(--d-line); }
+.dsh .dsh-acct li:first-child { border-top: 0; padding-top: 0; }
+.dsh .dsh-acct li:last-child { padding-bottom: 0; }
+.dsh .dsh-swatch { flex: none; width: 10px; height: 10px; border-radius: var(--d-r-pill); }
+.dsh .dsh-swatch--cash { background: var(--d-accent); }
+.dsh .dsh-swatch--bank { background: var(--d-bank); }
+.dsh .dsh-swatch--save { background: var(--d-accent-2); }
+.dsh .dsh-acct-name { flex: 1; font-size: 0.9375rem; color: var(--d-text-2); }
+.dsh .dsh-acct-val { font-family: var(--d-num); font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ───────── 8) CHÂN TRANG ───────── */
+.dsh .dsh-foot {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--d-3) var(--d-5);
+  padding-top: var(--d-4); border-top: 1px solid var(--d-line);
+  font-size: 0.8125rem; color: var(--d-muted);
+}
+.dsh .dsh-foot b { font-weight: 600; color: var(--d-text-2); }
+.dsh .dsh-foot-links { display: flex; flex-wrap: wrap; gap: var(--d-2) var(--d-5); }
+.dsh .dsh-foot-link { display: inline-flex; align-items: center; gap: 6px; color: var(--d-text-2); transition: color .15s; }
+.dsh a.dsh-foot-link:hover { color: var(--d-accent); }
+
+/* ───────── 9) MODAL HABIT — chỉnh phần nhập liệu theo token ───────── */
+.dsh .dsh-dl-row { display: flex; flex-direction: column; gap: var(--d-1); margin-bottom: var(--d-3); }
+.dsh .dsh-dl-name { font-size: 0.8125rem; color: var(--d-text); }
+.dsh .dsh-dl-fields { display: flex; flex-wrap: wrap; gap: var(--d-2); }
+.dsh .dsh-input {
+  flex: 1 1 160px; min-width: 0; padding: 6px var(--d-2);
+  font: inherit; font-size: 0.8125rem;
+  color: var(--d-text); background: var(--d-elev);
+  border: 1px solid var(--d-line); border-radius: var(--d-r-sm);
+}
+.dsh .dsh-input:focus-visible { border-color: var(--d-accent); outline-offset: 0; }
+
+/* ───────── 10) RESPONSIVE ───────── */
+@media (max-width: 900px) {
+  .dsh .dsh-hero { grid-template-columns: minmax(0, 1fr); }
+  .dsh .dsh-money { grid-template-columns: minmax(0, 1fr); gap: var(--d-5); }
+}
+@media (max-width: 560px) {
+  .dsh { gap: var(--d-5); }
+  .dsh .dsh-today, .dsh .dsh-money { padding: var(--d-5); }
+  .dsh .dsh-habits, .dsh .dsh-card { padding: var(--d-4); }
+  .dsh .dsh-grid { grid-template-columns: minmax(0, 1fr); gap: var(--d-4); }
+  .dsh .dsh-hb-item { flex-wrap: wrap; }
+  .dsh .dsh-hb-reward, .dsh .dsh-hb-dl { max-width: 100%; }
+}
+
+/* ───────── 11) GIẢM CHUYỂN ĐỘNG ───────── */
+@media (prefers-reduced-motion: reduce) {
+  .dsh *, .dsh *::before, .dsh *::after { transition: none !important; animation: none !important; }
+}
+body.theme-optimized .dsh *, body.perf-lite .dsh * { animation: none !important; }
