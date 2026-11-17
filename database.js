@@ -26,6 +26,10 @@ const HubDB = (function () {
   let _user      = null;
   let _ready     = false;
   let _initError = null;
+  const _authListeners = [];      // onAuthChange subscribers
+  let _authFired = false;
+  const _tmSubs = [];             // live Time Management subscribers
+  let _tmWatch = null;            // { uid, unsub } — Firestore listener of the signed-in account
 
   // ── Global debounce utility (shared by all modules) ──
   window.HubDebounce = (function () {
@@ -78,14 +82,50 @@ const HubDB = (function () {
     // Track auth state — resolve a pending promise on first fire
     _auth._authReady = new Promise(function (resolve) {
       _auth.onAuthStateChanged(function (user) {
+        var prevUid = _user ? _user.uid : null;
         _user = user;
         _ready = true;
         resolve();
+        _notifyAuth(prevUid);
       });
     });
   } catch (err) {
     _initError = err;
     console.warn('[HubDB] Firebase init failed, falling back to localStorage:', err.message);
+  }
+
+  // ── Auth change notifications ──
+
+  function _notifyAuth(prevUid) {
+    var uid = _user ? _user.uid : null;
+    var initial = !_authFired;
+    _authFired = true;
+    _tmRewatch();
+    _authListeners.slice().forEach(function (fn) {
+      try { fn({ uid: uid, prevUid: prevUid, initial: initial, loggedIn: !!uid }); }
+      catch (e) { console.warn('[HubDB] auth listener failed:', e); }
+    });
+  }
+
+  /**
+   * Subscribe to sign-in / sign-out / account switches.
+   * fn({ uid, prevUid, initial, loggedIn }) — uid is null when signed out.
+   * If auth has already settled, fn is called once (async) with the current state.
+   * @returns {Function} unsubscribe
+   */
+  function onAuthChange(fn) {
+    if (typeof fn !== 'function') return function () {};
+    _authListeners.push(fn);
+    if (_ready) {
+      setTimeout(function () {
+        var uid = _user ? _user.uid : null;
+        try { fn({ uid: uid, prevUid: uid, initial: true, loggedIn: !!uid }); } catch (_) {}
+      }, 0);
+    }
+    return function () {
+      var i = _authListeners.indexOf(fn);
+      if (i > -1) _authListeners.splice(i, 1);
+    };
   }
 
   // ── Helpers ──
@@ -1626,87 +1666,232 @@ const HubDB = (function () {
     return local || { daily: {} };
   }
 
-  // ── Time Management ──
+  // ── Time Management (per-account sync) ──
+  //
+  // One Firestore doc per account:  users/{uid}/timeman_store/data  →  { payload }
+  // payload (v2) = { v, timeBlocks, customTags, templates, audio, activeTagId, settingsAt,
+  //                  tombs: { blocks, tags, templates }, updatedAt }
+  //
+  // What keeps accounts apart and devices in step:
+  //  • every local copy lives under  hub_tm_data:<uid>  (or :guest) — never one key shared by all accounts
+  //  • a save only ever reaches the account that OWNS the data (opts.uid guard), even if the user
+  //    switched account while a debounced save was still pending
+  //  • cloud writes run in a transaction that MERGES with what is already stored: per item the newest
+  //    updatedAt wins and a deletion is a tombstone, so a stale tab / device can no longer overwrite newer data
+  //  • an onSnapshot listener hands remote changes to the module while it is open
 
-  const TM_LOCAL_KEY = 'hub_tm_data';
+  const TM_LOCAL_KEY = 'hub_tm_data';            // legacy key shared by every account — read-only, one-time migration
+  const TM_TOMB_TTL  = 90 * 24 * 3600 * 1000;    // deletion marks are kept 90 days
 
-  function _tmDocRef() {
-    if (!_isOnline()) return null;
-    return _db.collection('users').doc(_user.uid).collection('timeman_store').doc('data');
+  function _tmKey(uid) { return TM_LOCAL_KEY + ':' + (uid || 'guest'); }
+  function _tmReadKey(key) {
+    try { var raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; } catch (_) { return null; }
+  }
+  function _tmReadLocal(uid) { return _tmReadKey(_tmKey(uid)); }
+  function _tmWriteLocal(uid, data) {
+    try { localStorage.setItem(_tmKey(uid), JSON.stringify(data)); } catch (_) {}
+  }
+  function _tmDocRefFor(uid) {
+    return _db.collection('users').doc(uid).collection('timeman_store').doc('data');
+  }
+
+  function _tmBlocksOf(p) {
+    if (!p) return [];
+    return Array.isArray(p.timeBlocks) ? p.timeBlocks : (Array.isArray(p.blocks) ? p.blocks : []);
+  }
+  function _tmTs(o) { return (o && Number(o.updatedAt)) || 0; }
+
+  /** Union of two id-keyed lists. Newest updatedAt wins (a wins ties); a tombstone newer than the item removes it. */
+  function _tmMergeList(la, lb, ta, tb) {
+    var now = Date.now();
+    var tombs = {};
+    [ta, tb].forEach(function (m) {
+      Object.keys(m || {}).forEach(function (id) {
+        var t = Number(m[id]) || 0;
+        if (t > 0 && now - t <= TM_TOMB_TTL) tombs[id] = Math.max(tombs[id] || 0, t);
+      });
+    });
+    var byId = {}, order = [];
+    [la, lb].forEach(function (list) {
+      (Array.isArray(list) ? list : []).forEach(function (it) {
+        if (!it || it.id === undefined || it.id === null) return;
+        var id = String(it.id), cur = byId[id];
+        if (!cur) { byId[id] = it; order.push(id); }
+        else if (_tmTs(it) > _tmTs(cur)) byId[id] = it;
+      });
+    });
+    var out = [];
+    order.forEach(function (id) {
+      if (tombs[id] && tombs[id] >= _tmTs(byId[id])) return;   // deleted after its last edit
+      out.push(byId[id]);
+    });
+    return { list: out, tombs: tombs };
   }
 
   /**
-   * Save Time Management data (blocks + custom tags).
-   * Firestore-first, localStorage fallback.
-   * @param {Object} data — { blocks: [], customTags: [] }
+   * Merge two Time Management payloads (either may be null / a legacy v1 payload).
+   * `a` wins ties, so call it as merge(newer-or-local, other).
    */
-  async function saveTimeManagementData(data) {
-    await _ensureReady();
+  function mergeTimeManagement(a, b) {
+    a = a || {}; b = b || {};
+    var ta = a.tombs || {}, tb = b.tombs || {};
+    var blocks = _tmMergeList(_tmBlocksOf(a), _tmBlocksOf(b), ta.blocks, tb.blocks);
+    var tags   = _tmMergeList(a.customTags, b.customTags, ta.tags, tb.tags);
+    var tpls   = _tmMergeList(a.templates, b.templates, ta.templates, tb.templates);
+    var sa = Number(a.settingsAt) || 0, sb = Number(b.settingsAt) || 0;
+    var win = sb > sa ? b : a, other = win === a ? b : a;
+    var out = {
+      v: 2,
+      timeBlocks: blocks.list,
+      customTags: tags.list,
+      templates: tpls.list,
+      tombs: { blocks: blocks.tombs, tags: tags.tombs, templates: tpls.tombs },
+      settingsAt: Math.max(sa, sb),
+      updatedAt: Math.max(Number(a.updatedAt) || 0, Number(b.updatedAt) || 0)
+    };
+    var at = win.activeTagId !== undefined ? win.activeTagId : other.activeTagId;
+    if (at !== undefined) out.activeTagId = at;
+    var au = win.audio !== undefined ? win.audio : other.audio;
+    if (au !== undefined) out.audio = au;
+    return out;
+  }
 
-    if (_isOnline()) {
-      try {
-        await Promise.race([
-          _tmDocRef()
-            .set({ payload: data }, { merge: true })
-            .catch(function (err) {
-              console.error('[HubDB] TimeManagement write failed:', err);
-              throw err;
-            }),
-          _timeout(2500)
-        ]);
-        try { localStorage.setItem(TM_LOCAL_KEY, JSON.stringify(data)); } catch (_) {}
-        return;
-      } catch (err) {
-        console.error('[HubDB] TimeManagement save failed:', err.message || err);
-        try { localStorage.setItem(TM_LOCAL_KEY, JSON.stringify(data)); } catch (_) {}
-        return;
-      }
-    }
-
-    try { localStorage.setItem(TM_LOCAL_KEY, JSON.stringify(data)); } catch (_) {}
+  /** A signed-in account never silently inherits what was made while signed out / by an older build. */
+  function _tmFindClaimable(uid, current) {
+    try { if (localStorage.getItem('hub_tm_claim:' + uid)) return null; } catch (_) {}
+    var src = mergeTimeManagement(_tmReadLocal(null), _tmReadKey(TM_LOCAL_KEY));
+    var have = {};
+    _tmBlocksOf(current).forEach(function (b) { if (b) have[b.id] = true; });
+    var gone = (current && current.tombs && current.tombs.blocks) || {};
+    var extra = _tmBlocksOf(src).filter(function (b) { return b && b.id !== undefined && !have[b.id] && !gone[b.id]; });
+    return extra.length ? { payload: src, count: extra.length } : null;
   }
 
   /**
-   * Load Time Management data.
-   * Cloud first, localStorage fallback.
-   * @returns {Object|null} — { blocks: [], customTags: [] }
+   * Call once the user has answered the "import local data?" question.
+   * imported=true moves the signed-out / legacy copy away so it cannot be imported into a second account.
    */
-  async function loadTimeManagementData() {
-    if (navigator.onLine === false) {
-      try {
-        var rawLocal = localStorage.getItem(TM_LOCAL_KEY);
-        if (rawLocal) return JSON.parse(rawLocal);
-      } catch (_) {}
-      return null;
+  function claimTimeManagementLocal(uid, imported) {
+    try { localStorage.setItem('hub_tm_claim:' + uid, '1'); } catch (_) {}
+    if (imported) {
+      try { localStorage.removeItem(_tmKey(null)); localStorage.removeItem(TM_LOCAL_KEY); } catch (_) {}
     }
+  }
 
+  /**
+   * Load the Time Management state of whoever is signed in right now.
+   * @returns {Promise<{uid:string|null, payload:Object|null, source:string, cloudOk:boolean,
+   *                    cloudExists:boolean, dirty:boolean, claimable:Object|null}>}
+   *   dirty = local-only edits were merged in and should be pushed to the cloud.
+   */
+  async function loadTimeManagementState() {
     await _ensureReady();
+    var uid = _user ? _user.uid : null;
+    var local = _tmReadLocal(uid);
+    if (!uid && !local) local = _tmReadKey(TM_LOCAL_KEY);       // data of a signed-out user from before the per-account keys
+    var st = { uid: uid, payload: local, source: local ? 'local' : 'none', cloudOk: false, cloudExists: false, dirty: false, claimable: null };
 
-    if (_isOnline()) {
+    if (uid && _isOnline()) {
       try {
-        var doc = await Promise.race([
-          _tmDocRef().get(),
-          _timeout(2500)
-        ]);
-        if (doc && doc.exists) {
-          var cloudData = doc.data().payload;
-          if (cloudData && Array.isArray(cloudData.blocks)) {
-            try { localStorage.setItem(TM_LOCAL_KEY, JSON.stringify(cloudData)); } catch (_) {}
-            return cloudData;
-          }
-          return null;
+        var doc = await Promise.race([_tmDocRefFor(uid).get(), _timeout(3000)]);
+        st.cloudOk = true;
+        var cloud = doc && doc.exists ? doc.data().payload : null;
+        if (cloud && typeof cloud === 'object') {
+          st.cloudExists = true;
+          st.payload = mergeTimeManagement(cloud, local);          // cloud wins ties; offline edits survive
+          st.source = 'cloud';
+          st.dirty = !!local && JSON.stringify(st.payload) !== JSON.stringify(mergeTimeManagement(cloud, null));
+        } else if (local) {
+          st.dirty = true;                                         // this account's own offline copy never reached the cloud
         }
-        return null;
       } catch (err) {
-        console.warn('[HubDB] TimeManagement load failed, trying localStorage:', err.message);
+        console.warn('[HubDB] TimeManagement load failed, using this account\'s local copy:', err.message || err);
       }
     }
+    if (uid) st.claimable = _tmFindClaimable(uid, st.payload);
+    if (st.payload) _tmWriteLocal(uid, st.payload);
+    return st;
+  }
 
+  /** Backwards-compatible: just the payload. */
+  async function loadTimeManagementData() {
+    var st = await loadTimeManagementState();
+    return st.payload || null;
+  }
+
+  /**
+   * Save Time Management data.
+   * @param {Object} data
+   * @param {{uid?: string|null}} [opts] uid = the account that owns `data`. If another account is signed in by the
+   *        time the save runs, the data is kept locally for its owner and NOT written to the other account's cloud.
+   * @returns {Promise<{synced:boolean}>}
+   */
+  async function saveTimeManagementData(data, opts) {
+    opts = opts || {};
+    var owner = opts.uid !== undefined ? opts.uid : (_user ? _user.uid : null);
+    _tmWriteLocal(owner, data);                  // synchronous on purpose: survives pagehide
+    await _ensureReady();
+    var uid = _user ? _user.uid : null;
+    if (!uid || uid !== owner || !_isOnline()) return { synced: false };
     try {
-      var raw = localStorage.getItem(TM_LOCAL_KEY);
-      if (raw) return JSON.parse(raw);
-    } catch (_) {}
-    return null;
+      var ref = _tmDocRefFor(uid);
+      await Promise.race([
+        _db.runTransaction(function (tx) {
+          return tx.get(ref).then(function (snap) {
+            var cloud = snap.exists ? snap.data().payload : null;
+            var merged = mergeTimeManagement(data, cloud);       // what we just edited wins ties
+            merged.updatedAt = Date.now();
+            tx.set(ref, { payload: merged });                    // full replace: no deep-merge resurrecting deleted keys
+          });
+        }),
+        _timeout(8000)
+      ]);
+      return { synced: true };
+    } catch (err) {
+      console.error('[HubDB] TimeManagement save failed — kept locally, will merge on next save/load:', err.message || err);
+      return { synced: false };
+    }
+  }
+
+  function _tmStopWatch() {
+    if (_tmWatch && _tmWatch.unsub) { try { _tmWatch.unsub(); } catch (_) {} }
+    _tmWatch = null;
+  }
+
+  /** (Re)attach the live listener to the account that is signed in now. */
+  function _tmRewatch() {
+    var uid = _user ? _user.uid : null;
+    if (_tmWatch && _tmWatch.uid === uid) return;
+    _tmStopWatch();
+    if (!uid || !_tmSubs.length || !_db) return;
+    var unsub = _tmDocRefFor(uid).onSnapshot(function (snap) {
+      if (!snap.exists || snap.metadata.hasPendingWrites) return;
+      var p = snap.data().payload;
+      if (!p || typeof p !== 'object') return;
+      _tmSubs.slice().forEach(function (fn) {
+        try { fn(uid, p); } catch (e) { console.warn('[HubDB] TimeManagement subscriber failed:', e); }
+      });
+    }, function (err) {
+      console.warn('[HubDB] TimeManagement listener stopped:', err.message || err);
+      _tmWatch = null;
+    });
+    _tmWatch = { uid: uid, unsub: unsub };
+  }
+
+  /**
+   * Live updates from other devices of the signed-in account. fn(uid, payload).
+   * Follows account switches automatically.
+   * @returns {Function} unsubscribe
+   */
+  function subscribeTimeManagement(fn) {
+    if (typeof fn !== 'function') return function () {};
+    _tmSubs.push(fn);
+    _tmRewatch();
+    return function () {
+      var i = _tmSubs.indexOf(fn);
+      if (i > -1) _tmSubs.splice(i, 1);
+      if (!_tmSubs.length) _tmStopWatch();
+    };
   }
 
   // ── Expose public API ──
@@ -1732,6 +1917,11 @@ const HubDB = (function () {
     loadFlashcardStats: loadFlashcardStats,
     saveTimeManagementData: saveTimeManagementData,
     loadTimeManagementData: loadTimeManagementData,
+    loadTimeManagementState: loadTimeManagementState,
+    subscribeTimeManagement: subscribeTimeManagement,
+    mergeTimeManagement: mergeTimeManagement,
+    claimTimeManagementLocal: claimTimeManagementLocal,
+    onAuthChange: onAuthChange,
     loginWithGoogle: loginWithGoogle,
     getAuthStatus: getAuthStatus,
     waitForReady: _ensureReady,
