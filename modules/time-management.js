@@ -1285,8 +1285,11 @@ const timeManagementModule = (function () {
           chips += '<span class="hub-tm-month-chip" style="' + _tagStyle(tag) + '">' + _esc(b.startTime) + ' ' + _esc(b.title || tag.label) + '</span>';
         });
         list.slice(0, 6).forEach(function (b) { dots += '<span class="hub-tm-month-dot" style="' + _tagStyle(_tagOrFallback(b.tagId)) + '"></span>'; });
-        html += '<div class="hub-tm-month-cell' + (d.getMonth() !== m ? ' is-dim' : '') + (ds === today ? ' is-today' : '') + '" data-date="' + ds + '" data-activate role="button" tabindex="0" aria-label="' + DAY_FULL[d.getDay()] + ' ' + _dateLabel(d) + (list.length ? ', ' + list.length + ' block' + (list.length > 1 ? 's' : '') : '') + '">' +
+        const mins = list.reduce(function (s, b) { return s + Math.max(0, _toMins(b.endTime) - _toMins(b.startTime)); }, 0);
+        const load = Math.min(1, mins / 480).toFixed(2);          // 8h booked = full heat
+        html += '<div class="hub-tm-month-cell' + (d.getMonth() !== m ? ' is-dim' : '') + (ds === today ? ' is-today' : '') + '" style="--tm-load:' + load + '" data-date="' + ds + '" data-activate role="button" tabindex="0" aria-label="' + DAY_FULL[d.getDay()] + ' ' + _dateLabel(d) + (list.length ? ', ' + list.length + ' block' + (list.length > 1 ? 's' : '') : '') + '">' +
                   '<span class="hub-tm-month-num">' + d.getDate() + '</span>' +
+                  (mins ? '<span class="hub-tm-month-total">' + _fmtDur(mins) + '</span>' : '') +
                   '<span class="hub-tm-month-chips">' + chips + (list.length > 3 ? '<span class="hub-tm-month-more">+' + (list.length - 3) + ' more</span>' : '') + '</span>' +
                   '<span class="hub-tm-month-dots">' + dots + '</span></div>';
       }

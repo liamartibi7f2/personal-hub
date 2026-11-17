@@ -2936,3 +2936,415 @@ body.theme-optimized .hub-tm-strip-cur.is-clash { border-color: var(--danger); }
 [data-theme="solar-zen"] .hub-tm-hab-minibtn[aria-pressed="true"] { color: var(--text-primary); }
 body.theme-optimized .hub-tm-hab-minibtn { border-radius: 0; }
 body.theme-optimized .hub-tm-hab-minibtn:hover:not([disabled]) { background: var(--accent-primary); color: #000; }
+
+/* ==========================================================================
+   24. DESIGN SYNC  ·  "one language, four skins"
+   Goal: Day / Week / Month read as ONE system in all 4 themes.
+     • Labels: higher contrast, one typographic rule (token-driven)
+     • "Today": always accent — header bar + wash (Week), ring (Month)
+     • Month: heat tint + total hours per day (see --tm-load, set by JS)
+     • Signature per skin: HUD brackets / paper+serif / stitched / TUI
+   Placed LAST on purpose; selectors carry #time-management so they win
+   over earlier single-class rules without !important.
+   Optimize-safe: state is carried by colour / border / text only.
+   ========================================================================== */
+
+/* ---- 24.1 Tokens (default = Cyberpunk "HUD Radar") ---- */
+#time-management {
+  --tm-label-c: var(--text-secondary);
+  --tm-label-tt: uppercase;
+  --tm-label-ls: 0.1em;
+  --tm-label-fs: 0.66rem;
+  --tm-heat: 16%;                                   /* max tint of a fully-booked day */
+  --tm-today-wash: color-mix(in srgb, var(--accent-primary) 13%, transparent);
+  --tm-today-wash-end: color-mix(in srgb, var(--accent-primary) 3%, transparent);
+}
+[data-theme="solar-zen"] #time-management {
+  --tm-label-tt: none;
+  --tm-label-ls: 0.02em;
+  --tm-label-fs: 0.72rem;
+  --tm-heat: 11%;
+  --tm-today-wash: color-mix(in srgb, var(--accent-primary) 9%, transparent);
+  --tm-today-wash-end: color-mix(in srgb, var(--accent-primary) 2%, transparent);
+}
+[data-theme="lofi-twilight"] #time-management {
+  --tm-label-tt: none;
+  --tm-label-ls: 0.04em;
+  --tm-label-fs: 0.7rem;
+  --tm-heat: 14%;
+}
+body.theme-optimized #time-management {
+  --tm-label-c: var(--text-primary);
+  --tm-heat: 24%;
+  --tm-today-wash: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+  --tm-today-wash-end: transparent;
+}
+
+/* ---- 24.2 Labels (weekday names, hour labels) ---- */
+#time-management .hub-tm-week-head-day,
+#time-management .hub-tm-month-head-cell {
+  color: var(--tm-label-c);
+  font-size: var(--tm-label-fs);
+  font-weight: 700;
+  letter-spacing: var(--tm-label-ls);
+  text-transform: var(--tm-label-tt);
+}
+#time-management .hub-tm-hour-label { color: var(--text-secondary); }
+
+/* ---- 24.3 Week ---- */
+#time-management .hub-tm-week-head-cell {
+  border-top: 2px solid transparent;                /* reserved so "today" never shifts layout */
+}
+#time-management .hub-tm-week-head-date {
+  background: color-mix(in srgb, var(--text-primary) 8%, var(--bg-deep));
+  border: 1px solid var(--tm-line);
+  color: var(--text-primary);
+  font-weight: 800;
+}
+#time-management .hub-tm-week-head-cell.is-today {
+  border-top-color: var(--accent-primary);
+  background: var(--tm-today-wash);
+}
+#time-management .hub-tm-week-head-cell:hover { background: var(--glass-highlight); }
+#time-management .hub-tm-week-head-cell.is-today .hub-tm-week-head-day { color: var(--accent-primary); }
+#time-management .hub-tm-week-head-cell.is-today .hub-tm-week-head-date {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--tm-on-accent);
+}
+#time-management .hub-tm-week-day.is-today {
+  background-color: var(--tm-today-bg);
+  background-image: linear-gradient(180deg, var(--tm-today-wash), var(--tm-today-wash-end) 45%, transparent);
+  border-left-color: var(--tm-accent-line);
+  border-right: 1px solid var(--tm-accent-line);
+}
+
+/* ---- 24.4 Month ---- */
+#time-management .hub-tm-month-cell {
+  position: relative;
+  background-color: color-mix(in srgb, var(--accent-primary) calc(var(--tm-load, 0) * var(--tm-heat)), var(--bg-surface));
+}
+#time-management .hub-tm-month-cell:hover {
+  background-color: color-mix(in srgb, var(--accent-primary) 16%, var(--bg-surface));
+}
+#time-management .hub-tm-month-cell.is-today {
+  border-color: var(--accent-primary);
+  box-shadow: inset 0 0 0 1px var(--accent-primary);
+}
+#time-management .hub-tm-month-cell.is-dim { opacity: 0.5; background-color: transparent; }
+#time-management .hub-tm-month-num { color: var(--text-primary); font-weight: 700; }
+#time-management .hub-tm-month-cell.is-today .hub-tm-month-num { color: var(--tm-on-accent); font-weight: 800; }
+#time-management .hub-tm-month-cell.is-dim .hub-tm-month-num { color: var(--text-muted); }
+
+#time-management .hub-tm-month-total {
+  position: absolute;
+  top: 7px; right: 8px;
+  font: 700 0.62rem/1 var(--tm-font-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+@container tmcell (max-width: 92px) {
+  .hub-tm-month-total { display: none; }            /* narrow cells: dots + heat only */
+}
+
+/* ---- 24.5 Signature per skin ---- */
+/* Cyberpunk + Optimize: HUD corner bracket on hover / focus / today */
+#time-management .hub-tm-month-cell::before {
+  content: "";
+  position: absolute;
+  right: 4px; bottom: 4px;
+  width: 8px; height: 8px;
+  border: 0 solid var(--accent-primary);
+  border-width: 0 2px 2px 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-fast);
+}
+#time-management .hub-tm-month-cell:hover::before,
+#time-management .hub-tm-month-cell:focus-visible::before,
+#time-management .hub-tm-month-cell.is-today::before { opacity: 0.9; }
+
+/* Solar Zen · Daylight Ledger: no brackets, serif numerals, soft ring */
+[data-theme="solar-zen"] #time-management .hub-tm-month-cell::before { display: none; }
+[data-theme="solar-zen"] #time-management .hub-tm-month-num,
+[data-theme="solar-zen"] #time-management .hub-tm-week-head-date { font-family: var(--tm-font-display); }
+[data-theme="solar-zen"] #time-management .hub-tm-month-cell.is-today { box-shadow: 0 2px 8px color-mix(in srgb, var(--accent-primary) 25%, transparent); }
+
+/* Lo-Fi Twilight · Cassette Journal: stitched "today", no brackets */
+[data-theme="lofi-twilight"] #time-management .hub-tm-month-cell::before { display: none; }
+[data-theme="lofi-twilight"] #time-management .hub-tm-month-cell.is-today { border-style: dashed; border-width: 2px; box-shadow: none; }
+[data-theme="lofi-twilight"] #time-management .hub-tm-week-head-cell.is-today { border-top-style: dotted; border-top-width: 3px; }
+
+/* Optimize · TUI: square, static brackets, inverted today */
+body.theme-optimized #time-management .hub-tm-month-cell::before { opacity: 0.9; width: 6px; height: 6px; }
+body.theme-optimized #time-management .hub-tm-month-cell.is-today { box-shadow: none; }
+body.theme-optimized #time-management .hub-tm-week-head-cell.is-today { border-top-width: 3px; }
+
+/* ---- 24.6 Responsive + motion ---- */
+@media (max-width: 768px) {
+  #time-management .hub-tm-week-head-day,
+  #time-management .hub-tm-month-head-cell { font-size: 0.6rem; letter-spacing: 0.04em; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #time-management .hub-tm-month-cell::before { transition: none; }
+}
+
+
+/* ==========================================================================
+   25. SKIN IDENTITY  ·  four themes, four different designs
+     Cyberpunk      "HUD Radar"        — angular, neon, instruments & ruler ticks
+     Solar Zen      "Daylight Ledger"  — paper, serif, ink, red margin, hand-drawn circle
+     Lo-Fi Twilight "Cassette Journal" — dotted notebook, washi tape, stickers, ♪
+     Optimize       "TUI"              — box characters, [brackets], inverted video
+   Mechanism: shared rules read --tm-id-* tokens (set per theme below);
+   structure that only one theme needs lives under that theme's selector.
+   Optimize-safe: no state depends on shadow / filter / gradient / animation.
+   ========================================================================== */
+
+/* ---- 25.1 Identity tokens · default = Cyberpunk "HUD Radar" ---- */
+#time-management {
+  --tm-title-prefix: "// ";
+  --tm-time-ls: 0.08em;
+  --tm-slot-cursor: crosshair;
+  --tm-lock-display: block;                               /* target-lock brackets on today's header */
+  --tm-chip-clip: polygon(7px 0, 100% 0, 100% 100%, 0 100%, 0 7px);
+  --tm-switch-clip: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  --tm-week-clip: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+  --tm-now-bg: linear-gradient(90deg, var(--tm-now), color-mix(in srgb, var(--tm-now) 6%, transparent));
+  --tm-stage-bg:
+    radial-gradient(120% 55% at 50% 0%, color-mix(in srgb, var(--accent-primary) 9%, transparent), transparent 70%),
+    var(--bg-deep);
+  --tm-gutter-ticks:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent-primary) 75%, transparent) 0 1px, transparent 1px) right top / 12px var(--tm-hour-h) repeat-y,
+    linear-gradient(180deg, color-mix(in srgb, var(--accent-primary) 40%, transparent) 0 1px, transparent 1px) right top / 6px var(--tm-slot-h) repeat-y;
+  --tm-sb-w: 6px;
+  --tm-sb-thumb: color-mix(in srgb, var(--accent-primary) 55%, transparent);
+  --tm-sb-r: 0;
+  --tm-select: color-mix(in srgb, var(--accent-primary) 40%, transparent);
+}
+[data-theme="solar-zen"] #time-management {
+  --tm-title-prefix: "";
+  --tm-time-ls: 0;
+  --tm-slot-cursor: cell;
+  --tm-lock-display: none;
+  --tm-chip-clip: none;
+  --tm-switch-clip: none;
+  --tm-week-clip: none;
+  --tm-now-bg: var(--tm-now);
+  --tm-stage-bg: var(--bg-deep);
+  --tm-gutter-ticks: none;
+  --tm-sb-w: 8px;
+  --tm-sb-thumb: color-mix(in srgb, var(--text-muted) 55%, transparent);
+  --tm-sb-r: 999px;
+  --tm-select: color-mix(in srgb, var(--accent-primary) 22%, transparent);
+}
+[data-theme="lofi-twilight"] #time-management {
+  --tm-title-prefix: "";
+  --tm-now-prefix: "♪ ";
+  --tm-time-ls: 0;
+  --tm-slot-cursor: cell;
+  --tm-lock-display: none;
+  --tm-chip-clip: none;
+  --tm-switch-clip: none;
+  --tm-week-clip: none;
+  --tm-now-bg: transparent;                               /* its own dotted line is drawn by the border */
+  --tm-stage-bg:
+    radial-gradient(circle, color-mix(in srgb, var(--text-primary) 12%, transparent) 1px, transparent 1.7px) 0 0 / 20px 20px,
+    var(--bg-deep);
+  --tm-gutter-ticks: none;
+  --tm-sb-w: 10px;
+  --tm-sb-thumb: color-mix(in srgb, var(--accent-primary) 45%, transparent);
+  --tm-sb-r: 999px;
+  --tm-select: color-mix(in srgb, var(--accent-primary) 35%, transparent);
+}
+body.theme-optimized #time-management {
+  --tm-time-ls: 0;
+  --tm-lock-display: none;
+  --tm-chip-clip: none;
+  --tm-switch-clip: none;
+  --tm-week-clip: none;
+  --tm-now-bg: transparent;
+  --tm-stage-bg: var(--bg-deep);
+  --tm-gutter-ticks: none;
+  --tm-sb-w: 10px;
+  --tm-sb-thumb: var(--accent-primary);
+  --tm-sb-r: 0;
+  --tm-select: var(--accent-primary);
+}
+
+/* ---- 25.2 Shared rules that read the tokens ---- */
+#time-management .hub-tm-grid-wrapper { background: var(--tm-stage-bg); }
+#time-management .hub-tm-time-gutter { background: var(--tm-gutter-ticks), var(--bg-deep); }
+#time-management .hub-tm-now-line { background: var(--tm-now-bg); }
+#time-management .hub-tm-now-chip { clip-path: var(--tm-chip-clip); }
+#time-management .hub-tm-view-btn[aria-pressed="true"] { clip-path: var(--tm-switch-clip); }
+#time-management .hub-tm-week-block { clip-path: var(--tm-week-clip); }
+#time-management .hub-tm-block-time,
+#time-management .hub-tm-week-block-time { letter-spacing: var(--tm-time-ls); }
+#time-management .hub-tm-month-chip::before { content: var(--tm-title-prefix); color: var(--tm-c); }
+@media (hover: hover) {
+  #time-management .hub-tm-slot:hover { cursor: var(--tm-slot-cursor); }
+}
+#time-management .hub-tm-grid-scroll::-webkit-scrollbar { width: var(--tm-sb-w); height: var(--tm-sb-w); }
+#time-management .hub-tm-grid-scroll::-webkit-scrollbar-thumb { background: var(--tm-sb-thumb); border-radius: var(--tm-sb-r); }
+#time-management ::selection { background: var(--tm-select); }
+
+/* Cyberpunk "target lock": brackets on today's column header (hidden elsewhere via token) */
+#time-management .hub-tm-week-head-cell { position: relative; }
+#time-management .hub-tm-week-head-cell.is-today::before,
+#time-management .hub-tm-week-head-cell.is-today::after {
+  content: "";
+  display: var(--tm-lock-display);
+  position: absolute;
+  width: 9px; height: 9px;
+  border: 0 solid var(--accent-primary);
+  pointer-events: none;
+}
+#time-management .hub-tm-week-head-cell.is-today::before { top: 4px; left: 5px; border-width: 2px 0 0 2px; }
+#time-management .hub-tm-week-head-cell.is-today::after  { bottom: 4px; right: 5px; border-width: 0 2px 2px 0; }
+
+/* ======================================================================
+   25.3  SOLAR ZEN · "Daylight Ledger"
+   Paper, ink and a notebook's red margin. Serif numerals, hand-drawn today.
+   ====================================================================== */
+/* ruled page + red double margin rule */
+[data-theme="solar-zen"] #time-management .hub-tm-time-gutter { border-right: 3px double color-mix(in srgb, var(--danger) 45%, transparent); }
+[data-theme="solar-zen"] #time-management .hub-tm-main-col { border-left: 0; }
+[data-theme="solar-zen"] #time-management .hub-tm-hour-label {
+  font-family: var(--tm-font-display);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 0.76rem;
+}
+[data-theme="solar-zen"] #time-management .hub-tm-grid-header,
+[data-theme="solar-zen"] #time-management .hub-tm-week-head { border-bottom: 3px double var(--tm-line-strong); }
+/* head labels in small caps, like a printed ledger */
+[data-theme="solar-zen"] #time-management .hub-tm-week-head-day,
+[data-theme="solar-zen"] #time-management .hub-tm-month-head-cell {
+  font-family: var(--tm-font-display);
+  font-variant: small-caps;
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+}
+/* entries: serif titles with a ruled underline, italic times */
+[data-theme="solar-zen"] #time-management .hub-tm-block-title,
+[data-theme="solar-zen"] #time-management .hub-tm-week-block-title { font-family: var(--tm-font-display); }
+[data-theme="solar-zen"] #time-management .hub-tm-block-title { padding-bottom: 2px; border-bottom: 1px solid color-mix(in srgb, var(--tm-c) 35%, transparent); }
+[data-theme="solar-zen"] #time-management .hub-tm-block-time,
+[data-theme="solar-zen"] #time-management .hub-tm-week-block-time { font-style: italic; }
+/* week: plain numerals; today = circled in ink */
+[data-theme="solar-zen"] #time-management .hub-tm-week-head-date {
+  background: transparent;
+  border-color: transparent;
+  min-width: 30px; height: 30px;
+  font-size: 0.95rem;
+}
+[data-theme="solar-zen"] #time-management .hub-tm-week-head-cell.is-today .hub-tm-week-head-date,
+[data-theme="solar-zen"] #time-management .hub-tm-month-cell.is-today .hub-tm-month-num {
+  background: transparent;
+  color: var(--text-primary);
+  border: 2px solid var(--accent-primary);
+  border-radius: 58% 42% 55% 45% / 46% 58% 42% 54%;    /* hand-drawn ellipse */
+  transform: rotate(-5deg);
+}
+/* month: tear-off calendar leaves */
+[data-theme="solar-zen"] #time-management .hub-tm-month-cell { border-top: 3px solid var(--tm-line-strong); }
+[data-theme="solar-zen"] #time-management .hub-tm-month-cell.is-today { border-top-color: var(--accent-primary); }
+[data-theme="solar-zen"] #time-management .hub-tm-month-num { min-width: 28px; height: 28px; font-size: 0.98rem; }
+[data-theme="solar-zen"] #time-management .hub-tm-month-chip { font-family: var(--tm-font-display); font-weight: 600; }
+/* views as underlined tabs */
+[data-theme="solar-zen"] #time-management .hub-tm-view-switcher { background: transparent; border-color: transparent; box-shadow: none; }
+[data-theme="solar-zen"] #time-management .hub-tm-view-btn[aria-pressed="true"] {
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  border-bottom: 2px solid var(--accent-primary);
+  color: var(--text-primary);
+  font-family: var(--tm-font-display);
+  font-weight: 700;
+}
+
+/* ======================================================================
+   25.4  LO-FI TWILIGHT · "Cassette Journal"
+   Dotted notebook, washi tape on every entry, sticker-like days, a ♪ now.
+   ====================================================================== */
+/* washi-tape tab on day blocks (collapses on short blocks) */
+[data-theme="lofi-twilight"] #time-management .hub-tm-block::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 50%;
+  width: 36px; height: 7px;
+  margin-left: -18px;
+  border-radius: 0 0 5px 5px;
+  background: color-mix(in srgb, var(--tm-c) 62%, transparent);
+  transform: rotate(-2deg);
+  pointer-events: none;
+}
+@container tmblock (max-height: 50px) {
+  [data-theme="lofi-twilight"] #time-management .hub-tm-block::after { display: none; }
+}
+[data-theme="lofi-twilight"] #time-management .hub-tm-block-title { letter-spacing: 0.01em; }
+/* week: folder tabs for the day headers, dashed under the bar */
+[data-theme="lofi-twilight"] #time-management .hub-tm-week-head-cell { border-radius: var(--tm-r) var(--tm-r) 0 0; }
+[data-theme="lofi-twilight"] #time-management .hub-tm-week-head,
+[data-theme="lofi-twilight"] #time-management .hub-tm-grid-header { border-bottom: 2px dashed var(--tm-line-strong); }
+[data-theme="lofi-twilight"] #time-management .hub-tm-week-head-date { background: var(--bg-surface); }
+[data-theme="lofi-twilight"] #time-management .hub-tm-week-day.is-today { border-right-style: dashed; }
+/* month: stickers, slightly tilted, straighten + lift on hover */
+[data-theme="lofi-twilight"] #time-management .hub-tm-month-cell {
+  border-radius: var(--tm-r);
+  transition: transform var(--duration-fast), border-color var(--duration-fast), background-color var(--duration-fast);
+}
+[data-theme="lofi-twilight"] #time-management .hub-tm-month-cell:nth-child(odd)  { transform: rotate(-0.5deg); }
+[data-theme="lofi-twilight"] #time-management .hub-tm-month-cell:nth-child(even) { transform: rotate(0.5deg); }
+[data-theme="lofi-twilight"] #time-management .hub-tm-month-cell:hover { transform: rotate(0) translateY(-2px); }
+[data-theme="lofi-twilight"] #time-management .hub-tm-month-cell.is-today::after {
+  content: "✦";
+  position: absolute;
+  right: 8px; bottom: 5px;
+  color: var(--accent-primary);
+  font-size: 0.85rem;
+  line-height: 1;
+}
+[data-theme="lofi-twilight"] #time-management .hub-tm-month-chip {
+  border-left: 0;
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+/* views: stitched pill for the active one */
+[data-theme="lofi-twilight"] #time-management .hub-tm-view-btn[aria-pressed="true"] {
+  outline: 1.5px dashed var(--accent-primary);
+  outline-offset: -4px;
+}
+
+/* ======================================================================
+   25.5  OPTIMIZE · "TUI"
+   Everything is text: [brackets], box rules, inverted video, Σ totals.
+   ====================================================================== */
+body.theme-optimized #time-management .hub-tm-header { border-bottom: 3px double var(--accent-primary); }
+body.theme-optimized #time-management .hub-tm-grid-wrapper { border: 1px solid var(--accent-primary); }
+/* week: today = inverted-video column header */
+body.theme-optimized #time-management .hub-tm-week-head-date { background: transparent; border: 1px solid var(--tm-line-strong); }
+body.theme-optimized #time-management .hub-tm-week-head-cell.is-today { background: var(--accent-primary); border-top-color: var(--accent-primary); }
+body.theme-optimized #time-management .hub-tm-week-head-cell.is-today .hub-tm-week-head-day { color: #000; }
+body.theme-optimized #time-management .hub-tm-week-head-cell.is-today .hub-tm-week-head-date { background: #000; border-color: #000; color: var(--accent-primary); }
+body.theme-optimized #time-management .hub-tm-week-day.is-today { border-left: 1px solid var(--accent-primary); border-right: 1px solid var(--accent-primary); }
+/* times read like log timestamps */
+body.theme-optimized #time-management .hub-tm-block-time::before,
+body.theme-optimized #time-management .hub-tm-week-block-time::before { content: "["; }
+body.theme-optimized #time-management .hub-tm-block-time::after,
+body.theme-optimized #time-management .hub-tm-week-block-time::after { content: "]"; }
+/* month: ruled headings, Σ totals */
+body.theme-optimized #time-management .hub-tm-month-head-cell::before { content: "─ "; }
+body.theme-optimized #time-management .hub-tm-month-head-cell::after { content: " ─"; }
+body.theme-optimized #time-management .hub-tm-month-total::before { content: "Σ "; }
+body.theme-optimized #time-management .hub-tm-month-cell.is-dim { border-style: dotted; }
+/* views: active = [ INVERTED ] */
+body.theme-optimized #time-management .hub-tm-view-btn[aria-pressed="true"] {
+  background: var(--accent-primary);
+  color: #000;
+  box-shadow: none;
+}
+body.theme-optimized #time-management .hub-tm-view-btn[aria-pressed="true"]::before { content: "["; }
+body.theme-optimized #time-management .hub-tm-view-btn[aria-pressed="true"]::after { content: "]"; }
