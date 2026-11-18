@@ -327,6 +327,7 @@ const timeManagementModule = (function () {
       subtitle: _sanitizeHtml(b.subtitle || ''),
       createdAt: Number(b.createdAt) || parseInt(String(b.id).split('-')[1], 10) || 0,
       done: b.done === true,
+      seriesId: b.seriesId ? String(b.seriesId).slice(0, 40) : '',          // blocks created together by Set Time share one id
       habiticaId: b.habiticaId ? String(b.habiticaId).slice(0, 64) : '',
       habFp: b.habFp ? String(b.habFp).slice(0, 16) : '',
       habDone: b.habDone === true,
@@ -341,7 +342,7 @@ const timeManagementModule = (function () {
     const name = String(t.name || 'Template').slice(0, 120);
     return Object.assign({}, t, {
       name: name,
-      id: String(t.id || ('tpl-' + (Number(t.createdAt) || 0) + '-' + _habHash(name))),   // stable id for templates saved before ids existed
+      id: String(t.id || ('tpl-' + (Number(t.createdAt) || 0) + '-' + _habHashLegacy(name))),   // stable id for templates saved before ids existed
       updatedAt: Number(t.updatedAt) || 0
     });
   }
@@ -748,6 +749,14 @@ const timeManagementModule = (function () {
               '<div class="hub-tm-status-card">' +
                 '<div class="hub-tm-status-text"><span class="hub-tm-status-label">Completed</span><span class="hub-tm-hab-state" id="tm-details-habstate"></span></div>' +
                 '<label class="toggle-switch"><input type="checkbox" id="tm-details-done" aria-label="Completed"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>' +
+              '</div>' +
+            '</section>' +
+            '<section class="hub-tm-sec hub-tm-hidden" id="tm-details-series" aria-labelledby="tm-sec-series">' +
+              '<h4 class="hub-tm-sec-title" id="tm-sec-series">Repeating series</h4>' +
+              '<p class="hub-tm-hint" id="tm-series-note"></p>' +
+              '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+                '<button type="button" class="hub-tm-btn hub-tm-btn--outline" id="tm-series-apply">Apply time &amp; tag to upcoming</button>' +
+                '<button type="button" class="hub-tm-btn hub-tm-btn--alert" id="tm-series-del">Delete upcoming</button>' +
               '</div>' +
             '</section>' +
             '<section class="hub-tm-sec" aria-labelledby="tm-sec-desc">' +
@@ -1985,6 +1994,9 @@ const timeManagementModule = (function () {
     });
     _el('#tm-details-title').addEventListener('input', _syncDetails);
     _el('#tm-details-done').addEventListener('change', _syncDetails);
+    const _sa = _el('#tm-series-apply'), _sd = _el('#tm-series-del');
+    if (_sa) _sa.addEventListener('click', _seriesApply);
+    if (_sd) _sd.addEventListener('click', _seriesDelete);
     _el('.hub-tm-quick').addEventListener('click', function (e) {          // quick length: End = Start + n
       const q = e.target.closest('.hub-tm-quick-btn');
       if (!q) return;
@@ -2042,6 +2054,7 @@ const timeManagementModule = (function () {
     _el('#tm-details-done').checked = !!b.done;
     _ckOpen(b);
     _el('#tm-details-habstate').textContent = !_habOn() ? '' : b.habiticaId ? (b.habDone ? 'Completed in Habitica. Un-checking takes the gold back.' : 'Linked to a Habitica To-Do due when this block ends.') : 'Not in Habitica yet — it joins your next sync.';
+    _seriesRefresh(b);
     _savedRange = null;
     _el('#hub-tm-details-tags').innerHTML = _allTags().map(function (t) {
       return '<button type="button" class="hub-tm-tag-pick" style="' + _tagStyle(t) + '" data-tag-id="' + _esc(t.id) + '" aria-pressed="' + (t.id === b.tagId) + '"><span class="hub-tm-tag-dot"></span>' + _esc(t.label) + '</button>';
@@ -2099,6 +2112,64 @@ const timeManagementModule = (function () {
     note.classList.toggle('is-clash', !!clash);
     note.textContent = clash ? 'Overlaps “' + (clash.title || _tagOrFallback(clash.tagId).label) + '” (' + clash.startTime + '–' + clash.endTime + ')' :
       (dateOk && timeOk ? (_others(date, b.id).length ? 'Fits between your other blocks on this day.' : 'Nothing else planned on this day.') : '');
+  }
+
+  /* ── Repeating series (blocks created together by Set Time share a seriesId) ── */
+  function _seriesAll(b) { return b && b.seriesId ? _timeBlocks.filter(function (x) { return x.seriesId === b.seriesId; }) : []; }
+  function _seriesUpcoming(b) { return _seriesAll(b).filter(function (x) { return !x.done && x.date >= b.date; }); }
+  function _seriesRefresh(b) {
+    const sec = _el('#tm-details-series');
+    if (!sec) return;
+    const all = _seriesAll(b).length;
+    sec.classList.toggle('hub-tm-hidden', all < 2);
+    if (all >= 2) _el('#tm-series-note').textContent = 'One of ' + all + ' blocks created together with Set Time · ' + _seriesUpcoming(b).length + ' not completed from this date on.';
+  }
+  function _seriesApply() {
+    const b = _blockById(_editingId), err = _el('#hub-tm-details-error');
+    if (!b) return;
+    const st = _el('#tm-details-start').value, en = _el('#tm-details-end').value;
+    if (!st || !en) { err.textContent = 'Set both a start and an end time.'; return; }
+    const s = _toMins(st);
+    let e = _toMins(en);
+    if (e === 0 && s > 0) e = DAY_MINS;
+    if (e <= s) { err.textContent = 'End time must be after the start time.'; return; }
+    const pick = _el('#hub-tm-details-tags .hub-tm-tag-pick[aria-pressed="true"]');
+    const tagId = pick ? pick.getAttribute('data-tag-id') : b.tagId;
+    const title = _el('#tm-details-title').value.trim();
+    let n = 0, skip = 0;
+    _seriesUpcoming(b).forEach(function (x) {
+      if (x.id === b.id) return;                                        // this block is written by Save
+      if (_overlap(x.date, s, e, x.id)) { skip++; return; }
+      x.startTime = _toTime(s); x.endTime = _toTime(e); x.tagId = tagId;
+      if (title) x.title = title;
+      n++;
+    });
+    err.textContent = '';
+    if (n) { _scheduleSave(); _renderGrid({ animate: false, scroll: false }); _tlRefresh(); }
+    _toast(n ? 'Updated ' + n + ' upcoming block' + (n > 1 ? 's' : '') + (skip ? ' · ' + skip + ' skipped (time taken)' : '') + ' · press Save for this one' : 'Nothing updated' + (skip ? ' — ' + skip + ' clash with other blocks' : ''));
+  }
+  function _seriesDelete() {
+    const b = _blockById(_editingId);
+    if (!b) return;
+    const list = _seriesUpcoming(b);
+    if (!list.length) return;
+    _closeModal(_el('#hub-tm-details-modal'));
+    _confirm('Delete ' + list.length + ' block' + (list.length > 1 ? 's' : '') + ' of this series from ' + b.date + ' on? Completed blocks stay.', function () {
+      const ids = list.map(function (x) { return x.id; });
+      _timeBlocks = _timeBlocks.filter(function (x) { return ids.indexOf(x.id) < 0; });
+      _scheduleSave();
+      _renderGrid({ animate: false, scroll: false });
+      _tlRefresh();
+      _toast('Deleted ' + list.length + ' block' + (list.length > 1 ? 's' : ''), {
+        action: 'Undo',
+        onAction: function () {
+          list.forEach(function (x) { if (!_overlap(x.date, _toMins(x.startTime), _toMins(x.endTime))) _timeBlocks.push(x); });
+          _scheduleSave();
+          _renderGrid({ animate: false, scroll: false });
+          _tlRefresh();
+        }
+      });
+    }, { title: 'Delete series?', label: 'Delete' });
   }
 
   function _saveDetails() {
@@ -2508,10 +2579,11 @@ const timeManagementModule = (function () {
     const tagId = _tagOrFallback(_sb.tag).id === FALLBACK_TAG.id ? 'work' : _sb.tag;
     const title = (_el('#tm-sb-title').value || '').trim().slice(0, 120) || _tagOrFallback(tagId).label;
     const ids = []; let skipped = c.conflicts;
+    const sid = c.rows.length > 1 ? 'sr-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) : '';
     c.rows.forEach(function (r, i) {
       if (_overlap(r.date, r.s, r.e)) { skipped++; return; }
       const id = _newId(i);
-      _timeBlocks.push({ id: id, date: r.date, tagId: tagId, startTime: _toTime(r.s), endTime: _toTime(r.e), title: title, subtitle: '', createdAt: Date.now() });
+      _timeBlocks.push({ id: id, date: r.date, tagId: tagId, startTime: _toTime(r.s), endTime: _toTime(r.e), title: title, subtitle: '', createdAt: Date.now(), seriesId: sid });
       ids.push(id);
     });
     _closeModal(_el('#hub-tm-set-time-modal'));
@@ -3930,9 +4002,10 @@ const timeManagementModule = (function () {
   const HAB_BASE = 'https://habitica.com/api/v3';
   const HAB_KEY  = 'hub_tm_habitica';
   const HAB_LOG_TTL = 60 * 60 * 1000;                                       // activity entries live for 1 hour (when auto-clear is on)
+  const HAB_WINDOWS = [7, 14, 30];                                       // how many days ahead blocks are sent to Habitica (long repeats stay local until they come into range)
   const HAB_PRIO = [['0.1', 'Trivial'], ['1', 'Easy'], ['1.5', 'Medium'], ['2', 'Hard']];
   const _hab = {
-    cfg: { userId: '', apiKey: '', syncMode: 'auto', scope: 'titled', since: '', prio: {}, logAutoClear: true },
+    cfg: { userId: '', apiKey: '', syncMode: 'auto', scope: 'titled', winDays: 14, since: '', prio: {}, logAutoClear: true, delQ: [] },
     user: null, q: Promise.resolve(), busy: false, again: false, force: false,
     lastPull: 0, lastSync: 0, view: '', log: [], known: {}, gone: {}, delQ: [], timer: null, syncT: null, err: ''
   };
@@ -3945,13 +4018,31 @@ const timeManagementModule = (function () {
       if (_hab.cfg.syncMode !== 'manual') _hab.cfg.syncMode = 'auto';
       if (_hab.cfg.scope !== 'all') _hab.cfg.scope = 'titled';
       _hab.cfg.logAutoClear = _hab.cfg.logAutoClear !== false;               // on unless you switched it off
+      _hab.cfg.winDays = HAB_WINDOWS.indexOf(parseInt(_hab.cfg.winDays, 10)) > -1 ? parseInt(_hab.cfg.winDays, 10) : 14;
+      _hab.delQ = Array.isArray(_hab.cfg.delQ) ? _hab.cfg.delQ.map(String).filter(Boolean).slice(0, 500) : [];   // deletions that never reached Habitica survive a reload
     } catch (_) {}
   })();
 
   function _habSave() { _lsSet(HAB_KEY, JSON.stringify(_hab.cfg)); }
   function _habOn() { return !!(_hab.cfg.userId && _hab.cfg.apiKey); }
   function _habSleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
-  function _habHash(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
+  // 53-bit hash (cyrb53) — the old 32-bit djb2 is kept only so fingerprints saved by earlier builds still match (no mass re-upload)
+  function _habHash(s) {
+    let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+    for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+  }
+  function _habHashLegacy(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
+  // Is this checklist item's text unchanged since Habitica last saw it?  (accepts the old hash and upgrades it in place)
+  function _habCkClean(it) {
+    if (!it.hfp) return false;
+    const n = _habHash(it.text);
+    if (it.hfp === n) return true;
+    if (it.hfp === _habHashLegacy(it.text)) { it.hfp = n; return true; }
+    return false;
+  }
 
   /* ── HTTP: one request at a time, paced, honours 429 ── */
   function _habReq(method, path, body) {
@@ -3996,6 +4087,11 @@ const timeManagementModule = (function () {
   function _habIsOverdue(b) {
     return _habOn() && !b.done && !!_hab.cfg.since && b.date >= _hab.cfg.since && _habEndMs(b) < Date.now();
   }
+  function _habWinEnd() { return _dateToStr(_addDays(_parseDate(_todayStr()), _hab.cfg.winDays || 14)); }
+  // Should this block have a To-Do right now?  Done blocks always; upcoming ones only inside the rolling window.
+  function _habWants(b, today, winEnd) {
+    return !!b.done || (b.date >= today && b.date <= winEnd && (_hab.cfg.scope === 'all' || _habTitled(b)));
+  }
   function _habTitled(b) {
     return (!!b.title && b.title !== _tagOrFallback(b.tagId).label) || !!_plainText(b.subtitle);
   }
@@ -4017,6 +4113,13 @@ const timeManagementModule = (function () {
     };
   }
   function _habFp(p) { return _habHash([p.text, p.notes, p.date, p.priority].join('\u0001')); }
+  function _habFpClean(b, p) {
+    if (!b.habFp) return false;
+    const n = _habFp(p);
+    if (b.habFp === n) return true;
+    if (b.habFp === _habHashLegacy([p.text, p.notes, p.date, p.priority].join('\u0001'))) { b.habFp = n; return true; }
+    return false;
+  }
 
   /* ── API calls ── */
   async function _habFetchUser() {
@@ -4036,6 +4139,7 @@ const timeManagementModule = (function () {
       else throw e;
     }
     b.habiticaId = String(t.id || t._id);
+    _hab.known[b.habiticaId] = !!t.completed;      // tracked at once: if the block is deleted / undone before the next pass, its To-Do is still removed
     b.habFp = _habFp(p);
     b.habDone = !!t.completed;
     if (b.habDone) b.done = true;
@@ -4077,7 +4181,7 @@ const timeManagementModule = (function () {
     b.checklist = _ck(b).filter(function (it) {
       if (!it.hid) return true;
       const r = byId[it.hid];
-      const textClean = it.hfp === _habHash(it.text), doneClean = !!it.done === !!it.hdone;
+      const textClean = _habCkClean(it), doneClean = !!it.done === !!it.hdone;
       if (!r) { if (textClean && doneClean) { changed = true; return false; } return true; }   // removed in the app and nothing pending here → drop it
       if (doneClean && !!r.completed !== !!it.hdone) { it.done = it.hdone = !!r.completed; changed = true; }
       const rt = String(r.text || '').slice(0, 200);
@@ -4113,7 +4217,7 @@ const timeManagementModule = (function () {
         continue;
       }
       try {
-        if (it.hfp !== _habHash(it.text)) { await _habReq('PUT', base + '/' + it.hid, { text: it.text }); it.hfp = _habHash(it.text); ch = true; }
+        if (!_habCkClean(it)) { await _habReq('PUT', base + '/' + it.hid, { text: it.text }); it.hfp = _habHash(it.text); ch = true; }
         if (!!it.done !== !!it.hdone) {
           const d = await _habReq('POST', base + '/' + it.hid + '/score');        // toggles; read the result back
           const r = d && Array.isArray(d.checklist) ? d.checklist.find(function (x) { return x.id === it.hid; }) : null;
@@ -4160,10 +4264,12 @@ const timeManagementModule = (function () {
     });
     Object.keys(_hab.known).forEach(function (id) {
       if (id in cur) return;
-      if (!_hab.known[id]) { _hab.delQ.push(id); _hab.gone[id] = 1; }   // completed To-Dos are kept: they are earned history
+      if (!_hab.known[id]) { if (_hab.delQ.indexOf(id) < 0) _hab.delQ.push(id); _hab.gone[id] = 1; }   // completed To-Dos are kept: they are earned history
     });
     _hab.known = cur;
+    _habPersistDel();
   }
+  function _habPersistDel() { _hab.cfg.delQ = _hab.delQ.slice(0, 500); _habSave(); }
   function _habQueueSync(delay) {
     if (!_habOn() || !_dataReady || _hab.cfg.syncMode === 'manual') return;
     if (_hab.syncT) clearTimeout(_hab.syncT);
@@ -4182,23 +4288,23 @@ const timeManagementModule = (function () {
       if (pull || !_hab.user || Date.now() - _hab.lastPull > 120000) { if (await _habPull()) changed = true; }
       _habDiff();
       while (_hab.delQ.length) {
-        const id = _hab.delQ.shift();
+        const id = _hab.delQ[0];                                          // leaves the queue only after Habitica confirmed (or 404) — a failed request is retried
         try { await _habReq('DELETE', '/tasks/' + id); removed++; } catch (e) { if (e.status !== 404) throw e; }
+        _hab.delQ.shift(); _habPersistDel();
       }
-      const today = _todayStr();
+      const today = _todayStr(), winEnd = _habWinEnd();
       const list = _timeBlocks.slice().sort(function (a, b) { return (a.date + a.startTime) < (b.date + b.startTime) ? -1 : 1; });
       for (let i = 0; i < list.length; i++) {
         const b = list[i];
         if (_timeBlocks.indexOf(b) < 0) continue;                         // removed while syncing
         try {
           if (!b.habiticaId) {
-            const want = !!b.done || (b.date >= today && (_hab.cfg.scope === 'all' || _habTitled(b)));
-            if (!want) continue;
+            if (!_habWants(b, today, winEnd)) continue;
             await _habCreate(b);
             created++; changed = true;
           } else if (!b.habDone) {
             const p = _habPayload(b);
-            if (_habFp(p) !== b.habFp) { await _habUpdate(b); updated++; changed = true; }
+            if (!_habFpClean(b, p)) { await _habUpdate(b); updated++; changed = true; }
           }
           if (b.habiticaId && !b.habDone && await _habPushCk(b)) changed = true;
           if (!!b.done !== !!b.habDone) { gold += await _habScore(b); scored++; changed = true; }
@@ -4311,15 +4417,15 @@ const timeManagementModule = (function () {
   // Changes that exist locally but have not reached Habitica yet
   function _habPending() {
     if (!_habOn()) return 0;
-    const today = _todayStr(), cur = {};
+    const today = _todayStr(), winEnd = _habWinEnd(), cur = {};
     let n = _hab.delQ.length;
     _timeBlocks.forEach(function (b) {
       if (b.habiticaId) cur[b.habiticaId] = 1;
-      if (!b.habiticaId) { if (b.done || (b.date >= today && (_hab.cfg.scope === 'all' || _habTitled(b)))) n++; return; }
-      if (!b.habDone && _habFp(_habPayload(b)) !== b.habFp) n++;
+      if (!b.habiticaId) { if (_habWants(b, today, winEnd)) n++; return; }
+      if (!b.habDone && !_habFpClean(b, _habPayload(b))) n++;
       if (!b.habDone) {
         n += _ckDelList(b).length;
-        _ck(b).forEach(function (it) { if (!it.hid || it.hfp !== _habHash(it.text) || !!it.done !== !!it.hdone) n++; });
+        _ck(b).forEach(function (it) { if (!it.hid || !_habCkClean(it) || !!it.done !== !!it.hdone) n++; });
       }
       if (!!b.done !== !!b.habDone) n++;
     });
@@ -4431,6 +4537,12 @@ const timeManagementModule = (function () {
           opt('scope', 'all', c.scope === 'all', 'Every block', 'Including untitled ones, from today onward.') +
         '</div>' +
       '</section>' +
+      '<section class="hub-tm-hab-card"><h4>How far ahead to send</h4>' +
+        '<div class="hub-tm-hab-opts">' +
+          HAB_WINDOWS.map(function (w) { return opt('win', w, c.winDays === w, w + ' days', w === 7 ? 'Lightest — best for long repeats.' : w === 14 ? 'Recommended.' : 'More To-Dos in Habitica at once.'); }).join('') +
+        '</div>' +
+        '<p class="hub-tm-hint">Later blocks stay in the planner and join Habitica as their day gets close.</p>' +
+      '</section>' +
       '<section class="hub-tm-hab-card"><h4>Quest difficulty by tag</h4><div class="hub-tm-hab-ranks">' + ranks + '</div></section>' +
       '<section class="hub-tm-hab-card"><div class="hub-tm-hab-cardhead"><h4>Recent activity</h4>' + logTools + '</div><ul class="hub-tm-hab-log">' + log + '</ul>' + (auto ? '<p class="hub-tm-hab-logfoot">Entries disappear one hour after they appear.</p>' : '') + '</section>' +
       '<div class="hub-tm-hab-actions hub-tm-hab-actions--split"><button type="button" class="hub-tm-btn hub-tm-btn--alert" id="tm-hab-disconnect">Disconnect</button><button type="button" class="hub-tm-btn hub-tm-btn--outline" data-close>Close</button></div>';
@@ -4491,7 +4603,7 @@ const timeManagementModule = (function () {
     p.then(function () { if (_habHubOpen()) _habRenderHub(); });
   }
   function _habHubClick(e) {
-    const t = e.target.closest('[data-hab-go],[data-hab-mode],[data-hab-scope],[data-hab-rank],[data-hab-logclear],#tm-hab-sync-now,#tm-hab-disconnect');
+    const t = e.target.closest('[data-hab-go],[data-hab-mode],[data-hab-scope],[data-hab-win],[data-hab-rank],[data-hab-logclear],#tm-hab-sync-now,#tm-hab-disconnect');
     if (!t) return;
     if (t.hasAttribute('data-hab-logclear')) {
       if (t.getAttribute('data-hab-logclear') === 'now') _hab.log = [];
@@ -4520,6 +4632,7 @@ const timeManagementModule = (function () {
     }
     if (t.hasAttribute('data-hab-mode')) _hab.cfg.syncMode = t.getAttribute('data-hab-mode') === 'manual' ? 'manual' : 'auto';
     else if (t.hasAttribute('data-hab-scope')) _hab.cfg.scope = t.getAttribute('data-hab-scope') === 'all' ? 'all' : 'titled';
+    else if (t.hasAttribute('data-hab-win')) { const w = parseInt(t.getAttribute('data-hab-win'), 10); _hab.cfg.winDays = HAB_WINDOWS.indexOf(w) > -1 ? w : 14; }
     else if (t.hasAttribute('data-hab-rank')) _hab.cfg.prio[t.getAttribute('data-hab-rank')] = t.getAttribute('data-val');
     _habSave();
     _habAfterCfg();
