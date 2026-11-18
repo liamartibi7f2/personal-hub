@@ -3410,6 +3410,12 @@ body.theme-optimized #time-management { --tm-streak: #ffb000; --tm-streak-glow: 
 /* Optimize: square ring around the square day number, flat colours */
 body.theme-optimized .hub-tm-ring circle { display: none; }
 body.theme-optimized .hub-tm-ring-sq { display: inline; }
+
+/* Today's cell: the number is already a filled accent badge, so the progress ring
+   (a different radius, and green when the day is "hit") peeked out from behind it
+   as a stray green/grey sliver in every theme. Today's progress lives in the status
+   bar, so the ring is not drawn on today's cell. */
+#time-management .hub-tm-month-cell.is-today .hub-tm-ring { display: none; }
 body.theme-optimized .hub-tm-ring-arc { stroke-linecap: butt; }
 body.theme-optimized .hub-tm-ring { inset: -3px; width: calc(100% + 6px); height: calc(100% + 6px); }
 /* Solar: the number is drawn as a hand-made ellipse; keep the ring a little tighter */
@@ -3908,3 +3914,60 @@ body.theme-optimized .hub-tm-rv-track > span { border-radius: 0; }
 [data-theme="ember-noir"] .hub-tm-rv-col { border-bottom: 3px double rgba(224, 170, 100, 0.5); }
 [data-theme="ember-noir"] .hub-tm-rv-col i { border-radius: 2px 2px 0 0; }
 [data-theme="ember-noir"] .hub-tm-rv-ik { color: var(--ember-brass); }
+
+/* ==========================================================================
+   30. STREAK DAILY  ·  opt-in card in the Habitica Link
+   ========================================================================== */
+.hub-tm-hab-sd { --tm-c: var(--accent-primary); }
+.hub-tm-hab-sd.is-on { border-color: color-mix(in srgb, var(--tm-streak, #ff9f43) 55%, var(--tm-line-strong)); }
+.hub-tm-hab-sdswitch {
+  min-width: 52px; padding: 6px 14px;
+  border: 1px solid var(--tm-line-strong); border-radius: 999px;
+  background: var(--bg-elevated); color: var(--text-muted);
+  font: 700 0.66rem/1 var(--tm-font-num); letter-spacing: 0.08em; text-transform: uppercase;
+  cursor: pointer;
+}
+.hub-tm-hab-sdswitch:hover { color: var(--text-primary); border-color: var(--text-muted); }
+.hub-tm-hab-sdswitch[aria-checked="true"] {
+  border-color: var(--tm-streak, #ff9f43);
+  background: color-mix(in srgb, var(--tm-streak, #ff9f43) 18%, var(--bg-surface));
+  color: var(--text-primary);
+}
+.hub-tm-hab-sd-lead { margin: 0; font-size: 0.8rem; line-height: 1.5; color: var(--text-secondary); }
+.hub-tm-hab-sd-lead b { color: var(--text-primary); }
+.hub-tm-hab-sd-warn {
+  margin: 0; padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  border-left-width: 3px; border-radius: var(--tm-r-sm);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  font-size: 0.74rem; line-height: 1.45; color: var(--text-secondary);
+}
+.hub-tm-hab-sd-warn b { color: var(--text-primary); }
+.hub-tm-hab-sd-note { margin: 0; font-size: 0.74rem; color: var(--text-muted); }
+.hub-tm-hab-sd-status { display: flex; align-items: center; gap: 9px; font-size: 0.8rem; color: var(--text-secondary); }
+.hub-tm-hab-sd-status b { color: var(--text-primary); }
+.hub-tm-hab-sd-ok { color: var(--success) !important; }
+.hub-tm-hab-sd-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.hub-tm-hab-sd-row > span:first-child { display: grid; gap: 3px; font-size: 0.82rem; font-weight: 600; color: var(--text-primary); }
+.hub-tm-hab-sd-row small { font-size: 0.68rem; font-weight: 400; color: var(--text-muted); }
+.hub-tm-hab-days { display: inline-flex; gap: 4px; }
+.hub-tm-hab-days button {
+  width: 30px; height: 30px; padding: 0;
+  border: 1px solid var(--tm-line-strong); border-radius: 50%;
+  background: var(--bg-elevated); color: var(--text-muted);
+  font: 700 0.7rem/1 var(--tm-font-num); cursor: pointer;
+}
+.hub-tm-hab-days button:hover { color: var(--text-primary); border-color: var(--text-muted); }
+.hub-tm-hab-days button[aria-pressed="true"] {
+  border-color: var(--accent-primary);
+  background: var(--tm-accent-soft); color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px var(--tm-accent-line);
+}
+.hub-tm-hab-sd .hub-tm-hab-opt { text-align: left; }
+
+/* skins */
+[data-theme="lofi-twilight"] .hub-tm-hab-sd.is-on { border-style: dashed; }
+body.theme-optimized .hub-tm-hab-sdswitch,
+body.theme-optimized .hub-tm-hab-days button { border-radius: 0; }
+body.theme-optimized .hub-tm-hab-sdswitch[aria-checked="true"]::before { content: "["; }
+body.theme-optimized .hub-tm-hab-sdswitch[aria-checked="true"]::after { content: "]"; }

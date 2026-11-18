@@ -114,6 +114,7 @@ const timeManagementModule = (function () {
   let _sectionEl   = null;
   let _initialised = false;
   let _dataReady   = false;
+  let _dataTrusted = false;       // this account's data really came from the cloud (or this is a signed-out session) → safe to compare with Habitica
   let _dataUid     = undefined;   // account whose data is in memory: uid, null = signed out, undefined = nothing loaded yet
   let _loadSeq     = 0;           // lets a newer load (account switch) supersede an older one still in flight
   let _syncWired   = false;
@@ -460,6 +461,7 @@ const timeManagementModule = (function () {
   /** Replace what is in memory with the state of the account HubDB just loaded. */
   function _adopt(st) {
     _dataUid = st.uid === undefined ? null : st.uid;
+    _dataTrusted = !st.uid || !!st.cloudOk;
     _resetData();
     if (st.payload) _applyData(st.payload);
     _loadMs(st.payload);
@@ -1377,8 +1379,8 @@ const timeManagementModule = (function () {
     if (s.d / s.p >= STREAK_MIN) return 'hit';
     return ds === today ? 'pending' : 'miss';
   }
-  function _streakInfo() {
-    const today = _todayStr(), stats = _dayStats(), keys = Object.keys(stats).sort();
+  function _streakInfo(dayArg) {                       // dayArg: evaluate "as of" another day (Habitica's day can start later than midnight)
+    const today = dayArg || _todayStr(), stats = _dayStats(), keys = Object.keys(stats).sort();
     const out = { stats: stats, state: {}, runAt: {}, inRun: {}, cur: 0, best: 0, today: today, todayPct: 0, start: '' };
     if (!keys.length) return out;
     const end = _parseDate(today);
@@ -3924,7 +3926,9 @@ const timeManagementModule = (function () {
      HABITICA  ·  block → To-Do (deadline = end of block)
      Completing a block scores its To-Do (gold / XP); the planner then
      shows what is done, what is still due and what slipped past its
-     deadline.  Only To-Dos are created — never Dailies or Habits.
+     deadline.  Blocks only ever become To-Dos. The ONE exception is the opt-in
+     "Streak Daily" (off by default): a single Daily the planner ticks when a day
+     reaches the streak threshold, so Habitica itself keeps the streak.
      Credentials live in this browser only (never sent to HubDB).
      ============================================================ */
   const HAB_BASE = 'https://habitica.com/api/v3';
@@ -3932,9 +3936,11 @@ const timeManagementModule = (function () {
   const HAB_LOG_TTL = 60 * 60 * 1000;                                       // activity entries live for 1 hour (when auto-clear is on)
   const HAB_PRIO = [['0.1', 'Trivial'], ['1', 'Easy'], ['1.5', 'Medium'], ['2', 'Hard']];
   const _hab = {
-    cfg: { userId: '', apiKey: '', syncMode: 'auto', scope: 'titled', since: '', prio: {}, logAutoClear: true },
+    cfg: { userId: '', apiKey: '', syncMode: 'auto', scope: 'titled', since: '', prio: {}, logAutoClear: true,
+           sdOn: false, sdPrio: '1', sdDays: '1111111', sdRest: true, sdId: '', sdUp: '', sdFp: '' },      // sd* = Streak Daily
     user: null, q: Promise.resolve(), busy: false, again: false, force: false,
-    lastPull: 0, lastSync: 0, view: '', log: [], known: {}, gone: {}, delQ: [], timer: null, syncT: null, err: ''
+    sd: { streak: null, completed: null, note: '', at: 0 },
+    lastPull: 0, lastSync: 0, view: '', log: [], known: {}, gone: {}, delQ: [], sweep: false, timer: null, syncT: null, err: ''
   };
   (function () {
     try {
@@ -3945,10 +3951,32 @@ const timeManagementModule = (function () {
       if (_hab.cfg.syncMode !== 'manual') _hab.cfg.syncMode = 'auto';
       if (_hab.cfg.scope !== 'all') _hab.cfg.scope = 'titled';
       _hab.cfg.logAutoClear = _hab.cfg.logAutoClear !== false;               // on unless you switched it off
+      _hab.cfg.sdOn = _hab.cfg.sdOn === true;                                  // Streak Daily is opt-in
+      _hab.cfg.sdRest = _hab.cfg.sdRest !== false;
+      if (typeof _hab.cfg.sdDays !== 'string' || !/^[01]{7}$/.test(_hab.cfg.sdDays) || _hab.cfg.sdDays.indexOf('1') < 0) _hab.cfg.sdDays = '1111111';
+      _hab.cfg.sdPrio = HAB_PRIO.some(function (o) { return o[0] === String(_hab.cfg.sdPrio); }) ? String(_hab.cfg.sdPrio) : '1';
+      ['sdId', 'sdUp', 'sdFp'].forEach(function (k) { _hab.cfg[k] = typeof _hab.cfg[k] === 'string' ? _hab.cfg[k].slice(0, 64) : ''; });
     } catch (_) {}
   })();
 
   function _habSave() { _lsSet(HAB_KEY, JSON.stringify(_hab.cfg)); }
+
+  /* Deletions owed to Habitica. Kept in localStorage: before, they lived in memory only, so a reload,
+     a failed request or a manual-sync session silently forgot them and the To-Do stayed in Habitica forever. */
+  function _habSaveDel() { _lsSet(HAB_KEY + '_del', JSON.stringify(_hab.delQ)); }
+  function _habQueueDel(id) {
+    id = String(id || '');
+    if (!id || _hab.delQ.indexOf(id) >= 0) return;
+    _hab.delQ.push(id);
+    _hab.gone[id] = 1;
+    _habSaveDel();
+  }
+  (function () {
+    try {
+      const q = JSON.parse(_lsGet(HAB_KEY + '_del') || '[]');
+      if (Array.isArray(q)) q.forEach(function (id) { id = String(id || ''); if (id && _hab.delQ.indexOf(id) < 0) { _hab.delQ.push(id); _hab.gone[id] = 1; } });
+    } catch (_) {}
+  })();
   function _habOn() { return !!(_hab.cfg.userId && _hab.cfg.apiKey); }
   function _habSleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   function _habHash(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
@@ -4020,9 +4048,9 @@ const timeManagementModule = (function () {
 
   /* ── API calls ── */
   async function _habFetchUser() {
-    const d = await _habReq('GET', '/user?userFields=stats,profile.name');
+    const d = await _habReq('GET', '/user?userFields=stats,profile.name,preferences.dayStart');
     const s = (d && d.stats) || {};
-    _hab.user = { gp: +s.gp || 0, hp: +s.hp || 0, maxHp: +s.maxHealth || 50, exp: +s.exp || 0, toNext: +s.toNextLevel || 0, lvl: +s.lvl || 1, name: (d && d.profile && d.profile.name) || '' };
+    _hab.user = { gp: +s.gp || 0, hp: +s.hp || 0, maxHp: +s.maxHealth || 50, exp: +s.exp || 0, toNext: +s.toNextLevel || 0, lvl: +s.lvl || 1, name: (d && d.profile && d.profile.name) || '', dayStart: _clamp(Math.round(+(d && d.preferences && d.preferences.dayStart) || 0), 0, 23) };
     return _hab.user;
   }
   async function _habCreate(b) {
@@ -4038,6 +4066,7 @@ const timeManagementModule = (function () {
     b.habiticaId = String(t.id || t._id);
     b.habFp = _habFp(p);
     b.habDone = !!t.completed;
+    _hab.known[b.habiticaId] = !!b.habDone;     // from this moment a delete of the block must delete the To-Do (known used to be refreshed only at the NEXT sync)
     if (b.habDone) b.done = true;
     // Remember the Habitica id of every checklist item (same order when we created it; by text when adopting)
     const rc = Array.isArray(t.checklist) ? t.checklist : [], used = {};
@@ -4127,6 +4156,132 @@ const timeManagementModule = (function () {
     }
     return ch;
   }
+  /* ============================================================
+     STREAK DAILY  ·  opt-in. Habitica keeps the streak; the planner ticks it.
+     - One Daily (alias hubtmstreak). Ticked when the day reaches STREAK_MIN,
+       un-ticked only if WE ticked it earlier that day and the day dropped again.
+     - "Today" follows Habitica's Custom Day Start, not the calendar midnight.
+     - Empty days (inside the planner's rest tolerance) are ticked for you unless switched off.
+     - Deleted on Habitica's side → the feature switches itself off (never re-created).
+     - Never runs until this account's plans are really loaded (_dataTrusted).
+     ============================================================ */
+  const SD_ALIAS = 'hubtmstreak';
+  const SD_KEYS = ['m', 't', 'w', 'th', 'f', 's', 'su'];                   // Monday … Sunday
+  const SD_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  function _habDay() { const h = (_hab.user && _hab.user.dayStart) || 0; return _dateToStr(new Date(Date.now() - h * 3600000)); }
+  function _sdDue(ds) { return _hab.cfg.sdDays.charAt((_parseDate(ds).getDay() + 6) % 7) === '1'; }
+  function _sdFp() { return _hab.cfg.sdPrio + '|' + _hab.cfg.sdDays; }
+  function _sdBody(create) {
+    const need = Math.round(STREAK_MIN * 100), rep = {};
+    SD_KEYS.forEach(function (k, i) { rep[k] = _hab.cfg.sdDays.charAt(i) === '1'; });
+    const b = {
+      text: 'Planner · reach ' + need + '% of the day',
+      notes: 'Made by Time Management. Ticked automatically once you finish ' + need + '% of the time you planned today (and un-ticked if that drops again). Missing it costs HP like any Daily. Switch it off in the planner’s Habitica Link — that deletes it.',
+      priority: +_hab.cfg.sdPrio, frequency: 'weekly', repeat: rep, everyX: 1
+    };
+    if (create) { b.type = 'daily'; b.alias = SD_ALIAS; b.startDate = _parseDate(_habDay()).toISOString(); }
+    return b;
+  }
+  /** What the Daily should look like right now. */
+  function _sdWant() {
+    const day = _habDay(), sk = _streakInfo(day), st = sk.state[day];
+    return { day: day, sk: sk, st: st, want: st === 'hit' || (_hab.cfg.sdRest && (st === 'rest' || st === undefined) && sk.cur > 0) };
+  }
+  async function _habScoreTask(id, up) {
+    const before = _hab.user ? _hab.user.gp : null;
+    const d = await _habReq('POST', '/tasks/' + encodeURIComponent(id) + '/score/' + (up ? 'up' : 'down'));
+    if (d && typeof d.gp === 'number') {
+      _hab.user = Object.assign(_hab.user || {}, { gp: d.gp, hp: d.hp, exp: d.exp, lvl: d.lvl });
+      if (before !== null) return d.gp - before;
+    }
+    return 0;
+  }
+  async function _habStreakSync() {
+    const c = _hab.cfg, sd = _hab.sd, out = { msg: '' };
+    if (!c.sdOn) return out;
+    if (!_dataTrusted) { sd.note = 'Waiting for your plans to finish loading…'; return out; }
+    const w = _sdWant(), day = w.day;
+    if (!c.sdId && !w.sk.state[day]) { sd.note = 'Starts with your first planned day.'; return out; }   // never hand a brand-new user a missed Daily
+    let t = null, made = false;
+    if (c.sdId) {
+      try { t = await _habReq('GET', '/tasks/' + encodeURIComponent(c.sdId)); }
+      catch (e) { if (e.status !== 404) throw e; }
+      if (!t) {                                                               // deleted in Habitica → respect it, do not re-create
+        c.sdOn = false; c.sdId = ''; c.sdUp = ''; c.sdFp = ''; _habSave();
+        sd.streak = null; sd.completed = null; sd.note = '';
+        out.msg = 'Streak Daily was deleted in Habitica — switched off';
+        return out;
+      }
+    } else {
+      try { t = await _habReq('POST', '/tasks/user', _sdBody(true)); made = true; }
+      catch (e) {
+        if ((e.status === 409 || e.status === 400) && /alias/i.test(e.message)) t = await _habReq('GET', '/tasks/' + SD_ALIAS);   // adopt the one we made before
+        else throw e;
+      }
+      c.sdId = String(t.id || t._id); c.sdFp = made ? _sdFp() : ''; _habSave();
+      if (made) out.msg = 'Streak Daily created';
+    }
+    if (c.sdFp !== _sdFp()) { await _habReq('PUT', '/tasks/' + encodeURIComponent(c.sdId), _sdBody(false)); c.sdFp = _sdFp(); _habSave(); }
+    sd.streak = +t.streak || 0; sd.completed = !!t.completed; sd.note = '';
+    if (!_sdDue(day)) { sd.note = 'Not due today — your schedule skips this weekday.'; }
+    else if (w.want && !t.completed) {
+      const g = await _habScoreTask(c.sdId, true);
+      c.sdUp = day; _habSave(); sd.completed = true; sd.streak += 1;
+      out.msg = (out.msg ? out.msg + ' · ' : '') + 'Streak Daily ticked (' + (g >= 0 ? '+' : '') + g.toFixed(1) + ' gold)';
+    } else if (!w.want && t.completed && c.sdUp === day) {                    // only undo what WE did today; a tick you made in Habitica stays
+      await _habScoreTask(c.sdId, false);
+      c.sdUp = ''; _habSave(); sd.completed = false; sd.streak = Math.max(0, sd.streak - 1);
+      out.msg = (out.msg ? out.msg + ' · ' : '') + 'Streak Daily un-ticked';
+    }
+    sd.at = Date.now();
+    return out;
+  }
+  function _sdToggle() {
+    const c = _hab.cfg, need = Math.round(STREAK_MIN * 100);
+    if (!c.sdOn) {
+      _confirm('Habitica will get one Daily, “Planner · reach ' + need + '% of the day”. The planner ticks it for you, but any day that ends below ' + need + '% counts as missed: you lose HP and its streak goes back to zero, like any Daily. During a boss quest the damage can be doubled. You can switch it off any time — that deletes the Daily.', function () {
+        c.sdOn = true; _habSave(); _habAfterCfg();
+        if (c.syncMode === 'manual') _toast('Streak Daily on — press Sync now to create it'); else _habQueueSync(0);
+      }, { title: 'Turn on the Streak Daily?', label: 'Turn on' });
+      return;
+    }
+    _confirm('This deletes the Daily from Habitica, so its streak there is lost. Your planner streak is not affected.', function () {
+      if (c.sdId) _habQueueDel(c.sdId);
+      c.sdOn = false; c.sdId = ''; c.sdUp = ''; c.sdFp = '';
+      _hab.sd = { streak: null, completed: null, note: '', at: 0 };
+      _habSave(); _habAfterCfg();
+      if (_hab.delQ.length) _habReconcile(false);                              // right away, even in manual mode: a Daily left behind keeps costing HP
+      _toast('Streak Daily removed');
+    }, { title: 'Turn off the Streak Daily?', label: 'Turn off' });
+  }
+  function _sdHtml() {
+    const c = _hab.cfg, sd = _hab.sd, need = Math.round(STREAK_MIN * 100), manual = c.syncMode === 'manual';
+    const head = '<div class="hub-tm-hab-cardhead"><h4>Streak Daily</h4><button type="button" class="hub-tm-hab-sdswitch" data-hab-sd="toggle" role="switch" aria-checked="' + c.sdOn + '">' + (c.sdOn ? 'On' : 'Off') + '</button></div>';
+    const lead = '<p class="hub-tm-hab-sd-lead">One Daily in Habitica that the planner ticks for you once a day reaches <b>' + need + '%</b> of its planned time. Habitica then keeps the streak — with its rewards, and its penalties.</p>';
+    if (!c.sdOn) {
+      return '<section class="hub-tm-hab-card hub-tm-hab-sd">' + head + lead +
+        '<p class="hub-tm-hab-sd-warn">Off by default: a Daily that is not ticked by the end of the day costs HP and resets its streak.</p></section>';
+    }
+    const day = _habDay(), due = _sdDue(day);
+    const days = SD_DAYS.map(function (n, i) {
+      return '<button type="button" data-hab-sdday="' + i + '" aria-pressed="' + (c.sdDays.charAt(i) === '1') + '" aria-label="' + n + '" title="' + n + '">' + n.charAt(0) + '</button>';
+    }).join('');
+    const prio = HAB_PRIO.map(function (o) {
+      return '<button type="button" data-hab-sdprio data-val="' + o[0] + '" aria-pressed="' + (o[0] === String(c.sdPrio)) + '">' + o[1] + '</button>';
+    }).join('');
+    const status = !c.sdId ? 'Will be created on the next sync.'
+      : 'Habitica streak <b>' + (sd.streak == null ? '—' : sd.streak) + '</b> · today: ' + (!due ? 'not due' : sd.completed ? '<b class="hub-tm-hab-sd-ok">ticked</b>' : 'waiting for ' + need + '%');
+    return '<section class="hub-tm-hab-card hub-tm-hab-sd is-on">' + head + lead +
+      '<div class="hub-tm-hab-sd-status"><span class="hub-tm-hab-led' + (sd.completed && due ? '' : ' is-warn') + '"></span><span>' + status + '</span></div>' +
+      (sd.note ? '<p class="hub-tm-hab-sd-note">' + _esc(sd.note) + '</p>' : '') +
+      '<div class="hub-tm-hab-sd-row"><span>Difficulty<small>Bigger = more damage when missed</small></span><span class="hub-tm-hab-rank-opts" role="radiogroup" aria-label="Streak Daily difficulty">' + prio + '</span></div>' +
+      '<div class="hub-tm-hab-sd-row"><span>Due on<small>Other days it stays grey and never hurts</small></span><span class="hub-tm-hab-days" role="group" aria-label="Weekdays">' + days + '</span></div>' +
+      '<button type="button" class="hub-tm-hab-opt" data-hab-sd="rest" aria-pressed="' + c.sdRest + '"><strong>Empty days keep the streak</strong><small>A day with no plans is ticked for you while your planner streak is alive (up to ' + STREAK_REST_GAP + ' in a row), so resting never costs HP.</small></button>' +
+      (manual ? '<p class="hub-tm-hab-sd-warn">Manual sync is on: the Daily is only ticked when you press <b>Sync now</b>. Do it before your Habitica day ends.</p>' : '') +
+      '<p class="hub-tm-hab-sd-warn">A day that ends below ' + need + '% costs HP and resets the streak. Once Habitica has started a new day, the planner cannot claim the old one back.</p>' +
+      '</section>';
+  }
+
   async function _habPull() {
     await _habFetchUser();
     const open = await _habReq('GET', '/tasks/user?type=todos');
@@ -4134,6 +4289,20 @@ const timeManagementModule = (function () {
     const o = {}, c = {}, rem = {};
     (open || []).forEach(function (t) { o[t.id] = 1; rem[t.id] = Array.isArray(t.checklist) ? t.checklist : []; });
     (dn || []).forEach(function (t) { c[t.id] = 1; });
+    // Clean-up of leftovers: open To-Dos this app made (alias hubtm-…) for blocks that no longer exist.
+    // Runs once after this fix and on every "Sync now"; never touches your own To-Dos (no hubtm- alias) or completed ones.
+    if ((_hab.sweep || !_hab.cfg.swept) && _dataTrusted) {
+      const mine = {}, now = Date.now();
+      _timeBlocks.forEach(function (b) { mine[_habAlias(b)] = 1; });
+      (open || []).forEach(function (t) {
+        if (!t || t.completed || typeof t.alias !== 'string' || t.alias.indexOf('hubtm-') !== 0 || mine[t.alias]) return;
+        const born = Date.parse(t.createdAt);
+        if (born && now - born < 600000) return;                       // very new: another device may not have synced its block yet
+        _habQueueDel(t.id || t._id);
+      });
+      _hab.sweep = false;
+      if (!_hab.cfg.swept) { _hab.cfg.swept = true; _habSave(); }
+    }
     let changed = false;
     _timeBlocks.forEach(function (b) {
       if (!b.habiticaId) return;
@@ -4160,12 +4329,14 @@ const timeManagementModule = (function () {
     });
     Object.keys(_hab.known).forEach(function (id) {
       if (id in cur) return;
-      if (!_hab.known[id]) { _hab.delQ.push(id); _hab.gone[id] = 1; }   // completed To-Dos are kept: they are earned history
+      if (!_hab.known[id]) _habQueueDel(id);   // completed To-Dos are kept: they are earned history
     });
     _hab.known = cur;
   }
   function _habQueueSync(delay) {
-    if (!_habOn() || !_dataReady || _hab.cfg.syncMode === 'manual') return;
+    if (!_habOn() || !_dataReady) return;
+    _habDiff();                                   // note a deletion the moment it happens — even in manual mode, or if the tab closes before the timer fires
+    if (_hab.cfg.syncMode === 'manual') return;
     if (_hab.syncT) clearTimeout(_hab.syncT);
     _hab.syncT = setTimeout(function () { _hab.syncT = null; if (_hab.cfg.syncMode !== 'manual') _habReconcile(false); }, delay === undefined ? 1500 : delay);
   }
@@ -4177,13 +4348,19 @@ const timeManagementModule = (function () {
     _hab.err = '';
     pull = !!(pull || _hab.force);
     _hab.force = false;
-    let changed = false, gold = 0, scored = 0, created = 0, updated = 0, removed = 0;
+    let changed = false, gold = 0, scored = 0, created = 0, updated = 0, removed = 0, sdMsg = '';
     try {
       if (pull || !_hab.user || Date.now() - _hab.lastPull > 120000) { if (await _habPull()) changed = true; }
       _habDiff();
       while (_hab.delQ.length) {
-        const id = _hab.delQ.shift();
-        try { await _habReq('DELETE', '/tasks/' + id); removed++; } catch (e) { if (e.status !== 404) throw e; }
+        const id = _hab.delQ[0];
+        try { await _habReq('DELETE', '/tasks/' + id); removed++; }
+        catch (e) {
+          // keep the id and retry next sync unless Habitica says it is already gone / can never succeed
+          if (!(e.status === 404 || (e.status >= 400 && e.status < 500 && e.status !== 401 && e.status !== 408 && e.status !== 429))) throw e;
+        }
+        _hab.delQ.shift();
+        _habSaveDel();
       }
       const today = _todayStr();
       const list = _timeBlocks.slice().sort(function (a, b) { return (a.date + a.startTime) < (b.date + b.startTime) ? -1 : 1; });
@@ -4202,11 +4379,15 @@ const timeManagementModule = (function () {
           }
           if (b.habiticaId && !b.habDone && await _habPushCk(b)) changed = true;
           if (!!b.done !== !!b.habDone) { gold += await _habScore(b); scored++; changed = true; }
+          if (b.habiticaId) _hab.known[b.habiticaId] = !!b.habDone;
+          if (_timeBlocks.indexOf(b) < 0) { _habDiff(); _hab.again = true; }   // the block was deleted while its To-Do was being created/updated
         } catch (e) {
           if (e.status === 404 && b.habiticaId) { b.habiticaId = ''; b.habFp = ''; b.habDone = false; changed = true; }
           else throw e;
         }
       }
+      try { const sdr = await _habStreakSync(); if (sdr && sdr.msg) sdMsg = sdr.msg; }       // opt-in Streak Daily (no-op when off)
+      catch (e) { if (e.status === 401) throw e; _hab.sd.note = 'Streak Daily: ' + (e.message || 'sync failed'); }
     } catch (e) {
       _hab.err = e.status === 401 ? 'Habitica rejected the saved credentials.' : (e.message || 'Sync failed.');
     }
@@ -4217,6 +4398,7 @@ const timeManagementModule = (function () {
     if (updated) parts.push('Updated ' + updated);
     if (scored) parts.push('Scored ' + scored + ' (' + (gold >= 0 ? '+' : '') + gold.toFixed(1) + ' gold)');
     if (removed) parts.push('Removed ' + removed);
+    if (sdMsg) parts.push(sdMsg);
     if (_hab.err) parts.push('Error — ' + _hab.err);
     if (parts.length) { _hab.log.unshift({ t: Date.now(), text: parts.join(' · ') }); _hab.log.length = Math.min(_hab.log.length, 6); }
     if (changed) {
@@ -4324,6 +4506,8 @@ const timeManagementModule = (function () {
       if (!!b.done !== !!b.habDone) n++;
     });
     Object.keys(_hab.known).forEach(function (id) { if (!(id in cur) && !_hab.known[id]) n++; });
+    if (_hab.cfg.sdOn && !_hab.cfg.sdId) n++;
+    else if (_hab.cfg.sdOn && _hab.sd.completed !== null) { const w = _sdWant(); if (_sdDue(w.day) && w.want !== !!_hab.sd.completed && (w.want || _hab.cfg.sdUp === w.day)) n++; }
     return n;
   }
 
@@ -4431,6 +4615,7 @@ const timeManagementModule = (function () {
           opt('scope', 'all', c.scope === 'all', 'Every block', 'Including untitled ones, from today onward.') +
         '</div>' +
       '</section>' +
+      _sdHtml() +
       '<section class="hub-tm-hab-card"><h4>Quest difficulty by tag</h4><div class="hub-tm-hab-ranks">' + ranks + '</div></section>' +
       '<section class="hub-tm-hab-card"><div class="hub-tm-hab-cardhead"><h4>Recent activity</h4>' + logTools + '</div><ul class="hub-tm-hab-log">' + log + '</ul>' + (auto ? '<p class="hub-tm-hab-logfoot">Entries disappear one hour after they appear.</p>' : '') + '</section>' +
       '<div class="hub-tm-hab-actions hub-tm-hab-actions--split"><button type="button" class="hub-tm-btn hub-tm-btn--alert" id="tm-hab-disconnect">Disconnect</button><button type="button" class="hub-tm-btn hub-tm-btn--outline" data-close>Close</button></div>';
@@ -4486,12 +4671,13 @@ const timeManagementModule = (function () {
   }
   function _habRunSync() {
     if (_hab.busy) return;
+    _hab.sweep = true;
     const p = _habReconcile(true);
     _habRenderHub();
     p.then(function () { if (_habHubOpen()) _habRenderHub(); });
   }
   function _habHubClick(e) {
-    const t = e.target.closest('[data-hab-go],[data-hab-mode],[data-hab-scope],[data-hab-rank],[data-hab-logclear],#tm-hab-sync-now,#tm-hab-disconnect');
+    const t = e.target.closest('[data-hab-go],[data-hab-mode],[data-hab-scope],[data-hab-rank],[data-hab-logclear],[data-hab-sd],[data-hab-sdprio],[data-hab-sdday],#tm-hab-sync-now,#tm-hab-disconnect');
     if (!t) return;
     if (t.hasAttribute('data-hab-logclear')) {
       if (t.getAttribute('data-hab-logclear') === 'now') _hab.log = [];
@@ -4508,7 +4694,7 @@ const timeManagementModule = (function () {
     }
     if (t.id === 'tm-hab-sync-now') { _habRunSync(); return; }
     if (t.id === 'tm-hab-disconnect') {
-      _confirm('Remove the saved Habitica credentials from this browser? To-Dos already created stay in Habitica.', function () {
+      _confirm('Remove the saved Habitica credentials from this browser? To-Dos already created stay in Habitica.' + (_hab.cfg.sdId ? ' The Streak Daily stays too and keeps costing HP on missed days — switch it off first if you do not want that.' : ''), function () {
         _hab.cfg.userId = ''; _hab.cfg.apiKey = '';
         _hab.user = null; _hab.log = []; _hab.lastSync = 0; _hab.err = ''; _hab.view = 'locked';
         _habSave();
@@ -4518,7 +4704,16 @@ const timeManagementModule = (function () {
       }, { title: 'Lock Habitica?', label: 'Disconnect' });
       return;
     }
-    if (t.hasAttribute('data-hab-mode')) _hab.cfg.syncMode = t.getAttribute('data-hab-mode') === 'manual' ? 'manual' : 'auto';
+    if (t.getAttribute('data-hab-sd') === 'toggle') { _sdToggle(); return; }
+    if (t.hasAttribute('data-hab-sd')) _hab.cfg.sdRest = !_hab.cfg.sdRest;
+    else if (t.hasAttribute('data-hab-sdprio')) _hab.cfg.sdPrio = t.getAttribute('data-val');
+    else if (t.hasAttribute('data-hab-sdday')) {
+      const i = +t.getAttribute('data-hab-sdday'), a = _hab.cfg.sdDays.split('');
+      a[i] = a[i] === '1' ? '0' : '1';
+      if (a.indexOf('1') < 0) return;                                      // at least one due day
+      _hab.cfg.sdDays = a.join('');
+    }
+    else if (t.hasAttribute('data-hab-mode')) _hab.cfg.syncMode = t.getAttribute('data-hab-mode') === 'manual' ? 'manual' : 'auto';
     else if (t.hasAttribute('data-hab-scope')) _hab.cfg.scope = t.getAttribute('data-hab-scope') === 'all' ? 'all' : 'titled';
     else if (t.hasAttribute('data-hab-rank')) _hab.cfg.prio[t.getAttribute('data-hab-rank')] = t.getAttribute('data-val');
     _habSave();
