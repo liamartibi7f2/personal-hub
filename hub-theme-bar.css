@@ -1,0 +1,181 @@
+/* ==========================================================================
+   HUB.OS  ·  THEME BAR  +  EMBER NOIR (4th theme)
+   Nạp SAU styles.css:   <link rel="stylesheet" href="./hub-theme-bar.css">
+   Chỉ làm 3 việc, không đụng module nào khác (flashcard, quiz, ...):
+     A. Ember Noir cho Hub.OS: token nền + 3 chỗ shell còn gắn cứng màu cyan
+     B. Thanh chọn giao diện (.hub-theme-swatch-group): 4 swatch, mỗi theme
+        có HÌNH DẠNG và chất liệu riêng, thanh cũng đổi theo theme đang bật
+     C. Optimize / Lite: bỏ clip, gradient, bóng — trạng thái vẫn đọc được
+   (Time Management dùng token ở mục A cho skin Ember Noir của nó.)
+   ========================================================================== */
+
+/* ═══ A. EMBER NOIR · TOKEN (trích từ hub-wallet-os.css, phần A) ═══ */
+[data-theme="ember-noir"] {
+  --bg-deep:         #110c0a;
+  --bg-surface:      #1a1411;
+  --bg-elevated:     #261d18;
+  --glass-bg:        rgba(26, 20, 17, 0.78);
+  --glass-border:    rgba(224, 170, 100, 0.14);
+  --glass-highlight: rgba(224, 170, 100, 0.07);
+
+  --accent-primary:   #ff9f43;      /* amber */
+  --accent-secondary: #ff6a4d;      /* ember red */
+  --accent-glow:      0 0 18px rgba(255, 159, 67, 0.20);
+
+  --text-primary:   #f4eae2;
+  --text-secondary: #c8b4a5;
+  --text-muted:     #9a8576;
+
+  --danger:  #ff7b7b;
+  --success: #8be3a0;
+  --warning: #ffd166;
+
+  --font-body: 'Barlow', 'Roboto', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Barlow Condensed', 'Roboto Condensed', 'Arial Narrow', 'Segoe UI', sans-serif;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --shadow-sm:   0 2px 8px rgba(0, 0, 0, 0.45);
+  --shadow-md:   0 4px 20px rgba(0, 0, 0, 0.55);
+  --shadow-lg:   0 8px 40px rgba(0, 0, 0, 0.65);
+  --shadow-glow: 0 0 22px rgba(255, 159, 67, 0.14);
+
+  --ember-brass:      #e0aa64;                       /* frame metal */
+  --ember-brass-line: rgba(224, 170, 100, 0.22);
+}
+
+/* Backdrop: engraved diagonal hatch + a lamp glow at the top (instead of the dot grid) */
+[data-theme="ember-noir"] body::before {
+  background-image:
+    radial-gradient(70% 38% at 50% -8%, rgba(255, 159, 67, 0.11), transparent 70%),
+    repeating-linear-gradient(135deg, rgba(224, 170, 100, 0.028) 0 1px, transparent 1px 7px);
+  background-size: auto, auto;
+}
+[data-theme="ember-noir"] ::selection { background: rgba(255, 159, 67, 0.35); color: #fff; }
+[data-theme="ember-noir"] ::-webkit-scrollbar-thumb { background: rgba(224, 170, 100, 0.26); }
+[data-theme="ember-noir"] ::-webkit-scrollbar-thumb:hover { background: rgba(255, 159, 67, 0.5); }
+[data-theme="ember-noir"] *:focus-visible { outline-color: var(--accent-primary); }
+
+/* Shell Hub.OS: mục đang chọn ở thanh bên + khung đồng của thanh bên
+   (base styles.css gắn cứng viền cyan cho .nav-item.active) */
+[data-theme="ember-noir"] .sidebar {
+  box-shadow: inset 0 0 0 4px var(--bg-surface), inset 0 0 0 5px var(--ember-brass-line), var(--shadow-md);
+}
+[data-theme="ember-noir"] .nav-item { font-family: var(--font-mono); font-size: 0.9rem; letter-spacing: 0.08em; text-transform: uppercase; }
+[data-theme="ember-noir"] .nav-item.active {
+  color: var(--accent-primary);
+  background: rgba(255, 159, 67, 0.09);
+  box-shadow: inset 0 0 0 1px var(--ember-brass-line);
+}
+[data-theme="ember-noir"] .nav-item.active::before { background: var(--accent-primary); border-radius: 1px; box-shadow: 0 0 8px rgba(255, 159, 67, 0.6); }
+[data-theme="ember-noir"] .brand-text { font-family: var(--font-mono); letter-spacing: 0.14em; text-transform: uppercase; }
+[data-theme="ember-noir"] .sidebar-footer { border-top: 3px double var(--ember-brass-line); }
+
+/* ═══ B. THANH CHỌN GIAO DIỆN ═══ */
+.hub-theme-swatch-group { flex-wrap: wrap; max-width: 100%; }
+.hub-theme-swatch { position: relative; }
+.hub-theme-swatch:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+.hub-theme-swatch-circle { width: 18px; height: 18px; }
+
+/* Ô xem trước: mỗi theme = bảng màu RIÊNG + hình dạng RIÊNG (nền | màu nhấn) */
+.hub-theme-swatch-circle--cyberpunk {
+  border: 0; box-shadow: none; border-radius: 0;
+  background: linear-gradient(135deg, #0a0a0f 0 52%, #00f0ff 52%);
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+}
+.hub-theme-swatch-circle--solar-zen {
+  border: 1.5px solid rgba(79, 70, 229, 0.5); box-shadow: none;
+  background: linear-gradient(135deg, #f8fafc 0 52%, #4f46e5 52%);
+}
+.hub-theme-swatch-circle--lofi-twilight {
+  border: 1.5px dotted rgba(187, 154, 247, 0.75); box-shadow: none; border-radius: 50%;
+  background: linear-gradient(135deg, #1a1b26 0 52%, #bb9af7 52%);
+}
+.hub-theme-swatch-circle--ember-noir {
+  width: 15px; height: 15px; margin: 1.5px; border: 1.5px solid #e0aa64; border-radius: 3px; box-shadow: none;
+  background: linear-gradient(135deg, #110c0a 0 52%, #ff9f43 52%);
+  transform: rotate(45deg);                                   /* ◆ */
+}
+
+/* ── Cyberpunk: khung HUD cắt góc, vạch quét, nhấn neon ── */
+[data-theme="cyberpunk"] .hub-theme-swatch-group {
+  border-radius: 0; padding: 4px 6px;
+  border-color: rgba(0, 240, 255, 0.3);
+  background:
+    linear-gradient(180deg, rgba(0, 240, 255, 0.06), transparent 60%),
+    repeating-linear-gradient(0deg, rgba(0, 240, 255, 0.035) 0 1px, transparent 1px 3px);
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+}
+[data-theme="cyberpunk"] .hub-theme-swatch { border-radius: 0; letter-spacing: 0.12em; }
+[data-theme="cyberpunk"] .hub-theme-swatch--active {
+  border-color: transparent; background: rgba(0, 240, 255, 0.1);
+  box-shadow: inset 0 -2px 0 var(--accent-primary), 0 6px 14px -8px var(--accent-primary);
+}
+[data-theme="cyberpunk"] .hub-theme-swatch--active .hub-theme-swatch-label::before { content: "> "; color: var(--accent-primary); }
+
+/* ── Solar Zen: viên giấy sáng, bóng mảnh, không phát sáng ── */
+[data-theme="solar-zen"] .hub-theme-swatch-group {
+  background: #fff; border-color: rgba(15, 23, 42, 0.1);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 6px 16px -10px rgba(15, 23, 42, 0.18);
+}
+[data-theme="solar-zen"] .hub-theme-swatch { font-weight: 600; letter-spacing: 0.04em; text-transform: none; font-size: 0.74rem; }
+[data-theme="solar-zen"] .hub-theme-swatch:hover { background: rgba(79, 70, 229, 0.05); }
+[data-theme="solar-zen"] .hub-theme-swatch--active {
+  background: rgba(79, 70, 229, 0.08); border-color: rgba(79, 70, 229, 0.35);
+  box-shadow: 0 1px 2px rgba(79, 70, 229, 0.18);
+}
+
+/* ── Lo-Fi Twilight: bo mềm, viền chấm, ánh oải hương ── */
+[data-theme="lofi-twilight"] .hub-theme-swatch-group {
+  border-radius: 20px; border: 1.5px dotted rgba(187, 154, 247, 0.4);
+  background: radial-gradient(120% 140% at 0% 0%, rgba(187, 154, 247, 0.1), transparent 60%), rgba(187, 154, 247, 0.04);
+}
+[data-theme="lofi-twilight"] .hub-theme-swatch { border-radius: 16px; text-transform: none; letter-spacing: 0.02em; font-size: 0.74rem; }
+[data-theme="lofi-twilight"] .hub-theme-swatch--active {
+  background: rgba(187, 154, 247, 0.16); border-color: rgba(187, 154, 247, 0.5);
+  box-shadow: 0 6px 16px -8px rgba(187, 154, 247, 0.55);
+}
+
+/* ── Ember Noir: khung đồng đôi, nút "keycap", nhãn khắc ── */
+.hub-theme-swatch--ember-noir:hover { color: var(--text-secondary); }
+[data-theme="ember-noir"] .hub-theme-swatch-group {
+  border-radius: 10px; padding: 6px; gap: 6px;
+  border-color: rgba(224, 170, 100, 0.34);
+  background: var(--bg-surface);
+  box-shadow: inset 0 0 0 3px var(--bg-surface), inset 0 0 0 4px var(--ember-brass-line);
+}
+[data-theme="ember-noir"] .hub-theme-swatch {
+  border-radius: 8px; font-family: var(--font-mono); font-size: 0.82rem; font-weight: 600;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-secondary);
+  border-color: var(--ember-brass-line);
+  box-shadow: inset 0 1px 0 rgba(255, 220, 180, 0.07), inset 0 -2px 0 rgba(0, 0, 0, 0.3);
+}
+[data-theme="ember-noir"] .hub-theme-swatch:hover { border-color: var(--ember-brass); background: var(--glass-highlight); }
+[data-theme="ember-noir"] .hub-theme-swatch--active {
+  color: #1a0e04; border-color: var(--ember-brass);
+  background-color: var(--accent-primary);
+  background-image: linear-gradient(180deg, #ffb865, #ff9f43 55%, #f08a2a);
+  box-shadow: inset 0 1px 0 rgba(255, 236, 210, 0.55), inset 0 -2px 0 rgba(120, 50, 0, 0.38), 0 8px 18px -8px rgba(255, 159, 67, 0.55);
+}
+[data-theme="ember-noir"] .hub-theme-swatch--active .hub-theme-swatch-label::before { content: "◆ "; }
+
+@media (max-width: 500px) { .hub-theme-swatch-circle { width: 14px; height: 14px; } .hub-theme-swatch-circle--ember-noir { width: 12px; height: 12px; } }
+/* Màn hình hẹp: lưới 2×2 thay vì tràn ngang */
+@media (max-width: 560px) {
+  .hub-theme-swatch-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  .hub-theme-swatch { justify-content: flex-start; min-width: 0; }
+  .hub-theme-swatch-label { overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* ═══ C. OPTIMIZE / LITE: phẳng, không clip, không gradient, không bóng ═══ */
+body.theme-optimized .hub-theme-swatch-group,
+body.perf-lite .hub-theme-swatch-group { clip-path: none; background-image: none; }
+body.theme-optimized .hub-theme-swatch-group { border-radius: 0; box-shadow: none; }
+body.theme-optimized .hub-theme-swatch { border-radius: 0; box-shadow: none; background-image: none; }
+body.theme-optimized .hub-theme-swatch--active { border: 1px solid var(--accent-primary); background-color: transparent; color: var(--accent-primary); }
+[data-theme="ember-noir"] body.theme-optimized .hub-theme-swatch--active { color: var(--accent-primary); }
+body.perf-lite .hub-theme-swatch--active { box-shadow: none; }
+body.theme-optimized .hub-theme-swatch-circle { clip-path: none; box-shadow: none; }

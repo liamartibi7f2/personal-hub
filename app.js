@@ -150,7 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Migrate legacy theme values
   (function(){try{var t=localStorage.getItem('hub_theme');if(t==='light')localStorage.setItem('hub_theme','solar-zen');if(t==='dark')localStorage.setItem('hub_theme','cyberpunk');}catch(_){}})();
 
-  // Initialize the 3-theme switcher (cyberpunk / solar-zen / lofi-twilight)
+  // Initialize the 4-theme switcher (cyberpunk / solar-zen / lofi-twilight / ember-noir)
   _initThemeSwitcher();
 
   // Initialize optimize mode toggle (black & green terminal, max performance)
@@ -158,14 +158,14 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /* ----------------------------------------------------------
-   THEME SWITCHER (3 Themes: Cyberpunk / Solar Zen / Lo-Fi Twilight)
+   THEME SWITCHER (4 Themes: Cyberpunk / Solar Zen / Lo-Fi Twilight / Ember Noir)
    data-theme attribute on <html> drives all CSS theme selectors.
    ---------------------------------------------------------- */
 
 const THEME_KEY    = 'hub_theme';
-const THEME_ORDER  = ['cyberpunk', 'solar-zen', 'lofi-twilight'];
-const THEME_ICONS  = { 'cyberpunk': '☀️', 'solar-zen': '🌙', 'lofi-twilight': '🌆' };
-const THEME_TITLES = { 'cyberpunk': 'Cyberpunk — Dark Neon', 'solar-zen': 'Solar Zen — Clean Light', 'lofi-twilight': 'Lo-Fi Twilight — Soft Dark' };
+const THEME_ORDER  = ['cyberpunk', 'solar-zen', 'lofi-twilight', 'ember-noir'];
+const THEME_ICONS  = { 'cyberpunk': '☀️', 'solar-zen': '🌙', 'lofi-twilight': '🌆', 'ember-noir': '🔥' };
+const THEME_TITLES = { 'cyberpunk': 'Cyberpunk — Dark Neon', 'solar-zen': 'Solar Zen — Clean Light', 'lofi-twilight': 'Lo-Fi Twilight — Soft Dark', 'ember-noir': 'Ember Noir — Brass & Amber' };
 
 /** Get the current theme from the DOM attribute (single source of truth) */
 function _getCurrentTheme() {
@@ -237,7 +237,7 @@ function _syncThemeSwatches() {
 /** Initialize theme system: bind swatch buttons + sidebar cycle toggle */
 function _initThemeSwitcher() {
 
-  // ── Sidebar toggle button: cycle through 3 themes ──
+  // ── Sidebar toggle button: cycle through all themes ──
   var sidebarBtn = document.getElementById('btn-theme-toggle');
   if (sidebarBtn) {
     _syncSidebarThemeIcon();
@@ -285,7 +285,7 @@ function _initThemeSwitcher() {
     if (typeof flashcardModule !== 'undefined' && typeof HubDB !== 'undefined') {
       HubDB.loadFlashcardSettings().then(function (settings) {
         if (settings && settings.workspaceTheme &&
-            ['cyberpunk', 'solar-zen', 'lofi-twilight'].indexOf(settings.workspaceTheme) !== -1) {
+            THEME_ORDER.indexOf(settings.workspaceTheme) !== -1) {
           // Only sync from cloud if localStorage doesn't already have a theme set
           var localTheme = null;
           try { localTheme = localStorage.getItem(THEME_KEY); } catch (_) {}

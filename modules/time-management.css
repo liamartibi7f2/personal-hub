@@ -3348,3 +3348,563 @@ body.theme-optimized #time-management .hub-tm-view-btn[aria-pressed="true"] {
 }
 body.theme-optimized #time-management .hub-tm-view-btn[aria-pressed="true"]::before { content: "["; }
 body.theme-optimized #time-management .hub-tm-view-btn[aria-pressed="true"]::after { content: "]"; }
+
+
+/* ==========================================================================
+   26. NOTIFICATIONS card (Alerts dialog)
+   ========================================================================== */
+.hub-tm-snd-master + .hub-tm-snd-master--notif,
+.hub-tm-snd-master--notif + .hub-tm-set-group { margin-top: 12px; }
+.hub-tm-snd-master--notif .hub-tm-snd-master-text { gap: 8px; }
+.hub-tm-notif-opt { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.hub-tm-notif-opt input { accent-color: var(--accent-primary); }
+.hub-tm-notif-opt:has(input:disabled) { opacity: 0.5; cursor: default; }
+.hub-tm-notif-test { align-self: flex-start; padding: 6px 12px; font-size: 0.74rem; }
+.hub-tm-notif-test:disabled { opacity: 0.5; cursor: not-allowed; }
+body.theme-optimized .hub-tm-notif-test { border-radius: 0; }
+
+
+/* ==========================================================================
+   27. DAY COMPLETION RING + STREAK
+   Ring around the day number = done minutes / planned minutes.
+   Streak band along the cell's bottom edge = a day inside a streak (>= 2 days).
+   ========================================================================== */
+#time-management {
+  --tm-streak: #ff9f43;
+  --tm-ring-ok: var(--success, #2ecc71);
+  --tm-ring-miss: color-mix(in srgb, var(--danger) 75%, transparent);
+  --tm-streak-glow: 0 0 8px var(--tm-streak);
+}
+[data-theme="solar-zen"] #time-management { --tm-streak: #e8590c; --tm-streak-glow: none; }
+[data-theme="lofi-twilight"] #time-management { --tm-streak: #ffb561; --tm-streak-glow: none; }
+body.theme-optimized #time-management { --tm-streak: #ffb000; --tm-streak-glow: none; }
+
+#time-management .hub-tm-month-num { position: relative; }
+.hub-tm-ring {
+  position: absolute;
+  inset: -4px;
+  width: calc(100% + 8px); height: calc(100% + 8px);
+  overflow: visible;
+  pointer-events: none;
+}
+.hub-tm-ring circle, .hub-tm-ring rect { fill: none; stroke-width: 2.6; }
+.hub-tm-ring-sq { display: none; }
+.hub-tm-ring-track { stroke: color-mix(in srgb, var(--text-muted) 38%, transparent); }
+.hub-tm-ring-arc { stroke: var(--accent-primary); stroke-linecap: round; }
+.hub-tm-month-cell.day-hit .hub-tm-ring-arc { stroke: var(--tm-ring-ok); }
+.hub-tm-month-cell.day-miss .hub-tm-ring-arc { stroke: var(--tm-ring-miss); }
+.hub-tm-month-cell.day-future .hub-tm-ring-track { stroke-dasharray: 2 3.2; }   /* planned, not started: dotted */
+.hub-tm-month-cell.is-full .hub-tm-ring-arc { stroke-width: 3.6; }
+
+.hub-tm-month-streak {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 3px;
+  background: var(--tm-streak);
+  box-shadow: var(--tm-streak-glow);
+  pointer-events: none;
+}
+[data-theme="solar-zen"] #time-management .hub-tm-month-streak { height: 2px; }
+[data-theme="lofi-twilight"] #time-management .hub-tm-month-streak { height: 4px; border-radius: 4px 4px 0 0; opacity: 0.9; }
+
+/* Optimize: square ring around the square day number, flat colours */
+body.theme-optimized .hub-tm-ring circle { display: none; }
+body.theme-optimized .hub-tm-ring-sq { display: inline; }
+body.theme-optimized .hub-tm-ring-arc { stroke-linecap: butt; }
+body.theme-optimized .hub-tm-ring { inset: -3px; width: calc(100% + 6px); height: calc(100% + 6px); }
+/* Solar: the number is drawn as a hand-made ellipse; keep the ring a little tighter */
+[data-theme="solar-zen"] #time-management .hub-tm-ring { inset: -3px; width: calc(100% + 6px); height: calc(100% + 6px); }
+
+/* Streak chip (deck) */
+.hub-tm-streak { cursor: default; }
+.hub-tm-streak svg { color: var(--text-muted); }
+.hub-tm-streak.is-live { color: var(--text-primary); border-color: color-mix(in srgb, var(--tm-streak) 60%, transparent); }
+.hub-tm-streak.is-live svg { color: var(--tm-streak); }
+.hub-tm-streak-ok { color: var(--tm-ring-ok); font-weight: 700; }
+
+
+/* ==========================================================================
+   28. TIMELINE: checklist drawer + edit  ·  GOLD per day
+   ========================================================================== */
+#time-management {
+  --tm-gold: #f5c542;
+}
+[data-theme="solar-zen"] #time-management { --tm-gold: #b7791f; }
+[data-theme="lofi-twilight"] #time-management { --tm-gold: #ffd479; }
+body.theme-optimized #time-management { --tm-gold: #ffd000; }
+
+/* card becomes two rows: [title · actions] then [checklist strip] then [panel] */
+.hub-tm-tl-card { flex-wrap: wrap; }
+.hub-tm-tl-sub { flex: 0 0 100%; padding: 0 8px 6px 7px; }
+.hub-tm-tl-toggle {
+  display: flex; align-items: center; gap: 6px;
+  width: 100%; padding: 4px 5px;
+  border: 0; border-radius: var(--tm-r-sm);
+  background: transparent; color: var(--text-secondary);
+  font: 600 0.68rem/1 var(--tm-font-num);
+  text-align: left; cursor: pointer;
+}
+.hub-tm-tl-toggle svg { width: 12px; height: 12px; flex-shrink: 0; transition: transform var(--duration-fast); }
+.hub-tm-tl-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+.hub-tm-tl-toggle:hover, .hub-tm-tl-toggle:focus-visible { background: var(--glass-highlight); color: var(--text-primary); }
+.hub-tm-tl-ckbar { flex: 1; height: 3px; max-width: 96px; margin-left: auto; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--tm-c) 24%, transparent); }
+.hub-tm-tl-ckbar i { display: block; height: 100%; background: var(--tm-c); }
+/* Live time bar rides on the meta row (no extra line); it wraps under it only when the card is too narrow */
+.hub-tm-tl-meta .hub-tm-tl-bar { flex: 1 1 56px; min-width: 56px; margin-left: 4px; }
+
+.hub-tm-tl-panel { flex: 0 0 100%; padding: 4px 11px 11px 12px; border-top: 1px dashed var(--tm-line-strong); }
+.hub-tm-tl-ck { display: grid; gap: 1px; margin: 6px 0 9px; padding: 0; list-style: none; }
+.hub-tm-tl-ckrow { display: flex; align-items: flex-start; gap: 9px; padding: 4px 3px; border-radius: var(--tm-r-sm); cursor: pointer; }
+.hub-tm-tl-ckrow:hover { background: var(--glass-highlight); }
+.hub-tm-tl-ck .hub-tm-ck-box { flex-shrink: 0; width: 18px; height: 18px; margin-top: 1px; }
+.hub-tm-tl-cktext { font-size: 0.78rem; line-height: 1.35; color: var(--text-primary); overflow-wrap: anywhere; }
+.hub-tm-tl-ck .is-done .hub-tm-tl-cktext { color: var(--text-muted); text-decoration: line-through; }
+.hub-tm-tl-ckempty { margin: 8px 0 9px; font-size: 0.74rem; color: var(--text-muted); }
+.hub-tm-tl-ckedit {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--tm-line-strong); border-radius: var(--tm-r-sm);
+  background: transparent; color: var(--text-secondary);
+  font-family: inherit; font-size: 0.72rem; font-weight: 600; line-height: 1;
+  cursor: pointer;
+}
+.hub-tm-tl-ckedit svg { width: 13px; height: 13px; }
+.hub-tm-tl-ckedit:hover, .hub-tm-tl-ckedit:focus-visible { border-color: var(--tm-c); background: var(--glass-highlight); color: var(--text-primary); }
+.hub-tm-tl-item.is-done .hub-tm-tl-card .hub-tm-tl-panel { opacity: 1; }
+
+/* Skins */
+[data-theme="solar-zen"] #time-management .hub-tm-tl-cktext { font-family: var(--tm-font-display); font-size: 0.84rem; }
+[data-theme="lofi-twilight"] #time-management .hub-tm-tl-panel { border-top-style: dotted; }
+[data-theme="lofi-twilight"] #time-management .hub-tm-tl-ckbar { border-radius: 999px; }
+body.theme-optimized #time-management .hub-tm-tl-toggle { border-radius: 0; }
+body.theme-optimized #time-management .hub-tm-tl-ckedit { border-radius: 0; }
+
+/* Gold */
+.hub-tm-tl-gold { color: var(--tm-gold); font-weight: 700; }
+.hub-tm-stat--gold strong { color: var(--tm-gold); }
+.hub-tm-month-gold { margin-left: 5px; font-style: normal; color: var(--tm-gold); }
+
+/* ==========================================================================
+   29. MILESTONES  ·  streak tiers (Easy → Medium → Hard → Challenge → Hell)
+   Streak + today's progress live in the status bar (#hub-tm-summary);
+   the reward card celebrates 3 / 7 / 14 / 30 / 100 days.
+   ========================================================================== */
+#time-management .hub-tm-stat--streak,
+#time-management .hub-tm-reward { --ms: var(--tm-streak); }
+#time-management [data-tier="easy"]      { --ms: #3ddc97; }
+#time-management [data-tier="medium"]    { --ms: #4cc9f0; }
+#time-management [data-tier="hard"]      { --ms: #ffb000; }
+#time-management [data-tier="challenge"] { --ms: #c77dff; }
+#time-management [data-tier="hell"]      { --ms: #ff4d3d; }
+
+#time-management .hub-tm-stat strong { display: inline-flex; align-items: center; gap: 6px; }
+.hub-tm-stat--streak svg { width: 14px; height: 14px; color: var(--text-muted); }
+.hub-tm-stat--streak.is-live svg { color: var(--ms, var(--tm-streak)); }
+.hub-tm-ms-tier {
+  font: 700 0.56rem/1 var(--tm-font-num);
+  font-style: normal;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 3px 6px;
+  border: 1px solid var(--ms);
+  border-radius: 999px;
+  color: var(--ms);
+}
+.hub-tm-stat--next strong { color: var(--ms, var(--text-primary)); }
+.hub-tm-today-rest { color: var(--text-muted); font-weight: 600; }
+.hub-tm-meter {
+  position: relative;
+  display: inline-block;
+  width: 56px;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text-muted) 28%, transparent);
+}
+.hub-tm-meter::before { content: ""; position: absolute; inset: 0 auto 0 0; width: calc(var(--p) * 1%); background: var(--tm-streak); }
+.hub-tm-meter.is-hit::before { background: var(--tm-ring-ok); }
+.hub-tm-meter::after { content: ""; position: absolute; top: 0; bottom: 0; left: calc(var(--t) * 1%); width: 2px; background: var(--text-primary); opacity: 0.65; }
+
+/* Reward card */
+.hub-tm-reward {
+  position: fixed;
+  top: 22px;
+  left: 50%;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: max-content;
+  max-width: min(92vw, 440px);
+  padding: 14px 40px 14px 16px;
+  border: 1px solid var(--ms);
+  border-radius: calc(var(--tm-r) + 2px);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ms) 35%, transparent), 0 20px 44px -16px color-mix(in srgb, var(--ms) 60%, transparent), var(--shadow-lg);
+  cursor: pointer;
+  /* State = opacity + visibility so it still works when Optimize removes all motion */
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, -18px);
+  transition: opacity 260ms var(--ease-out-expo), transform 260ms var(--ease-out-expo), visibility 0s linear 260ms;
+}
+.hub-tm-reward.is-visible { opacity: 1; visibility: visible; transform: translate(-50%, 0); transition-delay: 0s; }
+.hub-tm-reward[data-tier="challenge"], .hub-tm-reward[data-tier="hell"] { outline: 1px solid color-mix(in srgb, var(--ms) 55%, transparent); outline-offset: 3px; }
+.hub-tm-reward-badge {
+  position: relative;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border: 2px solid var(--ms);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ms) 16%, transparent);
+  color: var(--ms);
+}
+.hub-tm-reward-badge svg { position: absolute; top: 6px; width: 15px; height: 15px; }
+.hub-tm-reward-badge b { margin-top: 12px; font: 800 1.15rem/1 var(--tm-font-num); color: var(--text-primary); }
+.hub-tm-reward-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.hub-tm-reward-kicker { font: 700 0.6rem/1 var(--tm-font-num); letter-spacing: 0.18em; text-transform: uppercase; color: var(--ms); }
+.hub-tm-reward-title { font: 800 1.12rem/1.2 var(--tm-font-ui); }
+.hub-tm-reward-msg { font: 500 0.8rem/1.35 var(--tm-font-ui); color: var(--text-secondary); }
+.hub-tm-reward-next { font: 600 0.68rem/1.2 var(--tm-font-num); letter-spacing: 0.06em; color: var(--text-muted); }
+.hub-tm-reward-x {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.hub-tm-reward-x:hover { color: var(--text-primary); }
+.hub-tm-reward-burst { position: absolute; inset: 0; pointer-events: none; }
+.hub-tm-reward-burst i { position: absolute; left: 50%; top: 50%; width: 5px; height: 5px; margin: -2.5px; border-radius: 50%; background: var(--ms); opacity: 0; }
+.hub-tm-reward-burst i:nth-child(3n) { background: var(--tm-gold, #f5c542); }
+@keyframes tm-ms-burst {
+  from { transform: rotate(var(--a)) translateY(-18px) scale(1); opacity: 1; }
+  to   { transform: rotate(var(--a)) translateY(-70px) scale(0.3); opacity: 0; }
+}
+.hub-tm-reward.is-visible .hub-tm-reward-burst i { animation: tm-ms-burst 900ms var(--ease-out-expo) both; animation-delay: calc(var(--i) * 16ms); }
+@media (prefers-reduced-motion: reduce) { .hub-tm-reward-burst { display: none; } .hub-tm-reward { transition: none; } }
+
+@media (max-width: 768px) {
+  #time-management .hub-tm-summary { flex-wrap: wrap; row-gap: 10px; }
+  #time-management .hub-tm-summary > .hub-tm-pulse-sep { display: none; }
+  .hub-tm-reward { top: 12px; }
+}
+
+/* Skins / Optimize */
+[data-theme="solar-zen"] .hub-tm-reward { box-shadow: 0 14px 30px -14px rgba(0, 0, 0, 0.3); }
+body.theme-optimized .hub-tm-reward { border-radius: 0; box-shadow: none; outline: 0; border: 1px solid var(--accent-primary); }
+body.theme-optimized .hub-tm-reward-badge,
+body.theme-optimized .hub-tm-meter,
+body.theme-optimized .hub-tm-ms-tier { border-radius: 0; }
+body.theme-optimized .hub-tm-reward-burst { display: none; }
+
+
+/* ==========================================================================
+   30. WEEKLY REVIEW  ·  planned vs done, by day and by tag
+   ========================================================================== */
+.hub-tm-review { width: 660px; }
+.hub-tm-review .hub-tm-dialog-title { display: inline-flex; align-items: center; gap: 8px; }
+.hub-tm-review .hub-tm-dialog-title svg { width: 16px; height: 16px; color: var(--accent-primary); }
+.hub-tm-rv-body { display: flex; flex-direction: column; gap: 18px; padding: 16px 18px 18px; overflow-y: auto; }
+
+.hub-tm-rv-nav { display: flex; align-items: center; gap: 8px; }
+.hub-tm-rv-range { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; font: 700 0.92rem/1.1 var(--tm-font-ui); color: var(--text-primary); }
+.hub-tm-rv-range small { font: 600 0.66rem/1 var(--tm-font-num); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
+.hub-tm-rv-nav [disabled] { opacity: 0.35; cursor: default; pointer-events: none; }
+
+.hub-tm-rv-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.hub-tm-rv-kpi { display: flex; flex-direction: column; gap: 7px; min-width: 0; padding: 12px; border: 1px solid var(--tm-line); border-radius: var(--tm-r); background: var(--bg-surface); }
+.hub-tm-rv-kpi strong { display: inline-flex; align-items: center; gap: 6px; font: 800 1.5rem/1 var(--tm-font-num); color: var(--text-primary); }
+.hub-tm-rv-kpi strong svg { width: 16px; height: 16px; color: var(--tm-streak); }
+.hub-tm-rv-sub { display: flex; flex-direction: column; gap: 6px; font: 500 0.68rem/1.3 var(--tm-font-ui); color: var(--text-muted); }
+.hub-tm-rv-kpi.is-up .hub-tm-rv-sub { color: var(--tm-ring-ok); }
+.hub-tm-rv-kpi.is-down .hub-tm-rv-sub { color: var(--danger); }
+.hub-tm-rv-kpi--streak[data-tier] { border-color: color-mix(in srgb, var(--ms) 55%, var(--tm-line)); }
+.hub-tm-rv-kpi--streak[data-tier] strong svg { color: var(--ms); }
+.hub-tm-rv-meter { position: relative; display: block; height: 5px; border-radius: 99px; overflow: hidden; background: color-mix(in srgb, var(--text-muted) 28%, transparent); }
+.hub-tm-rv-meter::before { content: ""; position: absolute; inset: 0 auto 0 0; width: calc(var(--p) * 1%); background: var(--tm-streak); }
+.hub-tm-rv-meter.is-hit::before { background: var(--tm-ring-ok); }
+
+.hub-tm-rv-sec { display: flex; flex-direction: column; gap: 10px; }
+.hub-tm-rv-sec .hub-tm-sec-title { display: flex; align-items: baseline; justify-content: space-between; margin: 0; }
+.hub-tm-rv-sec .hub-tm-sec-title span { font-weight: 500; letter-spacing: 0.08em; color: var(--text-muted); text-transform: none; }
+
+/* by day */
+.hub-tm-rv-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; padding: 12px 10px 8px; border: 1px solid var(--tm-line); border-radius: var(--tm-r); background: var(--bg-surface); }
+.hub-tm-rv-day { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+.hub-tm-rv-col { position: relative; width: 100%; height: 104px; border-bottom: 1px solid var(--tm-line-strong); }
+.hub-tm-rv-col i { position: absolute; left: 20%; right: 20%; bottom: 0; min-height: 0; border-radius: 4px 4px 0 0; }
+.hub-tm-rv-plan { border: 1px dashed color-mix(in srgb, var(--accent-primary) 55%, transparent); background: color-mix(in srgb, var(--accent-primary) 10%, transparent); }
+.hub-tm-rv-done { background-color: var(--accent-primary); }
+.hub-tm-rv-day.is-hit .hub-tm-rv-done { background-color: var(--tm-ring-ok); }
+.hub-tm-rv-day.is-miss .hub-tm-rv-plan { border-color: color-mix(in srgb, var(--danger) 70%, transparent); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.hub-tm-rv-day.is-future .hub-tm-rv-plan { opacity: 0.55; }
+.hub-tm-rv-dl { font: 700 0.62rem/1 var(--tm-font-num); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); padding: 3px 0 2px; border-bottom: 2px solid transparent; }
+.hub-tm-rv-day.is-today .hub-tm-rv-dl { color: var(--text-primary); border-bottom-color: var(--accent-primary); }
+.hub-tm-rv-dv { min-height: 0.7rem; font: 600 0.62rem/1 var(--tm-font-num); color: var(--text-secondary); }
+
+/* by tag */
+.hub-tm-rv-tags { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.hub-tm-rv-tags li { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; gap: 4px 8px; }
+.hub-tm-rv-tn { font: 600 0.82rem/1.2 var(--tm-font-ui); color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-tm-rv-tv { font: 500 0.7rem/1 var(--tm-font-num); color: var(--text-muted); }
+.hub-tm-rv-tv b { color: var(--text-primary); }
+.hub-tm-rv-track { grid-column: 2 / -1; display: block; height: 8px; border-radius: 99px; background: color-mix(in srgb, var(--text-muted) 14%, transparent); }
+.hub-tm-rv-track > span { display: block; height: 100%; border-radius: 99px; background: color-mix(in srgb, var(--tm-c) 28%, transparent); overflow: hidden; }
+.hub-tm-rv-track i { display: block; height: 100%; background-color: var(--tm-c); }
+
+/* highlights */
+.hub-tm-rv-ins { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border: 1px solid var(--tm-line); border-radius: var(--tm-r); background: var(--bg-surface); }
+.hub-tm-rv-ins li { display: flex; gap: 12px; padding: 10px 12px; font: 500 0.8rem/1.3 var(--tm-font-ui); color: var(--text-primary); }
+.hub-tm-rv-ins li + li { border-top: 1px solid var(--tm-line); }
+.hub-tm-rv-ik { flex: 0 0 116px; font: 700 0.6rem/1.5 var(--tm-font-num); letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted); }
+.hub-tm-rv-foot { display: flex; justify-content: flex-end; }
+.hub-tm-rv-empty { display: flex; flex-direction: column; gap: 6px; align-items: center; padding: 36px 16px; text-align: center; border: 1px dashed var(--tm-line-strong); border-radius: var(--tm-r); color: var(--text-muted); font: 500 0.8rem/1.4 var(--tm-font-ui); }
+.hub-tm-rv-empty b { color: var(--text-primary); font-size: 0.95rem; }
+
+@media (max-width: 768px) {
+  .hub-tm-review { width: 100%; }
+  .hub-tm-rv-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hub-tm-rv-col { height: 84px; }
+  .hub-tm-rv-ik { flex-basis: 96px; }
+}
+[data-theme="lofi-twilight"] .hub-tm-rv-col i { border-radius: 99px 99px 0 0; }
+body.theme-optimized .hub-tm-rv-kpi, body.theme-optimized .hub-tm-rv-days, body.theme-optimized .hub-tm-rv-ins,
+body.theme-optimized .hub-tm-rv-col i, body.theme-optimized .hub-tm-rv-meter, body.theme-optimized .hub-tm-rv-track,
+body.theme-optimized .hub-tm-rv-track > span { border-radius: 0; }
+
+/* ==========================================================================
+   26. EMBER NOIR  ·  "Forge Ledger"  (tích hợp từ time-management.ember.css)
+   Trích & mở rộng từ cashflow-styles.css (Phần 1: theme Ember Noir + Phần 3).
+   Phần này phải nằm CUỐI file. Dùng đúng token Ember của Wallet.OS:
+   --accent-primary (amber), --ember-brass, --ember-brass-line,
+   --font-body (Barlow), --font-mono (Barlow Condensed).
+
+   Ngôn ngữ thiết kế (giống Wallet.OS):
+     FRAME  khung đồng đôi (hairline ngoài + vạch trong) + 4 đinh tán
+     TYPE   Barlow Condensed cho số/nhãn, Barlow cho chữ
+     SHAPE  nút "keycap": cạnh trên sáng, cạnh dưới tối
+     DETAIL ◆ đầu nhãn, vạch kép dưới đầu bảng, đường chấm giữa các giờ
+   Optimize-safe: trạng thái luôn có border / background-color.
+   ========================================================================== */
+
+/* 1. TOKENS (gồm toàn bộ Phần 3 gốc) ------------------------------------- */
+[data-theme="ember-noir"] #time-management {
+  --tm-font-display: var(--font-body);
+  --tm-font-num: var(--font-mono);
+  --tm-r-sm: 6px;
+  --tm-r: 10px;
+  --tm-r-lg: 12px;
+  --tm-block-r: 8px;
+  --tm-on-accent: #1a0e04;
+  --tm-scrim: rgba(10, 6, 4, 0.8);
+  --tm-line: var(--ember-brass-line);
+  --tm-line-strong: rgba(224, 170, 100, 0.46);
+  --tm-hour-line: var(--ember-brass-line);
+  --tm-half-line: color-mix(in srgb, var(--ember-brass) 8%, transparent);
+  --tm-half-style: dotted;                       /* đường chấm như sổ cái */
+  --tm-today-bg: color-mix(in srgb, var(--accent-primary) 7%, transparent);
+  --tm-tint-scale: 0.8;
+  --tm-block-clip: none;
+
+  --tm-title-prefix: "";
+  --tm-now-prefix: "◆ ";
+  --tm-time-ls: 0.06em;
+  --tm-slot-cursor: cell;
+  --tm-lock-display: none;
+  --tm-chip-clip: none;
+  --tm-switch-clip: none;
+  --tm-week-clip: none;
+  --tm-now-bg: linear-gradient(90deg, var(--accent-primary), color-mix(in srgb, var(--accent-primary) 8%, transparent));
+
+  /* sân khấu: ánh đèn trên cùng + 4 đinh tán đồng ở góc khung */
+  --tm-rivet: radial-gradient(circle at 38% 34%, #ffe2bb 0 0.7px, #e0a04c 1.7px, #8a5014 3.1px, transparent 3.3px);
+  --tm-stage-bg:
+    var(--tm-rivet) left 11px top 11px / 9px 9px no-repeat,
+    var(--tm-rivet) right 11px top 11px / 9px 9px no-repeat,
+    var(--tm-rivet) left 11px bottom 11px / 9px 9px no-repeat,
+    var(--tm-rivet) right 11px bottom 11px / 9px 9px no-repeat,
+    radial-gradient(70% 38% at 50% -8%, rgba(255, 159, 67, 0.11), transparent 70%),
+    repeating-linear-gradient(135deg, rgba(224, 170, 100, 0.028) 0 1px, transparent 1px 7px),
+    var(--bg-deep);
+  /* thước đồng: vạch giờ dài, nửa giờ ngắn */
+  --tm-gutter-ticks:
+    linear-gradient(180deg, color-mix(in srgb, var(--ember-brass) 70%, transparent) 0 1px, transparent 1px) right top / 10px var(--tm-hour-h) repeat-y,
+    linear-gradient(180deg, color-mix(in srgb, var(--ember-brass) 34%, transparent) 0 1px, transparent 1px) right top / 5px var(--tm-slot-h) repeat-y;
+  --tm-sb-w: 8px;
+  --tm-sb-thumb: rgba(224, 170, 100, 0.26);
+  --tm-sb-r: 4px;
+  --tm-select: rgba(255, 159, 67, 0.35);
+
+  /* keycap dùng chung */
+  --tm-keycap: inset 0 1px 0 rgba(255, 220, 180, 0.07), inset 0 -2px 0 rgba(0, 0, 0, 0.3);
+  --tm-keycap-amber: inset 0 1px 0 rgba(255, 236, 210, 0.55), inset 0 -2px 0 rgba(120, 50, 0, 0.38), 0 8px 18px -8px rgba(255, 159, 67, 0.55);
+  color-scheme: dark;
+}
+
+/* Khối lịch: vạch "than hồng" ở cạnh trái (Phần 3 gốc) */
+[data-theme="ember-noir"] .hub-tm-block,
+[data-theme="ember-noir"] .hub-tm-week-block {
+  --tm-block-texture: none;
+  --tm-block-shadow: inset 3px 0 0 var(--tm-c);
+  --tm-block-shadow-hover: inset 3px 0 0 var(--tm-c), 0 6px 16px rgba(0, 0, 0, 0.5);
+  --tm-stitch: 0 solid transparent;
+}
+
+/* 2. KHUNG ĐỒNG ĐÔI ------------------------------------------------------ */
+[data-theme="ember-noir"] body:not(.theme-optimized) #time-management .hub-tm-grid-wrapper {
+  border: 1px solid rgba(224, 170, 100, 0.34);
+  border-radius: var(--tm-r-lg);
+  box-shadow: inset 0 0 0 5px var(--bg-surface), inset 0 0 0 6px var(--ember-brass-line);
+}
+[data-theme="ember-noir"] .hub-tm-grid-wrapper::before,
+[data-theme="ember-noir"] .hub-tm-grid-wrapper::after { display: none; }   /* bỏ ngoặc HUD của Cyberpunk */
+[data-theme="ember-noir"] body:not(.theme-optimized) #time-management .hub-tm-header {
+  border-bottom: 3px double rgba(224, 170, 100, 0.5);
+}
+[data-theme="ember-noir"] #time-management .hub-tm-time-gutter { border-right: 1px solid var(--ember-brass-line); }
+
+/* 3. CHỮ: khắc, gọn, thẳng hàng số ------------------------------------- */
+[data-theme="ember-noir"] #time-management .hub-tm-title {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+[data-theme="ember-noir"] body:not(.theme-optimized) #time-management .hub-tm-title::before { content: "◆ "; color: var(--accent-primary); }
+[data-theme="ember-noir"] #time-management .hub-tm-hour-label,
+[data-theme="ember-noir"] #time-management .hub-tm-block-time,
+[data-theme="ember-noir"] #time-management .hub-tm-week-block-time {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: 0.06em;
+}
+[data-theme="ember-noir"] #time-management .hub-tm-hour-label { font-size: 0.82rem; color: color-mix(in srgb, var(--ember-brass) 80%, var(--text-secondary)); }
+[data-theme="ember-noir"] #time-management .hub-tm-block-title { font-weight: 600; }
+[data-theme="ember-noir"] .hub-tm-block--past { opacity: 0.58; }
+[data-theme="ember-noir"] .hub-tm-tag-dot { border-radius: 1px; transform: rotate(45deg) scale(0.85); box-shadow: none; }
+
+/* 4. BÂY GIỜ: than hồng ------------------------------------------------- */
+[data-theme="ember-noir"] .hub-tm-now-line { height: 2px; box-shadow: none; }
+[data-theme="ember-noir"] .hub-tm-now-dot { border-radius: 1px; transform: rotate(45deg); box-shadow: 0 0 10px rgba(255, 159, 67, 0.6); }
+[data-theme="ember-noir"] .hub-tm-now-chip {
+  border-radius: 4px;
+  background: var(--accent-primary);
+  color: var(--tm-on-accent);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+/* 5. TUẦN / THÁNG: vạch kép dưới đầu bảng, nhãn khắc ------------------- */
+[data-theme="ember-noir"] body:not(.theme-optimized) #time-management .hub-tm-week-head,
+[data-theme="ember-noir"] body:not(.theme-optimized) #time-management .hub-tm-grid-header {
+  border-bottom: 3px double rgba(224, 170, 100, 0.5);
+}
+[data-theme="ember-noir"] #time-management .hub-tm-week-head-day,
+[data-theme="ember-noir"] #time-management .hub-tm-month-head-cell {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+[data-theme="ember-noir"] #time-management .hub-tm-week-head-cell.is-today .hub-tm-week-head-date,
+[data-theme="ember-noir"] #time-management .hub-tm-month-cell.is-today .hub-tm-month-num {
+  background: var(--accent-primary);
+  color: var(--tm-on-accent);
+  border-color: var(--ember-brass);
+  border-radius: 6px;
+}
+[data-theme="ember-noir"] #time-management .hub-tm-month-cell { border-top: 2px solid var(--ember-brass-line); }
+[data-theme="ember-noir"] #time-management .hub-tm-month-cell.is-today { border-top-color: var(--accent-primary); }
+[data-theme="ember-noir"] #time-management .hub-tm-month-chip { font-family: var(--font-body); font-weight: 600; border-radius: 4px; }
+
+/* 6. NÚT "KEYCAP" ---------------------------------------------------------- */
+[data-theme="ember-noir"] #time-management .hub-tm-btn,
+[data-theme="ember-noir"] #time-management .hub-tm-date-nav,
+[data-theme="ember-noir"] #time-management .hub-tm-view-btn {
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+[data-theme="ember-noir"] body:not(.theme-optimized) #time-management .hub-tm-btn,
+[data-theme="ember-noir"] body:not(.theme-optimized) #time-management .hub-tm-date-nav {
+  border-color: rgba(224, 170, 100, 0.34);
+  box-shadow: var(--tm-keycap);
+}
+[data-theme="ember-noir"] #time-management .hub-tm-btn:hover,
+[data-theme="ember-noir"] #time-management .hub-tm-date-nav:hover { border-color: var(--ember-brass); background: var(--glass-highlight); }
+[data-theme="ember-noir"] body:not(.theme-optimized) #time-management .hub-tm-btn--primary,
+[data-theme="ember-noir"] body:not(.theme-optimized) #time-management .hub-tm-view-btn[aria-pressed="true"] {
+  color: var(--tm-on-accent);
+  background-color: var(--accent-primary);
+  background-image: linear-gradient(180deg, #ffb865, #ff9f43 55%, #f08a2a);
+  box-shadow: var(--tm-keycap-amber);
+}
+[data-theme="ember-noir"] #time-management .hub-tm-btn--primary:active { transform: translateY(1px); }
+
+/* 7. HỘP THOẠI · BẢNG CHI TIẾT · TOAST --------------------------------- */
+[data-theme="ember-noir"] body:not(.theme-optimized) .hub-tm-drawer,
+[data-theme="ember-noir"] body:not(.theme-optimized) .hub-tm-dialog,
+[data-theme="ember-noir"] body:not(.theme-optimized) .hub-tm-focus-card {
+  border: 1px solid rgba(224, 170, 100, 0.5);
+  border-radius: var(--tm-r-lg);
+  box-shadow: inset 0 0 0 5px var(--bg-surface), inset 0 0 0 6px var(--ember-brass-line), var(--shadow-lg);
+}
+[data-theme="ember-noir"] body:not(.theme-optimized) .hub-tm-toast {
+  border: 1px solid var(--ember-brass-line);
+  border-left: 4px solid var(--accent-primary);
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+[data-theme="ember-noir"] #hub-tm-details-modal .hub-tm-inspector { clip-path: none; border: 1px solid var(--ember-brass-line); border-radius: 16px; box-shadow: var(--shadow-lg); }
+[data-theme="ember-noir"] .hub-tm-insp-hero { background-image: linear-gradient(180deg, color-mix(in srgb, var(--tm-c) 18%, transparent), transparent); }
+[data-theme="ember-noir"] .hub-tm-insp-eyebrow::before { content: "◆ "; color: var(--tm-c); }
+[data-theme="ember-noir"] .hub-tm-insp-title { font-size: 1.6rem; font-weight: 700; }
+[data-theme="ember-noir"] .hub-tm-sec-title { font-family: var(--font-mono); letter-spacing: 0.16em; text-transform: uppercase; }
+[data-theme="ember-noir"] .hub-tm-hab-minibtn[aria-pressed="true"] { color: var(--accent-primary); }
+[data-theme="ember-noir"] .hub-tm-focus-fill { background-color: var(--accent-primary); }
+
+/* 9. MỐC THƯỞNG: thẻ chúc mừng + thanh trạng thái ---------------------- */
+[data-theme="ember-noir"] body:not(.theme-optimized) .hub-tm-reward {
+  border: 1px solid rgba(224, 170, 100, 0.5);
+  border-radius: var(--tm-r-lg);
+  box-shadow: inset 0 0 0 5px var(--bg-surface), inset 0 0 0 6px var(--ember-brass-line), 0 20px 44px -16px color-mix(in srgb, var(--ms) 55%, transparent), var(--shadow-lg);
+}
+[data-theme="ember-noir"] .hub-tm-reward-badge { border-radius: 8px; transform: rotate(45deg); }
+[data-theme="ember-noir"] .hub-tm-reward-badge > * { transform: rotate(-45deg); }
+[data-theme="ember-noir"] .hub-tm-reward-badge .hub-tm-reward-burst { transform: none; }
+[data-theme="ember-noir"] .hub-tm-reward-kicker,
+[data-theme="ember-noir"] .hub-tm-reward-next { font-family: var(--font-mono); text-transform: uppercase; }
+[data-theme="ember-noir"] .hub-tm-reward-title { font-family: var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; }
+[data-theme="ember-noir"] .hub-tm-ms-tier { border-radius: 4px; }
+[data-theme="ember-noir"] .hub-tm-meter { border-radius: 2px; }
+
+/* 10. REVIEW ------------------------------------------------------------ */
+[data-theme="ember-noir"] body:not(.theme-optimized) .hub-tm-review {
+  border: 1px solid rgba(224, 170, 100, 0.5);
+  box-shadow: inset 0 0 0 5px var(--bg-surface), inset 0 0 0 6px var(--ember-brass-line), var(--shadow-lg);
+}
+[data-theme="ember-noir"] .hub-tm-rv-range { font-family: var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; }
+[data-theme="ember-noir"] .hub-tm-rv-kpi,
+[data-theme="ember-noir"] .hub-tm-rv-days,
+[data-theme="ember-noir"] .hub-tm-rv-ins { border-color: var(--ember-brass-line); }
+[data-theme="ember-noir"] .hub-tm-rv-kpi { border-top: 2px solid var(--ember-brass); }
+[data-theme="ember-noir"] .hub-tm-rv-col { border-bottom: 3px double rgba(224, 170, 100, 0.5); }
+[data-theme="ember-noir"] .hub-tm-rv-col i { border-radius: 2px 2px 0 0; }
+[data-theme="ember-noir"] .hub-tm-rv-ik { color: var(--ember-brass); }

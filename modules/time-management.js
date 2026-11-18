@@ -31,6 +31,19 @@ const timeManagementModule = (function () {
   const LOCAL_KEY    = 'hub_tm_data';
   const TEMPLATE_KEY = 'hub_tm_templates';
   const AUDIO_KEY    = 'hub_tm_audio';
+  const STREAK_MIN      = 0.5;   // a day counts when >= 50% of its planned minutes are done
+  const STREAK_REST_GAP = 2;     // up to 2 empty days in a row do not break a streak
+  const MS_KEY          = 'hub_tm_milestones';   // local mirror (per account) of the synced milestone map
+  /* Reward milestones: streak length -> difficulty tier (edit freely; keep ascending) */
+  const MS_TIERS = [
+    { n: 3,   k: 'easy',      name: 'Easy',      msg: 'Three days in a row. The spark is lit.' },
+    { n: 7,   k: 'medium',    name: 'Medium',    msg: 'A full week. The habit is taking shape.' },
+    { n: 14,  k: 'hard',      name: 'Hard',      msg: 'Two weeks. Most people quit before this.' },
+    { n: 30,  k: 'challenge', name: 'Challenge', msg: 'Thirty days. This is who you are now.' },
+    { n: 100, k: 'hell',      name: 'Hell',      msg: 'One hundred days. Legendary.' }
+  ];
+  const NOTIF_KEY    = 'hub_tm_notif';      // per device: { enabled, bgOnly }
+  const SW_URL       = 'tm-sw.js';          // must sit next to index.html (see tm-sw.js)
   const VIEW_KEY     = 'hub_tm_view';
   const HINT_KEY     = 'hub_tm_hint_seen';
   const SLOT_H       = 36;
@@ -69,9 +82,10 @@ const timeManagementModule = (function () {
     check:  TL_SVG('<path d="m5 12.5 4.5 4.5L19 7.5"/>'),
     fwd:    TL_SVG('<path d="M5 12h14M13 6l6 6-6 6"/>'),
     del:    TL_SVG('<path d="M6 6l12 12M18 6 6 18"/>'),
-    chev:   TL_SVG('<path d="m9 6 6 6-6 6"/>')
+    chev:   TL_SVG('<path d="m9 6 6 6-6 6"/>'),
+    edit:   TL_SVG('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>')
   };
-  let _tl = { q: '', tag: 'all', range: 'all', status: 'all', pastOpen: false };
+  let _tl = { q: '', tag: 'all', range: 'all', status: 'all', pastOpen: false, open: {} };
   /* Set Time v2 — constants & state */
   const SB_DURS = [15, 30, 45, 60, 90, 120, 180];
   const SB_WEEKS = [1, 2, 4, 8, 12];
@@ -87,7 +101,9 @@ const timeManagementModule = (function () {
     template: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>',
     repeat:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="17,1 21,5 17,9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7,23 3,19 7,15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
     timeline: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><rect x="7" y="10" width="4" height="8" rx="1"/><rect x="13" y="6" width="4" height="12" rx="1"/></svg>',
+    review:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V11M10 20V4M16 20v-6M22 20H2"/></svg>',
     focus:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg>',
+    flame:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3c1 3.2 4.5 5.2 4.5 9.5A4.5 4.5 0 0 1 12 17a4.5 4.5 0 0 1-4.5-4.5c0-1.7.8-2.9 1.8-3.9.2 1.1.8 1.9 1.6 2.2C10.6 8.1 11 5.6 12 3Z"/><path d="M12 21a3 3 0 0 1-3-3"/></svg>',
     bell:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>',
     gear:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>'
   };
@@ -104,6 +120,7 @@ const timeManagementModule = (function () {
   let _tombs       = { blocks: {}, tags: {}, templates: {} };                       // id → deletion time (so deletes sync too)
   let _base        = { blocks: {}, tags: {}, templates: {}, settings: '' };          // signature of every item at the last sync
   let _settingsAt  = 0;
+  let _msMap          = {};   // celebrated milestones: 'runStart|days' -> date. Add-only, synced with the account
   let _remoteT     = null;
   let _pendingClaim = null;
   let _confirmCancelCb = null;
@@ -137,6 +154,7 @@ const timeManagementModule = (function () {
   let _pendingScroll = null;        // minutes to scroll to after next day-grid build
 
   let _nowTimer = null, _focusTimer = null, _saveTimer = null, _toastTimer = null, _tlTimer = null;
+  let _notif = { enabled: false, bgOnly: true }, _noticeDone = {}, _hbWorker = null, _hbTimer = null, _swReg = null, _swPromise = null;
   let _audioTimer = null, _ctx = null, _master = null, _sched = {}, _buses = [], _cueTimers = [], _sample = null;
 
   const _modalStack = [];
@@ -182,6 +200,7 @@ const timeManagementModule = (function () {
     if (m >= DAY_MINS) return '24:00';
     return _pad(Math.floor(m / 60)) + ':' + _pad(m % 60);
   }
+  function _fmtGold(n) { return (Math.round(n * 10) / 10).toFixed(1); }
   function _fmtDur(m) {
     const h = Math.floor(m / 60), r = m % 60;
     if (!h) return r + 'm';
@@ -311,6 +330,7 @@ const timeManagementModule = (function () {
       habiticaId: b.habiticaId ? String(b.habiticaId).slice(0, 64) : '',
       habFp: b.habFp ? String(b.habFp).slice(0, 16) : '',
       habDone: b.habDone === true,
+      gp: +b.gp > 0 ? Math.min(9999, Math.round(+b.gp * 100) / 100) : 0,       // gold this block earned in Habitica
       checklist: _normCk(b.checklist),
       ckDel: Array.isArray(b.ckDel) ? b.ckDel.map(String).slice(0, CK_MAX) : [],
       updatedAt: Number(b.updatedAt) || 0
@@ -357,6 +377,7 @@ const timeManagementModule = (function () {
     _timeBlocks = []; _customTags = []; _templates = []; _activeTagId = 'work';
     _tombs = { blocks: {}, tags: {}, templates: {} };
     _settingsAt = 0;
+    _msMap = {};
   }
 
   /* ============================================================
@@ -383,7 +404,7 @@ const timeManagementModule = (function () {
     });
   }
   function _rebase() {
-    _base = { blocks: {}, tags: {}, templates: {}, settings: JSON.stringify([_activeTagId, _audioSynced()]) };
+    _base = { blocks: {}, tags: {}, templates: {}, settings: JSON.stringify([_activeTagId, _audioSynced(), _msMap]) };
     _timeBlocks.forEach(function (b) { _base.blocks[b.id] = _sigOf(b); });
     _customTags.forEach(function (t) { _base.tags[t.id] = _sigOf(t); });
     _templates.forEach(function (t) { _base.templates[t.id] = _sigOf(t); });
@@ -394,11 +415,11 @@ const timeManagementModule = (function () {
     _stampList(_customTags, 'tags', now);
     _stampList(_templates, 'templates', now);
     const audio = _audioSynced();
-    const ss = JSON.stringify([_activeTagId, audio]);
+    const ss = JSON.stringify([_activeTagId, audio, _msMap]);
     if (_base.settings !== ss) { _base.settings = ss; _settingsAt = now; }
     return {
       v: 2, timeBlocks: _timeBlocks, customTags: _customTags, templates: _templates,
-      audio: audio, activeTagId: _activeTagId, settingsAt: _settingsAt, tombs: _tombs, updatedAt: now
+      audio: audio, activeTagId: _activeTagId, settingsAt: _settingsAt, milestones: _msMap, tombs: _tombs, updatedAt: now
     };
   }
   function _saveAll() {
@@ -441,6 +462,7 @@ const timeManagementModule = (function () {
     _dataUid = st.uid === undefined ? null : st.uid;
     _resetData();
     if (st.payload) _applyData(st.payload);
+    _loadMs(st.payload);
     _rebase();
     _dataReady = true;
     if (st.claimable && _dataUid) _pendingClaim = { uid: _dataUid, count: st.claimable.count, payload: st.claimable.payload };
@@ -452,6 +474,7 @@ const timeManagementModule = (function () {
     _habQueueSync(800);
     _loadAudio();                          // this device's alerts on/off switch
     if (_audio.enabled) _startAudio(); else if (_audioTimer) _stopAudio();
+    _notifBoot();                          // this device's notification switch
     if (_sectionEl && _sectionEl.isConnected) _paint(true);
     if (st && st.dirty) _scheduleSave();   // local edits were merged in → push them up
     _maybeOfferClaim();
@@ -615,6 +638,7 @@ const timeManagementModule = (function () {
           '<button type="button" class="hub-tm-btn hub-tm-btn--tool" id="tm-btn-templates" title="Templates" aria-label="Templates">' + ICON.template + '<span class="hub-tm-btn-label">Templates</span></button>' +
           '<button type="button" class="hub-tm-btn hub-tm-btn--tool" id="tm-btn-set-time" title="Set Time (repeat blocks)" aria-label="Set Time">' + ICON.repeat + '<span class="hub-tm-btn-label">Set Time</span></button>' +
           '<button type="button" class="hub-tm-btn hub-tm-btn--tool" id="tm-btn-timeline" title="Timeline" aria-label="Timeline">' + ICON.timeline + '<span class="hub-tm-btn-label">Timeline</span></button>' +
+          '<button type="button" class="hub-tm-btn hub-tm-btn--tool" id="tm-btn-review" title="Weekly review" aria-label="Weekly review">' + ICON.review + '<span class="hub-tm-btn-label">Review</span></button>' +
             '</div>' +
           '<button type="button" class="hub-tm-btn hub-tm-btn--outline hub-tm-btn--habitica" id="tm-btn-habitica" title="Habitica" aria-label="Habitica"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/><polyline points="8.5,12 11,14.5 15.5,9.5"/></svg><span class="hub-tm-btn-label">Habitica</span></button>' +
           '<button type="button" class="hub-tm-btn hub-tm-btn--focus" id="tm-btn-focus-mode" title="Focus Mode" aria-label="Focus Mode">' + ICON.focus + '<span class="hub-tm-btn-label">Focus</span></button>' +
@@ -652,6 +676,14 @@ const timeManagementModule = (function () {
       '<div class="hub-tm-grid-wrapper">' +
         '<div class="hub-tm-grid-header" id="hub-tm-grid-header"></div>' +
         '<div class="hub-tm-grid-scroll" id="hub-tm-grid-scroll"><div class="hub-tm-grid-body" id="hub-tm-grid-body"></div></div>' +
+      '</div>' +
+
+      /* ── Weekly review ── */
+      '<div class="hub-tm-overlay" id="hub-tm-review-modal" aria-hidden="true">' +
+        '<div class="hub-tm-dialog hub-tm-review" role="dialog" aria-modal="true" aria-labelledby="hub-tm-review-title">' +
+          '<div class="hub-tm-dialog-head"><h3 class="hub-tm-dialog-title" id="hub-tm-review-title">' + ICON.review + 'Review</h3><button type="button" class="hub-tm-dialog-close" data-close aria-label="Close">&times;</button></div>' +
+          '<div class="hub-tm-dialog-body hub-tm-rv-body" id="hub-tm-review-body"></div>' +
+        '</div>' +
       '</div>' +
 
       /* ── Focus mode ── */
@@ -782,7 +814,7 @@ const timeManagementModule = (function () {
       /* ── Settings · Sound alerts (cue sheet) ── */
       '<div class="hub-tm-overlay" id="hub-tm-settings-modal" aria-hidden="true">' +
         '<div class="hub-tm-dialog hub-tm-dialog--lg hub-tm-snd" id="tm-snd" role="dialog" aria-modal="true" aria-labelledby="hub-tm-settings-heading">' +
-          '<div class="hub-tm-dialog-head"><h3 class="hub-tm-dialog-title" id="hub-tm-settings-heading">Sound alerts</h3><button type="button" class="hub-tm-dialog-close" data-close aria-label="Close">&times;</button></div>' +
+          '<div class="hub-tm-dialog-head"><h3 class="hub-tm-dialog-title" id="hub-tm-settings-heading">Alerts</h3><button type="button" class="hub-tm-dialog-close" data-close aria-label="Close">&times;</button></div>' +
           '<div class="hub-tm-dialog-body">' +
             '<section class="hub-tm-snd-master" id="tm-snd-master">' +
               '<div class="hub-tm-snd-master-text">' +
@@ -790,6 +822,15 @@ const timeManagementModule = (function () {
                 '<p class="hub-tm-hint" id="hub-tm-audio-status" aria-live="polite"></p>' +
               '</div>' +
               '<label class="toggle-switch"><input type="checkbox" id="tm-audio-enabled"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>' +
+            '</section>' +
+            '<section class="hub-tm-snd-master hub-tm-snd-master--notif" id="tm-notif-master">' +
+              '<div class="hub-tm-snd-master-text">' +
+                '<label class="hub-tm-snd-master-title" for="tm-notif-enabled"><span class="hub-tm-snd-dot" aria-hidden="true"></span>Notifications</label>' +
+                '<p class="hub-tm-hint" id="hub-tm-notif-status" aria-live="polite"></p>' +
+                '<label class="hub-tm-hint hub-tm-notif-opt"><input type="checkbox" id="tm-notif-bg"><span>Only when this tab is in the background</span></label>' +
+                '<button type="button" class="hub-tm-btn hub-tm-btn--outline hub-tm-notif-test" data-notif-test>Send a test notification</button>' +
+              '</div>' +
+              '<label class="toggle-switch"><input type="checkbox" id="tm-notif-enabled"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>' +
             '</section>' +
             '<div class="hub-tm-set-group" id="tm-audio-options">' +
               '<section class="hub-tm-snd-sec" aria-labelledby="tm-snd-h-inst">' +
@@ -972,6 +1013,8 @@ const timeManagementModule = (function () {
     _el('#tm-btn-templates').addEventListener('click', _openTemplates);
     _el('#tm-btn-set-time').addEventListener('click', _openSetTime);
     _el('#tm-btn-timeline').addEventListener('click', _openTimeline);
+    _el('#tm-btn-review').addEventListener('click', _openReview);
+    _bindReview();
 
     // Generic: [data-close] buttons + clicking a dark backdrop
     s.addEventListener('click', function (e) {
@@ -1270,6 +1313,7 @@ const timeManagementModule = (function () {
     const rows = Math.ceil((lead + dim) / 7);
     const byDate = {};
     _timeBlocks.forEach(function (b) { (byDate[b.date] = byDate[b.date] || []).push(b); });
+    const sk = _streakInfo();
 
     let html = '<div class="hub-tm-month"><div class="hub-tm-month-head">';
     for (let i = 1; i <= 7; i++) html += '<div class="hub-tm-month-head-cell">' + DAY_SHORT[i % 7] + '</div>';
@@ -1287,15 +1331,169 @@ const timeManagementModule = (function () {
         list.slice(0, 6).forEach(function (b) { dots += '<span class="hub-tm-month-dot" style="' + _tagStyle(_tagOrFallback(b.tagId)) + '"></span>'; });
         const mins = list.reduce(function (s, b) { return s + Math.max(0, _toMins(b.endTime) - _toMins(b.startTime)); }, 0);
         const load = Math.min(1, mins / 480).toFixed(2);          // 8h booked = full heat
-        html += '<div class="hub-tm-month-cell' + (d.getMonth() !== m ? ' is-dim' : '') + (ds === today ? ' is-today' : '') + '" style="--tm-load:' + load + '" data-date="' + ds + '" data-activate role="button" tabindex="0" aria-label="' + DAY_FULL[d.getDay()] + ' ' + _dateLabel(d) + (list.length ? ', ' + list.length + ' block' + (list.length > 1 ? 's' : '') : '') + '">' +
-                  '<span class="hub-tm-month-num">' + d.getDate() + '</span>' +
-                  (mins ? '<span class="hub-tm-month-total">' + _fmtDur(mins) + '</span>' : '') +
+        const gold = list.reduce(function (g, b) { return g + (b.gp || 0); }, 0);
+        const dst = sk.stats[ds], dstate = sk.state[ds] || _dayState(dst, ds, today);
+        let dcls = '', ring = '', band = '', dlabel = '', dtip = '';
+        if (dst) {
+          const pct = Math.min(100, Math.round(dst.d / dst.p * 100));
+          dcls = ' has-plan day-' + dstate + (pct >= 100 ? ' is-full' : '');
+          ring = _ringSvg(pct);
+          dlabel = ', ' + pct + '% done';
+          dtip = ' title="' + dst.k + ' of ' + dst.n + ' block' + (dst.n > 1 ? 's' : '') + ' done · ' + pct + '%"';
+        }
+        if (sk.inRun[ds]) { dcls += ' is-streak'; band = '<i class="hub-tm-month-streak" aria-hidden="true"></i>'; dlabel += ', streak day ' + sk.runAt[ds]; }
+        html += '<div class="hub-tm-month-cell' + (d.getMonth() !== m ? ' is-dim' : '') + (ds === today ? ' is-today' : '') + dcls + '" style="--tm-load:' + load + '" data-date="' + ds + '" data-activate role="button" tabindex="0" aria-label="' + DAY_FULL[d.getDay()] + ' ' + _dateLabel(d) + (list.length ? ', ' + list.length + ' block' + (list.length > 1 ? 's' : '') : '') + dlabel + '"' + dtip + '>' +
+                  '<span class="hub-tm-month-num">' + d.getDate() + ring + '</span>' +
+                  (mins ? '<span class="hub-tm-month-total">' + _fmtDur(mins) + (gold > 0 ? '<em class="hub-tm-month-gold">+' + _fmtGold(gold) + '</em>' : '') + '</span>' : '') +
                   '<span class="hub-tm-month-chips">' + chips + (list.length > 3 ? '<span class="hub-tm-month-more">+' + (list.length - 3) + ' more</span>' : '') + '</span>' +
-                  '<span class="hub-tm-month-dots">' + dots + '</span></div>';
+                  '<span class="hub-tm-month-dots">' + dots + '</span>' + band + '</div>';
       }
       html += '</div>';
     }
     body.innerHTML = html + '</div>';
+  }
+
+  /* ============================================================
+     DAY COMPLETION + STREAK
+     - A day "hits" when >= STREAK_MIN (50%) of its planned minutes are checked done.
+     - Days with no blocks are rest days: up to STREAK_REST_GAP in a row keep the streak.
+     - Today never breaks a streak while it is still pending.
+     - Derived from the blocks each time, so it follows sync and Habitica for free.
+     ============================================================ */
+  function _dayStats() {
+    const m = {};
+    _timeBlocks.forEach(function (b) {
+      const mins = Math.max(0, _toMins(b.endTime) - _toMins(b.startTime));
+      if (!mins) return;
+      const s = m[b.date] || (m[b.date] = { p: 0, d: 0, n: 0, k: 0 });
+      s.p += mins; s.n++;
+      if (b.done) { s.d += mins; s.k++; }
+    });
+    return m;
+  }
+  function _dayState(s, ds, today) {
+    if (!s) return 'rest';
+    if (ds > today) return 'future';
+    if (s.d / s.p >= STREAK_MIN) return 'hit';
+    return ds === today ? 'pending' : 'miss';
+  }
+  function _streakInfo() {
+    const today = _todayStr(), stats = _dayStats(), keys = Object.keys(stats).sort();
+    const out = { stats: stats, state: {}, runAt: {}, inRun: {}, cur: 0, best: 0, today: today, todayPct: 0, start: '' };
+    if (!keys.length) return out;
+    const end = _parseDate(today);
+    let d = _parseDate(keys[0]);
+    const cap = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 1500);
+    if (d < cap) d = cap;
+    let run = 0, gap = 0, prevHit = null, runStart = '';
+    while (d <= end) {
+      const ds = _dateToStr(d), st = _dayState(stats[ds], ds, today);
+      out.state[ds] = st;
+      if (st === 'hit') {
+        run++; gap = 0; if (run === 1) runStart = ds;
+        if (run > out.best) out.best = run;
+        out.runAt[ds] = run;
+        if (run >= 2) { out.inRun[ds] = true; if (prevHit) out.inRun[prevHit] = true; }
+        prevHit = ds;
+      } else if (st === 'miss') { run = 0; gap = 0; prevHit = null; }
+      else if (st === 'pending') { gap = 0; }
+      else { gap++; if (gap > STREAK_REST_GAP) { run = 0; prevHit = null; } }
+      d.setDate(d.getDate() + 1);
+    }
+    out.cur = run; out.start = run > 0 ? runStart : '';
+    const t = stats[today];
+    out.todayPct = t ? Math.round(t.d / t.p * 100) : 0;
+    return out;
+  }
+  /** Progress ring drawn around the day number. Circle everywhere, square for the TUI skin (CSS picks). */
+  function _ringSvg(pct) {
+    const dash = ' pathLength=\"100\" stroke-dasharray=\"' + pct + ' 100\"';
+    return '<svg class=\"hub-tm-ring\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" focusable=\"false\">' +
+      '<circle class=\"hub-tm-ring-track\" cx=\"18\" cy=\"18\" r=\"15.5\"/>' +
+      (pct > 0 ? '<circle class=\"hub-tm-ring-arc\" cx=\"18\" cy=\"18\" r=\"15.5\"' + dash + ' transform=\"rotate(-90 18 18)\"/>' : '') +
+      '<rect class=\"hub-tm-ring-sq hub-tm-ring-track\" x=\"2.5\" y=\"2.5\" width=\"31\" height=\"31\"/>' +
+      (pct > 0 ? '<rect class=\"hub-tm-ring-sq hub-tm-ring-arc\" x=\"2.5\" y=\"2.5\" width=\"31\" height=\"31\"' + dash + '/>' : '') +
+      '</svg>';
+  }
+  /* ---- Milestones: tier lookup, status-bar cells, celebration ---- */
+  function _tierAt(cur) { let t = null; MS_TIERS.forEach(function (x) { if (cur >= x.n) t = x; }); return t; }
+  function _streakCells(sk) {
+    if (!Object.keys(sk.stats).length) return '';
+    const t = _tierAt(sk.cur), nx = MS_TIERS.filter(function (x) { return x.n > sk.cur; })[0];
+    const need = Math.round(STREAK_MIN * 100), st = sk.state[sk.today];
+    const cell = function (cls, k, v, attr, title) { return '<span class="hub-tm-stat ' + cls + '"' + (attr || '') + (title ? ' title="' + title + '"' : '') + '><span class="hub-tm-stat-k">' + k + '</span><strong>' + v + '</strong></span>'; };
+    const streak = cell('hub-tm-stat--streak' + (sk.cur > 0 ? ' is-live' : ''), 'Streak',
+      ICON.flame + '<span>' + sk.cur + 'd</span>' + (t ? '<em class="hub-tm-ms-tier">' + t.name + '</em>' : ''),
+      t ? ' data-tier="' + t.k + '"' : '',
+      'Best ' + sk.best + ' days. A day counts when ' + need + '% of its planned time is done. Up to ' + STREAK_REST_GAP + ' empty days in a row do not break a streak.');
+    const meter = '<i class="hub-tm-meter' + (st === 'hit' ? ' is-hit' : '') + '" style="--p:' + Math.min(100, sk.todayPct) + ';--t:' + need + '" aria-hidden="true"></i>';
+    const today = cell('hub-tm-stat--today', 'Today', st === 'rest' ? '<span class="hub-tm-today-rest">Rest day</span>'
+      : meter + (st === 'hit' ? '<span class="hub-tm-streak-ok">Done</span>' : '<span>' + sk.todayPct + '%</span>'), '', 'Needs ' + need + '% to count for the streak');
+    const next = nx ? cell('hub-tm-stat--next', 'Next', nx.name + ' · ' + (nx.n - sk.cur) + 'd', ' data-tier="' + nx.k + '"', nx.n + '-day streak')
+      : cell('hub-tm-stat--next', 'Tier', 'Max', ' data-tier="hell"');
+    return streak + today + next + '<span class="hub-tm-pulse-sep"></span>';
+  }
+  function _normMs(o) {
+    const r = {};
+    if (!o || typeof o !== 'object') return r;
+    Object.keys(o).slice(0, 300).forEach(function (k) { if (/^\d{4}-\d{2}-\d{2}\|\d{1,4}$/.test(k) && /^\d{4}-\d{2}-\d{2}$/.test(String(o[k]))) r[k] = String(o[k]); });
+    return r;
+  }
+  function _msKeyLs() { return MS_KEY + ':' + (_dataUid || 'guest'); }
+  /** Union of the account's synced map and this device's mirror, so a celebration is never repeated on another device. */
+  function _loadMs(payload) { _msMap = Object.assign({}, _normMs(_lsJson(MS_KEY)), _normMs(_lsJson(_msKeyLs())), _normMs(payload && payload.milestones)); }
+  /** Fires once per (streak run, milestone), on the day the streak reaches exactly that length. */
+  function _msCheck(sk) {
+    if (!sk.start || sk.state[sk.today] !== 'hit') return;
+    const t = MS_TIERS.filter(function (x) { return x.n === sk.cur; })[0];
+    if (!t) return;
+    if (!_dataReady) return;                       // never decide before the account's data (and its milestone map) has loaded
+    const key = sk.start + '|' + t.n;
+    if (_msMap[key]) return;
+    _msMap[key] = sk.today;
+    _lsSet(_msKeyLs(), JSON.stringify(_msMap));
+    _scheduleSave();
+    setTimeout(function () { _celebrate(t); }, 450);
+  }
+  let _rewardTimer = null;
+  function _fanfare(idx) {
+    if (!_audio.enabled || !_ctx || _ctx.state !== 'running') return;
+    try {
+      const key = _voiceKey(), v = VOICES[key], bus = _ctx.createGain();
+      bus.gain.value = _clamp(_audio.volume / 100, 0, 1);
+      bus.connect(_master);
+      [0, 4, 7, 12, 16, 19].slice(0, 3 + Math.min(3, idx)).forEach(function (s, k) {
+        _voiceTone(key, _ctx, bus, _ctx.currentTime + 0.05 + k * 0.11, v.root * Math.pow(2, s / 12), v.dur * 1.2, 0.9);
+      });
+    } catch (e) {}
+  }
+  function _celebrate(t) {
+    if (!_sectionEl || !_sectionEl.isConnected) return;
+    const idx = MS_TIERS.indexOf(t), nx = MS_TIERS[idx + 1];
+    let el = _el('#hub-tm-reward');
+    if (!el) { el = document.createElement('div'); el.id = 'hub-tm-reward'; _sectionEl.appendChild(el); }
+    let dots = '';
+    for (let k = 0; k < 8 + idx * 4; k++) dots += '<i style="--a:' + Math.round(k * 360 / (8 + idx * 4)) + 'deg;--i:' + k + '"></i>';
+    el.className = 'hub-tm-reward';
+    el.setAttribute('data-tier', t.k);
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+    el.innerHTML =
+      '<div class="hub-tm-reward-badge">' + ICON.flame + '<b>' + t.n + '</b><span class="hub-tm-reward-burst" aria-hidden="true">' + dots + '</span></div>' +
+      '<div class="hub-tm-reward-body">' +
+        '<span class="hub-tm-reward-kicker">Milestone · ' + t.name + '</span>' +
+        '<strong class="hub-tm-reward-title">' + t.n + '-day streak</strong>' +
+        '<span class="hub-tm-reward-msg">' + t.msg + '</span>' +
+        (nx ? '<span class="hub-tm-reward-next">Next · ' + nx.name + ' at ' + nx.n + ' days</span>' : '<span class="hub-tm-reward-next">Top tier reached</span>') +
+      '</div>' +
+      '<button type="button" class="hub-tm-reward-x" aria-label="Close">&times;</button>';
+    const close = function () { el.classList.remove('is-visible'); if (_rewardTimer) { clearTimeout(_rewardTimer); _rewardTimer = null; } };
+    el.querySelector('.hub-tm-reward-x').addEventListener('click', close);
+    el.addEventListener('click', close);
+    requestAnimationFrame(function () { requestAnimationFrame(function () { el.classList.add('is-visible'); }); });
+    _fanfare(idx);
+    if (_rewardTimer) clearTimeout(_rewardTimer);
+    _rewardTimer = setTimeout(close, 7000 + idx * 1000);
   }
 
   /* ---- Summary (planned time + tag mix for the visible range) ---- */
@@ -1308,6 +1506,9 @@ const timeManagementModule = (function () {
   }
   function _updateSummary() {
     _habChip();
+    const sk = _streakInfo();
+    _msCheck(sk);
+    const lead = _streakCells(sk);
     const per = _tagTimes();
     _applyTagTimes(per);
     const box = _el('#hub-tm-summary');
@@ -1315,7 +1516,7 @@ const timeManagementModule = (function () {
     const list = _rangeBlocks();
     if (!list.length) {
       box.classList.add('is-empty');
-      box.innerHTML = '<span class="hub-tm-summary-empty">' + (_view === 'day' ? 'Drag on the grid to plan this day' : 'Nothing planned this ' + _view) + '</span>';
+      box.innerHTML = lead + '<span class="hub-tm-summary-empty">' + (_view === 'day' ? 'Drag on the grid to plan this day' : 'Nothing planned this ' + _view) + '</span>';
       return;
     }
     box.classList.remove('is-empty');
@@ -1326,7 +1527,10 @@ const timeManagementModule = (function () {
       const t = _tagOrFallback(id);
       return '<span style="' + _tagStyle(t) + ';flex:' + per[id] + '" title="' + _esc(t.label) + ' · ' + _fmtDur(per[id]) + '"></span>';
     }).join('');
-    box.innerHTML = stat('Planned', _fmtDur(total)) + stat('Blocks', list.length) + '<div class="hub-tm-summary-bar" aria-hidden="true">' + seg + '</div>';
+    const gold = list.reduce(function (g, b) { return g + (b.gp || 0); }, 0);
+    box.innerHTML = lead + stat('Planned', _fmtDur(total)) + stat('Blocks', list.length) +
+      (gold > 0 ? '<span class="hub-tm-stat hub-tm-stat--gold"><span class="hub-tm-stat-k">Gold</span><strong>+' + _fmtGold(gold) + '</strong></span>' : '') +
+      '<div class="hub-tm-summary-bar" aria-hidden="true">' + seg + '</div>';
   }
 
   /* ---- Now line / past dimming / scrolling ---- */
@@ -1772,6 +1976,7 @@ const timeManagementModule = (function () {
         _scheduleSave();
         _closeModal(modal);
         _renderGrid({ animate: false, scroll: false });
+        _tlRefresh();
       }, { title: 'Delete block?' });
     });
     _el('#tm-details-title').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); _saveDetails(); } });
@@ -1922,9 +2127,11 @@ const timeManagementModule = (function () {
     b.subtitle = ed.textContent.trim() ? _sanitizeHtml(ed.innerHTML) : '';
     _ckCommit(b);
     b.done = wantDone;
+    if (!wantDone) b.gp = 0;
     _scheduleSave();
     _closeModal(_el('#hub-tm-details-modal'));
     _renderGrid({ animate: false, scroll: false });
+    _tlRefresh();                                  // opened from the Timeline? keep it in step
   }
 
   /* ============================================================
@@ -1973,6 +2180,122 @@ const timeManagementModule = (function () {
     t.classList.add('is-visible');
     _toastTimer = setTimeout(function () { t.classList.remove('is-visible'); t._cb = null; _toastTimer = null; }, opts.action ? 5000 : 2600);
   }
+
+  /* ============================================================
+     WEEKLY REVIEW  ·  what was planned vs what was really done
+     Pure read-out of the blocks (follows sync and Habitica for free).
+     ============================================================ */
+  let _rvOff = 0, _rvText = '';
+  function _rvWeek(off) {
+    const mon = _addDays(_weekStart(_todayStr()), off * 7), days = [];
+    for (let i = 0; i < 7; i++) days.push(_dateToStr(_addDays(mon, i)));
+    return { mon: mon, days: days };
+  }
+  function _rvAgg(days) {
+    const stats = _dayStats(), per = {}, set = {};
+    days.forEach(function (d) { set[d] = 1; });
+    let p = 0, d = 0;
+    const rows = days.map(function (ds) { const s = stats[ds] || { p: 0, d: 0 }; p += s.p; d += s.d; return { ds: ds, p: s.p, d: s.d }; });
+    _timeBlocks.forEach(function (b) {
+      if (!set[b.date]) return;
+      const m = Math.max(0, _toMins(b.endTime) - _toMins(b.startTime));
+      if (!m) return;
+      const t = per[b.tagId] || (per[b.tagId] = { p: 0, d: 0 });
+      t.p += m; if (b.done) t.d += m;
+    });
+    return { rows: rows, p: p, d: d, per: per };
+  }
+  function _rvLabel(off, w) {
+    const end = _addDays(w.mon, 6), range = _dateLabel(w.mon) + ' – ' + _dateLabel(end);
+    return (off === 0 ? 'This week' : off === -1 ? 'Last week' : Math.abs(off) + ' weeks ago') + '<small>' + range + '</small>';
+  }
+  function _renderReview() {
+    const box = _el('#hub-tm-review-body');
+    if (!box) return;
+    const today = _todayStr(), w = _rvWeek(_rvOff), A = _rvAgg(w.days), B = _rvAgg(_rvWeek(_rvOff - 1).days), sk = _streakInfo();
+    const need = Math.round(STREAK_MIN * 100), pct = A.p ? Math.round(A.d / A.p * 100) : 0;
+    const planned = w.days.filter(function (ds) { return (sk.stats[ds] || {}).p; });
+    const hits = planned.filter(function (ds) { return sk.state[ds] === 'hit'; }).length;
+    const dm = A.d - B.d, tier = _tierAt(sk.cur);
+    const delta = (!A.d && !B.d) ? '' : (dm === 0 ? 'Same as the week before' : (dm > 0 ? '▲ +' : '▼ −') + _fmtDur(Math.abs(dm)) + ' vs week before');
+    const kpi = function (k, v, sub, extra) { return '<div class="hub-tm-rv-kpi' + (extra || '') + '"><span class="hub-tm-stat-k">' + k + '</span><strong>' + v + '</strong><span class="hub-tm-rv-sub">' + sub + '</span></div>'; };
+
+    const nav = '<div class="hub-tm-rv-nav">' +
+      '<button type="button" class="hub-tm-date-nav" data-rv="-1" aria-label="Previous week" title="Previous week">' + ICON.prev + '</button>' +
+      '<div class="hub-tm-rv-range" aria-live="polite">' + _rvLabel(_rvOff, w) + '</div>' +
+      '<button type="button" class="hub-tm-date-nav" data-rv="1" aria-label="Next week" title="Next week"' + (_rvOff >= 0 ? ' disabled' : '') + '>' + ICON.next + '</button>' +
+      '<button type="button" class="hub-tm-btn" data-rv="0"' + (_rvOff === 0 ? ' disabled' : '') + '>This week</button></div>';
+
+    if (!A.p) {
+      _rvText = '';
+      box.innerHTML = nav + '<div class="hub-tm-rv-empty"><b>Nothing planned this week</b><span>Drag on the grid to plan time, then check blocks off — the review fills itself in.</span></div>';
+      return;
+    }
+
+    const kpis = '<div class="hub-tm-rv-kpis">' +
+      kpi('Completion', pct + '%', 'Done ' + _fmtDur(A.d) + ' of ' + _fmtDur(A.p) + '<i class="hub-tm-rv-meter' + (pct >= need ? ' is-hit' : '') + '" style="--p:' + Math.min(100, pct) + '"></i>') +
+      kpi('Time done', _fmtDur(A.d), delta || '&nbsp;', dm > 0 ? ' is-up' : dm < 0 ? ' is-down' : '') +
+      kpi('On target', hits + '/' + planned.length, 'days at ≥ ' + need + '%') +
+      '<div class="hub-tm-rv-kpi hub-tm-rv-kpi--streak"' + (tier ? ' data-tier="' + tier.k + '"' : '') + '><span class="hub-tm-stat-k">Streak now</span><strong>' + ICON.flame + sk.cur + 'd' + (tier ? '<em class="hub-tm-ms-tier">' + tier.name + '</em>' : '') + '</strong><span class="hub-tm-rv-sub">Best ' + sk.best + ' days</span></div>' +
+      '</div>';
+
+    const maxP = Math.max(60, Math.max.apply(null, A.rows.map(function (r) { return r.p; })));
+    const days = '<div class="hub-tm-rv-days" role="img" aria-label="Planned versus done time per day">' + A.rows.map(function (r, i) {
+      const st = sk.state[r.ds], cls = (r.ds === today ? ' is-today' : '') + (st === 'hit' ? ' is-hit' : '') + (st === 'miss' ? ' is-miss' : '') + (r.ds > today ? ' is-future' : '');
+      return '<div class="hub-tm-rv-day' + cls + '"><span class="hub-tm-rv-dv">' + (r.p ? _fmtDur(r.d) : '') + '</span>' +
+        '<div class="hub-tm-rv-col" title="' + DAY_SHORT[(i + 1) % 7] + ' · done ' + _fmtDur(r.d) + ' of ' + _fmtDur(r.p) + '">' +
+        (r.p ? '<i class="hub-tm-rv-plan" style="height:' + Math.round(r.p / maxP * 100) + '%"></i><i class="hub-tm-rv-done" style="height:' + Math.round(r.d / maxP * 100) + '%"></i>' : '') + '</div>' +
+        '<span class="hub-tm-rv-dl">' + DAY_SHORT[(i + 1) % 7] + '</span></div>';
+    }).join('') + '</div>';
+
+    const tagIds = Object.keys(A.per).sort(function (a, b) { return A.per[b].p - A.per[a].p; });
+    const maxT = A.per[tagIds[0]].p;
+    const tags = '<ul class="hub-tm-rv-tags">' + tagIds.map(function (id) {
+      const t = _tagOrFallback(id), v = A.per[id];
+      return '<li style="' + _tagStyle(t) + '"><span class="hub-tm-tag-dot"></span><span class="hub-tm-rv-tn">' + _esc(t.label) + '</span>' +
+        '<span class="hub-tm-rv-tv"><b>' + _fmtDur(v.d) + '</b> / ' + _fmtDur(v.p) + '</span>' +
+        '<span class="hub-tm-rv-track"><span style="width:' + Math.round(v.p / maxT * 100) + '%"><i style="width:' + Math.round(v.d / v.p * 100) + '%"></i></span></span></li>';
+    }).join('') + '</ul>';
+
+    // Insights: only days with real plans (>= 30 min) that are not still ahead of us
+    const past = A.rows.filter(function (r) { return r.p >= 30 && r.ds <= today; }).map(function (r) { const i = A.rows.indexOf(r); return { n: DAY_FULL[(i + 1) % 7], v: r.d / r.p, p: r.p, ds: r.ds }; });
+    const ins = [];
+    if (past.length) {
+      const best = past.slice().sort(function (a, b) { return b.v - a.v || b.p - a.p; })[0];
+      ins.push(['Best day', best.n + ' · ' + Math.round(best.v * 100) + '% of ' + _fmtDur(best.p)]);
+      const weak = past.filter(function (x) { return x.ds < today && x.v < STREAK_MIN; }).sort(function (a, b) { return a.v - b.v; })[0];
+      if (weak) ins.push(['Needs attention', weak.n + ' · only ' + Math.round(weak.v * 100) + '% done']);
+    }
+    const topDone = tagIds.slice().sort(function (a, b) { return A.per[b].d - A.per[a].d; })[0];
+    if (A.per[topDone].d) ins.push(['Most time on', _tagOrFallback(topDone).label + ' · ' + _fmtDur(A.per[topDone].d)]);
+    const insHtml = ins.length ? '<ul class="hub-tm-rv-ins">' + ins.map(function (x) { return '<li><span class="hub-tm-rv-ik">' + x[0] + '</span><span>' + _esc(x[1]) + '</span></li>'; }).join('') + '</ul>' : '';
+
+    _rvText = 'Weekly review · ' + _dateLabel(w.mon) + ' – ' + _dateLabel(_addDays(w.mon, 6)) + '\n' +
+      'Completion ' + pct + '% (' + _fmtDur(A.d) + ' of ' + _fmtDur(A.p) + ')' + (delta ? ' · ' + delta : '') + '\n' +
+      'On target ' + hits + '/' + planned.length + ' days · streak ' + sk.cur + 'd (best ' + sk.best + ')\n' +
+      tagIds.map(function (id) { return '• ' + _tagOrFallback(id).label + ': ' + _fmtDur(A.per[id].d) + ' / ' + _fmtDur(A.per[id].p); }).join('\n') +
+      (ins.length ? '\n' + ins.map(function (x) { return x[0] + ': ' + x[1]; }).join('\n') : '');
+
+    box.innerHTML = nav + kpis +
+      '<section class="hub-tm-rv-sec"><h4 class="hub-tm-sec-title">By day<span>planned · done</span></h4>' + days + '</section>' +
+      '<section class="hub-tm-rv-sec"><h4 class="hub-tm-sec-title">By tag<span>done / planned</span></h4>' + tags + '</section>' +
+      (insHtml ? '<section class="hub-tm-rv-sec"><h4 class="hub-tm-sec-title">Highlights</h4>' + insHtml + '</section>' : '') +
+      '<div class="hub-tm-rv-foot"><button type="button" class="hub-tm-btn hub-tm-btn--outline" data-rv-copy>Copy summary</button></div>';
+  }
+  function _openReview() { _rvOff = 0; _renderReview(); _openModal(_el('#hub-tm-review-modal'), '.hub-tm-dialog-close'); }
+  function _bindReview() {
+    const m = _el('#hub-tm-review-modal');
+    if (!m) return;
+    m.addEventListener('click', function (e) {
+      const n = e.target.closest('[data-rv]');
+      if (n) { if (n.disabled) return; const v = n.getAttribute('data-rv'); _rvOff = v === '0' ? 0 : Math.min(0, _rvOff + (+v)); _renderReview(); return; }
+      if (e.target.closest('[data-rv-copy]') && _rvText) {
+        const ok = function () { _toast('Review copied'); };
+        try { navigator.clipboard.writeText(_rvText).then(ok, function () { _toast('Couldn’t copy — select the text manually.'); }); } catch (_) { _toast('Couldn’t copy — select the text manually.'); }
+      }
+    });
+  }
+
 
   /* ============================================================
      FOCUS MODE  (always about *today*, live-updating)
@@ -2337,6 +2660,15 @@ const timeManagementModule = (function () {
         _el('#tm-timeline-search').value = '';
         _tlSavePrefs(); _renderTimeline(); return;
       }
+      if ((n = t.closest('[data-tl-open]'))) {                       // › / ⌄  show or hide the checklist
+        const id = n.getAttribute('data-tl-open');
+        _tl.open[id] = n.getAttribute('aria-expanded') !== 'true';
+        _renderTimeline();
+        const again = drawer.querySelector('[data-tl-open="' + id + '"]');
+        if (again) again.focus({ preventScroll: true });
+        return;
+      }
+      if ((n = t.closest('[data-tl-edit]'))) { _openDetails(n.getAttribute('data-tl-edit')); return; }   // editor opens on top; Timeline stays
       if ((n = t.closest('[data-tl-done]')))   { _habToggleDone(n.getAttribute('data-tl-done')); _tlRefresh(); return; }
       if ((n = t.closest('[data-tl-next]')))   { _tlMove(n.getAttribute('data-tl-next')); return; }
       if ((n = t.closest('[data-tl-del]')))    { _tlDelete(n.getAttribute('data-tl-del')); return; }
@@ -2348,6 +2680,23 @@ const timeManagementModule = (function () {
         _setDate(b.date, { view: 'day', scrollMins: _toMins(b.startTime) });
         _focusBlock(b.id);
       }
+    });
+
+    // Tick checklist items right inside the Timeline (same effect as in Focus mode)
+    drawer.addEventListener('change', function (e) {
+      const cb = e.target.closest('[data-tl-ck]');
+      if (!cb) return;
+      const bid = cb.getAttribute('data-tl-blk'), iid = cb.getAttribute('data-tl-ck');
+      const b = _blockById(bid), it = b && _ck(b).find(function (i) { return i.id === iid; });
+      if (!it) return;
+      it.done = cb.checked;
+      _scheduleSave();
+      _fckSig = '';
+      _renderGrid({ animate: false, scroll: false });
+      _renderTimeline();
+      const again = drawer.querySelector('[data-tl-ck="' + iid + '"][data-tl-blk="' + bid + '"]');
+      if (again) again.focus({ preventScroll: true });
+      _ckNudge(b);
     });
   }
 
@@ -2534,31 +2883,50 @@ const timeManagementModule = (function () {
     meta.push('<span>' + _esc(tag.label) + '</span>');
     if (c.flat) meta.push('<span>' + _esc(b.startTime) + '–' + _esc(b.endTime) + '</span>');
     meta.push('<span>' + _fmtDur(e - s) + '</span>');
-    if (ck.length) meta.push('<span>' + ckDone + '/' + ck.length + ' tasks</span>');
+    if (b.done && b.gp > 0) meta.push('<span class="hub-tm-tl-gold">+' + _fmtGold(b.gp) + ' gold</span>');
     let when;
     if (c.flat) { const d = _parseDate(b.date); when = '<span class="hub-tm-tl-t1">' + _dateLabel(d) + '</span><span class="hub-tm-tl-t2">' + DAY_SHORT[d.getDay()] + '</span>'; }
     else when = '<span class="hub-tm-tl-t1">' + _esc(b.startTime) + '</span><span class="hub-tm-tl-t2">' + _esc(b.endTime) + '</span>';
     const mvName = _tlDayName(_tlMoveTarget(b, c.today), c.today);
+    // Checklist drawer: the live block opens by itself until the person decides otherwise
+    const isOpen = _tl.open[b.id] !== undefined ? !!_tl.open[b.id] : (live && ck.length > 0);
+    const pid = 'hub-tm-tlp-' + id;
+    const ckPct = ck.length ? Math.round(ckDone / ck.length * 100) : 0;
+    const strip = '<div class="hub-tm-tl-sub"><button type="button" class="hub-tm-tl-toggle" data-tl-open="' + id + '" aria-expanded="' + isOpen + '"' + (isOpen ? ' aria-controls="' + pid + '"' : '') + ' title="' + (isOpen ? 'Hide' : 'Show') + ' checklist">' +
+      TL_ICON.chev + '<span>' + (ck.length ? ckDone + '/' + ck.length + ' tasks' : 'No tasks') + '</span>' +
+      (ck.length ? '<span class="hub-tm-tl-ckbar" aria-hidden="true"><i style="width:' + ckPct + '%"></i></span>' : '') + '</button></div>';
+    let panel = '';
+    if (isOpen) {
+      panel = '<div class="hub-tm-tl-panel" id="' + pid + '">' +
+        (ck.length
+          ? '<ul class="hub-tm-tl-ck">' + ck.map(function (i) {
+              return '<li class="' + (i.done ? 'is-done' : '') + '"><label class="hub-tm-tl-ckrow"><span class="hub-tm-ck-box"><input type="checkbox" data-tl-ck="' + _esc(i.id) + '" data-tl-blk="' + id + '"' + (i.done ? ' checked' : '') + '><span></span></span><span class="hub-tm-tl-cktext">' + _esc(i.text) + '</span></label></li>';
+            }).join('') + '</ul>'
+          : '<p class="hub-tm-tl-ckempty">No tasks yet — add some in the editor.</p>') +
+        '<button type="button" class="hub-tm-tl-ckedit" data-tl-edit="' + id + '">' + TL_ICON.edit + '<span>Edit block &amp; checklist</span></button></div>';
+    }
     const cls = 'hub-tm-tl-item' + (b.done ? ' is-done' : '') + (live ? ' is-live' : '') + (late ? ' is-late' : '');
     return '<li class="' + cls + '" style="' + _tagStyle(tag) + '">' +
       '<span class="hub-tm-tl-when">' + when + '</span><span class="hub-tm-tl-node" aria-hidden="true"></span>' +
       '<div class="hub-tm-tl-card">' +
         '<button type="button" class="hub-tm-tl-main" data-tl-go="' + id + '">' +
           '<span class="hub-tm-tl-title">' + title + '</span>' +
-          '<span class="hub-tm-tl-meta">' + meta.join('<span class="hub-tm-tl-sep" aria-hidden="true">·</span>') + '</span>' +
-          (live ? '<span class="hub-tm-tl-bar"><i style="width:' + _clamp(Math.round((c.nm - s) / (e - s) * 100), 0, 100) + '%"></i></span>' : '') +
+          '<span class="hub-tm-tl-meta">' + meta.join('<span class="hub-tm-tl-sep" aria-hidden="true">·</span>') +
+            (live ? '<span class="hub-tm-tl-bar"><i style="width:' + _clamp(Math.round((c.nm - s) / (e - s) * 100), 0, 100) + '%"></i></span>' : '') + '</span>' +
         '</button>' +
         '<span class="hub-tm-tl-acts">' +
+          '<button type="button" class="hub-tm-tl-act" data-tl-edit="' + id + '" title="Edit block" aria-label="Edit ' + title + '">' + TL_ICON.edit + '</button>' +
           '<button type="button" class="hub-tm-tl-act hub-tm-tl-act--done" role="checkbox" aria-checked="' + (b.done ? 'true' : 'false') + '" data-tl-done="' + id + '" title="' + (b.done ? 'Mark not complete' : 'Mark complete') + '" aria-label="' + (b.done ? 'Mark ' + title + ' not complete' : 'Mark ' + title + ' complete') + '">' + TL_ICON.check + '</button>' +
           (b.done ? '' : '<button type="button" class="hub-tm-tl-act" data-tl-next="' + id + '" title="Move to ' + _esc(mvName) + '" aria-label="Move ' + title + ' to ' + _esc(mvName) + '">' + TL_ICON.fwd + '</button>') +
           '<button type="button" class="hub-tm-tl-act hub-tm-tl-act--del" data-tl-del="' + id + '" title="Delete" aria-label="Delete ' + title + '">' + TL_ICON.del + '</button>' +
         '</span>' +
+        strip + panel +
       '</div></li>';
   }
   function _tlGroup(g, c) {
     const d = _parseDate(g.date), diff = _tlDayDiff(g.date), isToday = diff === 0;
-    let mins = 0, done = 0;
-    g.items.forEach(function (b) { mins += _toMins(b.endTime) - _toMins(b.startTime); if (b.done) done++; });
+    let mins = 0, done = 0, gold = 0;
+    g.items.forEach(function (b) { mins += _toMins(b.endTime) - _toMins(b.startTime); if (b.done) done++; gold += b.gp || 0; });
     const label = isToday ? 'Today' : diff === 1 ? 'Tomorrow' : diff === -1 ? 'Yesterday' : DAY_FULL[d.getDay()];
     let rows = '', placed = !isToday || !!c.liveId;
     g.items.forEach(function (b, i) {
@@ -2577,7 +2945,7 @@ const timeManagementModule = (function () {
       '<button type="button" class="hub-tm-tl-ghead" data-tl-day="' + _esc(g.date) + '" title="Open this day">' +
         '<span class="hub-tm-tl-day">' + label + '</span><span class="hub-tm-tl-date">' + DAY_SHORT[d.getDay()] + ', ' + _dateLabel(d) + ', ' + d.getFullYear() + '</span>' +
         (Math.abs(diff) > 1 ? '<span class="hub-tm-tl-rel">' + _tlRel(diff) + '</span>' : '') +
-        '<span class="hub-tm-tl-gsum">' + done + '/' + g.items.length + ' · ' + _fmtDur(mins) + '</span>' +
+        '<span class="hub-tm-tl-gsum">' + done + '/' + g.items.length + ' · ' + _fmtDur(mins) + (gold > 0 ? ' · +' + _fmtGold(gold) : '') + '</span>' +
       '</button><ul class="hub-tm-tl-rail">' + rows + '</ul></section>';
   }
   function _tlEmpty(filtered) {
@@ -2896,6 +3264,194 @@ const timeManagementModule = (function () {
   }
 
   /* ============================================================
+     NOTIFICATIONS  ·  system notifications for the same moments as the sound cues
+     - Fires for pre / start / wrap-up / end / handover (honours the Cue sheet).
+     - Driven by a Web-Worker heartbeat so background tabs are not throttled.
+     - Shown through a service worker (tm-sw.js) when available — required on
+       Android — and falls back to `new Notification()` on desktop.
+     - Per device: the on/off switch is stored locally, never synced.
+     - Limit: needs the page open in some tab. Reaching a closed browser needs a
+       push server (tm-sw.js already contains the `push` handler for that).
+     ============================================================ */
+  function _notifSupported() { return typeof Notification !== 'undefined' && window.isSecureContext !== false; }
+  function _notifReady() { return _notifSupported() && Notification.permission === 'granted'; }
+  function _loadNotif() {
+    const p = _lsJson(NOTIF_KEY);
+    if (p && typeof p === 'object') { _notif.enabled = !!p.enabled; _notif.bgOnly = p.bgOnly !== false; }
+  }
+  function _saveNotif() { _lsSet(NOTIF_KEY, JSON.stringify(_notif)); }
+
+  /** Must be called straight from a click (user gesture). */
+  function _askNotifPermission() {
+    if (typeof Notification === 'undefined') return Promise.resolve('unsupported');
+    if (window.isSecureContext === false) return Promise.resolve('insecure');
+    if (Notification.permission !== 'default') return Promise.resolve(Notification.permission);
+    return new Promise(function (res) {
+      let done = false;
+      const fin = function (p) { if (!done) { done = true; res(p || Notification.permission); } };
+      try { const r = Notification.requestPermission(fin); if (r && r.then) r.then(fin, function () { fin(); }); } catch (_) { fin(); }
+    });
+  }
+
+  /** Registers tm-sw.js once; resolves to an ACTIVE registration, or null (then desktop falls back to new Notification). */
+  function _swGet() {
+    if (_swReg && _swReg.active) return Promise.resolve(_swReg);
+    if (!('serviceWorker' in navigator) || window.isSecureContext === false) return Promise.resolve(null);
+    if (!_swPromise) {
+      _swPromise = navigator.serviceWorker.register(new URL(SW_URL, document.baseURI).href).then(function (reg) {
+        return new Promise(function (res) {
+          if (reg.active) { res(reg); return; }
+          const w = reg.installing || reg.waiting;
+          if (!w) { res(null); return; }
+          w.addEventListener('statechange', function () { if (w.state === 'activated') res(reg); else if (w.state === 'redundant') res(null); });
+          setTimeout(function () { res(reg.active ? reg : null); }, 5000);
+        });
+      }).then(function (reg) { _swReg = reg; if (!reg) _swPromise = null; return reg; })
+        .catch(function () { _swPromise = null; return null; });
+    }
+    return _swPromise;
+  }
+
+  function _iconUrl() { const l = document.querySelector('link[rel~="icon"]'); return l && l.href ? l.href : undefined; }
+
+  /** Resolves true when something was shown. */
+  function _showNotice(title, opts) {
+    return _swGet().then(function (reg) {
+      if (reg) return reg.showNotification(title, opts).then(function () { return true; });
+      const n = new Notification(title, opts);
+      n.onclick = function () { try { window.focus(); } catch (_) {} _openFromNotice(opts.data); n.close(); };
+      return true;
+    }).catch(function () {
+      try {
+        const n = new Notification(title, opts);
+        n.onclick = function () { try { window.focus(); } catch (_) {} _openFromNotice(opts.data); n.close(); };
+        return true;
+      } catch (_) { return false; }
+    });
+  }
+  function _openFromNotice(d) {
+    const b = d && d.blockId ? _blockById(d.blockId) : null;
+    if (!b || !_sectionEl || !_sectionEl.isConnected) return;
+    _setDate(b.date, { scrollMins: Math.max(0, _toMins(b.startTime) - 60) });
+    setTimeout(function () { _focusBlock(b.id); }, 350);
+  }
+  if (typeof navigator !== 'undefined' && navigator.serviceWorker) {
+    navigator.serviceWorker.addEventListener('message', function (e) {
+      if (e.data && e.data.type === 'tm-notification-click') _openFromNotice(e.data);
+    });
+  }
+
+  function _noticeText(ev) {
+    const b = _blockById(ev.blockId), tag = _tagOrFallback(ev.tagId);
+    const name = ev.title || (b && b.title) || tag.label;
+    const range = b ? b.startTime + ' – ' + b.endTime : '';
+    const dur = b ? _fmtDur(_toMins(b.endTime) - _toMins(b.startTime)) : '';
+    const meta = [range, dur].filter(Boolean).join(' · ');
+    switch (ev.type) {
+      case 'pre':      return ['Starting soon · ' + name, 'In ' + _audio.preMins + ' min' + (meta ? ' · ' + meta : '')];
+      case 'start':    return ['Now · ' + name, meta || tag.label];
+      case 'warn':     return ['Wrapping up · ' + name, _audio.warnMins + ' min left' + (b ? ' · ends ' + b.endTime : '')];
+      case 'end':      return ['Finished · ' + name, b ? 'Ended at ' + b.endTime : 'Block ended'];
+      default:         return ['Next up · ' + name, (meta ? meta + ' · ' : '') + 'previous block just ended'];   // handover
+    }
+  }
+  function _deliverNotice(ev) {
+    const t = _noticeText(ev), b = _blockById(ev.blockId);
+    if (_notif.bgOnly && document.hasFocus && document.hasFocus() && document.visibilityState === 'visible') {
+      _toast(t[0] + ' — ' + t[1]);                       // you are looking at the planner: an in-app toast is enough
+      return;
+    }
+    _showNotice(t[0], {
+      body: t[1],
+      tag: 'tm-' + ev.blockId,                           // one evolving notification per block
+      renotify: true,
+      silent: !!(_audio.enabled && _armed()),            // our own chime is already playing
+      icon: _iconUrl(),
+      timestamp: ev.at,
+      data: { blockId: ev.blockId, date: b && b.date, url: location.href }
+    });
+  }
+
+  /** 1-second heartbeat: delivers whatever became due. Stateless — safe if blocks are edited. */
+  function _noticeTick() {
+    if (!_notif.enabled || !_notifReady()) return;
+    const now = Date.now();
+    _cueEvents(now - 20000, now + 500).forEach(function (ev) {
+      if (_noticeDone[ev.key]) return;
+      _noticeDone[ev.key] = ev.at;
+      _deliverNotice(ev);
+    });
+    Object.keys(_noticeDone).forEach(function (k) { if (_noticeDone[k] < now - 600000) delete _noticeDone[k]; });
+  }
+  function _noticeSeed() {                                // enabling / reloading must not replay what just passed
+    const now = Date.now();
+    _cueEvents(now - 120000, now).forEach(function (ev) { _noticeDone[ev.key] = ev.at; });
+  }
+  function _hbStop() {
+    if (_hbWorker) { try { _hbWorker.postMessage('stop'); _hbWorker.terminate(); } catch (_) {} _hbWorker = null; }
+    if (_hbTimer) { clearInterval(_hbTimer); _hbTimer = null; }
+  }
+  function _hbStart() {
+    _hbStop();
+    try {                                                 // workers are not throttled in hidden tabs
+      const src = 'var t=setInterval(function(){postMessage(1)},1000);onmessage=function(e){if(e.data==="stop"){clearInterval(t);close();}};';
+      const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+      _hbWorker = new Worker(url);
+      _hbWorker.onmessage = _noticeTick;
+      setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+    } catch (_) { _hbTimer = setInterval(_noticeTick, 1000); }
+  }
+  function _notifBoot() {
+    _loadNotif();
+    if (_notif.enabled && _notifReady()) { _noticeSeed(); _hbStart(); _swGet(); }
+    else _hbStop();
+  }
+  /** Save button: apply the switch. Returns a short message for the toast. */
+  function _commitNotif(want, bgOnly) {
+    _notif.bgOnly = bgOnly;
+    const off = function (msg) { _notif.enabled = false; _saveNotif(); _hbStop(); return msg; };
+    if (!want) return Promise.resolve(off('notifications off'));
+    return _askNotifPermission().then(function (p) {
+      if (p === 'granted') {
+        _notif.enabled = true; _saveNotif(); _noticeSeed(); _hbStart(); _swGet();
+        return 'notifications on';
+      }
+      return off(p === 'denied' ? 'notifications blocked by the browser' : 'notifications need https and a supporting browser');
+    });
+  }
+  function _syncNotifUi() {
+    const tg = _el('#tm-notif-enabled');
+    if (!tg) return;
+    const sup = typeof Notification !== 'undefined', secure = window.isSecureContext !== false;
+    const perm = sup ? Notification.permission : 'denied';
+    const blocked = !sup || !secure || perm === 'denied';
+    tg.disabled = blocked;
+    if (blocked) tg.checked = false;
+    const on = tg.checked;
+    const master = _el('#tm-notif-master');
+    master.classList.toggle('is-on', on);
+    master.classList.toggle('is-armed', on && perm === 'granted');
+    _el('#tm-notif-bg').disabled = !on;
+    _el('[data-notif-test]').disabled = blocked;
+    _el('#hub-tm-notif-status').textContent =
+        !sup ? 'This browser doesn’t support notifications.'
+      : !secure ? 'Notifications need a secure (https) page.'
+      : perm === 'denied' ? 'Blocked in the browser — allow Notifications for this site (lock icon in the address bar), then reload.'
+      : !on ? 'Off. Turn on to be notified when a block is about to start, starts, wraps up and ends.'
+      : perm === 'default' ? 'Your browser will ask for permission when you save.'
+      : 'Ready · same moments and lead times as the sound alerts · works while the planner stays open in a tab, background tabs included.';
+  }
+  function _sendTestNotice() {
+    _askNotifPermission().then(function (p) {
+      _syncNotifUi();
+      if (p !== 'granted') { _toast(p === 'denied' ? 'Notifications are blocked in the browser.' : 'Notifications aren’t available here.'); return; }
+      return _showNotice('Time Management · test', {
+        body: 'This is how block alerts will look.', tag: 'tm-test', icon: _iconUrl(), data: { url: location.href }
+      }).then(function (ok) { _toast(ok ? 'Test sent' : 'Couldn’t show it — is tm-sw.js next to index.html?'); });
+    });
+  }
+
+  /* ============================================================
      SETTINGS DIALOG
      ============================================================ */
   /* Settings (voice, volume, lead times, cues, custom sounds) follow the account; only the on/off switch is per device. */
@@ -3025,6 +3581,8 @@ const timeManagementModule = (function () {
       return '<label class="hub-tm-melody" style="' + _tagStyle(t) + '"><input type="radio" name="tm-preview-tag" value="' + _esc(t.id) + '"' + (t.id === pick ? ' checked' : '') + '><span><i aria-hidden="true"></i>' + _esc(t.label) + '</span></label>';
     }).join('');
     _renderRolls();
+    _el('#tm-notif-enabled').checked = _notif.enabled && _notifReady();
+    _el('#tm-notif-bg').checked = _notif.bgOnly;
     _syncSettingsEnabled();
   }
   function _syncSettingsEnabled() {
@@ -3047,6 +3605,7 @@ const timeManagementModule = (function () {
     _el('#hub-tm-audio-status').textContent = !on
       ? 'Off. Switch on to hear a chime as blocks start and end.'
       : (_armed() ? 'Ready' : 'Saving arms sound for this tab') + ' · ' + VOICES[_voiceKey(_formVoice())].label + ' · plays only while this page stays open.';
+    _syncNotifUi();
   }
   function _openSettings() {
     _fillSettings();
@@ -3091,12 +3650,15 @@ const timeManagementModule = (function () {
       if (_audio.enabled) { _startAudio(); _armNow().then(_updateChip).catch(function () {}); }   // this click is the user gesture that arms sound
       else _stopAudio();
       _updateChip();
+      const wantN = _el('#tm-notif-enabled').checked, bgN = _el('#tm-notif-bg').checked;   // read first; the permission prompt needs this click
+      const pending = _commitNotif(wantN, bgN);
       _closeModal(modal);
-      _toast(_audio.enabled ? 'Sound alerts on' : 'Sound alerts off');
+      pending.then(function (nMsg) { _toast((_audio.enabled ? 'Sound alerts on' : 'Sound alerts off') + ' · ' + nMsg); });
     });
 
     modal.addEventListener('click', function (e) {
       const pv = e.target.closest('[data-preview]'), ts = e.target.closest('[data-test-sound]');
+      if (e.target.closest('[data-notif-test]')) { _sendTestNotice(); return; }
       if (pv) {
         _audition(pv.getAttribute('data-preview'));
       } else if (ts) {
@@ -3496,8 +4058,13 @@ const timeManagementModule = (function () {
     b.habDone = up;
     if (d && typeof d.gp === 'number') {
       _hab.user = Object.assign(_hab.user || {}, { gp: d.gp, hp: d.hp, exp: d.exp, lvl: d.lvl });
-      if (before !== null) return d.gp - before;
+      if (before !== null) {
+        const delta = d.gp - before;
+        b.gp = up ? Math.max(0, Math.round(delta * 100) / 100) : 0;           // remembered per block → shown per day
+        return delta;
+      }
     }
+    if (!up) b.gp = 0;
     return 0;
   }
   // Mirror what happened inside the Habitica app (checked off / unchecked there)
@@ -3573,7 +4140,7 @@ const timeManagementModule = (function () {
       if (!b.habDone && rem[b.habiticaId] && _habMergeCk(b, rem[b.habiticaId])) changed = true;
       if (!!b.done !== !!b.habDone) return;                               // a pending local change wins
       if (c[b.habiticaId] && !b.done) { b.done = b.habDone = true; changed = true; }
-      else if (o[b.habiticaId] && b.done) { b.done = b.habDone = false; changed = true; }
+      else if (o[b.habiticaId] && b.done) { b.done = b.habDone = false; b.gp = 0; changed = true; }
     });
     _hab.lastPull = Date.now();
     return changed;
@@ -3654,7 +4221,7 @@ const timeManagementModule = (function () {
     if (parts.length) { _hab.log.unshift({ t: Date.now(), text: parts.join(' · ') }); _hab.log.length = Math.min(_hab.log.length, 6); }
     if (changed) {
       _saveAll();
-      if (_sectionEl && _sectionEl.isConnected) _renderGrid({ animate: false, scroll: false });
+      if (_sectionEl && _sectionEl.isConnected) { _renderGrid({ animate: false, scroll: false }); _tlRefresh(); }   // gold just landed: show it in the Timeline too
     }
     _habChip();
     if (_habHubOpen()) _habRenderHub();
@@ -3669,6 +4236,7 @@ const timeManagementModule = (function () {
     if (!b) return;
     const apply = function () {
       b.done = !b.done;
+      if (!b.done) b.gp = 0;
       _scheduleSave();
       _habQueueSync(300);
       _renderGrid({ animate: false, scroll: false });
