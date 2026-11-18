@@ -3914,7 +3914,6 @@ body.theme-optimized .hub-tm-rv-track > span { border-radius: 0; }
 [data-theme="ember-noir"] .hub-tm-rv-col { border-bottom: 3px double rgba(224, 170, 100, 0.5); }
 [data-theme="ember-noir"] .hub-tm-rv-col i { border-radius: 2px 2px 0 0; }
 [data-theme="ember-noir"] .hub-tm-rv-ik { color: var(--ember-brass); }
-<<<<<<< HEAD
 
 /* ==========================================================================
    30. STREAK DAILY  ·  opt-in card in the Habitica Link
@@ -3972,21 +3971,3 @@ body.theme-optimized .hub-tm-hab-sdswitch,
 body.theme-optimized .hub-tm-hab-days button { border-radius: 0; }
 body.theme-optimized .hub-tm-hab-sdswitch[aria-checked="true"]::before { content: "["; }
 body.theme-optimized .hub-tm-hab-sdswitch[aria-checked="true"]::after { content: "]"; }
-=======
-/* Lo-Fi Twilight: viền sạch cho ô "hôm nay" ở Month view */
-[data-theme="lofi-twilight"] #time-management .hub-tm-month-cell.is-today {
-  border-style: solid;
-  border-width: 1px;
-  border-color: var(--accent-primary);
-  box-shadow: none;
-  outline: 1.5px dashed var(--accent-primary);
-  outline-offset: -3px;
-}
-[data-theme="lofi-twilight"] #time-management .hub-tm-month-cell.is-today:not(:hover) {
-  transform: none;
-}
-[data-theme="lofi-twilight"] #time-management .hub-tm-month-cell.is-today:focus-visible {
-  outline-style: solid;
-  outline-width: 2px;
-}
->>>>>>> c0d2de1f9f90ef3367918608006843eb9995d303
