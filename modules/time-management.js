@@ -1775,32 +1775,107 @@ const timeManagementModule = (function () {
     } else {
       d.el.classList.add('hub-tm-block--busy');
     }
+    _dgOpen(d);
     _applyDragAt(d.lastY);
+  }
+
+  /* ── Drag HUD: snap rules, free-lane, origin outline and a live readout ── */
+  const DG_VERB = { create: 'New', move: 'Move', 'resize-top': 'Start', 'resize-bottom': 'End' };
+  function _dgOpen(d) {
+    const col = _mainCol();
+    if (!col) return;
+    const tag = d.mode === 'create' ? _tagOrFallback(_activeTagId) : _tagOrFallback(d.block.tagId);
+    const h = document.createElement('div');
+    h.className = 'hub-tm-dg';
+    h.setAttribute('aria-hidden', 'true');
+    h.setAttribute('data-mode', d.mode);
+    h.style.cssText = _tagStyle(tag);
+    h.innerHTML =
+      '<i class="hub-tm-dg-lane"></i>' +
+      (d.orig ? '<i class="hub-tm-dg-orig"></i>' : '') +
+      '<i class="hub-tm-dg-line hub-tm-dg-line--s"><b></b></i>' +
+      '<i class="hub-tm-dg-line hub-tm-dg-line--e"><b></b></i>' +
+      '<div class="hub-tm-dg-tip"><span class="hub-tm-dg-verb"></span><span class="hub-tm-dg-range"></span><span class="hub-tm-dg-dur"></span></div>';
+    col.appendChild(h);
+    col.classList.add('is-dragging');
+    col.setAttribute('data-drag', d.mode);
+    d.hud = h;
+    const lane = h.querySelector('.hub-tm-dg-lane');
+    lane.style.top = Math.round(d.bounds[0] / 60 * HOUR_H) + 'px';
+    lane.style.height = Math.round((d.bounds[1] - d.bounds[0]) / 60 * HOUR_H) + 'px';
+    if (d.orig) {
+      const o = h.querySelector('.hub-tm-dg-orig');
+      o.style.top = Math.round(d.orig.s / 60 * HOUR_H) + 'px';
+      o.style.height = Math.max(18, Math.round((d.orig.e - d.orig.s) / 60 * HOUR_H)) + 'px';
+    }
+  }
+  function _dgUpdate(d, s, e, limited) {
+    const h = d.hud;
+    if (!h) return;
+    const ls = h.querySelector('.hub-tm-dg-line--s'), le = h.querySelector('.hub-tm-dg-line--e'), tip = h.querySelector('.hub-tm-dg-tip');
+    ls.style.top = Math.round(s / 60 * HOUR_H) + 'px';
+    le.style.top = Math.round(e / 60 * HOUR_H) + 'px';
+    ls.firstChild.textContent = _toTime(s);
+    le.firstChild.textContent = e >= DAY_MINS ? '24:00' : _toTime(e);
+    h.classList.toggle('is-limit', !!limited);
+    const below = s < 75;                                           // no room above → hang the readout under the block
+    h.classList.toggle('is-below', below);
+    tip.style.top = Math.round((below ? e : s) / 60 * HOUR_H) + 'px';
+    let verb = DG_VERB[d.mode];
+    if (limited) verb = 'Limit';
+    else if (d.mode === 'move' && d.orig) {
+      const dm = s - d.orig.s;
+      verb = dm ? (dm > 0 ? '+' : '−') + _fmtDur(Math.abs(dm)) : 'Move';
+    }
+    tip.querySelector('.hub-tm-dg-verb').textContent = verb;
+    tip.querySelector('.hub-tm-dg-range').textContent = _toTime(s) + ' – ' + (e >= DAY_MINS ? '24:00' : _toTime(e));
+    tip.querySelector('.hub-tm-dg-dur').textContent = _fmtDur(e - s);
+  }
+  function _dgClose(d) {
+    if (d.hud && d.hud.parentNode) d.hud.parentNode.removeChild(d.hud);
+    d.hud = null;
+    const col = _mainCol();
+    if (col) { col.classList.remove('is-dragging'); col.removeAttribute('data-drag'); }
+  }
+  function _dropFx(id) {
+    const n = _el('.hub-tm-block[data-block-id="' + id + '"]');
+    if (!n) return;
+    n.classList.add('hub-tm-block--drop');
+    setTimeout(function () { n.classList.remove('hub-tm-block--drop'); }, 650);
   }
 
   function _applyDragAt(clientY) {
     const d = _drag;
     if (!d || !d.active) return;
     const m = _yToMins(clientY);
-    let s, e;
+    let s, e, limited = false;
     if (d.mode === 'create') {
       const lo = Math.min(d.raw0, m), hi = Math.max(d.raw0, m);
       s = _snap(lo, 'down'); e = _snap(hi, 'up');
       if (e - s < CREATE_DUR) e = s + CREATE_DUR;
+      const ws = s, we = e;
       s = _clamp(s, d.bounds[0], d.bounds[1] - MIN_DUR);
       e = _clamp(e, s + MIN_DUR, d.bounds[1]);
+      limited = ws < s || we > e;
     } else if (d.mode === 'move') {
       const dur = d.orig.e - d.orig.s;
-      s = _clamp(d.orig.s + _snap(m - d.raw0, 'round'), d.bounds[0], d.bounds[1] - dur);
+      const ws = d.orig.s + _snap(m - d.raw0, 'round');
+      s = _clamp(ws, d.bounds[0], d.bounds[1] - dur);
       e = s + dur;
+      limited = ws !== s;
     } else if (d.mode === 'resize-bottom') {
       s = d.orig.s;
-      e = _clamp(_snap(m, 'round'), d.orig.s + MIN_DUR, d.bounds[1]);
+      const we = _snap(m, 'round');
+      e = _clamp(we, d.orig.s + MIN_DUR, d.bounds[1]);
+      limited = we > e;
     } else {
       e = d.orig.e;
-      s = _clamp(_snap(m, 'round'), d.bounds[0], d.orig.e - MIN_DUR);
+      const ws = _snap(m, 'round');
+      s = _clamp(ws, d.bounds[0], d.orig.e - MIN_DUR);
+      limited = ws < s;
     }
     d.cur = { s: s, e: e };
+    _dgUpdate(d, s, e, limited);
     const n = d.mode === 'create' ? d.ghost : d.el;
     if (!n) return;
     n.style.top = Math.round(s / 60 * HOUR_H) + 'px';
@@ -1829,6 +1904,7 @@ const timeManagementModule = (function () {
     if (!d) return;
     if (d.timer) clearTimeout(d.timer);
     if (d.scrollTimer) clearInterval(d.scrollTimer);
+    _dgClose(d);
     try { _el('#hub-tm-grid-scroll').releasePointerCapture(d.pointerId); } catch (_) {}
     _drag = null;
   }
@@ -1860,6 +1936,7 @@ const timeManagementModule = (function () {
         }
         _renderDayBlocks();
         _focusBlock(block.id);
+        _dropFx(block.id);
       }
       return;
     }
@@ -1888,6 +1965,7 @@ const timeManagementModule = (function () {
     _renderDayBlocks();
     _updateSummary();
     _focusBlock(b.id);
+    _dropFx(b.id);
     return b;
   }
 
