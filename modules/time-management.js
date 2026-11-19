@@ -44,6 +44,20 @@ const timeManagementModule = (function () {
   ];
   const NOTIF_KEY    = 'hub_tm_notif';      // per device: { enabled, bgOnly }
   const SW_URL       = 'tm-sw.js';          // must sit next to index.html (see tm-sw.js)
+
+  /* Focus session: Start / Pause / Stop records the time you really focused on a block (block.focusMs, synced) */
+  const FS_KEY       = 'hub_tm_fsession';   // the running session, per account → survives a reload
+  const FS_MODE_KEY  = 'hub_tm_fmode';      // last chosen mode (per device)
+  const FS_MODES = {
+    block: { label: 'Timer',    hint: 'Counts the time you focus on this block' },
+    pomo:  { label: 'Pomodoro', hint: '25 min focus · 5 min break · 15 min every 4th', work: 25, brk: 5,  long: 15, every: 4 },
+    deep:  { label: 'Deep work', hint: '90 min focus · 15 min break',                   work: 90, brk: 15, long: 15, every: 0 }
+  };
+  const FS_QUICK       = [15, 25, 45, 90];  // quick-focus lengths (minutes)
+  const FS_EARLY_MIN   = 15;                // "Start early" is offered when the next block starts within this many minutes
+  const FS_MIN_MS      = 5000;              // a session shorter than this is treated as a mis-tap and not recorded
+  const FS_AWAY_LOAD   = 180000;            // page was closed longer than this → the restored session comes back paused
+  const FS_AWAY_TICK   = 1800000;           // gap this long between two ticks = computer slept → pause at the last heartbeat
   const VIEW_KEY     = 'hub_tm_view';
   const HINT_KEY     = 'hub_tm_hint_seen';
   const SLOT_H       = 36;
@@ -124,6 +138,9 @@ const timeManagementModule = (function () {
   let _msMap          = {};   // celebrated milestones: 'runStart|days' -> date. Add-only, synced with the account
   let _remoteT     = null;
   let _pendingClaim = null;
+  let _fs = null, _fsTimer = null, _fsSummary = null, _fsSig = '', _fsMiss = 0;     // focus session state
+  let _fsMode = (function () { const m = _lsGet(FS_MODE_KEY); return FS_MODES[m] ? m : 'block'; })();
+  let _fsQuick = 25;
   let _confirmCancelCb = null;
   let _ui          = new AbortController();   // document-level listeners of the current mount
 
@@ -332,6 +349,7 @@ const timeManagementModule = (function () {
       habFp: b.habFp ? String(b.habFp).slice(0, 16) : '',
       habDone: b.habDone === true,
       gp: +b.gp > 0 ? Math.min(9999, Math.round(+b.gp * 100) / 100) : 0,       // gold this block earned in Habitica
+      focusMs: _clamp(Math.round(Number(b.focusMs) || 0), 0, 86400000),      // time really focused on this block (Focus session)
       checklist: _normCk(b.checklist),
       ckDel: Array.isArray(b.ckDel) ? b.ckDel.map(String).slice(0, CK_MAX) : [],
       updatedAt: Number(b.updatedAt) || 0
@@ -375,6 +393,7 @@ const timeManagementModule = (function () {
   }
   function _resetData() {
     _cancelDrag();
+    _fs = null; _fsSummary = null; _fsMiss = 0;     // the session of the previous account stays saved under that account
     _timeBlocks = []; _customTags = []; _templates = []; _activeTagId = 'work';
     _tombs = { blocks: {}, tags: {}, templates: {} };
     _settingsAt = 0;
@@ -472,6 +491,7 @@ const timeManagementModule = (function () {
     _afterDataReady(st);
   }
   function _afterDataReady(st) {
+    _fsRestore();                          // this account's running focus session, if any
     _habSeedKnown();                       // this account's To-Do ids count as already synced — Habitica must never read another account's blocks as "deleted"
     _habQueueSync(800);
     _loadAudio();                          // this device's alerts on/off switch
@@ -513,6 +533,8 @@ const timeManagementModule = (function () {
   function _wireSync() {
     if (_syncWired || typeof HubDB === 'undefined' || !HubDB) return;
     _syncWired = true;
+    if (typeof window !== 'undefined') window.addEventListener('pagehide', _fsBeat);
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', function () { if (document.hidden) _fsBeat(); });
     if (typeof HubDB.onAuthChange === 'function') HubDB.onAuthChange(_onAuth);
     if (typeof HubDB.subscribeTimeManagement === 'function') HubDB.subscribeTimeManagement(_onRemote);
     if (typeof window !== 'undefined') window.addEventListener('online', function () { if (_dataReady) _scheduleSave(); });   // push what was edited offline
@@ -703,6 +725,13 @@ const timeManagementModule = (function () {
           '<div class="hub-tm-focus-progress">' +
             '<div class="hub-tm-focus-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="hub-tm-focus-fill"></div></div>' +
             '<span class="hub-tm-focus-label"></span>' +
+          '</div>' +
+          '<div class="hub-tm-fs" id="hub-tm-fs">' +
+            '<div class="hub-tm-fs-clock hub-tm-hidden" id="hub-tm-fs-clock" role="timer"><span class="hub-tm-fs-time" id="hub-tm-fs-time">00:00</span><span class="hub-tm-fs-sub" id="hub-tm-fs-sub"></span></div>' +
+            '<div class="hub-tm-fs-chips hub-tm-hidden" id="hub-tm-fs-modes" role="group" aria-label="Focus mode"></div>' +
+            '<div class="hub-tm-fs-chips hub-tm-hidden" id="hub-tm-fs-quick" role="group" aria-label="Quick focus length"></div>' +
+            '<p class="hub-tm-fs-note hub-tm-hidden" id="hub-tm-fs-note"></p>' +
+            '<div class="hub-tm-fs-actions" id="hub-tm-fs-actions"></div>' +
           '</div>' +
           '<button type="button" class="hub-tm-btn hub-tm-btn--outline" id="tm-btn-focus-exit">Exit Focus</button>' +
         '</div>' +
@@ -1011,6 +1040,7 @@ const timeManagementModule = (function () {
     _el('#tm-btn-focus-mode').addEventListener('click', _openFocus);
     _el('#tm-btn-focus-exit').addEventListener('click', function () { _closeModal(_el('#hub-tm-focus-panel')); });
     _el('.hub-tm-focus-backdrop').addEventListener('click', function () { _closeModal(_el('#hub-tm-focus-panel')); });
+    _el('#hub-tm-fs').addEventListener('click', _fsClick);
     _el('#tm-btn-settings').addEventListener('click', _openSettings);
     _el('#tm-btn-templates').addEventListener('click', _openTemplates);
     _el('#tm-btn-set-time').addEventListener('click', _openSetTime);
@@ -1231,6 +1261,7 @@ const timeManagementModule = (function () {
         '<span class="hub-tm-block-time">' + _esc(b.startTime) + ' – ' + _esc(b.endTime) + '</span>' +
         '<span class="hub-tm-block-title">' + _esc(b.title || tag.label) + '</span>' +
         (ck.total ? '<span class="hub-tm-block-ck' + (ck.done === ck.total ? ' is-complete' : '') + '" title="Checklist: ' + ck.done + ' of ' + ck.total + ' done">&#10003; ' + ck.done + '/' + ck.total + '</span>' : '') +
+        (b.focusMs >= 60000 ? '<span class="hub-tm-block-focus" title="Time really focused on this block">&#9201; ' + _fmtDur(Math.round(b.focusMs / 60000)) + '</span>' : '') +
         (note ? '<span class="hub-tm-block-note">' + _esc(note.slice(0, 160)) + '</span>' : '') +
       '</div>' +
       '<div class="hub-tm-block-grip hub-tm-block-grip--bottom" aria-hidden="true"></div>' +
@@ -1530,7 +1561,8 @@ const timeManagementModule = (function () {
       return '<span style="' + _tagStyle(t) + ';flex:' + per[id] + '" title="' + _esc(t.label) + ' · ' + _fmtDur(per[id]) + '"></span>';
     }).join('');
     const gold = list.reduce(function (g, b) { return g + (b.gp || 0); }, 0);
-    box.innerHTML = lead + stat('Planned', _fmtDur(total)) + stat('Blocks', list.length) +
+    const focused = list.reduce(function (g, b) { return g + (b.focusMs || 0); }, 0);
+    box.innerHTML = lead + stat('Planned', _fmtDur(total)) + (focused >= 60000 ? stat('Focused', _fmtDur(Math.round(focused / 60000))) : '') + stat('Blocks', list.length) +
       (gold > 0 ? '<span class="hub-tm-stat hub-tm-stat--gold"><span class="hub-tm-stat-k">Gold</span><strong>+' + _fmtGold(gold) + '</strong></span>' : '') +
       '<div class="hub-tm-summary-bar" aria-hidden="true">' + seg + '</div>';
   }
@@ -2381,6 +2413,8 @@ const timeManagementModule = (function () {
      FOCUS MODE  (always about *today*, live-updating)
      ============================================================ */
   function _openFocus() {
+    if (!_fs) _fsSummary = null;
+    _fsSig = '';
     _renderFocus();
     _openModal(_el('#hub-tm-focus-panel'), '#tm-btn-focus-exit');
     if (_focusTimer) clearInterval(_focusTimer);
@@ -2395,21 +2429,24 @@ const timeManagementModule = (function () {
     const nxt = cur ? null : list.find(function (b) { return _toMins(b.startTime) > nm; });
     const set = function (sel, v) { const n = p.querySelector(sel); if (n) n.textContent = v; };
     const fill = p.querySelector('.hub-tm-focus-fill'), bar = p.querySelector('.hub-tm-focus-bar'), tagEl = p.querySelector('.hub-tm-focus-tag');
-    const b = cur || nxt;
-    p.classList.toggle('is-idle', !cur);
-    set('.hub-tm-focus-badge-text', cur ? 'NOW' : nxt ? 'UP NEXT' : 'FREE');
+    const sb = _fs ? _blockById(_fs.blockId) : null;               // a running session pins the panel to its own block
+    const b = sb || cur || nxt;
+    p.classList.toggle('is-idle', !cur && !sb);
+    p.classList.toggle('is-session', !!sb);
+    set('.hub-tm-focus-badge-text', sb ? (_fs.phase === 'break' ? 'BREAK' : _fs.running ? 'FOCUS' : 'PAUSED') : cur ? 'NOW' : nxt ? 'UP NEXT' : 'FREE');
     if (b) {
       const tag = _tagOrFallback(b.tagId), s = _toMins(b.startTime), e = _toMins(b.endTime);
+      const inside = nm >= s && nm < e;
       set('.hub-tm-focus-time', b.startTime + ' – ' + b.endTime);
       set('.hub-tm-focus-title', b.title || tag.label);
       set('.hub-tm-focus-note', _plainText(b.subtitle));
       _renderFocusCk(b);
       tagEl.textContent = tag.label;
       tagEl.style.setProperty('--tm-c', _safeColor(tag.color));
-      const pct = cur ? _clamp(Math.round((nm - s) / (e - s) * 100), 0, 100) : 0;
+      const pct = inside ? _clamp(Math.round((nm - s) / (e - s) * 100), 0, 100) : nm >= e ? 100 : 0;
       fill.style.width = pct + '%';
       bar.setAttribute('aria-valuenow', String(pct));
-      set('.hub-tm-focus-label', cur ? pct + '% complete · ' + _fmtDur(e - nm) + ' left' : 'Starts in ' + _fmtDur(s - nm));
+      set('.hub-tm-focus-label', inside ? pct + '% complete · ' + _fmtDur(e - nm) + ' left' : nm >= e ? 'Block time is up · ' + _fmtDur(nm - e) + ' over' : 'Starts in ' + _fmtDur(s - nm));
     } else {
       set('.hub-tm-focus-time', '');
       set('.hub-tm-focus-title', 'No active block');
@@ -2420,6 +2457,278 @@ const timeManagementModule = (function () {
       bar.setAttribute('aria-valuenow', '0');
       set('.hub-tm-focus-label', 'Nothing else scheduled today');
     }
+    _fsPaint();
+  }
+
+  /* ============================================================
+     FOCUS SESSION
+     Everything is computed from timestamps (never from counting ticks), so a throttled
+     background tab or a reload cannot make the clock drift.
+       accMs    focus time already banked      segStart  when the running stretch began
+       phaseAcc time spent in the current phase before that stretch (Pomodoro / Deep work)
+       beat     last moment we know the page was alive (used to detect sleep / a closed page)
+     ============================================================ */
+  function _fsPhaseLen(s) {                                   // ms, 0 = no phases (plain timer)
+    const m = FS_MODES[s.mode];
+    if (!m || !m.work) return 0;
+    if (s.phase === 'work') return m.work * 60000;
+    return ((m.every && s.cycles > 0 && s.cycles % m.every === 0) ? m.long : m.brk) * 60000;
+  }
+  function _fsFocusMs(s, now) { return s.accMs + (s.running && s.phase === 'work' ? Math.max(0, now - s.segStart) : 0); }
+  function _fsPhaseMs(s, now) { return s.phaseAcc + (s.running ? Math.max(0, now - s.segStart) : 0); }
+  function _fsClock(ms) {
+    const t = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), sec = t % 60;
+    return (h ? h + ':' + _pad(m) : _pad(m)) + ':' + _pad(sec);
+  }
+  function _fsKey() { return FS_KEY + ':' + (_dataUid || 'guest'); }
+  function _fsPersist() {
+    try { if (_fs) localStorage.setItem(_fsKey(), JSON.stringify(_fs)); else localStorage.removeItem(_fsKey()); } catch (_) {}
+  }
+  function _fsEnsureTimer() { if (_fs && !_fsTimer) _fsTimer = setInterval(_fsTick, 1000); }
+
+  /** Move through any phase boundaries that passed (also when the tab was in the background). */
+  function _fsAdvance(now) {
+    const s = _fs;
+    if (!s || !s.running) return false;
+    let moved = false, guard = 0;
+    while (s.running && guard++ < 100) {
+      const L = _fsPhaseLen(s);
+      if (!L) break;
+      const pm = s.phaseAcc + (now - s.segStart);
+      if (pm < L) break;
+      const endAt = now - (pm - L);                         // the exact moment the phase ended
+      if (s.phase === 'work') { s.accMs += Math.max(0, endAt - s.segStart); s.cycles++; s.phase = 'break'; }
+      else s.phase = 'work';
+      s.phaseAcc = 0; s.segStart = endAt; moved = true;
+    }
+    return moved;
+  }
+  function _fsBank(now) {                                   // stop the running stretch and bank it
+    const s = _fs;
+    if (!s || !s.running) return;
+    const seg = Math.max(0, now - s.segStart);
+    if (s.phase === 'work') s.accMs += seg;
+    s.phaseAcc += seg;
+    s.running = false;
+  }
+  function _fsCue(type) {
+    try { if (navigator.vibrate) navigator.vibrate(type === 'end' ? [160, 80, 160] : 120); } catch (_) {}
+    try {
+      const b = _fs && _blockById(_fs.blockId);
+      if (_audio.enabled && _armed() && _ctx) _playCue({ type: type, tagId: b ? b.tagId : null }, _ctx.currentTime + 0.05);
+    } catch (_) {}
+  }
+
+  function _fsStart(blockId, mode) {
+    const b = _blockById(blockId);
+    if (!b) return false;
+    const now = Date.now();
+    if (!FS_MODES[mode]) mode = 'block';
+    _fs = { id: 'fs-' + now, blockId: blockId, mode: mode, running: true, phase: 'work', segStart: now, phaseAcc: 0, accMs: 0, cycles: 0, startedAt: now, beat: now };
+    _fsSummary = null; _fsMiss = 0;
+    _fsPersist(); _fsEnsureTimer(); _renderFocus();
+    return true;
+  }
+  function _fsPause() {
+    if (!_fs || !_fs.running) return;
+    const now = Date.now();
+    _fsAdvance(now); _fsBank(now);
+    _fsPersist(); _renderFocus();
+  }
+  function _fsResume() {
+    if (!_fs || _fs.running) return;
+    _fs.running = true; _fs.segStart = _fs.beat = Date.now();
+    _fsPersist(); _renderFocus();
+  }
+  function _fsSkipBreak() {
+    if (!_fs || _fs.phase !== 'break') return;
+    const now = Date.now();
+    if (_fs.running) _fsAdvance(now);
+    if (_fs.phase !== 'break') return;
+    _fs.phase = 'work'; _fs.phaseAcc = 0; _fs.segStart = now;
+    _fsPersist(); _renderFocus();
+  }
+  function _fsStop() {
+    const s = _fs;
+    if (!s) return;
+    const now = Date.now();
+    _fsAdvance(now); _fsBank(now);
+    const ms = Math.round(s.accMs), b = _blockById(s.blockId);
+    _fs = null; _fsPersist();
+    if (b && ms >= FS_MIN_MS) {
+      b.focusMs = _clamp((b.focusMs || 0) + ms, 0, 86400000);
+      _scheduleSave();
+      _fsSummary = { blockId: b.id, ms: ms };
+      if (_sectionEl && _sectionEl.isConnected) { _renderGrid({ animate: false, scroll: false }); _updateSummary(); }
+    } else {
+      _fsSummary = null;
+      if (!b) _toast('That block no longer exists — the session was not saved.');
+    }
+    _fsSig = '';
+    _renderFocus();
+  }
+  /** After a reload: pick the session up again, paused if the page was closed for a while. */
+  function _fsRestore() {
+    _fs = null;
+    const r = _lsJson(_fsKey());
+    if (r && typeof r === 'object' && _blockById(r.blockId) && FS_MODES[r.mode] && isFinite(r.segStart)) {
+      _fs = {
+        id: String(r.id || ''), blockId: String(r.blockId), mode: r.mode, running: !!r.running, phase: r.phase === 'break' ? 'break' : 'work',
+        segStart: +r.segStart, phaseAcc: +r.phaseAcc || 0, accMs: +r.accMs || 0, cycles: +r.cycles || 0, startedAt: +r.startedAt || +r.segStart, beat: +r.beat || +r.segStart
+      };
+      const now = Date.now();
+      if (_fs.running && now - _fs.beat > FS_AWAY_LOAD) {
+        _fsAdvance(_fs.beat); _fsBank(_fs.beat);
+        _toast('Focus session paused — the page was closed for a while.');
+      } else if (_fs.running) _fsAdvance(now);
+      _fsPersist(); _fsEnsureTimer();
+    }
+    _fsSig = '';
+  }
+  function _fsBeat() { if (_fs && _fs.running) { _fs.beat = Date.now(); _fsPersist(); } }
+
+  function _fsTick() {
+    const s = _fs;
+    if (!s) { if (_fsTimer) { clearInterval(_fsTimer); _fsTimer = null; } _fsPaint(); return; }
+    const now = Date.now();
+    if (!_blockById(s.blockId)) {                                 // deleted (here or on another device); give Undo a moment
+      if (!_fsMiss) _fsMiss = now;
+      else if (now - _fsMiss > 15000) { _fs = null; _fsMiss = 0; _fsPersist(); _fsSig = ''; _toast('Focus session ended — its block was deleted.'); }
+    } else _fsMiss = 0;
+    if (_fs && _fs.running) {
+      if (now - (_fs.beat || _fs.segStart) > FS_AWAY_TICK) {      // the computer slept: do not count the time away
+        const t = _fs.beat || _fs.segStart;
+        _fsAdvance(t); _fsBank(t);
+        _fsPersist(); _fsSig = '';
+        _toast('Focus session paused — you were away.');
+      } else {
+        const was = _fs.phase;
+        if (_fsAdvance(now)) {
+          _fsCue(_fs.phase === 'break' ? 'end' : 'start');
+          _toast(_fs.phase === 'break' ? 'Focus round done — take a break.' : 'Break over — back to focus.');
+          _fsPersist();
+        }
+        if (now - (_fs.beat || 0) >= 15000) { _fs.beat = now; _fsPersist(); }
+        if (was !== _fs.phase) _renderFocus();
+      }
+    }
+    _fsPaint();
+  }
+
+  /* What should the big button do right now? */
+  function _fsSuggest() {
+    const d = new Date(), nm = d.getHours() * 60 + d.getMinutes();
+    const list = _blocksForDate(_todayStr());
+    const cur = list.find(function (b) { return nm >= _toMins(b.startTime) && nm < _toMins(b.endTime); });
+    if (cur) return { kind: 'now', b: cur };
+    const nxt = list.find(function (b) { return _toMins(b.startTime) > nm; });
+    if (nxt && _toMins(nxt.startTime) - nm <= FS_EARLY_MIN) return { kind: 'early', b: nxt, mins: _toMins(nxt.startTime) - nm };
+    return { kind: 'quick', b: null, next: nxt || null, nm: nm };
+  }
+  /** Quick focus: make a block that starts now, never overlapping the next one. */
+  function _fsQuickStart(mins, mode) {
+    const d = new Date(), date = _todayStr(), s = d.getHours() * 60 + d.getMinutes();
+    const free = _freeBounds(date, s);
+    const e = Math.min(DAY_MINS, s + mins, free[1]);
+    if (free[1] <= s || e - s < 5) {
+      const nx = _blocksForDate(date).find(function (b) { return _toMins(b.startTime) > s; });
+      _toast(nx ? 'Less than 5 min free before “' + (nx.title || _tagOrFallback(nx.tagId).label) + '”.' : 'No time left today.');
+      return null;
+    }
+    const tag = _tagOrFallback(_activeTagId);
+    const b = _normBlock({ id: _newId(), date: date, tagId: tag.id === FALLBACK_TAG.id ? 'work' : tag.id, startTime: _toTime(s), endTime: _toTime(e), title: 'Quick focus', subtitle: '', createdAt: Date.now() });
+    if (!b) return null;
+    _timeBlocks.push(b);
+    _scheduleSave();
+    if (_sectionEl && _sectionEl.isConnected) { _renderGrid({ animate: false, scroll: false }); _updateSummary(); }
+    _fsStart(b.id, mode);
+    if (e - s < mins) _toast('Shortened to ' + (e - s) + ' min — the next block starts then.');
+    return b;
+  }
+
+  function _fsSub(s, now) {
+    const b = _blockById(s.blockId);
+    if (!s.running) return 'Paused · ' + _fsClock(_fsFocusMs(s, now)) + ' focused';
+    if (s.phase === 'break') return 'Break · step away from the screen';
+    if (s.mode === 'block') {
+      const d = new Date(), nm = d.getHours() * 60 + d.getMinutes(), e = b ? _toMins(b.endTime) : 0;
+      return b && nm >= e ? 'Over the block by ' + _fmtDur(nm - e) : 'Block ends at ' + (b ? b.endTime : '');
+    }
+    return 'Round ' + (s.cycles + 1) + ' · ' + _fsClock(_fsFocusMs(s, now)) + ' focused';
+  }
+  function _fsBtn(now) {                                         // the toolbar button shows the live clock
+    const btn = _el('#tm-btn-focus-mode');
+    if (!btn) return;
+    const s = _fs, lab = btn.querySelector('.hub-tm-btn-label');
+    btn.classList.toggle('is-live', !!s);
+    btn.classList.toggle('is-paused', !!s && !s.running);
+    if (!s) { if (lab) lab.textContent = 'Focus'; btn.title = 'Focus Mode'; return; }
+    const L = _fsPhaseLen(s), txt = (s.phase === 'break' ? 'Break' : s.running ? 'Focus' : 'Paused') + ' · ' + _fsClock(L ? L - _fsPhaseMs(s, now) : _fsFocusMs(s, now));
+    if (lab) lab.textContent = txt;
+    btn.title = txt;
+  }
+  function _fsPaint() {
+    const now = Date.now(), s = _fs;
+    _fsBtn(now);
+    const box = _el('#hub-tm-fs');
+    if (!box) return;
+    const clock = _el('#hub-tm-fs-clock'), tEl = _el('#hub-tm-fs-time'), sub = _el('#hub-tm-fs-sub');
+    clock.classList.toggle('hub-tm-hidden', !s);
+    box.classList.toggle('is-break', !!s && s.phase === 'break');
+    let sig, modesHtml = '', quickHtml = '', actHtml = '', note = '';
+    const btn = function (act, label, cls, v) { return '<button type="button" class="hub-tm-btn ' + (cls || 'hub-tm-btn--outline') + '" data-fs="' + act + '"' + (v !== undefined ? ' data-v="' + v + '"' : '') + '>' + label + '</button>'; };
+    if (s) {
+      const L = _fsPhaseLen(s);
+      tEl.textContent = _fsClock(L ? L - _fsPhaseMs(s, now) : _fsFocusMs(s, now));
+      sub.textContent = _fsSub(s, now);
+      sig = 'run|' + s.running + '|' + s.phase + '|' + s.mode;
+      actHtml = (s.running ? btn('pause', 'Pause') : btn('resume', 'Resume', 'hub-tm-btn--primary')) + (s.phase === 'break' ? btn('skip', 'Skip break') : '') + btn('stop', 'Stop &amp; save', 'hub-tm-btn--danger');
+    } else if (_fsSummary) {
+      const b = _blockById(_fsSummary.blockId);
+      sig = 'sum|' + _fsSummary.blockId + '|' + _fsSummary.ms + '|' + (b && b.done);
+      note = 'Focused ' + _fmtDur(Math.max(1, Math.round(_fsSummary.ms / 60000))) + (b ? ' on “' + _esc(b.title || _tagOrFallback(b.tagId).label) + '” · ' + _fmtDur(Math.round((b.focusMs || 0) / 60000)) + ' in total' : '');
+      actHtml = (b && !b.done ? btn('sum-done', 'Mark block done', 'hub-tm-btn--primary') : '') + btn('sum-close', 'Another session');
+    } else {
+      const sg = _fsSuggest();
+      sig = 'idle|' + sg.kind + '|' + (sg.b ? sg.b.id : '') + '|' + (sg.mins || '') + '|' + _fsMode + '|' + _fsQuick + '|' + (sg.next ? sg.next.id : '');
+      modesHtml = Object.keys(FS_MODES).map(function (k) {
+        return '<button type="button" class="hub-tm-fs-chip' + (k === _fsMode ? ' is-on' : '') + '" data-fs="mode" data-v="' + k + '" aria-pressed="' + (k === _fsMode) + '">' + FS_MODES[k].label + '</button>';
+      }).join('');
+      note = FS_MODES[_fsMode].hint;
+      if (sg.kind === 'quick') {
+        quickHtml = FS_QUICK.map(function (m) { return '<button type="button" class="hub-tm-fs-chip' + (m === _fsQuick ? ' is-on' : '') + '" data-fs="len" data-v="' + m + '" aria-pressed="' + (m === _fsQuick) + '">' + m + ' min</button>'; }).join('');
+        const room = sg.next ? _toMins(sg.next.startTime) - sg.nm : 0;
+        note += ' · ' + (sg.next ? 'Free for ' + _fmtDur(room) + ' before “' + _esc(sg.next.title || _tagOrFallback(sg.next.tagId).label) + '”' : 'Creates a block starting now');
+        actHtml = btn('start-quick', 'Quick focus · ' + _fsQuick + ' min', 'hub-tm-btn--primary');
+      } else {
+        actHtml = btn('start', sg.kind === 'early' ? 'Start early · in ' + _fmtDur(sg.mins) : 'Start focus', 'hub-tm-btn--primary');
+      }
+    }
+    if (sig !== _fsSig) {                                        // rebuild controls only when something changed
+      _fsSig = sig;
+      _el('#hub-tm-fs-modes').innerHTML = modesHtml;
+      _el('#hub-tm-fs-quick').innerHTML = quickHtml;
+      _el('#hub-tm-fs-actions').innerHTML = actHtml;
+      _el('#hub-tm-fs-note').innerHTML = note;
+      _el('#hub-tm-fs-modes').classList.toggle('hub-tm-hidden', !modesHtml);
+      _el('#hub-tm-fs-quick').classList.toggle('hub-tm-hidden', !quickHtml);
+      _el('#hub-tm-fs-note').classList.toggle('hub-tm-hidden', !note);
+    }
+  }
+  function _fsClick(e) {
+    const t = e.target.closest('[data-fs]');
+    if (!t) return;
+    const act = t.getAttribute('data-fs'), v = t.getAttribute('data-v');
+    if (act === 'mode') { _fsMode = FS_MODES[v] ? v : 'block'; _lsSet(FS_MODE_KEY, _fsMode); _fsSig = ''; _fsPaint(); }
+    else if (act === 'len') { _fsQuick = parseInt(v, 10) || 25; _fsSig = ''; _fsPaint(); }
+    else if (act === 'start') { const sg = _fsSuggest(); if (sg.b) _fsStart(sg.b.id, _fsMode); }
+    else if (act === 'start-quick') _fsQuickStart(_fsQuick, _fsMode);
+    else if (act === 'pause') _fsPause();
+    else if (act === 'resume') _fsResume();
+    else if (act === 'skip') _fsSkipBreak();
+    else if (act === 'stop') _fsStop();
+    else if (act === 'sum-done') { if (_fsSummary) _habToggleDone(_fsSummary.blockId); _fsSig = ''; _renderFocus(); }
+    else if (act === 'sum-close') { _fsSummary = null; _fsSig = ''; _fsPaint(); }
   }
 
   /* ============================================================
@@ -4297,6 +4606,7 @@ const timeManagementModule = (function () {
         else throw e;
       }
       c.sdId = String(t.id || t._id); c.sdFp = made ? _sdFp() : ''; _habSave();
+      if (!c.sdOn) { _habQueueDel(c.sdId); c.sdId = ''; c.sdFp = ''; _habSave(); _hab.again = true; return out; }   // switched off while it was being created
       if (made) out.msg = 'Streak Daily created';
     }
     if (c.sdFp !== _sdFp()) { await _habReq('PUT', '/tasks/' + encodeURIComponent(c.sdId), _sdBody(false)); c.sdFp = _sdFp(); _habSave(); }
@@ -4324,7 +4634,7 @@ const timeManagementModule = (function () {
       return;
     }
     _confirm('This deletes the Daily from Habitica, so its streak there is lost. Your planner streak is not affected.', function () {
-      if (c.sdId) _habQueueDel(c.sdId);
+      _habQueueDel(c.sdId || SD_ALIAS);                                        // no saved id (other browser / cleared storage)? Habitica also accepts the alias
       c.sdOn = false; c.sdId = ''; c.sdUp = ''; c.sdFp = '';
       _hab.sd = { streak: null, completed: null, note: '', at: 0 };
       _habSave(); _habAfterCfg();
@@ -4428,7 +4738,8 @@ const timeManagementModule = (function () {
     _hab.force = false;
     let changed = false, gold = 0, scored = 0, created = 0, updated = 0, removed = 0, sdMsg = '';
     try {
-      if (pull || !_hab.user || Date.now() - _hab.lastPull > 120000) { if (await _habPull()) changed = true; }
+      try { if (pull || !_hab.user || Date.now() - _hab.lastPull > 120000) { if (await _habPull()) changed = true; } }
+      catch (e) { if (e.status === 401) throw e; }                          // a failed pull must not stop owed deletions below
       _habDiff();
       while (_hab.delQ.length) {
         const id = _hab.delQ[0];
@@ -4487,7 +4798,7 @@ const timeManagementModule = (function () {
     if (_habHubOpen()) _habRenderHub();
     if (_hab.err) _toast('Habitica: ' + _hab.err);
     else if (scored) _toast((gold >= 0 ? '+' : '') + gold.toFixed(1) + ' gold');
-    if (_hab.again) { _hab.again = false; _habQueueSync(); }
+    if (_hab.again) { _hab.again = false; if (_hab.delQ.length) _habReconcile(false); else _habQueueSync(); }   // manual mode: owed deletions still go out
   }
 
   /* ── Completing a block ── */

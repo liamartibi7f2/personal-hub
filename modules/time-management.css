@@ -4198,3 +4198,43 @@ body.theme-optimized #time-management .hub-tm-block:hover .hub-tm-block-grip::af
 @media (prefers-reduced-motion: reduce) {
   .hub-tm-block.hub-tm-block--busy, .hub-tm-block--drop { animation: none !important; }
 }
+
+/* ============================================================
+   FOCUS SESSION  ·  clock, mode chips, quick focus, live toolbar button
+   ============================================================ */
+.hub-tm-fs { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; }
+.hub-tm-fs-clock { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.hub-tm-fs-time { font: 800 3rem/1 var(--tm-font-num); letter-spacing: 0.02em; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.hub-tm-fs-sub { font: 600 0.76rem/1.3 var(--tm-font-ui); color: var(--text-secondary); }
+.hub-tm-fs.is-break .hub-tm-fs-time { color: var(--accent-secondary, var(--accent-primary)); }
+.hub-tm-fs-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.hub-tm-fs-chip {
+  min-height: 34px; padding: 0 14px; border: 1px solid var(--tm-line-strong); border-radius: 999px;
+  background: var(--bg-deep); color: var(--text-secondary); font: 700 0.76rem/1 var(--tm-font-ui);
+  cursor: pointer; transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
+}
+.hub-tm-fs-chip:hover { color: var(--text-primary); border-color: var(--accent-primary); }
+.hub-tm-fs-chip.is-on { background: var(--accent-primary); border-color: var(--accent-primary); color: var(--tm-on-accent); }
+.hub-tm-fs-note { max-width: 340px; margin: 0; font: 500 0.76rem/1.5 var(--tm-font-ui); color: var(--text-muted); }
+.hub-tm-fs-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: 100%; }
+.hub-tm-fs-actions .hub-tm-btn { min-height: 44px; padding: 0 20px; }
+.hub-tm-fs-actions .hub-tm-btn--danger { background: transparent; border: 1px solid var(--danger); color: var(--danger); }
+.hub-tm-fs-actions .hub-tm-btn--danger:hover { background: var(--danger); color: #fff; }
+.hub-tm-focus-panel.is-session .hub-tm-focus-badge::before { animation: none; }
+
+/* toolbar button while a session runs */
+#time-management .hub-tm-btn--focus.is-live .hub-tm-btn-label { display: inline; font-variant-numeric: tabular-nums; }
+#time-management .hub-tm-btn--focus.is-live::after {
+  content: ""; position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--tm-on-accent); box-shadow: 0 0 0 0 color-mix(in srgb, var(--tm-on-accent) 70%, transparent);
+}
+#time-management .hub-tm-btn--focus.is-live { position: relative; width: auto; padding: 0 18px; }
+#time-management .hub-tm-btn--focus.is-paused::after { animation: none; opacity: 0.45; }
+@media (prefers-reduced-motion: no-preference) {
+  #time-management .hub-tm-btn--focus.is-live:not(.is-paused)::after { animation: hub-tm-fs-pulse 1.6s ease-out infinite; }
+}
+@keyframes hub-tm-fs-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--tm-on-accent) 60%, transparent); } 100% { box-shadow: 0 0 0 9px transparent; } }
+
+/* time really focused, shown on the block */
+.hub-tm-block-focus { display: inline-flex; align-items: center; gap: 3px; font: 700 0.64rem/1 var(--tm-font-num); opacity: 0.9; }
+@media (max-height: 640px) { .hub-tm-fs-time { font-size: 2.3rem; } }
