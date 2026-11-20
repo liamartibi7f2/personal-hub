@@ -700,6 +700,15 @@ const timeManagementModule = (function () {
         '</form>' +
       '</div>' +
 
+      '<form class="hub-tm-qp" id="hub-tm-qp" autocomplete="off">' +
+        '<label class="hub-tm-qp-field">' +
+          '<span class="hub-tm-qp-ico" aria-hidden="true"></span>' +
+          '<input type="text" class="hub-tm-qp-input" id="tm-qp-input" maxlength="600" spellcheck="false" aria-label="Quick plan" aria-describedby="tm-qp-hint" placeholder="Quick plan  ·  11:00 1h Plan Schedule | việc 1; việc 2">' +
+        '</label>' +
+        '<span class="hub-tm-qp-hint" id="tm-qp-hint" aria-live="polite"></span>' +
+        '<span class="hub-tm-qp-keys" title="Point at a block (or select it), then press a key" aria-hidden="true"><kbd>N</kbd>plan <kbd>E</kbd>edit <kbd>C</kbd>checklist <kbd>X</kbd>done</span>' +
+      '</form>' +
+
       '<div class="hub-tm-hint-bar hub-tm-hidden" id="hub-tm-hint">' +
         '<span>Drag on the grid to create a block · drag a block to move it · drag its edges to resize · click to edit. On touch, press and hold.</span>' +
         '<button type="button" id="tm-btn-hint-close" aria-label="Dismiss tip">&times;</button>' +
@@ -821,7 +830,7 @@ const timeManagementModule = (function () {
           '</div>' +
           '<footer class="hub-tm-dialog-foot hub-tm-dialog-foot--split hub-tm-insp-foot">' +
             '<button type="button" class="hub-tm-btn hub-tm-btn--alert" id="tm-btn-details-delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>Delete</button>' +
-            '<div class="hub-tm-insp-actions"><span class="hub-tm-insp-keys" aria-hidden="true"><kbd>Enter</kbd> save · <kbd>Esc</kbd> close</span>' +
+            '<div class="hub-tm-insp-actions"><span class="hub-tm-insp-keys" aria-hidden="true"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> save · <kbd>Esc</kbd> close</span>' +
               '<button type="button" class="hub-tm-btn hub-tm-btn--outline" data-close>Cancel</button>' +
               '<button type="button" class="hub-tm-btn hub-tm-btn--primary" id="tm-btn-details-save">Save changes</button></div>' +
           '</footer>' +
@@ -1075,6 +1084,7 @@ const timeManagementModule = (function () {
     _bindHabitica();
     _bindTagPop();
     _bindChecklist();
+    _bindQuickPlan();
 
     // One keyboard handler for the whole mount
     document.addEventListener('keydown', _onDocKey, sig);
@@ -1086,6 +1096,24 @@ const timeManagementModule = (function () {
       const t = _allTags()[parseInt(e.key, 10) - 1];
       if (t) { e.preventDefault(); _setActiveTag(t.id); _toast('Brush: ' + t.label); }
       return;
+    }
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.isComposing) {   // Ctrl+Enter saves the block dialog from anywhere inside it
+      const dlg = _modalStack[_modalStack.length - 1];
+      if (dlg && dlg.id === 'hub-tm-details-modal') { e.preventDefault(); _saveDetails(); return; }
+    }
+    if (e.key && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat && !e.isComposing && !_modalStack.length && !_isTyping(e.target) &&
+        _sectionEl && _sectionEl.isConnected && !_sectionEl.classList.contains('hub-tm-hidden')) {
+      const k = e.key.toLowerCase();
+      if (k === 'n' || k === '/') { const q = _el('#tm-qp-input'); if (q) { e.preventDefault(); q.focus(); q.select(); } return; }
+      if (_view === 'day' && (k === 'e' || k === 'c' || k === 'x')) {
+        const el = _kbTarget(), b = el && _blockById(el.getAttribute('data-block-id'));
+        if (!b) return;
+        e.preventDefault();
+        if (k === 'e') _openDetails(b.id);
+        else if (k === 'x') _habToggleDone(b.id);
+        else _bkOpenAndFocus(el, b);
+        return;
+      }
     }
     if (e.key === 'Escape') {
       const pop = _el('#hub-tm-add-tag-form');
@@ -1217,6 +1245,7 @@ const timeManagementModule = (function () {
     if (opts && opts.animate) { body.classList.remove('hub-tm-enter'); void body.offsetWidth; body.classList.add('hub-tm-enter'); }
     _updateSummary();
     _tick();
+    _qpUpdate();
     if (!opts || opts.scroll !== false) _scrollInitial();
   }
 
@@ -1259,8 +1288,9 @@ const timeManagementModule = (function () {
     if (e <= s) e = Math.min(DAY_MINS, s + CREATE_DUR);
     return Math.max(18, Math.round((e - s) / 60 * HOUR_H));
   }
+  function _bkKind(b, st) { return st.total || !b.subtitle ? 'checklist' : 'notes'; }
   function _bkToggleLabel(b, st, open) {
-    return (st.total ? 'Checklist, ' + st.done + ' of ' + st.total + ' done. ' : 'Notes. ') + (open ? 'Hide' : 'Show');
+    return (st.total ? 'Checklist, ' + st.done + ' of ' + st.total + ' done. ' : (b.subtitle ? 'Notes. ' : 'Add a checklist. ')) + (open ? 'Hide' : 'Show');
   }
   function _bkFootHtml(b, st) {
     return '<button type="button" class="hub-tm-bk-btn" data-bk-edit>Edit block</button>' +
@@ -1278,6 +1308,7 @@ const timeManagementModule = (function () {
       });
       h += '</ul>';
     }
+    h += '<div class="hub-tm-bk-add"><span aria-hidden="true">+</span><input type="text" data-bk-new maxlength="200" autocomplete="off" placeholder="Add item — Enter · paste a list for many" aria-label="New checklist item"></div>';
     return h + '<div class="hub-tm-bk-foot">' + _bkFootHtml(b, st) + '</div></div>';
   }
   function _bkRefresh(el, b) {
@@ -1292,6 +1323,46 @@ const timeManagementModule = (function () {
     const bar = el.querySelector('.hub-tm-bk-prog span'); if (bar) bar.style.width = st.pct + '%';
     const foot = el.querySelector('.hub-tm-bk-foot'); if (foot) foot.innerHTML = _bkFootHtml(b, st);
   }
+  /** Swap one block's element for a fresh render (keeps the drawer open via _bkOpenIds). */
+  function _bkReplace(el, b) {
+    const fresh = _makeBlockEl(b);
+    el.replaceWith(fresh);
+    _updatePast();
+    return fresh;
+  }
+  /** Add one or many checklist items to a block from the drawer. */
+  function _bkAddItems(el, b, texts) {
+    const list = _ck(b); let n = 0, full = false;
+    texts.forEach(function (t) {
+      t = String(t).replace(/^\s*(?:[-*\u2022]|\d+[.)])\s+/, '').replace(/\s+/g, ' ').trim().slice(0, 200);
+      if (!t) return;
+      if (list.length >= CK_MAX) { full = true; return; }
+      list.push(_ckNewItem(t)); n++;
+    });
+    if (full) _toast('A checklist can have up to ' + CK_MAX + ' items.');
+    if (!n) return false;
+    _bkOpenIds[b.id] = 1;
+    _scheduleSave();
+    _fckSig = '';
+    const fresh = _bkReplace(el, b), inp = fresh.querySelector('[data-bk-new]');
+    if (inp) inp.focus({ preventScroll: true });
+    try { fresh.scrollIntoView({ block: 'nearest' }); } catch (_) {}
+    _tlRefresh();
+    return true;
+  }
+  /* Keyboard target: the block under the pointer, else the one that has focus */
+  let _hoverBlockId = '';
+  function _kbTarget() {
+    let el = _hoverBlockId ? _el('.hub-tm-block[data-block-id="' + _hoverBlockId + '"]') : null;
+    if (!el) { const a = document.activeElement; el = a && a.closest ? a.closest('.hub-tm-block') : null; }
+    return el;
+  }
+  function _bkOpenAndFocus(el, b) {
+    if (!el.classList.contains('is-open')) _bkToggle(el, b);
+    const inp = el.querySelector('[data-bk-new]');
+    if (inp) inp.focus({ preventScroll: true });
+  }
+
   function _bkToggle(el, b) {
     const open = !el.classList.contains('is-open'), base = _bkBaseH(b), st = _ckStats(b);
     const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1322,7 +1393,7 @@ const timeManagementModule = (function () {
     if (btn) {
       btn.setAttribute('aria-expanded', String(open));
       btn.setAttribute('aria-label', _bkToggleLabel(b, st, open));
-      btn.title = (open ? 'Hide ' : 'Show ') + (st.total ? 'checklist' : 'notes');
+      btn.title = (open ? 'Hide ' : 'Show ') + _bkKind(b, st);
     }
   }
 
@@ -1331,8 +1402,8 @@ const timeManagementModule = (function () {
     const tag = _tagOrFallback(b.tagId);
     const el = document.createElement('div');
     const note = _plainText(b.subtitle), ck = _ckStats(b);
-    const hasPanel = ck.total > 0 || note.length > 0;
-    const open = hasPanel && !!_bkOpenIds[b.id];
+    const hasPanel = true, empty = !ck.total && !note;
+    const open = !!_bkOpenIds[b.id];
     el.className = 'hub-tm-block' + (b.done ? ' is-done' : '') + (_habIsOverdue(b) ? ' is-overdue' : '') + (open ? ' is-open' : '');
     el.setAttribute('data-block-id', b.id);
     el.setAttribute('role', 'button');
@@ -1340,8 +1411,8 @@ const timeManagementModule = (function () {
     el.setAttribute('aria-label', _blockLabel(b) + '. Enter to edit, arrow keys to move, Shift plus arrows to resize, Delete to remove.');
     el.style.cssText = _tagStyle(tag) + ';top:' + Math.round(s / 60 * HOUR_H) + 'px;height:' + _bkBaseH(b) + 'px;--tm-base:' + _bkBaseH(b) + 'px';
     const toggle = hasPanel
-      ? '<button type="button" class="hub-tm-bk-toggle' + (ck.total && ck.done === ck.total ? ' is-complete' : '') + '" style="--p:' + ck.pct + '%" aria-expanded="' + open + '" aria-controls="hub-tm-bk-' + _esc(b.id) + '" aria-label="' + _esc(_bkToggleLabel(b, ck, open)) + '" title="' + (open ? 'Hide ' : 'Show ') + (ck.total ? 'checklist' : 'notes') + '">' +
-          (ck.total ? '<svg class="hub-tm-bk-ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="hub-tm-bk-count">' + ck.done + '/' + ck.total + '</span>' : '<span class="hub-tm-bk-count">Notes</span>') +
+      ? '<button type="button" class="hub-tm-bk-toggle' + (ck.total && ck.done === ck.total ? ' is-complete' : '') + (empty ? ' is-empty' : '') + '" style="--p:' + ck.pct + '%" aria-expanded="' + open + '" aria-controls="hub-tm-bk-' + _esc(b.id) + '" aria-label="' + _esc(_bkToggleLabel(b, ck, open)) + '" title="' + (open ? 'Hide ' : 'Show ') + _bkKind(b, ck) + '">' +
+          (ck.total ? '<svg class="hub-tm-bk-ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="hub-tm-bk-count">' + ck.done + '/' + ck.total + '</span>' : '<span class="hub-tm-bk-count">' + (note ? 'Notes' : '+ Checklist') + '</span>') +
           '<svg class="hub-tm-bk-chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'
       : '';
     el.innerHTML =
@@ -1827,6 +1898,19 @@ const timeManagementModule = (function () {
     scroll.addEventListener('contextmenu', function (e) { if (_drag) e.preventDefault(); }, sig);
     scroll.addEventListener('click', _onGridClick, sig);
     scroll.addEventListener('change', _onGridChange, sig);
+    scroll.addEventListener('mouseover', function (e) { const bl = e.target.closest && e.target.closest('.hub-tm-block'); _hoverBlockId = bl ? bl.getAttribute('data-block-id') : ''; }, sig);
+    scroll.addEventListener('mouseleave', function () { _hoverBlockId = ''; }, sig);
+    scroll.addEventListener('focusin', function (e) { if (e.target.classList && e.target.classList.contains('hub-tm-block')) _hoverBlockId = ''; }, sig);
+    scroll.addEventListener('paste', function (e) {                 // paste a list into the drawer → one item per line
+      const t = e.target;
+      if (!t.hasAttribute || !t.hasAttribute('data-bk-new')) return;
+      const txt = ((e.clipboardData || window.clipboardData).getData('text') || '').trim();
+      if (!/\r?\n/.test(txt)) return;
+      const el = t.closest('.hub-tm-block'), b = el && _blockById(el.getAttribute('data-block-id'));
+      if (!b) return;
+      e.preventDefault();
+      _bkAddItems(el, b, txt.split(/\r?\n/));
+    }, sig);
     scroll.addEventListener('keydown', _onGridKey, sig);
   }
 
@@ -2095,6 +2179,172 @@ const timeManagementModule = (function () {
     return b;
   }
 
+  /* ============================================================
+     QUICK PLAN  ·  one line → one block (+ its checklist)
+       [time | range] [duration] [#tag] title | item; item; item
+       11:00 1h Plan Schedule | viết journal; làm bài tiểu luận
+       @9h30 45p #study Đọc sách      ·      9:00-10:30 Họp      ·      1h30 Deep work
+     Time: 11:00 · 9am · 9:30pm · @9 · @9h30 · 11:00-12:30 · now.   Duration: 1h · 90m · 45p · 1h30.
+     No time → the next free slot.  Tag → #work, #study, #2 …   Items → after "|", split by ";".
+     ============================================================ */
+  function _qpClock(tok, forced) {
+    const m = /^(\d{1,2})(?:[:h](\d{2})?)?(am|pm)?$/i.exec(tok);
+    if (!m) return null;
+    if (!forced && !(tok.indexOf(':') > -1 || m[3])) return null;      // bare "11" or "9h30" is only a time after "@"
+    let h = parseInt(m[1], 10);
+    const mi = m[2] ? parseInt(m[2], 10) : 0;
+    if (m[3]) { if (h < 1 || h > 12) return null; h = h % 12 + (/pm/i.test(m[3]) ? 12 : 0); }
+    if (mi > 59 || h > 24 || (h === 24 && mi > 0)) return null;
+    return h * 60 + mi;
+  }
+  function _qpRange(tok) {
+    const m = /^(@?)([^-\u2013]+)[-\u2013](@?)([^-\u2013]+)$/.exec(tok);
+    if (!m) return null;
+    const f = !!(m[1] || m[3]), a = _qpClock(m[2], f), b = _qpClock(m[4], f);
+    return a !== null && b !== null ? [a, b] : null;
+  }
+  function _qpDur(tok) {
+    let m;
+    if ((m = /^(\d+(?:[.,]\d+)?)h$/i.exec(tok))) return Math.round(parseFloat(m[1].replace(',', '.')) * 60);
+    if ((m = /^(\d+)h(\d{1,2})$/i.exec(tok))) return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+    if ((m = /^(\d+)(?:min|phut|ph|m|p)$/i.exec(tok))) return parseInt(m[1], 10);
+    return null;
+  }
+  function _qpTag(name) {
+    const n = name.toLowerCase(), all = _allTags();
+    if (/^\d+$/.test(n)) return all[parseInt(n, 10) - 1] || null;
+    return all.find(function (t) { return t.id.toLowerCase() === n || t.label.toLowerCase() === n; }) ||
+           all.find(function (t) { return t.label.toLowerCase().indexOf(n) === 0 || t.id.toLowerCase().indexOf(n) === 0; }) || null;
+  }
+  function _qpBase(date) {
+    if (date !== _todayStr()) return 9 * 60;
+    const d = new Date();
+    return Math.ceil((d.getHours() * 60 + d.getMinutes()) / SNAP) * SNAP;
+  }
+  /** First free window of `dur` minutes on `date`, starting the search at `from` (then wrapping to the top of the day). */
+  function _qpFindFree(date, dur, from) {
+    for (let pass = 0; pass < 2; pass++) {
+      for (let c = pass ? 0 : from; c + dur <= DAY_MINS && (pass === 0 || c < from); c += SNAP) {
+        if (!_overlap(date, c, c + dur)) return c;
+      }
+    }
+    return null;
+  }
+  function _qpParse(raw) {
+    raw = String(raw || '').replace(/\s+/g, ' ').trim();
+    if (!raw) return { empty: true };
+    const bar = raw.indexOf('|');
+    const head = (bar < 0 ? raw : raw.slice(0, bar)).trim();
+    const items = (bar < 0 ? '' : raw.slice(bar + 1)).split(';').map(function (x) { return x.trim(); }).filter(Boolean);
+    const date = _currentDate, words = [];
+    let start = null, end = null, dur = null, tag = null, lead = true;
+    const toks = head.split(' ').filter(Boolean);
+    for (let i = 0; i < toks.length; i++) {
+      const tok = toks[i];
+      let m, v;
+      if ((m = /^#(\S+)$/.exec(tok))) {
+        tag = _qpTag(m[1]);
+        if (!tag) return { error: 'No tag “#' + m[1] + '”. Try ' + _allTags().slice(0, 3).map(function (t) { return '#' + t.label.toLowerCase(); }).join(' ') + '.' };
+        continue;
+      }
+      if (lead) {
+        if (/^now$/i.test(tok)) { start = _qpBase(date); continue; }
+        if ((v = _qpRange(tok))) { start = v[0]; end = v[1]; continue; }
+        v = tok.charAt(0) === '@' ? _qpClock(tok.slice(1), true) : _qpClock(tok, false);
+        if (v !== null) { start = v; continue; }
+        v = _qpDur(tok);
+        if (v !== null) { dur = v; continue; }
+        lead = false;
+      }
+      words.push(tok);
+    }
+    const tg = tag || _tagOrFallback(_activeTagId), tagId = tg.id === FALLBACK_TAG.id ? 'work' : tg.id;
+    const title = words.join(' ').slice(0, 120);
+    let s, e, shortened = false;
+    if (dur !== null && dur < MIN_DUR) dur = MIN_DUR;
+    if (start !== null) {
+      s = start;
+      if (s >= DAY_MINS) return { error: 'That start time is past midnight.' };
+      e = end !== null ? end : s + (dur || 60);
+      if (end !== null && end === 0) e = DAY_MINS;
+      if (e <= s) return { error: 'End must be after start.' };
+      if (e > DAY_MINS) e = DAY_MINS;
+      const fb = _freeBounds(date, s);
+      if (fb[1] - s < MIN_DUR) {
+        const hit = _others(date).find(function (o) { return s >= o.s && s < o.e; }) || _others(date).find(function (o) { return o.s === s; });
+        return { error: 'Taken' + (hit ? ': ' + hit.b.startTime + '–' + hit.b.endTime + ' “' + (hit.b.title || _tagOrFallback(hit.b.tagId).label) + '”' : '') + '.' };
+      }
+      if (e > fb[1]) { e = fb[1]; shortened = true; }
+    } else {
+      const d = dur || 60;
+      s = _qpFindFree(date, d, _qpBase(date));
+      if (s === null) return { error: 'No free ' + _fmtDur(d) + ' left on this day.' };
+      e = s + d;
+    }
+    return { s: s, e: e, tagId: tagId, tag: tg, title: title, items: items, shortened: shortened };
+  }
+  function _qpUpdate() {
+    const inp = _el('#tm-qp-input'), out = _el('#tm-qp-hint'), form = _el('#hub-tm-qp');
+    if (!inp || !out || !form) return;
+    const r = _qpParse(inp.value);
+    out.classList.toggle('is-error', !!r.error);
+    if (r.empty) {
+      const tg = _tagOrFallback(_activeTagId), f = _qpFindFree(_currentDate, 60, _qpBase(_currentDate));
+      form.style.setProperty('--tm-c', _safeColor(tg.color));
+      out.textContent = f !== null ? 'Next free ' + _toTime(f) + ' · ' + tg.label : '';
+      return;
+    }
+    if (r.error) { out.textContent = r.error; return; }
+    form.style.setProperty('--tm-c', _safeColor(r.tag.color));
+    out.textContent = _toTime(r.s) + '–' + _toTime(r.e) + ' · ' + r.tag.label + (r.items.length ? ' · ' + r.items.length + ' item' + (r.items.length > 1 ? 's' : '') : '') + (r.shortened ? ' · fits before the next block' : '');
+  }
+  function _qpSubmit() {
+    const inp = _el('#tm-qp-input');
+    if (!inp) return;
+    const r = _qpParse(inp.value);
+    if (r.empty) return;
+    if (r.error) { _qpUpdate(); return; }
+    const b = _normBlock({
+      id: _newId(), date: _currentDate, tagId: r.tagId, startTime: _toTime(r.s), endTime: _toTime(r.e),
+      title: r.title || r.tag.label, subtitle: '', createdAt: Date.now(),
+      checklist: r.items.slice(0, CK_MAX).map(function (t) { return { text: t }; })
+    });
+    if (!b) return;
+    _timeBlocks.push(b);
+    _scheduleSave();
+    if (_view === 'day') {
+      _renderDayBlocks(); _updateSummary(); _dropFx(b.id);
+      const n = _el('.hub-tm-block[data-block-id="' + b.id + '"]');
+      if (n) { try { n.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) {} }
+    } else _renderGrid({ animate: false, scroll: false });
+    _tlRefresh();
+    inp.value = '';
+    _qpUpdate();
+    _toast('Planned ' + b.startTime + '–' + b.endTime + ' · ' + b.title, {
+      action: 'Undo',
+      onAction: function () {
+        _timeBlocks = _timeBlocks.filter(function (x) { return x.id !== b.id; });
+        _scheduleSave();
+        _renderGrid({ animate: false, scroll: false });
+        _tlRefresh();
+      }
+    });
+  }
+  function _bindQuickPlan() {
+    const form = _el('#hub-tm-qp'), inp = _el('#tm-qp-input');
+    if (!form || !inp) return;
+    const sig = { signal: _ui.signal };
+    inp.addEventListener('input', _qpUpdate, sig);
+    inp.addEventListener('focus', _qpUpdate, sig);
+    inp.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      e.preventDefault(); e.stopPropagation();
+      if (inp.value) { inp.value = ''; _qpUpdate(); } else inp.blur();
+    }, sig);
+    form.addEventListener('submit', function (e) { e.preventDefault(); _qpSubmit(); }, sig);
+    _qpUpdate();
+  }
+
   function _onGridClick(e) {
     if (performance.now() < _suppressClickUntil) return;
     const tg = e.target.closest('.hub-tm-bk-toggle');
@@ -2159,6 +2409,15 @@ const timeManagementModule = (function () {
     if (t.hasAttribute('data-activate') && (e.key === 'Enter' || e.key === ' ')) {
       e.preventDefault();
       _setDate(t.getAttribute('data-date'), { view: 'day' });
+      return;
+    }
+    if (t.hasAttribute && t.hasAttribute('data-bk-new')) {           // drawer input: Enter adds, Enter on empty finishes
+      if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return;
+      e.preventDefault();
+      const el = t.closest('.hub-tm-block'), b = el && _blockById(el.getAttribute('data-block-id'));
+      if (!b) return;
+      if (t.value.trim()) _bkAddItems(el, b, [t.value]);
+      else { _bkToggle(el, b); el.focus({ preventScroll: true }); }
       return;
     }
     if (!t.classList.contains('hub-tm-block') && !t.classList.contains('hub-tm-week-block')) return;

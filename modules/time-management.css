@@ -4392,3 +4392,92 @@ body.theme-optimized #time-management .hub-tm-bk-row label { border-radius: 0; }
 @media (prefers-reduced-motion: reduce) {
   #time-management .hub-tm-block, .hub-tm-bk-chev, .hub-tm-bk-box, .hub-tm-bk-box::after, .hub-tm-bk-prog span, .hub-tm-bk-toggle::after { transition: none; }
 }
+
+/* ==========================================================================
+   QUICK PLAN  ·  one-line planner under the Brush toolbar
+   Built only from the theme tokens (--tm-r*, --tm-line*, --accent-primary, fonts),
+   so each skin keeps its own character; the finishes below add one small
+   signature per theme and nothing else. Optimize-safe: focus never relies on
+   shadow, filter or gradient.
+   ========================================================================== */
+#time-management { --tm-qp-prompt: "//"; }
+[data-theme="solar-zen"] #time-management { --tm-qp-prompt: "¶"; }
+[data-theme="lofi-twilight"] #time-management { --tm-qp-prompt: "♪"; }
+[data-theme="ember-noir"] #time-management { --tm-qp-prompt: "◆"; }
+body.theme-optimized #time-management { --tm-qp-prompt: ">"; }
+
+#time-management .hub-tm-qp {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 18px;
+  padding: 10px 26px;
+  background: var(--bg-deep);
+  border-bottom: 1px solid var(--tm-line);
+}
+.hub-tm-qp-field {
+  position: relative; flex: 1 1 440px; min-width: 0; display: flex; align-items: center;
+  height: 40px;
+  border: 1px solid var(--tm-line-strong); border-left: 3px solid var(--accent-primary);
+  border-radius: var(--tm-r-sm);
+  background: color-mix(in srgb, var(--bg-surface) 60%, var(--bg-deep));
+  transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
+}
+.hub-tm-qp-field:focus-within { border-color: var(--accent-primary); box-shadow: 0 0 0 3px var(--tm-accent-soft); }
+.hub-tm-qp-ico { flex: none; display: grid; place-items: center; width: 38px; font: 700 0.98rem/1 var(--tm-font-display); color: var(--accent-primary); }
+.hub-tm-qp-ico::before { content: var(--tm-qp-prompt, "+"); }
+.hub-tm-qp-input {
+  flex: 1; min-width: 0; height: 100%; padding: 0 12px 0 0; border: 0; outline: 0; background: transparent;
+  color: var(--text-primary); font: 500 0.88rem/1 var(--tm-font-ui);
+  user-select: text; -webkit-user-select: text;
+}
+.hub-tm-qp-input::placeholder { color: color-mix(in srgb, var(--text-primary) 52%, transparent); }
+.hub-tm-qp-hint {
+  flex: 0 1 auto; display: inline-flex; align-items: center; gap: 8px; min-height: 1em;
+  font: 600 0.74rem/1.3 var(--tm-font-num); font-variant-numeric: tabular-nums; color: var(--text-secondary);
+}
+.hub-tm-qp-hint:not(:empty):not(.is-error)::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--tm-c, var(--accent-primary)); }
+.hub-tm-qp-hint.is-error { color: var(--danger); }
+.hub-tm-qp-keys { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; font: 500 0.7rem/1 var(--tm-font-ui); color: var(--text-secondary); white-space: nowrap; }
+.hub-tm-qp-keys kbd { margin-left: 4px; padding: 2px 6px; border: 1px solid var(--tm-line-strong); border-radius: 4px; font: 700 0.64rem/1 var(--tm-font-num); color: var(--text-primary); }
+.hub-tm-qp-keys kbd:first-child { margin-left: 0; }
+@media (max-width: 860px) { .hub-tm-qp-keys { display: none; } }
+@media (max-width: 640px) { #time-management .hub-tm-qp { padding: 8px 12px; } .hub-tm-qp-field { flex-basis: 100%; } }
+
+/* Solar Zen — a ruled ledger line: paper, soft shadow, serif prompt and placeholder */
+[data-theme="solar-zen"] #time-management .hub-tm-qp-field { border-left-width: 1px; border-radius: var(--tm-r); background: var(--bg-surface); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08); }
+[data-theme="solar-zen"] #time-management .hub-tm-qp-field:focus-within { box-shadow: 0 0 0 3px var(--tm-accent-soft), 0 1px 2px rgba(15, 23, 42, 0.08); }
+[data-theme="solar-zen"] #time-management .hub-tm-qp-input::placeholder { font-family: var(--tm-font-display); font-style: italic; }
+/* Lo-Fi Twilight — stitched like the cassette journal, softly rounded */
+[data-theme="lofi-twilight"] #time-management .hub-tm-qp-field { border: 1.5px dashed color-mix(in srgb, var(--accent-primary) 55%, transparent); border-radius: var(--tm-r); }
+[data-theme="lofi-twilight"] #time-management .hub-tm-qp-field:focus-within { border-style: solid; border-color: var(--accent-primary); }
+/* Ember Noir — brass double rule, like the frame around the grid */
+[data-theme="ember-noir"] #time-management .hub-tm-qp-field { border-left-width: 1px; border-color: var(--ember-brass-line); box-shadow: inset 0 0 0 2px var(--bg-deep), inset 0 0 0 3px var(--ember-brass-line); }
+[data-theme="ember-noir"] #time-management .hub-tm-qp-field:focus-within { border-color: var(--ember-brass); box-shadow: inset 0 0 0 2px var(--bg-deep), inset 0 0 0 3px var(--ember-brass); }
+[data-theme="ember-noir"] #time-management .hub-tm-qp-ico { color: var(--ember-brass); }
+/* Optimize · TUI — a terminal prompt: square, monospace, no glow */
+body.theme-optimized #time-management .hub-tm-qp-field { border: 1px solid var(--accent-primary); border-radius: 0; background: transparent; box-shadow: none; }
+body.theme-optimized #time-management .hub-tm-qp-field:focus-within { box-shadow: none; outline: 2px solid var(--accent-primary); outline-offset: 1px; }
+body.theme-optimized #time-management .hub-tm-qp-input { font-family: var(--font-mono); }
+body.theme-optimized #time-management .hub-tm-qp-keys kbd { border-radius: 0; }
+body.theme-optimized #time-management .hub-tm-qp-hint:not(:empty):not(.is-error)::before { border-radius: 0; }
+
+/* ==========================================================================
+   BLOCK DRAWER  ·  inline "add item" row + the ghost "+ Checklist" pill
+   ========================================================================== */
+.hub-tm-bk-add {
+  display: flex; align-items: center; gap: 8px; margin-top: 4px; padding: 0 8px; min-height: 34px;
+  border: 1px dashed color-mix(in srgb, var(--tm-c) 50%, var(--text-muted)); border-radius: 8px;
+}
+.hub-tm-bk-add:focus-within { border-style: solid; border-color: color-mix(in srgb, var(--tm-c) 80%, var(--text-primary)); }
+.hub-tm-bk-add > span { flex: none; font-weight: 700; color: color-mix(in srgb, var(--tm-c) 60%, var(--text-primary)); }
+.hub-tm-bk-add input {
+  flex: 1; min-width: 0; height: 32px; padding: 0; border: 0; outline: 0; background: transparent;
+  color: var(--text-primary); font: 500 0.84rem/1 var(--tm-font-ui);
+  user-select: text; -webkit-user-select: text;
+}
+.hub-tm-bk-add input::placeholder { color: color-mix(in srgb, var(--text-primary) 55%, transparent); }
+.hub-tm-bk-toggle.is-empty { opacity: 0; border-style: dashed; }
+#time-management .hub-tm-block:hover .hub-tm-bk-toggle.is-empty,
+#time-management .hub-tm-block:focus-within .hub-tm-bk-toggle.is-empty,
+#time-management .hub-tm-block.is-open .hub-tm-bk-toggle.is-empty,
+.hub-tm-bk-toggle.is-empty:focus-visible { opacity: 1; }
+@media (hover: none) { .hub-tm-bk-toggle.is-empty { opacity: 0.75; } }
+body.theme-optimized #time-management .hub-tm-bk-add { border-radius: 0; }
