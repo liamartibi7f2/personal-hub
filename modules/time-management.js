@@ -238,7 +238,15 @@ const timeManagementModule = (function () {
   }
   function _tagOrFallback(id) { return _tagById(id) || FALLBACK_TAG; }
   function _tint(tag) { return Math.round(10 + (tag.opacity || 85) * 0.3); }
-  function _tagStyle(tag) { return '--tm-c:' + _safeColor(tag.color) + ';--tm-k:' + _tint(tag); }
+  /** Readable text colour (dark or light) for anything painted in the solid tag colour. */
+  function _inkFor(hex) {
+    const c = _safeColor(hex), ch = [1, 3, 5].map(function (i) {
+      const v = parseInt(c.slice(i, i + 2), 16) / 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return (0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2]) > 0.4 ? '#10121a' : '#ffffff';
+  }
+  function _tagStyle(tag) { return '--tm-c:' + _safeColor(tag.color) + ';--tm-k:' + _tint(tag) + ';--tm-ink:' + _inkFor(tag.color); }
 
   /* ---- Blocks ---- */
   function _blockById(id) {
@@ -1242,28 +1250,112 @@ const timeManagementModule = (function () {
   function _blockLabel(b) {
     return _tagOrFallback(b.tagId).label + ': ' + (b.title || '') + ', ' + b.startTime + ' to ' + b.endTime;
   }
+  /* ---- Checklist drawer on a block (Day view) ----
+     A pill on the block opens a panel with the full note + every checklist item.
+     Tick items right there; press the pill again (or Esc) to roll it back up. */
+  let _bkOpenIds = {};
+  function _bkBaseH(b) {
+    const s = _toMins(b.startTime); let e = _toMins(b.endTime);
+    if (e <= s) e = Math.min(DAY_MINS, s + CREATE_DUR);
+    return Math.max(18, Math.round((e - s) / 60 * HOUR_H));
+  }
+  function _bkToggleLabel(b, st, open) {
+    return (st.total ? 'Checklist, ' + st.done + ' of ' + st.total + ' done. ' : 'Notes. ') + (open ? 'Hide' : 'Show');
+  }
+  function _bkFootHtml(b, st) {
+    return '<button type="button" class="hub-tm-bk-btn" data-bk-edit>Edit block</button>' +
+      (st.total && st.done === st.total && !b.done ? '<button type="button" class="hub-tm-bk-btn hub-tm-bk-btn--primary" data-bk-complete>Complete block</button>' : '');
+  }
+  function _bkPanelHtml(b, st, note) {
+    let h = '<div class="hub-tm-bk-panel" id="hub-tm-bk-' + _esc(b.id) + '">';
+    if (note) h += '<p class="hub-tm-bk-note">' + _esc(note) + '</p>';
+    if (st.total) {
+      h += '<div class="hub-tm-bk-prog" aria-hidden="true"><span style="width:' + st.pct + '%"></span></div><ul class="hub-tm-bk-list">';
+      _ck(b).forEach(function (it) {
+        h += '<li class="hub-tm-bk-row' + (it.done ? ' is-done' : '') + '"><label>' +
+          '<input type="checkbox" data-bk-ck="' + _esc(it.id) + '"' + (it.done ? ' checked' : '') + '>' +
+          '<span class="hub-tm-bk-box" aria-hidden="true"></span><span class="hub-tm-bk-txt">' + _esc(it.text) + '</span></label></li>';
+      });
+      h += '</ul>';
+    }
+    return h + '<div class="hub-tm-bk-foot">' + _bkFootHtml(b, st) + '</div></div>';
+  }
+  function _bkRefresh(el, b) {
+    const st = _ckStats(b), t = el.querySelector('.hub-tm-bk-toggle');
+    if (t) {
+      const c = t.querySelector('.hub-tm-bk-count');
+      if (c) c.textContent = st.done + '/' + st.total;
+      t.style.setProperty('--p', st.pct + '%');
+      t.classList.toggle('is-complete', st.total > 0 && st.done === st.total);
+      t.setAttribute('aria-label', _bkToggleLabel(b, st, el.classList.contains('is-open')));
+    }
+    const bar = el.querySelector('.hub-tm-bk-prog span'); if (bar) bar.style.width = st.pct + '%';
+    const foot = el.querySelector('.hub-tm-bk-foot'); if (foot) foot.innerHTML = _bkFootHtml(b, st);
+  }
+  function _bkToggle(el, b) {
+    const open = !el.classList.contains('is-open'), base = _bkBaseH(b), st = _ckStats(b);
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const btn = el.querySelector('.hub-tm-bk-toggle');
+    if (el._bkT) { clearTimeout(el._bkT); el._bkT = 0; }
+    if (open) {
+      _bkOpenIds[b.id] = 1;
+      el.style.setProperty('--tm-open-h', 'auto');
+      el.classList.add('is-open');
+      if (!reduce) {
+        const full = el.offsetHeight;                                  // natural height with the panel showing
+        el.style.setProperty('--tm-open-h', base + 'px');
+        void el.offsetHeight;
+        el.style.setProperty('--tm-open-h', full + 'px');
+        el._bkT = setTimeout(function () { el.style.setProperty('--tm-open-h', 'auto'); }, 300);
+      }
+      setTimeout(function () { try { el.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' }); } catch (_) {} }, reduce ? 0 : 280);
+    } else {
+      delete _bkOpenIds[b.id];
+      if (reduce) { el.classList.remove('is-open'); el.style.removeProperty('--tm-open-h'); }
+      else {
+        el.style.setProperty('--tm-open-h', el.offsetHeight + 'px');
+        void el.offsetHeight;
+        el.style.setProperty('--tm-open-h', base + 'px');
+        el._bkT = setTimeout(function () { el.classList.remove('is-open'); el.style.removeProperty('--tm-open-h'); }, 280);
+      }
+    }
+    if (btn) {
+      btn.setAttribute('aria-expanded', String(open));
+      btn.setAttribute('aria-label', _bkToggleLabel(b, st, open));
+      btn.title = (open ? 'Hide ' : 'Show ') + (st.total ? 'checklist' : 'notes');
+    }
+  }
+
   function _makeBlockEl(b) {
     const s = _toMins(b.startTime);
-    let e = _toMins(b.endTime);
-    if (e <= s) e = Math.min(DAY_MINS, s + CREATE_DUR);
     const tag = _tagOrFallback(b.tagId);
     const el = document.createElement('div');
-    el.className = 'hub-tm-block' + (b.done ? ' is-done' : '') + (_habIsOverdue(b) ? ' is-overdue' : '');
+    const note = _plainText(b.subtitle), ck = _ckStats(b);
+    const hasPanel = ck.total > 0 || note.length > 0;
+    const open = hasPanel && !!_bkOpenIds[b.id];
+    el.className = 'hub-tm-block' + (b.done ? ' is-done' : '') + (_habIsOverdue(b) ? ' is-overdue' : '') + (open ? ' is-open' : '');
     el.setAttribute('data-block-id', b.id);
     el.setAttribute('role', 'button');
     el.setAttribute('tabindex', '0');
     el.setAttribute('aria-label', _blockLabel(b) + '. Enter to edit, arrow keys to move, Shift plus arrows to resize, Delete to remove.');
-    el.style.cssText = _tagStyle(tag) + ';top:' + Math.round(s / 60 * HOUR_H) + 'px;height:' + Math.max(18, Math.round((e - s) / 60 * HOUR_H)) + 'px';
-    const note = _plainText(b.subtitle), ck = _ckStats(b);
+    el.style.cssText = _tagStyle(tag) + ';top:' + Math.round(s / 60 * HOUR_H) + 'px;height:' + _bkBaseH(b) + 'px;--tm-base:' + _bkBaseH(b) + 'px';
+    const toggle = hasPanel
+      ? '<button type="button" class="hub-tm-bk-toggle' + (ck.total && ck.done === ck.total ? ' is-complete' : '') + '" style="--p:' + ck.pct + '%" aria-expanded="' + open + '" aria-controls="hub-tm-bk-' + _esc(b.id) + '" aria-label="' + _esc(_bkToggleLabel(b, ck, open)) + '" title="' + (open ? 'Hide ' : 'Show ') + (ck.total ? 'checklist' : 'notes') + '">' +
+          (ck.total ? '<svg class="hub-tm-bk-ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="hub-tm-bk-count">' + ck.done + '/' + ck.total + '</span>' : '<span class="hub-tm-bk-count">Notes</span>') +
+          '<svg class="hub-tm-bk-chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'
+      : '';
     el.innerHTML =
       '<div class="hub-tm-block-grip hub-tm-block-grip--top" aria-hidden="true"></div>' +
       '<div class="hub-tm-block-body">' +
-        '<span class="hub-tm-block-time">' + _esc(b.startTime) + ' – ' + _esc(b.endTime) + '</span>' +
+        '<div class="hub-tm-bk-head">' +
+          '<span class="hub-tm-block-time">' + _esc(b.startTime) + ' – ' + _esc(b.endTime) + '</span>' +
+          toggle +
+          (b.focusMs >= 60000 ? '<span class="hub-tm-block-focus" title="Time really focused on this block">&#9201; ' + _fmtDur(Math.round(b.focusMs / 60000)) + '</span>' : '') +
+        '</div>' +
         '<span class="hub-tm-block-title">' + _esc(b.title || tag.label) + '</span>' +
-        (ck.total ? '<span class="hub-tm-block-ck' + (ck.done === ck.total ? ' is-complete' : '') + '" title="Checklist: ' + ck.done + ' of ' + ck.total + ' done">&#10003; ' + ck.done + '/' + ck.total + '</span>' : '') +
-        (b.focusMs >= 60000 ? '<span class="hub-tm-block-focus" title="Time really focused on this block">&#9201; ' + _fmtDur(Math.round(b.focusMs / 60000)) + '</span>' : '') +
         (note ? '<span class="hub-tm-block-note">' + _esc(note.slice(0, 160)) + '</span>' : '') +
       '</div>' +
+      (hasPanel ? _bkPanelHtml(b, ck, note) : '') +
       '<div class="hub-tm-block-grip hub-tm-block-grip--bottom" aria-hidden="true"></div>' +
       '<button type="button" class="hub-tm-block-check" aria-label="Toggle complete" title="Complete (scores the Habitica To-Do)" tabindex="-1">&#10003;</button>' +
       '<button type="button" class="hub-tm-block-delete" aria-label="Delete block" title="Delete block" tabindex="-1">&times;</button>';
@@ -1734,6 +1826,7 @@ const timeManagementModule = (function () {
     scroll.addEventListener('touchmove', function (e) { if (_drag && _drag.active && e.cancelable) e.preventDefault(); }, { passive: false, signal: _ui.signal });
     scroll.addEventListener('contextmenu', function (e) { if (_drag) e.preventDefault(); }, sig);
     scroll.addEventListener('click', _onGridClick, sig);
+    scroll.addEventListener('change', _onGridChange, sig);
     scroll.addEventListener('keydown', _onGridKey, sig);
   }
 
@@ -1747,8 +1840,9 @@ const timeManagementModule = (function () {
   function _onPointerDown(e) {
     if (_view !== 'day' || _drag) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
-    if (!e.target.closest('.hub-tm-main-col') || e.target.closest('.hub-tm-block-delete') || e.target.closest('.hub-tm-block-check')) return;
+    if (!e.target.closest('.hub-tm-main-col') || e.target.closest('.hub-tm-block-delete') || e.target.closest('.hub-tm-block-check') || e.target.closest('.hub-tm-bk-toggle') || e.target.closest('.hub-tm-bk-panel')) return;
     const blockEl = e.target.closest('.hub-tm-block');
+    if (blockEl && blockEl.classList.contains('is-open')) return;     // roll the checklist up first, then move / resize
     const block = blockEl ? _blockById(blockEl.getAttribute('data-block-id')) : null;
     if (blockEl && !block) return;
     const grip = e.target.closest('.hub-tm-block-grip');
@@ -2003,6 +2097,19 @@ const timeManagementModule = (function () {
 
   function _onGridClick(e) {
     if (performance.now() < _suppressClickUntil) return;
+    const tg = e.target.closest('.hub-tm-bk-toggle');
+    if (tg) {
+      const te = tg.closest('.hub-tm-block'), tb = te && _blockById(te.getAttribute('data-block-id'));
+      if (tb) _bkToggle(te, tb);
+      return;
+    }
+    const pn = e.target.closest('.hub-tm-bk-panel');
+    if (pn) {
+      const pe = pn.closest('.hub-tm-block'), pid = pe && pe.getAttribute('data-block-id');
+      if (e.target.closest('[data-bk-edit]')) _openDetails(pid);
+      else if (e.target.closest('[data-bk-complete]')) _habToggleDone(pid);
+      return;                                                         // ticking / reading never opens the editor
+    }
     const chk = e.target.closest('.hub-tm-block-check');
     if (chk) {
       const ce = chk.closest('.hub-tm-block');
@@ -2026,9 +2133,29 @@ const timeManagementModule = (function () {
     }
   }
 
+  /** Tick a checklist item straight from the block. Updates in place so the drawer stays open. */
+  function _onGridChange(e) {
+    const cb = e.target.closest && e.target.closest('[data-bk-ck]');
+    if (!cb) return;
+    const el = cb.closest('.hub-tm-block'), b = el && _blockById(el.getAttribute('data-block-id'));
+    const it = b && _ck(b).find(function (i) { return i.id === cb.getAttribute('data-bk-ck'); });
+    if (!it) return;
+    it.done = cb.checked;
+    const row = cb.closest('.hub-tm-bk-row'); if (row) row.classList.toggle('is-done', cb.checked);
+    _scheduleSave();
+    _fckSig = '';
+    _bkRefresh(el, b);
+    _tlRefresh();
+    _ckNudge(b);
+  }
+
   function _onGridKey(e) {
     const t = e.target;
     if (!t.classList) return;
+    if (e.key === 'Escape' && t.closest) {                            // Esc rolls an opened checklist back up
+      const oe = t.closest('.hub-tm-block.is-open'), ob = oe && _blockById(oe.getAttribute('data-block-id'));
+      if (ob) { e.preventDefault(); _bkToggle(oe, ob); const tg = oe.querySelector('.hub-tm-bk-toggle'); if (tg) tg.focus({ preventScroll: true }); return; }
+    }
     if (t.hasAttribute('data-activate') && (e.key === 'Enter' || e.key === ' ')) {
       e.preventDefault();
       _setDate(t.getAttribute('data-date'), { view: 'day' });

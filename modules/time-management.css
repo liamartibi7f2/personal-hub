@@ -4238,3 +4238,157 @@ body.theme-optimized #time-management .hub-tm-block:hover .hub-tm-block-grip::af
 /* time really focused, shown on the block */
 .hub-tm-block-focus { display: inline-flex; align-items: center; gap: 3px; font: 700 0.64rem/1 var(--tm-font-num); opacity: 0.9; }
 @media (max-height: 640px) { .hub-tm-fs-time { font-size: 2.3rem; } }
+/* ==========================================================================
+   BLOCK CARD v2  ·  Day view
+   - Readable on ANY tag colour: the card surface stays close to the theme
+     surface (a light wash of the tag colour), the tag colour itself lives on
+     the left bar, the checklist pill and the checkboxes, and text always uses
+     the theme's own text tokens. Anything painted in the solid tag colour uses
+     --tm-ink (dark or light, picked from the colour's luminance in JS).
+   - Full text: titles wrap instead of being cut to one line; the full note
+     and every checklist item are one click away in the drawer.
+   - Checklist drawer: the pill on the block rolls the block down; tick items
+     right there; press the pill again (or Esc) to roll it back up.
+   ========================================================================== */
+#time-management .hub-tm-block {
+  --tm-stitch: 0 solid transparent;            /* no dashed stitching running through the text */
+  --tm-block-texture: none;
+  background-color: color-mix(in srgb, var(--tm-c) calc(8% + var(--tm-k) * 0.2%), var(--bg-surface));
+  background-image: none;
+  border: 1px solid color-mix(in srgb, var(--tm-c) calc(20% + var(--tm-k) * 1%), transparent);
+  border-left: 5px solid var(--tm-c);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+  color: var(--text-primary);
+  transition: height 0.26s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow var(--duration-fast), transform var(--duration-fast), opacity var(--duration-fast);
+}
+#time-management .hub-tm-block:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.34); }
+#time-management .hub-tm-block.hub-tm-block--busy { background-image: none; animation: none; opacity: 0.96; box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45), 0 0 0 2px var(--tm-c); }
+#time-management .hub-tm-block.hub-tm-block--ghost { border-style: dashed; border-left-style: solid; border-color: var(--tm-c); box-shadow: none; opacity: 0.92; }
+
+/* states: dimmed but still readable — past ≠ struck through, only “done” is */
+#time-management .hub-tm-block.hub-tm-block--past { opacity: 0.82; }
+#time-management .hub-tm-block.hub-tm-block--past .hub-tm-block-title { text-decoration: none; }
+#time-management .hub-tm-block.is-done { opacity: 0.78; }
+#time-management .hub-tm-block.is-done .hub-tm-block-title { text-decoration: line-through; text-decoration-thickness: 1.5px; }
+#time-management .hub-tm-block.is-overdue { border-color: var(--danger); border-left-color: var(--tm-c); box-shadow: inset 0 0 0 1px var(--danger); }
+
+/* text */
+#time-management .hub-tm-block .hub-tm-block-body { display: flex; flex-direction: column; gap: 3px; padding: 5px 58px 5px 10px; height: 100%; min-width: 0; }
+.hub-tm-bk-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+#time-management .hub-tm-block .hub-tm-block-time {
+  flex: none; font-size: 0.7rem; font-weight: 700; line-height: 1.2;
+  color: color-mix(in srgb, var(--text-primary) 84%, transparent);
+}
+#time-management .hub-tm-block .hub-tm-block-title {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  overflow: hidden; white-space: normal; overflow-wrap: anywhere; text-overflow: clip;
+  padding-bottom: 0; border-bottom: 0;
+  font-size: 0.86rem; font-weight: 700; line-height: 1.28; color: var(--text-primary);
+}
+#time-management .hub-tm-block .hub-tm-block-note {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; line-clamp: 1;
+  font-size: 0.76rem; line-height: 1.35; color: color-mix(in srgb, var(--text-primary) 78%, transparent);
+  overflow: hidden; overflow-wrap: anywhere;
+}
+#time-management .hub-tm-block .hub-tm-block-focus { color: var(--text-primary); }
+
+/* the checklist pill */
+.hub-tm-bk-toggle {
+  position: relative; flex: none; display: inline-flex; align-items: center; gap: 5px;
+  height: 20px; padding: 0 6px 0 7px; margin: 0;
+  border-radius: 999px; overflow: hidden; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--tm-c) 70%, transparent);
+  background: color-mix(in srgb, var(--text-primary) 9%, var(--bg-surface));
+  color: var(--text-primary);
+  font: 700 0.72rem/1 var(--tm-font-num); font-variant-numeric: tabular-nums;
+  transition: background var(--duration-fast), border-color var(--duration-fast);
+}
+.hub-tm-bk-toggle::after { content: ""; position: absolute; left: 0; bottom: 0; height: 2px; width: var(--p, 0%); background: var(--tm-c); transition: width 0.25s; }
+.hub-tm-bk-toggle:hover { border-color: var(--tm-c); background: color-mix(in srgb, var(--tm-c) 24%, var(--bg-surface)); }
+.hub-tm-bk-toggle:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+.hub-tm-bk-toggle.is-complete { background: var(--tm-c); border-color: var(--tm-c); color: var(--tm-ink, #fff); }
+.hub-tm-bk-toggle.is-complete::after { display: none; }
+.hub-tm-bk-ico, .hub-tm-bk-chev { width: 12px; height: 12px; flex: none; }
+.hub-tm-bk-chev { transition: transform 0.24s; }
+.hub-tm-bk-toggle[aria-expanded="true"] .hub-tm-bk-chev { transform: rotate(180deg); }
+@media (pointer: coarse) { .hub-tm-bk-toggle { height: 26px; padding-inline: 9px; } }
+
+/* short blocks */
+@container tmblock (max-height: 69px) {
+  #time-management .hub-tm-block .hub-tm-block-title { -webkit-line-clamp: 1; line-clamp: 1; }
+}
+@container tmblock (max-height: 95px) {
+  #time-management .hub-tm-block .hub-tm-block-note { display: none; }          /* the note lives in the drawer */
+}
+@container tmblock (min-height: 120px) {
+  #time-management .hub-tm-block .hub-tm-block-title { -webkit-line-clamp: 3; line-clamp: 3; }
+  #time-management .hub-tm-block .hub-tm-block-note { -webkit-line-clamp: 3; line-clamp: 3; }
+}
+@container tmblock (max-height: 50px) {                                          /* one row: time · title · pill */
+  #time-management .hub-tm-block .hub-tm-block-body { flex-direction: row; align-items: center; gap: 8px; padding-block: 2px; }
+  .hub-tm-bk-head { display: contents; }
+  #time-management .hub-tm-block .hub-tm-block-time { order: 0; }
+  #time-management .hub-tm-block .hub-tm-block-title { order: 1; flex: 1; min-width: 0; display: block; white-space: nowrap; text-overflow: ellipsis; }
+  .hub-tm-bk-toggle { order: 2; }
+  #time-management .hub-tm-block .hub-tm-block-focus { order: 3; }
+}
+@container tmblock (max-height: 28px) {
+  #time-management .hub-tm-block .hub-tm-block-time { display: none; }
+  .hub-tm-bk-toggle { display: none; }                                           /* 15-min block: resize it to reach the checklist */
+}
+
+/* the drawer */
+#time-management .hub-tm-block .hub-tm-bk-panel {
+  display: none; position: relative; margin: 0 12px 0 10px; padding: 9px 0 11px;
+  border-top: 1px solid color-mix(in srgb, var(--tm-c) 38%, transparent);
+  cursor: default;
+}
+#time-management .hub-tm-block.is-open {
+  container-type: normal;                                                        /* let the card grow to its content */
+  height: var(--tm-open-h, auto) !important;
+  min-height: var(--tm-base, 0);
+  z-index: 5; opacity: 1;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45), 0 0 0 1px color-mix(in srgb, var(--tm-c) 55%, transparent);
+}
+#time-management .hub-tm-block.is-open .hub-tm-block-body { height: auto; padding-top: 7px; padding-bottom: 7px; }
+#time-management .hub-tm-block.is-open .hub-tm-block-title { display: block; overflow: visible; -webkit-line-clamp: unset; line-clamp: unset; }
+#time-management .hub-tm-block.is-open .hub-tm-block-note { display: none; }
+#time-management .hub-tm-block.is-open .hub-tm-block-grip { display: none; }
+#time-management .hub-tm-block.is-open .hub-tm-bk-panel { display: block; }
+
+.hub-tm-bk-note { margin: 0 0 9px; font: 500 0.84rem/1.5 var(--tm-font-ui); color: color-mix(in srgb, var(--text-primary) 88%, transparent); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
+.hub-tm-bk-prog { height: 4px; margin-bottom: 6px; border-radius: 999px; overflow: hidden; background: color-mix(in srgb, var(--text-primary) 14%, transparent); }
+.hub-tm-bk-prog span { display: block; height: 100%; background: var(--tm-c); transition: width 0.25s; }
+.hub-tm-bk-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.hub-tm-bk-row label { position: relative; display: flex; align-items: flex-start; gap: 10px; min-height: 32px; padding: 6px; border-radius: 8px; cursor: pointer; }
+.hub-tm-bk-row label:hover { background: color-mix(in srgb, var(--text-primary) 8%, transparent); }
+.hub-tm-bk-row input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.hub-tm-bk-box {
+  flex: none; display: grid; place-items: center; width: 18px; height: 18px; margin-top: 1px;
+  border-radius: 6px; border: 2px solid color-mix(in srgb, var(--tm-c) 55%, var(--text-primary));
+  transition: background var(--duration-fast), border-color var(--duration-fast);
+}
+.hub-tm-bk-box::after { content: ""; width: 9px; height: 5px; margin-top: -2px; border-left: 2px solid var(--tm-ink, #fff); border-bottom: 2px solid var(--tm-ink, #fff); transform: rotate(-45deg) scale(0); transition: transform 0.15s; }
+.hub-tm-bk-row input:checked + .hub-tm-bk-box { background: var(--tm-c); border-color: var(--tm-c); }
+.hub-tm-bk-row input:checked + .hub-tm-bk-box::after { transform: rotate(-45deg) scale(1); }
+.hub-tm-bk-row input:focus-visible + .hub-tm-bk-box { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+.hub-tm-bk-txt { font: 500 0.86rem/1.4 var(--tm-font-ui); color: var(--text-primary); overflow-wrap: anywhere; }
+.hub-tm-bk-row.is-done .hub-tm-bk-txt { color: color-mix(in srgb, var(--text-primary) 58%, transparent); text-decoration: line-through; }
+.hub-tm-bk-foot { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.hub-tm-bk-btn {
+  height: 28px; padding: 0 12px; border-radius: 999px; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--text-primary) 28%, transparent); background: transparent; color: var(--text-primary);
+  font: 600 0.76rem/1 var(--tm-font-ui);
+}
+.hub-tm-bk-btn:hover { background: color-mix(in srgb, var(--text-primary) 10%, transparent); }
+.hub-tm-bk-btn:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+.hub-tm-bk-btn--primary, .hub-tm-bk-btn--primary:hover { background: var(--tm-c); border-color: var(--tm-c); color: var(--tm-ink, #fff); }
+.hub-tm-bk-btn--primary:hover { filter: brightness(1.08); }
+
+body.theme-optimized #time-management .hub-tm-bk-toggle,
+body.theme-optimized #time-management .hub-tm-bk-btn,
+body.theme-optimized #time-management .hub-tm-bk-box,
+body.theme-optimized #time-management .hub-tm-bk-row label { border-radius: 0; }
+@media (prefers-reduced-motion: reduce) {
+  #time-management .hub-tm-block, .hub-tm-bk-chev, .hub-tm-bk-box, .hub-tm-bk-box::after, .hub-tm-bk-prog span, .hub-tm-bk-toggle::after { transition: none; }
+}
