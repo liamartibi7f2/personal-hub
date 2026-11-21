@@ -159,6 +159,9 @@ const timeManagementModule = (function () {
   let _templates   = [];
   let _inbox       = [];     // Inbox / Backlog: tasks with no time yet { id, title, tagId, dur, note, ck, createdAt, updatedAt }
   let _ibx         = null;   // inbox drag in progress
+  let _ibxSelId    = '';     // Inbox item picked by a click (Delete removes it, Ctrl+C copies it)
+  let _clip        = null;   // Ctrl+C clipboard: { title, tagId, dur, note, ck[], pri, from:{date,e} }
+  let _ptrY        = null;   // last mouse Y over the Day column (for Ctrl+V placement)
   let _wkd         = null;   // Week view: block being dragged back to the Inbox
   let _ibxSuppress = 0;      // swallow the click that follows a drag
   let _ibxOpen     = (function () { const v = _lsGet(INBOX_OPEN_KEY); return v === null ? (typeof window !== 'undefined' && window.innerWidth >= 1000) : v === '1'; })();
@@ -747,11 +750,11 @@ const timeManagementModule = (function () {
         '</div>' +
         '<span class="hub-tm-qp-hint" id="tm-qp-hint" aria-live="polite"></span>' +
         '<ol class="hub-tm-qp-plan" id="tm-qp-plan" aria-label="Plan preview" hidden></ol>' +
-        '<span class="hub-tm-qp-keys" title="Point at a block (or select it), then press a key" aria-hidden="true"><kbd>N</kbd>plan <kbd>I</kbd>inbox <kbd>⇧↵</kbd>lines <kbd>E</kbd>edit <kbd>C</kbd>checklist <kbd>X</kbd>done <kbd>B</kbd>→inbox</span>' +
+        '<span class="hub-tm-qp-keys" title="Point at a block (or select it), then press a key" aria-hidden="true"><kbd>N</kbd>plan <kbd>I</kbd>inbox <kbd>⇧↵</kbd>lines <kbd>E</kbd>edit <kbd>C</kbd>checklist <kbd>X</kbd>done <kbd>B</kbd>→inbox <kbd>Ctrl</kbd>C/V copy</span>' +
       '</form>' +
 
       '<div class="hub-tm-hint-bar hub-tm-hidden" id="hub-tm-hint">' +
-        '<span>Drag on the grid to create a block · drag a block to move it · drag its edges to resize · drag a block onto the Inbox to put it back · click to edit. On touch, press and hold.</span>' +
+        '<span>Drag on the grid to create a block · drag a block to move it · drag its edges to resize · drag a block onto the Inbox to put it back · Ctrl+C / Ctrl+V copies a block or task · click to edit. On touch, press and hold.</span>' +
         '<button type="button" id="tm-btn-hint-close" aria-label="Dismiss tip">&times;</button>' +
       '</div>' +
 
@@ -766,7 +769,7 @@ const timeManagementModule = (function () {
             '<input type="text" class="hub-tm-input" id="tm-ibx-input" maxlength="200" autocomplete="off" spellcheck="false" aria-label="Add to Inbox" placeholder="Jot it down, no time needed…  30m · #tag · !high">' +
             '<button type="button" class="hub-tm-btn hub-tm-btn--primary" id="tm-ibx-add" aria-label="Add to Inbox" title="Add (Enter)">+</button>' +
           '</div>' +
-          '<p class="hub-tm-ibx-hint">Drag a task onto the grid (touch: press and hold). Drag a block back here to unschedule it. Tap ⋮ to edit.</p>' +
+          '<p class="hub-tm-ibx-hint">Drag a task onto the grid (touch: press and hold). Drag a block back here to unschedule it. Click a task, then Delete removes it. Tap ⋮ to edit.</p>' +
           '<ul class="hub-tm-ibx-list" id="tm-ibx-list" aria-label="Waiting tasks"></ul>' +
         '</aside>' +
         '<div class="hub-tm-ibx-dock" id="hub-tm-ibx-dock" aria-hidden="true">' + ICON.inbox + '<span>Drop to Inbox</span></div>' +
@@ -1173,6 +1176,7 @@ const timeManagementModule = (function () {
 
     // One keyboard handler for the whole mount
     document.addEventListener('keydown', _onDocKey, sig);
+    document.addEventListener('pointerdown', function (e) { if (_ibxSelId && e.target.closest && !e.target.closest('.hub-tm-ibx-item')) _ibxSelect(''); }, sig);
   }
 
   function _isTyping(t) { return !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)); }
@@ -1185,6 +1189,19 @@ const timeManagementModule = (function () {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.isComposing) {   // Ctrl+Enter saves the block dialog from anywhere inside it
       const dlg = _modalStack[_modalStack.length - 1];
       if (dlg && dlg.id === 'hub-tm-details-modal') { e.preventDefault(); _saveDetails(); return; }
+    }
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && !e.isComposing && e.key && (e.key.toLowerCase() === 'c' || e.key.toLowerCase() === 'v') &&
+        !_modalStack.length && !_isTyping(e.target) && _sectionEl && _sectionEl.isConnected && !_sectionEl.classList.contains('hub-tm-hidden')) {
+      if (e.key.toLowerCase() === 'c') _clipCopy(e); else _clipPaste(e);
+      return;
+    }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && !e.isComposing && !e.repeat &&
+        !_modalStack.length && !_isTyping(e.target) && _sectionEl && _sectionEl.isConnected && !_sectionEl.classList.contains('hub-tm-hidden') &&
+        !(_ibx && _ibx.active) && !(_drag && _drag.active)) {
+      const a = document.activeElement, foc = a && a.closest ? a.closest('.hub-tm-ibx-item') : null;
+      const inGrid = !!(e.target.closest && e.target.closest('#hub-tm-grid-scroll'));
+      const id = foc && _sectionEl.contains(foc) ? foc.getAttribute('data-ibx-id') : (!inGrid && _ibxSelId && _ibxById(_ibxSelId) ? _ibxSelId : '');
+      if (id && _ibxById(id)) { e.preventDefault(); _ibxMenuClose(); _ibxRemove(id); return; }
     }
     if (e.key && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat && !e.isComposing && !_modalStack.length && !_isTyping(e.target) &&
         _sectionEl && _sectionEl.isConnected && !_sectionEl.classList.contains('hub-tm-hidden')) {
@@ -1991,7 +2008,8 @@ const timeManagementModule = (function () {
     scroll.addEventListener('click', _onGridClick, sig);
     scroll.addEventListener('change', _onGridChange, sig);
     scroll.addEventListener('mouseover', function (e) { const bl = e.target.closest && e.target.closest('.hub-tm-block'); _hoverBlockId = bl ? bl.getAttribute('data-block-id') : ''; }, sig);
-    scroll.addEventListener('mouseleave', function () { _hoverBlockId = ''; }, sig);
+    scroll.addEventListener('mouseleave', function () { _hoverBlockId = ''; _ptrY = null; }, sig);
+    scroll.addEventListener('mousemove', function (e) { _ptrY = e.clientY; }, { passive: true, signal: _ui.signal });
     scroll.addEventListener('focusin', function (e) { if (e.target.classList && e.target.classList.contains('hub-tm-block')) _hoverBlockId = ''; }, sig);
     scroll.addEventListener('paste', function (e) {                 // paste a list into the drawer → one item per line
       const t = e.target;
@@ -2147,6 +2165,123 @@ const timeManagementModule = (function () {
     if (!n) return;
     n.classList.add('hub-tm-block--drop');
     setTimeout(function () { n.classList.remove('hub-tm-block--drop'); }, 650);
+  }
+
+  /* ============================================================
+     COPY / PASTE  (Ctrl/Cmd + C · Ctrl/Cmd + V)
+     Works on calendar blocks and Inbox tasks, in either direction.
+     The clipboard is internal: title, tag, length, note and checklist
+     (progress, done state, focus time and Habitica links are not copied).
+     ============================================================ */
+  function _clipSource() {
+    const a = document.activeElement;
+    let li = _el('.hub-tm-ibx-item:hover') || (a && a.closest ? a.closest('.hub-tm-ibx-item') : null) || (_ibxSelId && !_kbTarget() ? _el('.hub-tm-ibx-item.is-sel') : null);
+    if (li && _sectionEl.contains(li)) {
+      const it = _ibxById(li.getAttribute('data-ibx-id'));
+      if (it) return { title: it.title, tagId: it.tagId, dur: it.dur, note: it.note, ck: it.ck.slice(), pri: it.pri, from: null };
+    }
+    if (_view === 'day') {
+      const el = _kbTarget(), b = el && _blockById(el.getAttribute('data-block-id'));
+      if (b) {
+        return {
+          title: b.title, tagId: b.tagId, dur: Math.max(MIN_DUR, _toMins(b.endTime) - _toMins(b.startTime)), note: b.subtitle || '',
+          ck: _ck(b).map(function (x) { return x.text; }), pri: 'normal', from: { date: b.date, e: _toMins(b.endTime) }
+        };
+      }
+    }
+    return null;
+  }
+  function _clipCopy(e) {
+    const sel = window.getSelection && window.getSelection();
+    if (sel && String(sel).length) return;                                   // the person is copying text: leave it alone
+    const c = _clipSource();
+    if (!c) return;
+    e.preventDefault();
+    _clip = c;
+    _toast('Copied · ' + (c.title || _tagOrFallback(c.tagId).label) + ' — Ctrl+V to paste');
+  }
+  /** First free interval on `date` at or after `from` that fits `need` minutes → [s, e] (e capped at s + dur). */
+  function _clipGap(date, from, dur, need) {
+    const o = _others(date).sort(function (a, b) { return a.s - b.s; });
+    let cur = _clamp(from, 0, DAY_MINS);
+    for (let i = 0; i < o.length; i++) {
+      if (o[i].e <= cur) continue;
+      if (o[i].s - cur >= need) return [cur, Math.min(cur + dur, o[i].s)];
+      cur = Math.max(cur, o[i].e);
+    }
+    return DAY_MINS - cur >= need ? [cur, Math.min(cur + dur, DAY_MINS)] : null;
+  }
+  function _clipSlot(date, dur, hoverMin, from) {
+    if (hoverMin !== null) {
+      const fb = _freeBounds(date, hoverMin);
+      if (fb[1] - fb[0] >= MIN_DUR) {
+        const s = _clamp(_snap(hoverMin, 'round'), fb[0], Math.max(fb[0], fb[1] - dur));
+        return [s, Math.min(s + dur, fb[1])];
+      }
+    }
+    return _clipGap(date, from, dur, dur) || _clipGap(date, 0, dur, dur) || _clipGap(date, 0, dur, MIN_DUR);
+  }
+  function _clipPaste(e) {
+    const c = _clip;
+    if (!c) return;
+    e.preventDefault();
+    const a = document.activeElement;
+    const toInbox = !!_el('.hub-tm-inbox.is-open:hover') || !!(a && a.closest && a.closest('.hub-tm-inbox'));
+    if (toInbox) {
+      if (_inbox.length >= IBX_MAX) { _toast('Inbox is full (' + IBX_MAX + ').'); return; }
+      const it = _normInbox({ id: _ibxNewId(), title: c.title || _tagOrFallback(c.tagId).label, tagId: c.tagId, pri: c.pri, dur: c.dur, note: c.note, ck: c.ck, createdAt: Date.now() });
+      if (!it) return;
+      _inbox.push(it);
+      _ibxSort(); _scheduleSave(); _qpHN = -1;
+      _ibxToggle(true);
+      _ibxRender(true);
+      const ne = _el('.hub-tm-ibx-item[data-ibx-id="' + it.id + '"]');
+      if (ne) { ne.classList.add('is-new'); try { ne.scrollIntoView({ block: 'nearest' }); } catch (_) {} setTimeout(function () { ne.classList.remove('is-new'); }, 1400); }
+      _toast('Pasted into the Inbox · ' + it.title, {
+        action: 'Undo',
+        onAction: function () { _inbox = _inbox.filter(function (x) { return x.id !== it.id; }); _scheduleSave(); _ibxRender(true); }
+      });
+      return;
+    }
+    // → calendar
+    const cell = _view !== 'day' ? _el('#hub-tm-grid-scroll [data-date]:hover') : null;
+    const date = cell ? cell.getAttribute('data-date') : _currentDate;
+    if (!_isDateStr(date)) return;
+    let hover = null;
+    if (_view === 'day' && date === _currentDate && _ptrY !== null && _el('#hub-tm-main-col:hover')) hover = _yToMins(_ptrY);
+    const now = new Date();
+    const from = c.from && c.from.date === date ? c.from.e : (date === _todayStr() ? Math.ceil((now.getHours() * 60 + now.getMinutes()) / SNAP) * SNAP : 480);
+    const slot = _clipSlot(date, c.dur, hover, from);
+    if (!slot || slot[1] - slot[0] < MIN_DUR) { _toast('No free time left on that day.'); return; }
+    const tag = _tagOrFallback(c.tagId);
+    const b = _normBlock({
+      id: _newId(), date: date, tagId: tag.id === FALLBACK_TAG.id ? 'work' : tag.id,
+      startTime: _toTime(slot[0]), endTime: slot[1] >= DAY_MINS ? '24:00' : _toTime(slot[1]),
+      title: c.title || tag.label, subtitle: c.note, createdAt: Date.now(),
+      checklist: c.ck.map(function (t) { return { text: t }; })
+    });
+    if (!b) return;
+    _timeBlocks.push(b);
+    c.from = { date: date, e: slot[1] };                                     // the next paste lands right after this one
+    _scheduleSave();
+    if (_view === 'day' && date === _currentDate) {
+      _renderDayBlocks(); _updateSummary(); _focusBlock(b.id); _dropFx(b.id);
+      const n = _el('.hub-tm-block[data-block-id="' + b.id + '"]');
+      if (n) { try { n.scrollIntoView({ block: 'nearest' }); } catch (_) {} }
+    } else {
+      _renderGrid({ animate: false, scroll: false }); _updateSummary();
+    }
+    _tlRefresh();
+    _toast('Pasted · ' + b.title + ' · ' + b.startTime + ' – ' + b.endTime, {
+      action: 'Undo',
+      onAction: function () {
+        const i = _timeBlocks.indexOf(b);
+        if (i < 0) return;
+        _timeBlocks.splice(i, 1);
+        _scheduleSave();
+        _renderGrid({ animate: false, scroll: false }); _updateSummary(); _tlRefresh();
+      }
+    });
   }
 
   /* ── drag: grid block → Inbox (Day + Week) ── */
@@ -2514,7 +2649,7 @@ const timeManagementModule = (function () {
   }
   function _ibxItemHtml(it) {
     const tg = _tagOrFallback(it.tagId), pri = it.pri || 'normal';
-    return '<li class="hub-tm-ibx-item" data-ibx-id="' + _esc(it.id) + '" data-pri="' + pri + '" style="' + _tagStyle(tg) + '">' +
+    return '<li class="hub-tm-ibx-item' + (it.id === _ibxSelId ? ' is-sel' : '') + '" data-ibx-id="' + _esc(it.id) + '" data-pri="' + pri + '" style="' + _tagStyle(tg) + '">' +
       '<div class="hub-tm-ibx-main">' +
         '<div class="hub-tm-ibx-top">' +
           '<span class="hub-tm-ibx-title" data-ibx-title tabindex="0" role="button" aria-label="Rename: ' + _esc(it.title) + '">' + _esc(it.title) + '</span>' +
@@ -2593,6 +2728,7 @@ const timeManagementModule = (function () {
     const i = _inbox.findIndex(function (x) { return x.id === id; });
     if (i < 0) return;
     const removed = _inbox.splice(i, 1)[0];
+    if (_ibxSelId === id) _ibxSelId = '';
     _scheduleSave();
     _ibxRender(true);
     _toast('Removed “' + removed.title + '”', {
@@ -2850,12 +2986,19 @@ const timeManagementModule = (function () {
     else if (t.kind === 'day') _ibxAuto(id, t.date);
     else _toast('That time is taken.');
   }
+  function _ibxSelect(id) {
+    _ibxSelId = id || '';
+    _all('.hub-tm-ibx-item.is-sel').forEach(function (n) { if (n.getAttribute('data-ibx-id') !== _ibxSelId) n.classList.remove('is-sel'); });
+    const n = _ibxSelId && _el('.hub-tm-ibx-item[data-ibx-id="' + _ibxSelId + '"]');
+    if (n) n.classList.add('is-sel');
+  }
   function _ibxClick(e) {
     if (performance.now() < _ibxSuppress) return;
     const li = e.target.closest('.hub-tm-ibx-item');
     if (!li) return;
     const id = li.getAttribute('data-ibx-id'), it = _ibxById(id), kb = e.detail === 0;
     if (!it) return;
+    if (!e.target.closest('[data-ibx-del]')) _ibxSelect(id);
     const after = function () {                                              // keyboard users: keep focus somewhere useful
       if (!kb) return;
       const n = _el('.hub-tm-ibx-item [data-ibx-go]') || _el('#tm-ibx-input');

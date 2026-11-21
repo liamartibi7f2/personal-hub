@@ -4953,3 +4953,6 @@ body.theme-optimized #time-management .hub-tm-ibx-prisel { border-radius: 0; }
   .hub-tm-ibx-dock { right: 0; bottom: auto; width: auto; height: 52px; flex-direction: row; }
   .hub-tm-ibx-dock span { writing-mode: horizontal-tb; transform: none; }
 }
+
+/* Inbox: the item picked by a click (Delete removes it · Ctrl+C copies it) */
+#time-management .hub-tm-ibx-item.is-sel { --ibx-edge: var(--accent-primary); outline: 2px solid var(--accent-primary); outline-offset: -2px; }
