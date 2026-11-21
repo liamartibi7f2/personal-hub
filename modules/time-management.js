@@ -60,6 +60,12 @@ const timeManagementModule = (function () {
   const FS_AWAY_TICK   = 1800000;           // gap this long between two ticks = computer slept → pause at the last heartbeat
   const VIEW_KEY     = 'hub_tm_view';
   const HINT_KEY     = 'hub_tm_hint_seen';
+  /* Inbox / Backlog: tasks that have no time yet (see the INBOX section) */
+  const INBOX_KEY      = 'hub_tm_inbox';        // local mirror (per account): safety net next to the cloud payload
+  const INBOX_OPEN_KEY = 'hub_tm_inbox_open';   // panel open / closed (per device)
+  const IBX_MAX        = 200;
+  const IBX_PRI        = ['high', 'normal', 'low'];                               // order = sort order in the Inbox
+  const IBX_PRI_LABEL  = { high: 'High', normal: 'Normal', low: 'Low' };
   const SLOT_H       = 36;
   const HOUR_H       = 72;
   const DAY_MINS     = 1440;
@@ -108,6 +114,7 @@ const timeManagementModule = (function () {
   let _sb = { tag: 'work', days: [], weeks: 1, ov: {}, dur: 30 };
 
   const ICON = {
+    inbox:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>',
     brush:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3Z"/><path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7"/><path d="M14.5 17.5 4.5 15"/></svg>',
     clock:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>',
     prev:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15,18 9,12 15,6"/></svg>',
@@ -132,8 +139,8 @@ const timeManagementModule = (function () {
   let _dataUid     = undefined;   // account whose data is in memory: uid, null = signed out, undefined = nothing loaded yet
   let _loadSeq     = 0;           // lets a newer load (account switch) supersede an older one still in flight
   let _syncWired   = false;
-  let _tombs       = { blocks: {}, tags: {}, templates: {} };                       // id → deletion time (so deletes sync too)
-  let _base        = { blocks: {}, tags: {}, templates: {}, settings: '' };          // signature of every item at the last sync
+  let _tombs       = { blocks: {}, tags: {}, templates: {}, inbox: {} };                       // id → deletion time (so deletes sync too)
+  let _base        = { blocks: {}, tags: {}, templates: {}, inbox: {}, settings: '' };          // signature of every item at the last sync
   let _settingsAt  = 0;
   let _msMap          = {};   // celebrated milestones: 'runStart|days' -> date. Add-only, synced with the account
   let _remoteT     = null;
@@ -150,6 +157,11 @@ const timeManagementModule = (function () {
   let _customTags  = [];
   let _activeTagId = 'work';
   let _templates   = [];
+  let _inbox       = [];     // Inbox / Backlog: tasks with no time yet { id, title, tagId, dur, note, ck, createdAt, updatedAt }
+  let _ibx         = null;   // inbox drag in progress
+  let _wkd         = null;   // Week view: block being dragged back to the Inbox
+  let _ibxSuppress = 0;      // swallow the click that follows a drag
+  let _ibxOpen     = (function () { const v = _lsGet(INBOX_OPEN_KEY); return v === null ? (typeof window !== 'undefined' && window.innerWidth >= 1000) : v === '1'; })();
   const LEGACY_SOUNDS = ['https://www.soundjay.com/misc/sounds/bell-ringing-01.mp3', 'https://www.soundjay.com/misc/sounds/bell-ringing-02.mp3'];
   let _audio = {
     enabled: false,
@@ -363,6 +375,20 @@ const timeManagementModule = (function () {
       updatedAt: Number(b.updatedAt) || 0
     };
   }
+  function _normInbox(i) {
+    if (!i || !i.id) return null;
+    const title = String(i.title || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+    if (!title) return null;
+    return {
+      id: String(i.id), title: title, tagId: String(i.tagId || 'work'),
+      pri: IBX_PRI.indexOf(i.pri) > -1 ? i.pri : 'normal',
+      dur: _clamp(Math.round((Number(i.dur) || CREATE_DUR) / SNAP) * SNAP, MIN_DUR, 480),
+      note: _sanitizeHtml(i.note || ''),
+      ck: Array.isArray(i.ck) ? i.ck.map(function (t) { return String(t).replace(/\s+/g, ' ').trim().slice(0, 200); }).filter(Boolean).slice(0, CK_MAX) : [],
+      createdAt: Number(i.createdAt) || 0,
+      updatedAt: Number(i.updatedAt) || 0
+    };
+  }
   function _normTpl(t) {
     if (!t || typeof t !== 'object' || !Array.isArray(t.blocks)) return null;
     const name = String(t.name || 'Template').slice(0, 120);
@@ -373,7 +399,7 @@ const timeManagementModule = (function () {
     });
   }
   function _normTombs(t) {
-    const out = { blocks: {}, tags: {}, templates: {} };
+    const out = { blocks: {}, tags: {}, templates: {}, inbox: {} };
     if (t && typeof t === 'object') {
       Object.keys(out).forEach(function (k) {
         const m = t[k];
@@ -393,7 +419,10 @@ const timeManagementModule = (function () {
     const rawBlocks = Array.isArray(data.timeBlocks) ? data.timeBlocks : (Array.isArray(data.blocks) ? data.blocks : []);
     _timeBlocks  = rawBlocks.map(_normBlock).filter(Boolean);
     _activeTagId = _tagById(data.activeTagId) ? data.activeTagId : 'work';
+    const prevIbxT = _tombs && _tombs.inbox;
     _tombs       = _normTombs(data.tombs);
+    if (prevIbxT) Object.keys(prevIbxT).forEach(function (id) { if (!(_tombs.inbox[id] >= prevIbxT[id])) _tombs.inbox[id] = prevIbxT[id]; });
+    if (Array.isArray(data.inbox)) { _inbox = data.inbox.map(_normInbox).filter(Boolean); _ibxSort(); }
     _settingsAt  = Number(data.settingsAt) || 0;
     if (Array.isArray(data.templates)) _templates = data.templates.map(_normTpl).filter(Boolean);
     else _seedLegacyTemplates();
@@ -402,8 +431,8 @@ const timeManagementModule = (function () {
   function _resetData() {
     _cancelDrag();
     _fs = null; _fsSummary = null; _fsMiss = 0;     // the session of the previous account stays saved under that account
-    _timeBlocks = []; _customTags = []; _templates = []; _activeTagId = 'work';
-    _tombs = { blocks: {}, tags: {}, templates: {} };
+    _timeBlocks = []; _customTags = []; _templates = []; _inbox = []; _activeTagId = 'work';
+    _tombs = { blocks: {}, tags: {}, templates: {}, inbox: {} };
     _settingsAt = 0;
     _msMap = {};
   }
@@ -432,21 +461,23 @@ const timeManagementModule = (function () {
     });
   }
   function _rebase() {
-    _base = { blocks: {}, tags: {}, templates: {}, settings: JSON.stringify([_activeTagId, _audioSynced(), _msMap]) };
+    _base = { blocks: {}, tags: {}, templates: {}, inbox: {}, settings: JSON.stringify([_activeTagId, _audioSynced(), _msMap]) };
     _timeBlocks.forEach(function (b) { _base.blocks[b.id] = _sigOf(b); });
     _customTags.forEach(function (t) { _base.tags[t.id] = _sigOf(t); });
     _templates.forEach(function (t) { _base.templates[t.id] = _sigOf(t); });
+    _inbox.forEach(function (t) { _base.inbox[t.id] = _sigOf(t); });
   }
   function _payload() {
     const now = Date.now();
     _stampList(_timeBlocks, 'blocks', now);
     _stampList(_customTags, 'tags', now);
     _stampList(_templates, 'templates', now);
+    _stampList(_inbox, 'inbox', now);
     const audio = _audioSynced();
     const ss = JSON.stringify([_activeTagId, audio, _msMap]);
     if (_base.settings !== ss) { _base.settings = ss; _settingsAt = now; }
     return {
-      v: 2, timeBlocks: _timeBlocks, customTags: _customTags, templates: _templates,
+      v: 2, timeBlocks: _timeBlocks, customTags: _customTags, templates: _templates, inbox: _inbox,
       audio: audio, activeTagId: _activeTagId, settingsAt: _settingsAt, milestones: _msMap, tombs: _tombs, updatedAt: now
     };
   }
@@ -454,6 +485,7 @@ const timeManagementModule = (function () {
     _saveTimer = null;
     if (_dataUid === undefined) return;                  // nothing loaded yet — never write an empty shell over real data
     const p = _payload();
+    _ibxSaveLs();
     if (typeof HubDB !== 'undefined' && HubDB && typeof HubDB.saveTimeManagementData === 'function') {
       // uid = the account these blocks belong to; HubDB refuses to write them into another account's cloud
       try { Promise.resolve(HubDB.saveTimeManagementData(p, { uid: _dataUid })).catch(function () {}); } catch (_) {}
@@ -491,6 +523,7 @@ const timeManagementModule = (function () {
     _dataTrusted = !st.uid || !!st.cloudOk;
     _resetData();
     if (st.payload) _applyData(st.payload);
+    _ibxLoad(st.payload);
     _loadMs(st.payload);
     _rebase();
     _dataReady = true;
@@ -518,17 +551,20 @@ const timeManagementModule = (function () {
     _loadData();
   }
   function _sameSync(a, b) {
-    return JSON.stringify([a.timeBlocks, a.customTags, a.templates, a.audio]) === JSON.stringify([b.timeBlocks, b.customTags, b.templates, b.audio]);
+    return JSON.stringify([a.timeBlocks, a.customTags, a.templates, a.audio, a.inbox]) === JSON.stringify([b.timeBlocks, b.customTags, b.templates, b.audio, b.inbox]);
   }
   function _onRemote(uid, remote) {
     if (!_dataReady || uid !== _dataUid) return;
-    if (_drag || _editingId) {                          // never pull the rug from under a drag / open editor
+    if (_drag || _editingId || _ibx) {                          // never pull the rug from under a drag / open editor
       if (_remoteT) clearTimeout(_remoteT);
       _remoteT = setTimeout(function () { _remoteT = null; _onRemote(uid, remote); }, 1200);
       return;
     }
     const local = _payload();
     const merged = HubDB.mergeTimeManagement(local, remote);
+    const mi = _ibxMerge(_inbox, _tombs.inbox, remote);                // the Inbox is merged here: HubDB only knows blocks / tags / templates
+    merged.inbox = mi.list;
+    merged.tombs = Object.assign({}, merged.tombs, { inbox: mi.tomb });
     if (_sameSync(merged, local)) return;               // nothing new from the other device
     const keepTag = _activeTagId;
     _applyData(merged);
@@ -593,6 +629,8 @@ const timeManagementModule = (function () {
   function _teardownUI() {
     _ui.abort();                                  // removes every document-level listener
     _cancelDrag();
+    _wkEnd();
+    _ibxEnd();
     if (_nowTimer)   { clearInterval(_nowTimer);   _nowTimer = null; }
     if (_focusTimer) { clearInterval(_focusTimer); _focusTimer = null; }
     if (_tlTimer)    { clearInterval(_tlTimer);    _tlTimer = null; }
@@ -667,6 +705,7 @@ const timeManagementModule = (function () {
         '</div>' +
           '<div class="hub-tm-header-right">' +
             '<div class="hub-tm-tools" role="group" aria-label="Planning tools">' +
+          '<button type="button" class="hub-tm-btn hub-tm-btn--tool" id="tm-btn-inbox" title="Inbox · tasks without a time (I)" aria-label="Inbox" aria-controls="hub-tm-inbox" aria-pressed="false" aria-keyshortcuts="I">' + ICON.inbox + '<span class="hub-tm-btn-label">Inbox</span><span class="hub-tm-ibx-badge" id="tm-inbox-badge" hidden></span></button>' +
           '<button type="button" class="hub-tm-btn hub-tm-btn--tool" id="tm-btn-templates" title="Templates" aria-label="Templates">' + ICON.template + '<span class="hub-tm-btn-label">Templates</span></button>' +
           '<button type="button" class="hub-tm-btn hub-tm-btn--tool" id="tm-btn-set-time" title="Set Time (repeat blocks)" aria-label="Set Time">' + ICON.repeat + '<span class="hub-tm-btn-label">Set Time</span></button>' +
           '<button type="button" class="hub-tm-btn hub-tm-btn--tool" id="tm-btn-timeline" title="Timeline" aria-label="Timeline">' + ICON.timeline + '<span class="hub-tm-btn-label">Timeline</span></button>' +
@@ -701,22 +740,40 @@ const timeManagementModule = (function () {
       '</div>' +
 
       '<form class="hub-tm-qp" id="hub-tm-qp" autocomplete="off">' +
-        '<label class="hub-tm-qp-field">' +
+        '<div class="hub-tm-qp-field">' +
           '<span class="hub-tm-qp-ico" aria-hidden="true"></span>' +
-          '<input type="text" class="hub-tm-qp-input" id="tm-qp-input" maxlength="600" spellcheck="false" aria-label="Quick plan" aria-describedby="tm-qp-hint" placeholder="Quick plan  ·  11:00 1h Plan Schedule | việc 1; việc 2">' +
-        '</label>' +
+          '<textarea class="hub-tm-qp-input" id="tm-qp-input" rows="1" maxlength="3000" spellcheck="false" aria-label="Quick plan" aria-describedby="tm-qp-hint" aria-autocomplete="list" aria-controls="tm-qp-sug" aria-expanded="false" placeholder="Quick plan  ·  mai 9:00 1h Học | việc 1; việc 2  ·  4x25p"></textarea>' +
+          '<ul class="hub-tm-qp-sug" id="tm-qp-sug" role="listbox" aria-label="From your history" hidden></ul>' +
+        '</div>' +
         '<span class="hub-tm-qp-hint" id="tm-qp-hint" aria-live="polite"></span>' +
-        '<span class="hub-tm-qp-keys" title="Point at a block (or select it), then press a key" aria-hidden="true"><kbd>N</kbd>plan <kbd>E</kbd>edit <kbd>C</kbd>checklist <kbd>X</kbd>done</span>' +
+        '<ol class="hub-tm-qp-plan" id="tm-qp-plan" aria-label="Plan preview" hidden></ol>' +
+        '<span class="hub-tm-qp-keys" title="Point at a block (or select it), then press a key" aria-hidden="true"><kbd>N</kbd>plan <kbd>I</kbd>inbox <kbd>⇧↵</kbd>lines <kbd>E</kbd>edit <kbd>C</kbd>checklist <kbd>X</kbd>done <kbd>B</kbd>→inbox</span>' +
       '</form>' +
 
       '<div class="hub-tm-hint-bar hub-tm-hidden" id="hub-tm-hint">' +
-        '<span>Drag on the grid to create a block · drag a block to move it · drag its edges to resize · click to edit. On touch, press and hold.</span>' +
+        '<span>Drag on the grid to create a block · drag a block to move it · drag its edges to resize · drag a block onto the Inbox to put it back · click to edit. On touch, press and hold.</span>' +
         '<button type="button" id="tm-btn-hint-close" aria-label="Dismiss tip">&times;</button>' +
       '</div>' +
 
-      '<div class="hub-tm-grid-wrapper">' +
-        '<div class="hub-tm-grid-header" id="hub-tm-grid-header"></div>' +
-        '<div class="hub-tm-grid-scroll" id="hub-tm-grid-scroll"><div class="hub-tm-grid-body" id="hub-tm-grid-body"></div></div>' +
+      '<div class="hub-tm-stage" id="hub-tm-stage">' +
+        '<aside class="hub-tm-inbox' + (_ibxOpen ? ' is-open' : '') + '" id="hub-tm-inbox" aria-label="Inbox">' +
+          '<div class="hub-tm-ibx-head">' +
+            '<h3 class="hub-tm-ibx-title-h">' + ICON.inbox + '<span>Inbox</span><b class="hub-tm-ibx-count" id="tm-ibx-count"></b></h3>' +
+            '<span class="hub-tm-ibx-sum" id="tm-ibx-sum" aria-live="polite"></span>' +
+            '<button type="button" class="hub-tm-ibx-x" id="tm-ibx-close" aria-label="Close Inbox" title="Close">&times;</button>' +
+          '</div>' +
+          '<div class="hub-tm-ibx-add">' +
+            '<input type="text" class="hub-tm-input" id="tm-ibx-input" maxlength="200" autocomplete="off" spellcheck="false" aria-label="Add to Inbox" placeholder="Jot it down, no time needed…  30m · #tag · !high">' +
+            '<button type="button" class="hub-tm-btn hub-tm-btn--primary" id="tm-ibx-add" aria-label="Add to Inbox" title="Add (Enter)">+</button>' +
+          '</div>' +
+          '<p class="hub-tm-ibx-hint">Drag a task onto the grid (touch: press and hold). Drag a block back here to unschedule it. Tap ⋮ to edit.</p>' +
+          '<ul class="hub-tm-ibx-list" id="tm-ibx-list" aria-label="Waiting tasks"></ul>' +
+        '</aside>' +
+        '<div class="hub-tm-ibx-dock" id="hub-tm-ibx-dock" aria-hidden="true">' + ICON.inbox + '<span>Drop to Inbox</span></div>' +
+        '<div class="hub-tm-grid-wrapper">' +
+          '<div class="hub-tm-grid-header" id="hub-tm-grid-header"></div>' +
+          '<div class="hub-tm-grid-scroll" id="hub-tm-grid-scroll"><div class="hub-tm-grid-body" id="hub-tm-grid-body"></div></div>' +
+        '</div>' +
       '</div>' +
 
       /* ── Weekly review ── */
@@ -831,6 +888,7 @@ const timeManagementModule = (function () {
           '<footer class="hub-tm-dialog-foot hub-tm-dialog-foot--split hub-tm-insp-foot">' +
             '<button type="button" class="hub-tm-btn hub-tm-btn--alert" id="tm-btn-details-delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>Delete</button>' +
             '<div class="hub-tm-insp-actions"><span class="hub-tm-insp-keys" aria-hidden="true"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> save · <kbd>Esc</kbd> close</span>' +
+              '<button type="button" class="hub-tm-btn hub-tm-btn--outline" id="tm-btn-details-inbox" title="Take it off the grid and keep it in the Inbox">To Inbox</button>' +
               '<button type="button" class="hub-tm-btn hub-tm-btn--outline" data-close>Cancel</button>' +
               '<button type="button" class="hub-tm-btn hub-tm-btn--primary" id="tm-btn-details-save">Save changes</button></div>' +
           '</footer>' +
@@ -856,6 +914,32 @@ const timeManagementModule = (function () {
           '<div class="hub-tm-dialog-head"><h3 class="hub-tm-dialog-title" id="hub-tm-confirm-title">Delete?</h3></div>' +
           '<div class="hub-tm-dialog-body"><p class="hub-tm-confirm-message" id="hub-tm-confirm-msg"></p></div>' +
           '<div class="hub-tm-dialog-foot"><button type="button" class="hub-tm-btn hub-tm-btn--outline" id="tm-btn-confirm-cancel">Cancel</button><button type="button" class="hub-tm-btn hub-tm-btn--danger" id="tm-btn-confirm-delete">Delete</button></div>' +
+        '</div>' +
+      '</div>' +
+
+      /* ── Inbox · edit one task ── */
+      '<div class="hub-tm-overlay" id="hub-tm-ibx-modal" aria-hidden="true">' +
+        '<div class="hub-tm-dialog hub-tm-ibx-dialog" role="dialog" aria-modal="true" aria-labelledby="hub-tm-ibx-modal-h">' +
+          '<div class="hub-tm-dialog-head"><h3 class="hub-tm-dialog-title" id="hub-tm-ibx-modal-h">Edit task</h3><button type="button" class="hub-tm-dialog-close" data-close aria-label="Close">&times;</button></div>' +
+          '<div class="hub-tm-dialog-body">' +
+            '<div class="hub-tm-field"><label for="tm-ibx-m-title">Title</label><input type="text" class="hub-tm-input" id="tm-ibx-m-title" maxlength="120" autocomplete="off"></div>' +
+            '<div class="hub-tm-field-row">' +
+              '<div class="hub-tm-field"><label for="tm-ibx-m-tag">Tag</label><select class="hub-tm-input" id="tm-ibx-m-tag"></select></div>' +
+              '<div class="hub-tm-field"><label for="tm-ibx-m-dur">Length</label><select class="hub-tm-input" id="tm-ibx-m-dur"></select></div>' +
+            '</div>' +
+            '<fieldset class="hub-tm-field"><legend>Priority</legend>' +
+              '<div class="hub-tm-ibx-prisel" role="radiogroup" aria-label="Priority">' +
+                IBX_PRI.map(function (p) { return '<label data-pri="' + p + '"><input type="radio" name="tm-ibx-m-pri" value="' + p + '"><span><i class="hub-tm-ibx-pri-g" aria-hidden="true"><b></b><b></b><b></b></i>' + IBX_PRI_LABEL[p] + '</span></label>'; }).join('') +
+              '</div>' +
+            '</fieldset>' +
+            '<div class="hub-tm-field"><label for="tm-ibx-m-note">Note</label><textarea class="hub-tm-input hub-tm-ibx-ta" id="tm-ibx-m-note" rows="3" maxlength="2000" placeholder="Anything to remember when you place it"></textarea></div>' +
+            '<div class="hub-tm-field"><label for="tm-ibx-m-ck">Checklist <span class="hub-tm-hint">one item per line</span></label><textarea class="hub-tm-input hub-tm-ibx-ta" id="tm-ibx-m-ck" rows="3" placeholder="Call the clinic&#10;Bring the insurance card"></textarea></div>' +
+            '<p class="hub-tm-error" id="tm-ibx-m-err" role="alert"></p>' +
+          '</div>' +
+          '<div class="hub-tm-dialog-foot hub-tm-dialog-foot--split">' +
+            '<button type="button" class="hub-tm-btn hub-tm-btn--alert" id="tm-ibx-m-del">Delete</button>' +
+            '<div class="hub-tm-ibx-foot-r"><button type="button" class="hub-tm-btn hub-tm-btn--outline" data-close>Cancel</button><button type="button" class="hub-tm-btn hub-tm-btn--primary" id="tm-ibx-m-save">Save</button></div>' +
+          '</div>' +
         '</div>' +
       '</div>' +
 
@@ -1085,6 +1169,7 @@ const timeManagementModule = (function () {
     _bindTagPop();
     _bindChecklist();
     _bindQuickPlan();
+    _bindInbox();
 
     // One keyboard handler for the whole mount
     document.addEventListener('keydown', _onDocKey, sig);
@@ -1104,12 +1189,14 @@ const timeManagementModule = (function () {
     if (e.key && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat && !e.isComposing && !_modalStack.length && !_isTyping(e.target) &&
         _sectionEl && _sectionEl.isConnected && !_sectionEl.classList.contains('hub-tm-hidden')) {
       const k = e.key.toLowerCase();
+      if (k === 'i') { e.preventDefault(); _ibxFocus(); return; }
       if (k === 'n' || k === '/') { const q = _el('#tm-qp-input'); if (q) { e.preventDefault(); q.focus(); q.select(); } return; }
-      if (_view === 'day' && (k === 'e' || k === 'c' || k === 'x')) {
+      if (_view === 'day' && (k === 'e' || k === 'c' || k === 'x' || k === 'b')) {
         const el = _kbTarget(), b = el && _blockById(el.getAttribute('data-block-id'));
         if (!b) return;
         e.preventDefault();
         if (k === 'e') _openDetails(b.id);
+        else if (k === 'b') _blockToInbox(b.id);
         else if (k === 'x') _habToggleDone(b.id);
         else _bkOpenAndFocus(el, b);
         return;
@@ -1124,6 +1211,9 @@ const timeManagementModule = (function () {
         if (nb) nb.focus();
         return;
       }
+      if (_ibxMenuEl && !_ibxMenuEl.hidden) { e.preventDefault(); e.stopPropagation(); _ibxMenuClose(true); return; }
+      if (_ibx && _ibx.active) { e.preventDefault(); _ibxEnd(); return; }
+      if (_wkd && _wkd.active) { e.preventDefault(); _wkEnd(); return; }
       if (_drag && _drag.active) { e.preventDefault(); _cancelDrag(); return; }
       const top = _modalStack[_modalStack.length - 1];
       if (top) {
@@ -1788,6 +1878,7 @@ const timeManagementModule = (function () {
     const list = _el('#hub-tm-tag-list');
     if (!list) return;
     if (!_tagById(_activeTagId)) _activeTagId = 'work';
+    _ibxRender();                                  // the Inbox chips follow the tag list
     list.innerHTML = _allTags().map(function (t, i) {
       const custom = t.id.indexOf('custom-') === 0 || DEFAULT_TAGS.indexOf(t) === -1;
       const active = t.id === _activeTagId;
@@ -1874,6 +1965,7 @@ const timeManagementModule = (function () {
     const run = function () {
       _customTags = _customTags.filter(function (t) { return t.id !== id; });
       _timeBlocks.forEach(function (b) { if (b.tagId === id) b.tagId = 'work'; });
+      _inbox.forEach(function (i) { if (i.tagId === id) i.tagId = 'work'; });
       if (_activeTagId === id) _activeTagId = 'work';
       _scheduleSave();
       _renderTags();
@@ -1894,8 +1986,8 @@ const timeManagementModule = (function () {
     scroll.addEventListener('pointermove', _onPointerMove, sig);
     scroll.addEventListener('pointerup', _onPointerUp, sig);
     scroll.addEventListener('pointercancel', function () { _cancelDrag(); }, sig);
-    scroll.addEventListener('touchmove', function (e) { if (_drag && _drag.active && e.cancelable) e.preventDefault(); }, { passive: false, signal: _ui.signal });
-    scroll.addEventListener('contextmenu', function (e) { if (_drag) e.preventDefault(); }, sig);
+    scroll.addEventListener('touchmove', function (e) { if (((_drag && _drag.active) || (_wkd && _wkd.active)) && e.cancelable) e.preventDefault(); }, { passive: false, signal: _ui.signal });
+    scroll.addEventListener('contextmenu', function (e) { if (_drag || _wkd) e.preventDefault(); }, sig);
     scroll.addEventListener('click', _onGridClick, sig);
     scroll.addEventListener('change', _onGridChange, sig);
     scroll.addEventListener('mouseover', function (e) { const bl = e.target.closest && e.target.closest('.hub-tm-block'); _hoverBlockId = bl ? bl.getAttribute('data-block-id') : ''; }, sig);
@@ -1922,6 +2014,7 @@ const timeManagementModule = (function () {
   }
 
   function _onPointerDown(e) {
+    if (_view === 'week') { _wkDown(e); return; }
     if (_view !== 'day' || _drag) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     if (!e.target.closest('.hub-tm-main-col') || e.target.closest('.hub-tm-block-delete') || e.target.closest('.hub-tm-block-check') || e.target.closest('.hub-tm-bk-toggle') || e.target.closest('.hub-tm-bk-panel')) return;
@@ -1934,7 +2027,7 @@ const timeManagementModule = (function () {
     const d = {
       mode: !block ? 'create' : grip ? (grip.classList.contains('hub-tm-block-grip--top') ? 'resize-top' : 'resize-bottom') : 'move',
       pointerId: e.pointerId, pointerType: e.pointerType,
-      x0: e.clientX, y0: e.clientY, lastY: e.clientY,
+      x0: e.clientX, y0: e.clientY, lastY: e.clientY, lastX: e.clientX,
       raw0: raw, block: block, el: blockEl,
       orig: block ? { s: _toMins(block.startTime), e: _toMins(block.endTime) } : null,
       bounds: null, active: false, timer: null, scrollTimer: null, ghost: null, cur: null
@@ -1956,9 +2049,10 @@ const timeManagementModule = (function () {
   }
 
   function _onPointerMove(e) {
+    if (_wkd) { _wkMove(e); return; }
     const d = _drag;
     if (!d || e.pointerId !== d.pointerId) return;
-    d.lastY = e.clientY;
+    d.lastY = e.clientY; d.lastX = e.clientX;
     if (!d.active) {
       const dist = Math.hypot(e.clientX - d.x0, e.clientY - d.y0);
       if (d.pointerType === 'touch') { if (dist > 8) _clearDrag(); return; }    // finger is scrolling
@@ -1984,6 +2078,7 @@ const timeManagementModule = (function () {
       d.ghost = g;
     } else {
       d.el.classList.add('hub-tm-block--busy');
+      if (d.mode === 'move') _sectionEl.classList.add('is-blk-drag');
     }
     _dgOpen(d);
     _applyDragAt(d.lastY);
@@ -2054,6 +2149,117 @@ const timeManagementModule = (function () {
     setTimeout(function () { n.classList.remove('hub-tm-block--drop'); }, 650);
   }
 
+  /* ── drag: grid block → Inbox (Day + Week) ── */
+  /** The Inbox (open panel, the closed-Inbox drop dock, or the toolbar button) under the pointer, or null. */
+  function _dgInboxTarget(x, y) {
+    if (x == null || !_sectionEl) return null;
+    const el = document.elementFromPoint(x, y);
+    if (!el || !el.closest) return null;
+    const box = el.closest('#hub-tm-inbox.is-open, #hub-tm-ibx-dock, #tm-btn-inbox');
+    return box && _sectionEl.contains(box) ? box : null;
+  }
+  /** Highlights the drop target and moves the little label that follows the pointer. Returns the target (or null). */
+  function _bdUpdate(s, b, x, y) {
+    const t = _dgInboxTarget(x, y);
+    if (s.bover !== t) {
+      if (s.bover) s.bover.classList.remove('is-ibx-drop');
+      if (t) t.classList.add('is-ibx-drop');
+      s.bover = t;
+    }
+    if (t && !s.bchip) {
+      const tag = _tagOrFallback(b.tagId), g = document.createElement('div');
+      g.className = 'hub-tm-ibx-ghost hub-tm-ibx-ghost--blk';
+      g.setAttribute('aria-hidden', 'true');
+      g.style.cssText = _tagStyle(tag);
+      g.innerHTML = '<span class="hub-tm-ibx-ghost-t"></span><span class="hub-tm-ibx-ghost-d">' + _fmtDur(_toMins(b.endTime) - _toMins(b.startTime)) + '</span>';
+      g.firstChild.textContent = b.title || tag.label;
+      _sectionEl.appendChild(g);
+      s.bchip = g;
+    } else if (!t && s.bchip) {
+      if (s.bchip.parentNode) s.bchip.parentNode.removeChild(s.bchip);
+      s.bchip = null;
+    }
+    if (s.bchip) {
+      s.bchip.style.transform = 'translate(' + Math.round(x + 14) + 'px,' + Math.round(y + 10) + 'px)';
+      s.bchip.classList.toggle('is-no', !!b.done || _inbox.length >= IBX_MAX);
+    }
+    return t;
+  }
+  function _bdClear(s) {
+    if (s.bover) s.bover.classList.remove('is-ibx-drop');
+    if (s.bchip && s.bchip.parentNode) s.bchip.parentNode.removeChild(s.bchip);
+    s.bover = null; s.bchip = null;
+  }
+  /** While over the Inbox the block rests where it came from (dimmed) and the time HUD steps aside. */
+  function _dgInboxRest(d, on) {
+    if (!!d.rest === !!on) return;
+    d.rest = !!on;
+    d.el.classList.toggle('hub-tm-block--ibx', !!on);
+    if (d.hud) d.hud.style.display = on ? 'none' : '';
+    if (on) {
+      d.cur = null;
+      d.el.style.top = Math.round(d.orig.s / 60 * HOUR_H) + 'px';
+      d.el.style.height = Math.max(18, Math.round((d.orig.e - d.orig.s) / 60 * HOUR_H)) + 'px';
+      const lbl = d.el.querySelector('.hub-tm-block-time');
+      if (lbl) lbl.textContent = _toTime(d.orig.s) + ' – ' + _toTime(d.orig.e);
+    }
+  }
+
+  /* Week view: a block can only go back to the Inbox (no moving inside the week) */
+  function _wkDown(e) {
+    if (_wkd || _drag || _ibx) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const el = e.target.closest && e.target.closest('.hub-tm-week-block');
+    if (!el) return;
+    const b = _blockById(el.getAttribute('data-block-id'));
+    if (!b) return;
+    const w = { el: el, block: b, pointerId: e.pointerId, pointerType: e.pointerType, x0: e.clientX, y0: e.clientY, active: false, timer: null, bover: null, bchip: null };
+    _wkd = w;
+    if (e.pointerType === 'touch') {
+      w.timer = setTimeout(function () {
+        if (_wkd !== w) return;
+        w.active = true; _wkBegin();
+        if (navigator.vibrate) { try { navigator.vibrate(12); } catch (_) {} }
+      }, LONG_PRESS);
+    }
+  }
+  function _wkBegin() {
+    const w = _wkd;
+    if (!w) return;
+    try { _el('#hub-tm-grid-scroll').setPointerCapture(w.pointerId); } catch (_) {}
+    w.el.classList.add('hub-tm-block--busy');
+    _sectionEl.classList.add('is-blk-drag');
+  }
+  function _wkMove(e) {
+    const w = _wkd;
+    if (!w || e.pointerId !== w.pointerId) return;
+    if (!w.active) {
+      const dist = Math.hypot(e.clientX - w.x0, e.clientY - w.y0);
+      if (w.pointerType === 'touch') { if (dist > 8) _wkEnd(); return; }
+      if (dist < 4) return;
+      w.active = true; _wkBegin();
+    }
+    _bdUpdate(w, w.block, e.clientX, e.clientY);
+  }
+  function _wkUp(e) {
+    const w = _wkd;
+    if (!w || e.pointerId !== w.pointerId) return;
+    const hit = w.active && !!w.bover, id = w.block.id, was = w.active;
+    _wkEnd();
+    if (was) _suppressClickUntil = performance.now() + 350;
+    if (hit) _blockToInbox(id);
+  }
+  function _wkEnd() {
+    const w = _wkd;
+    if (!w) return;
+    if (w.timer) clearTimeout(w.timer);
+    _bdClear(w);
+    w.el.classList.remove('hub-tm-block--busy');
+    if (_sectionEl) _sectionEl.classList.remove('is-blk-drag');
+    try { _el('#hub-tm-grid-scroll').releasePointerCapture(w.pointerId); } catch (_) {}
+    _wkd = null;
+  }
+
   function _applyDragAt(clientY) {
     const d = _drag;
     if (!d || !d.active) return;
@@ -2084,6 +2290,11 @@ const timeManagementModule = (function () {
       s = _clamp(ws, d.bounds[0], d.orig.e - MIN_DUR);
       limited = ws < s;
     }
+    if (d.mode === 'move') {
+      const over = _bdUpdate(d, d.block, d.lastX, clientY);
+      if (over) { _dgInboxRest(d, true); return; }
+      if (d.rest) _dgInboxRest(d, false);
+    }
     d.cur = { s: s, e: e };
     _dgUpdate(d, s, e, limited);
     const n = d.mode === 'create' ? d.ghost : d.el;
@@ -2105,6 +2316,7 @@ const timeManagementModule = (function () {
       let dy = 0;
       if (y < r.top + edge) dy = -Math.ceil((r.top + edge - y) / 6);
       else if (y > r.bottom - edge) dy = Math.ceil((y - (r.bottom - edge)) / 6);
+      if (d.rest) return;
       if (dy) { sc.scrollTop += _clamp(dy, -18, 18); _applyDragAt(y); }
     }, 16);
   }
@@ -2114,23 +2326,37 @@ const timeManagementModule = (function () {
     if (!d) return;
     if (d.timer) clearTimeout(d.timer);
     if (d.scrollTimer) clearInterval(d.scrollTimer);
+    _bdClear(d);
+    if (_sectionEl) _sectionEl.classList.remove('is-blk-drag');
     _dgClose(d);
     try { _el('#hub-tm-grid-scroll').releasePointerCapture(d.pointerId); } catch (_) {}
     _drag = null;
   }
   function _cancelDrag() {
+    _wkEnd();
     const d = _drag;
     if (!d) return;
     const wasActive = d.active;
     if (d.ghost && d.ghost.parentNode) d.ghost.parentNode.removeChild(d.ghost);
-    if (d.el) d.el.classList.remove('hub-tm-block--busy');
+    if (d.el) d.el.classList.remove('hub-tm-block--busy', 'hub-tm-block--ibx');
+    _wkEnd();
     _clearDrag();
     if (wasActive) { _suppressClickUntil = performance.now() + 350; _renderDayBlocks(); }
   }
 
   function _onPointerUp(e) {
+    if (_wkd) { _wkUp(e); return; }
     const d = _drag;
     if (!d || e.pointerId !== d.pointerId) return;
+    if (d.active && d.rest && d.block) {
+      const id = d.block.id;
+      _suppressClickUntil = performance.now() + 350;
+      d.el.classList.remove('hub-tm-block--busy', 'hub-tm-block--ibx');
+      _clearDrag();
+      _renderDayBlocks();
+      _blockToInbox(id);
+      return;
+    }
     if (d.active && d.cur) {
       _suppressClickUntil = performance.now() + 350;
       if (d.ghost && d.ghost.parentNode) d.ghost.parentNode.removeChild(d.ghost);
@@ -2180,12 +2406,695 @@ const timeManagementModule = (function () {
   }
 
   /* ============================================================
+     INBOX / BACKLOG  ·  capture first, schedule later
+     Tasks that have no time yet. They are NOT blocks, so they never reach
+     Habitica, the streak, the review or the alarms until you place them.
+     Place = drag onto the Day grid (or onto a day in Week / Month),
+     or press the arrow = next free slot. A block can come back via "To Inbox".
+     Sync: own list + own tombstones (merged by updatedAt, like blocks) and a
+     per-account local mirror, so nothing is lost even if the cloud ignores it.
+     ============================================================ */
+  function _ibxById(id) { for (let i = 0; i < _inbox.length; i++) if (_inbox[i].id === id) return _inbox[i]; return null; }
+  function _ibxSort() { _inbox.sort(function (a, b) { return (a.createdAt - b.createdAt) || (a.id < b.id ? -1 : 1); }); }
+  function _ibxNewId(k) { return 'ibx-' + Date.now() + '-' + (k || 0) + '-' + Math.floor(Math.random() * 100000); }
+
+  /* ── persistence helpers ── */
+  function _ibxLsKey() { return INBOX_KEY + ':' + (_dataUid || 'guest'); }
+  function _ibxSaveLs() { _lsSet(_ibxLsKey(), JSON.stringify({ inbox: _inbox, tombs: { inbox: _tombs.inbox || {} } })); }
+  /** Merge two Inbox states by updatedAt; a tombstone newer than an item's last edit wins. */
+  function _ibxMerge(list, tomb, other) {
+    other = other || {};
+    const ol = Array.isArray(other.inbox) ? other.inbox.map(_normInbox).filter(Boolean) : [];
+    const ot = (other.tombs && other.tombs.inbox) || {}, t = {};
+    [tomb, ot].forEach(function (m) {
+      Object.keys(m || {}).forEach(function (id) { const n = Number(m[id]); if (n > 0 && n > (t[id] || 0)) t[id] = n; });
+    });
+    const by = {};
+    list.concat(ol).forEach(function (it) { const c = by[it.id]; if (!c || it.updatedAt > c.updatedAt) by[it.id] = it; });
+    const out = Object.keys(by).map(function (k) { return by[k]; }).filter(function (it) { return !(t[it.id] && t[it.id] >= it.updatedAt); });
+    out.sort(function (a, b) { return (a.createdAt - b.createdAt) || (a.id < b.id ? -1 : 1); });
+    return { list: out, tomb: t };
+  }
+  function _ibxLoad(payload) {
+    const mine = payload && Array.isArray(payload.inbox) ? payload.inbox.map(_normInbox).filter(Boolean) : [];
+    const m = _ibxMerge(mine, payload && payload.tombs && payload.tombs.inbox, _lsJson(_ibxLsKey()));
+    _inbox = m.list;
+    _tombs.inbox = m.tomb;
+  }
+
+  /* ── capture ── */
+  /** "Call dentist 15m #personal"  →  title, tag, length. Unspecified tag / length are learned from history, like Quick plan. */
+  function _ibxParse(raw) {
+    let s = String(raw || '').replace(/\s+/g, ' ').trim().replace(QP_BULLET, '');
+    if (!s) return null;
+    const orig = s;
+    let tag = null, dur = 0, pri = 'normal';
+    s = s.replace(/(^|\s)!(high|cao|low|thap|thấp)(?=\s|$)/i, function (m, sp, w) {
+      pri = /^(high|cao)$/i.test(w) ? 'high' : 'low';
+      return sp;
+    });
+    s = s.replace(/(^|\s)#([^\s#]+)/, function (m, sp, w) {
+      const k = _qpPlain(w), t = _allTags().filter(function (x) { return _qpPlain(x.label) === k || x.id === w.toLowerCase(); })[0];
+      if (!t) return m;
+      tag = t;
+      return sp;
+    });
+    s = s.replace(/(^|\s)(\d{1,2}(?:[.,]\d)?)\s?(?:h|g|gio|giờ)(?=\s|$)/i, function (m, sp, n) {
+      dur = Math.round(parseFloat(String(n).replace(',', '.')) * 60);
+      return sp;
+    });
+    if (!dur) s = s.replace(/(^|\s)(\d{1,3})\s?(?:p|ph|phut|phút|m|min)(?=\s|$)/i, function (m, sp, n) { dur = parseInt(n, 10); return sp; });
+    s = s.replace(/\s+/g, ' ').trim();
+    if (!s && (tag || dur || pri !== 'normal')) return null;       // only a #tag / length / priority, no task
+    const title = (s || orig).slice(0, 120);
+    let hist = null;
+    try { hist = _qpHist(); } catch (_) {}
+    const hit = hist && hist.map[_qpPlain(title)];
+    let t = tag;
+    if (!t && hit && hit.tagId) t = _tagById(hit.tagId);
+    t = t || _tagOrFallback(_activeTagId);
+    const tagId = t.id === FALLBACK_TAG.id ? 'work' : t.id;
+    if (!dur) dur = (hit && hit.dur) || (hist && hist.tagDur[tagId]) || CREATE_DUR;
+    return { title: title, tagId: tagId, pri: pri, dur: _clamp(Math.round(dur / SNAP) * SNAP, MIN_DUR, 480) };
+  }
+  function _ibxAddMany(lines) {
+    const now = Date.now();
+    let n = 0, last = null, full = false;
+    lines.forEach(function (ln) {
+      if (_inbox.length >= IBX_MAX) { full = true; return; }
+      const p = _ibxParse(ln);
+      if (!p) return;
+      const it = _normInbox({ id: _ibxNewId(n), title: p.title, tagId: p.tagId, pri: p.pri, dur: p.dur, createdAt: now + n });
+      if (!it) return;
+      _inbox.push(it);
+      last = it;
+      n++;
+    });
+    if (full) _toast('Inbox is full (' + IBX_MAX + '). Place or clear something first.');
+    if (!n) return 0;
+    _ibxSort();
+    _scheduleSave();
+    _ibxRender(true);
+    const list = _el('#tm-ibx-list');
+    if (list) list.scrollTop = 0;
+    const el = last && _el('.hub-tm-ibx-item[data-ibx-id="' + last.id + '"]');
+    if (el) { el.classList.add('is-new'); setTimeout(function () { el.classList.remove('is-new'); }, 700); }
+    return n;
+  }
+
+  /* ── render ── */
+  /** Display order: High → Normal → Low, newest first inside each level. (`_inbox` itself stays in creation order for sync.) */
+  function _ibxView() {
+    return _inbox.slice().sort(function (a, b) {
+      return (IBX_PRI.indexOf(a.pri) - IBX_PRI.indexOf(b.pri)) || (b.createdAt - a.createdAt) || (a.id < b.id ? 1 : -1);
+    });
+  }
+  function _ibxPriHtml(pri) {
+    return '<i class="hub-tm-ibx-pri-g" aria-hidden="true"><b></b><b></b><b></b></i><span class="hub-tm-ibx-pri-t">' + IBX_PRI_LABEL[pri] + '</span>';
+  }
+  function _ibxItemHtml(it) {
+    const tg = _tagOrFallback(it.tagId), pri = it.pri || 'normal';
+    return '<li class="hub-tm-ibx-item" data-ibx-id="' + _esc(it.id) + '" data-pri="' + pri + '" style="' + _tagStyle(tg) + '">' +
+      '<div class="hub-tm-ibx-main">' +
+        '<div class="hub-tm-ibx-top">' +
+          '<span class="hub-tm-ibx-title" data-ibx-title tabindex="0" role="button" aria-label="Rename: ' + _esc(it.title) + '">' + _esc(it.title) + '</span>' +
+          '<button type="button" class="hub-tm-ibx-more" data-ibx-more aria-haspopup="menu" aria-expanded="false" title="More" aria-label="Options: ' + _esc(it.title) + '"><i aria-hidden="true"></i></button>' +
+        '</div>' +
+        '<div class="hub-tm-ibx-meta">' +
+          '<div class="hub-tm-ibx-chips">' +
+          '<button type="button" class="hub-tm-ibx-chip hub-tm-ibx-chip--tag" data-ibx-tag title="Change tag"><i class="hub-tm-ibx-dot"></i>' + _esc(tg.label) + '</button>' +
+          '<button type="button" class="hub-tm-ibx-chip hub-tm-ibx-chip--dur" data-ibx-dur title="Change length">' + _fmtDur(it.dur) + '</button>' +
+          '<button type="button" class="hub-tm-ibx-chip hub-tm-ibx-chip--pri" data-ibx-pri title="Priority: ' + IBX_PRI_LABEL[pri] + ' (click to change)" aria-label="Priority: ' + IBX_PRI_LABEL[pri] + '">' + _ibxPriHtml(pri) + '</button>' +
+          (it.ck.length ? '<span class="hub-tm-ibx-note">' + it.ck.length + ' item' + (it.ck.length > 1 ? 's' : '') + '</span>' : '') +
+          '</div>' +
+          '<button type="button" class="hub-tm-ibx-act hub-tm-ibx-go" data-ibx-go title="Put it in the next free slot" aria-label="Schedule in the next free slot: ' + _esc(it.title) + '">' + TL_ICON.fwd + '</button>' +
+        '</div>' +
+      '</div>' +
+    '</li>';
+  }
+  function _ibxRender(force) {
+    const list = _el('#tm-ibx-list');
+    if (!list) return;
+    if (_ibx && _ibx.active) return;                                      // never swap the DOM under a drag
+    const n = _inbox.length, mins = _inbox.reduce(function (a, i) { return a + i.dur; }, 0);
+    const badge = _el('#tm-inbox-badge'), cnt = _el('#tm-ibx-count'), sum = _el('#tm-ibx-sum'), btn = _el('#tm-btn-inbox'), panel = _el('#hub-tm-inbox');
+    if (badge) { badge.hidden = !n; badge.textContent = n > 99 ? '99+' : String(n); }
+    if (cnt) cnt.textContent = n ? String(n) : '';
+    if (sum) sum.textContent = n ? _fmtDur(mins) + ' to place' : '';
+    if (btn) { btn.setAttribute('aria-pressed', String(_ibxOpen)); btn.setAttribute('aria-label', 'Inbox' + (n ? ', ' + n + ' waiting' : '')); }
+    if (panel) panel.classList.toggle('is-open', _ibxOpen);
+    const ae = document.activeElement;
+    if (!force && ae && ae.classList && ae.classList.contains('hub-tm-ibx-edit') && list.contains(ae)) return;   // a title is being edited
+    list.innerHTML = n ? _ibxView().map(_ibxItemHtml).join('')
+      : '<li class="hub-tm-ibx-empty">Nothing waiting.<br>Jot ideas here as they come. Pick the time later.</li>';
+  }
+  function _ibxToggle(open, focus) {
+    _ibxOpen = !!open;
+    _lsSet(INBOX_OPEN_KEY, _ibxOpen ? '1' : '0');
+    _ibxRender(true);
+    if (_ibxOpen && focus) { const i = _el('#tm-ibx-input'); if (i) i.focus({ preventScroll: true }); }
+  }
+  function _ibxFocus() {
+    _ibxToggle(true);
+    const i = _el('#tm-ibx-input');
+    if (i) { i.focus(); i.select(); }
+  }
+  function _ibxRefocus(id, sel) {
+    const n = _el('.hub-tm-ibx-item[data-ibx-id="' + id + '"] ' + sel);
+    if (n) n.focus({ preventScroll: true });
+  }
+
+  /* ── item actions ── */
+  function _ibxEdit(li) {
+    const it = li && _ibxById(li.getAttribute('data-ibx-id'));
+    const span = li && li.querySelector('[data-ibx-title]');
+    if (!it || !span || li.querySelector('.hub-tm-ibx-edit')) return;
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.className = 'hub-tm-ibx-edit'; inp.maxLength = 120; inp.value = it.title;
+    inp.setAttribute('aria-label', 'Task title');
+    span.replaceWith(inp);
+    inp.focus(); inp.select();
+    let done = false;
+    const finish = function (save) {
+      if (done) return;
+      done = true;
+      const v = inp.value.replace(/\s+/g, ' ').trim().slice(0, 120);
+      if (save && v && v !== it.title) { it.title = v; _scheduleSave(); }
+      _ibxRender(true);
+    };
+    inp.addEventListener('keydown', function (e) {
+      if (e.isComposing || e.keyCode === 229) return;
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
+    });
+    inp.addEventListener('blur', function () { finish(true); });
+  }
+  function _ibxRemove(id) {
+    const i = _inbox.findIndex(function (x) { return x.id === id; });
+    if (i < 0) return;
+    const removed = _inbox.splice(i, 1)[0];
+    _scheduleSave();
+    _ibxRender(true);
+    _toast('Removed “' + removed.title + '”', {
+      action: 'Undo',
+      onAction: function () {
+        if (!_ibxById(removed.id)) _inbox.push(removed);
+        _ibxSort(); _scheduleSave(); _ibxRender(true);
+      }
+    });
+  }
+  /** Inbox → grid. Nothing is created unless [s,e) on `date` is really free. */
+  function _ibxSchedule(id, date, s, e) {
+    const i = _inbox.findIndex(function (x) { return x.id === id; });
+    if (i < 0) return null;
+    const it = _inbox[i];
+    if (_overlap(date, s, e)) { _toast('That time is taken.'); return null; }
+    const b = _normBlock({
+      id: _newId(), date: date, tagId: _tagById(it.tagId) ? it.tagId : 'work',
+      startTime: _toTime(s), endTime: _toTime(e),
+      title: it.title, subtitle: it.note, createdAt: Date.now(),
+      checklist: it.ck.map(function (t) { return { text: t }; })
+    });
+    if (!b) return null;
+    _timeBlocks.push(b);
+    _inbox.splice(i, 1);
+    _qpHN = -1;                                                           // history learns from the new block
+    _scheduleSave();
+    if (_view === 'day' && date === _currentDate) { _renderDayBlocks(); _updateSummary(); }
+    else _renderGrid({ animate: false, scroll: false });
+    _ibxRender(true);
+    _tlRefresh();
+    if (_view === 'day' && date === _currentDate) {
+      _dropFx(b.id);
+      const n = _el('.hub-tm-block[data-block-id="' + b.id + '"]');
+      if (n) { try { n.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) {} }
+    }
+    _toast('Placed ' + b.startTime + '–' + b.endTime + ' · ' + it.title + (date !== _currentDate ? ' · ' + _qpDateText(date) : ''), {
+      action: 'Undo',
+      onAction: function () {
+        const k = _timeBlocks.indexOf(b);
+        if (k >= 0) _timeBlocks.splice(k, 1);
+        if (!_ibxById(it.id)) _inbox.push(it);
+        _ibxSort(); _qpHN = -1; _scheduleSave();
+        _renderGrid({ animate: false, scroll: false });
+        _ibxRender(true); _tlRefresh();
+      }
+    });
+    return b;
+  }
+  /** First free slot of the task's length: today after "now" (or the picked day after 09:00), then the following days. */
+  function _ibxAuto(id, date) {
+    const it = _ibxById(id);
+    if (!it) return null;
+    const today = _todayStr();
+    let ds = date || (_currentDate < today ? today : _currentDate);
+    for (let k = 0; k < 14; k++) {
+      const s = _qpFindFree(ds, it.dur, _qpBase(ds), true);
+      if (s !== null) return _ibxSchedule(id, ds, s, s + it.dur);
+      ds = _dateToStr(_addDays(_parseDate(ds), 1));
+    }
+    _toast('No free ' + _fmtDur(it.dur) + ' in the next two weeks.');
+    return null;
+  }
+  /** Grid → Inbox, without losing the note or the checklist. */
+  function _blockToInbox(id) {
+    const b = _blockById(id);
+    if (!b) return;
+    if (b.done) { _toast('A completed block stays on the grid.'); return; }
+    if (_inbox.length >= IBX_MAX) { _toast('Inbox is full (' + IBX_MAX + ').'); return; }
+    const go = function () {
+      const cur = _blockById(id);
+      if (!cur) return;
+      const it = _normInbox({
+        id: _ibxNewId(), title: cur.title || _tagOrFallback(cur.tagId).label, tagId: cur.tagId,
+        dur: _toMins(cur.endTime) - _toMins(cur.startTime), note: cur.subtitle,
+        ck: _ck(cur).map(function (x) { return x.text; }), createdAt: Date.now()
+      });
+      if (!it) return;
+      const removed = _timeBlocks.splice(_timeBlocks.indexOf(cur), 1)[0];
+      _inbox.push(it);
+      _ibxSort(); _qpHN = -1; _scheduleSave();
+      _closeModal(_el('#hub-tm-details-modal'));
+      _renderGrid({ animate: false, scroll: false });
+      _ibxRender(true); _tlRefresh();
+      const ne = _el('.hub-tm-ibx-item[data-ibx-id="' + it.id + '"]');
+      if (ne) { ne.classList.add('is-new'); try { ne.scrollIntoView({ block: 'nearest' }); } catch (_) {} setTimeout(function () { ne.classList.remove('is-new'); }, 1400); }
+      _toast('Back in the Inbox · ' + it.title, {
+        action: 'Undo',
+        onAction: function () {
+          if (_overlap(removed.date, _toMins(removed.startTime), _toMins(removed.endTime))) { _toast('Can’t restore — that time is taken now.'); return; }
+          _inbox = _inbox.filter(function (x) { return x.id !== it.id; });
+          _timeBlocks.push(removed);
+          _qpHN = -1; _scheduleSave();
+          _renderGrid({ animate: false, scroll: false });
+          _ibxRender(true); _tlRefresh();
+        }
+      });
+    };
+    if (b.focusMs > 0) _confirm('This block has ' + _fmtDur(Math.max(1, Math.round(b.focusMs / 60000))) + ' of focus time recorded. Moving it to the Inbox discards that time. Continue?', go, { title: 'Move to Inbox?', label: 'Move' });
+    else go();
+  }
+
+  /* ── drag: Inbox → grid ── */
+  function _ibxDown(e) {
+    if (_ibx || _drag) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const li = e.target.closest('.hub-tm-ibx-item');
+    if (!li || e.target.closest('button, input')) return;
+    if (!_ibxById(li.getAttribute('data-ibx-id'))) return;
+    const d = { id: li.getAttribute('data-ibx-id'), li: li, pointerId: e.pointerId, pointerType: e.pointerType,
+      x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, active: false, timer: null, scrollTimer: null,
+      ghost: null, gb: null, pd: null, pdKey: '', target: null, over: null };
+    _ibx = d;
+    if (e.pointerType === 'touch') {
+      d.timer = setTimeout(function () {
+        if (_ibx !== d) return;
+        d.active = true;
+        _ibxBegin();
+        if (navigator.vibrate) { try { navigator.vibrate(12); } catch (_) {} }
+      }, LONG_PRESS);
+    }
+  }
+  function _ibxMove(e) {
+    const d = _ibx;
+    if (!d || e.pointerId !== d.pointerId) return;
+    d.x = e.clientX; d.y = e.clientY;
+    if (!d.active) {
+      const dist = Math.hypot(e.clientX - d.x0, e.clientY - d.y0);
+      if (d.pointerType === 'touch') { if (dist > 8) _ibxEnd(); return; }    // the finger is scrolling the list
+      if (dist < 5) return;
+      d.active = true;
+      _ibxBegin();
+      return;
+    }
+    _ibxPlace();
+    _ibxAutoScroll();
+  }
+  function _ibxBegin() {
+    const d = _ibx, it = d && _ibxById(d.id);
+    if (!it) { _ibxEnd(); return; }
+    try { d.li.setPointerCapture(d.pointerId); } catch (_) {}
+    const g = document.createElement('div');
+    g.className = 'hub-tm-ibx-ghost';
+    g.setAttribute('aria-hidden', 'true');
+    g.style.cssText = _tagStyle(_tagOrFallback(it.tagId));
+    g.innerHTML = '<span class="hub-tm-ibx-ghost-t"></span><span class="hub-tm-ibx-ghost-d">' + _fmtDur(it.dur) + '</span>';
+    g.firstChild.textContent = it.title;
+    _sectionEl.appendChild(g);
+    d.ghost = g;
+    d.li.classList.add('is-lifted');
+    _sectionEl.classList.add('is-ibx-drag');
+    _ibxPlace();
+  }
+  /** What is under the pointer: a free spot in the Day grid, a taken spot, a day cell (Week / Month), or nothing. */
+  function _ibxTargetAt(x, y, it) {
+    const sc = _el('#hub-tm-grid-scroll');
+    if (!sc) return null;
+    const r = sc.getBoundingClientRect();
+    if (x < r.left || x > r.right || y < r.top || y > r.bottom) return null;
+    if (_view === 'day') {
+      const col = _mainCol();
+      if (!col) return null;
+      const cr = col.getBoundingClientRect();
+      if (x < cr.left || x > cr.right) return null;
+      const m = _yToMins(y), fb = _freeBounds(_currentDate, m);
+      if (fb[1] - fb[0] < MIN_DUR) return { kind: 'taken' };
+      const s = _clamp(_snap(m, 'round'), fb[0], Math.max(fb[0], fb[1] - MIN_DUR));
+      const e = Math.min(s + it.dur, fb[1]);
+      if (e - s < MIN_DUR) return { kind: 'taken' };
+      return { kind: 'slot', s: s, e: e, fb: fb, limited: e - s < it.dur };
+    }
+    const el = document.elementFromPoint(x, y), cell = el && el.closest && el.closest('[data-date]');
+    if (cell && sc.contains(cell)) return { kind: 'day', date: cell.getAttribute('data-date'), el: cell };
+    return null;
+  }
+  function _ibxPlace() {
+    const d = _ibx, it = d && _ibxById(d.id);
+    if (!it || !d.ghost) return;
+    d.ghost.style.transform = 'translate(' + Math.round(d.x + 14) + 'px,' + Math.round(d.y + 10) + 'px)';
+    const t = _ibxTargetAt(d.x, d.y, it);
+    d.target = t;
+    d.ghost.classList.toggle('is-no', !!t && t.kind === 'taken');
+    const over = t && t.kind === 'day' ? t.el : null;
+    if (d.over !== over) {
+      if (d.over) d.over.classList.remove('is-ibx-over');
+      if (over) over.classList.add('is-ibx-over');
+      d.over = over;
+    }
+    const tg = _tagOrFallback(it.tagId), col = _mainCol();
+    if (t && t.kind === 'slot' && col) {
+      const key = t.fb[0] + '-' + t.fb[1];
+      if (!d.pd || d.pdKey !== key) {                                       // the free lane changed → rebuild the HUD
+        if (d.pd) _dgClose(d.pd);
+        d.pd = { mode: 'create', block: null, orig: null, bounds: t.fb, hud: null };
+        _dgOpen(d.pd);
+        if (d.pd.hud) d.pd.hud.style.cssText = _tagStyle(tg);
+        d.pdKey = key;
+      }
+      _dgUpdate(d.pd, t.s, t.e, t.limited);
+      if (!d.gb) {
+        const g = document.createElement('div');
+        g.className = 'hub-tm-block hub-tm-block--ghost';
+        g.style.cssText = _tagStyle(tg);
+        g.innerHTML = '<div class="hub-tm-block-body"><span class="hub-tm-block-time"></span><span class="hub-tm-block-title"></span></div>';
+        g.querySelector('.hub-tm-block-title').textContent = it.title;
+        col.appendChild(g);
+        d.gb = g;
+      }
+      d.gb.style.top = Math.round(t.s / 60 * HOUR_H) + 'px';
+      d.gb.style.height = Math.max(18, Math.round((t.e - t.s) / 60 * HOUR_H)) + 'px';
+      const lbl = d.gb.querySelector('.hub-tm-block-time');
+      if (lbl) lbl.textContent = _toTime(t.s) + ' – ' + _toTime(t.e);
+    } else {
+      if (d.pd) { _dgClose(d.pd); d.pd = null; d.pdKey = ''; }
+      if (d.gb && d.gb.parentNode) { d.gb.parentNode.removeChild(d.gb); d.gb = null; }
+    }
+  }
+  function _ibxAutoScroll() {
+    const d = _ibx;
+    if (!d || d.scrollTimer) return;
+    d.scrollTimer = setInterval(function () {
+      if (_ibx !== d) return;
+      const sc = _el('#hub-tm-grid-scroll');
+      if (!sc) return;
+      const r = sc.getBoundingClientRect(), edge = 56;
+      if (d.x < r.left || d.x > r.right || d.y < r.top || d.y > r.bottom) return;
+      let dy = 0;
+      if (d.y < r.top + edge) dy = -Math.ceil((r.top + edge - d.y) / 6);
+      else if (d.y > r.bottom - edge) dy = Math.ceil((d.y - (r.bottom - edge)) / 6);
+      if (dy) { sc.scrollTop += _clamp(dy, -18, 18); _ibxPlace(); }
+    }, 16);
+  }
+  function _ibxEnd() {
+    const d = _ibx;
+    if (!d) return;
+    if (d.timer) clearTimeout(d.timer);
+    if (d.scrollTimer) clearInterval(d.scrollTimer);
+    if (d.pd) _dgClose(d.pd);
+    if (d.gb && d.gb.parentNode) d.gb.parentNode.removeChild(d.gb);
+    if (d.ghost && d.ghost.parentNode) d.ghost.parentNode.removeChild(d.ghost);
+    if (d.over) d.over.classList.remove('is-ibx-over');
+    if (d.li) { d.li.classList.remove('is-lifted'); try { d.li.releasePointerCapture(d.pointerId); } catch (_) {} }
+    if (_sectionEl) _sectionEl.classList.remove('is-ibx-drag');
+    if (d.active) _ibxSuppress = performance.now() + 300;
+    _ibx = null;
+  }
+  function _ibxUp(e) {
+    const d = _ibx;
+    if (!d || e.pointerId !== d.pointerId) return;
+    if (!d.active) { _ibxEnd(); return; }                                    // a plain click: the click handler takes it
+    const t = d.target, id = d.id;
+    _ibxEnd();
+    if (!t) return;                                                          // dropped outside the grid: nothing changes
+    if (t.kind === 'slot') _ibxSchedule(id, _currentDate, t.s, t.e);
+    else if (t.kind === 'day') _ibxAuto(id, t.date);
+    else _toast('That time is taken.');
+  }
+  function _ibxClick(e) {
+    if (performance.now() < _ibxSuppress) return;
+    const li = e.target.closest('.hub-tm-ibx-item');
+    if (!li) return;
+    const id = li.getAttribute('data-ibx-id'), it = _ibxById(id), kb = e.detail === 0;
+    if (!it) return;
+    const after = function () {                                              // keyboard users: keep focus somewhere useful
+      if (!kb) return;
+      const n = _el('.hub-tm-ibx-item [data-ibx-go]') || _el('#tm-ibx-input');
+      if (n) n.focus({ preventScroll: true });
+    };
+    if (e.target.closest('[data-ibx-go]')) { _ibxMenuClose(); _ibxAuto(id); after(); return; }
+    if (e.target.closest('[data-ibx-del]')) { _ibxRemove(id); after(); return; }
+    if (e.target.closest('[data-ibx-more]')) {
+      const same = _ibxMenuEl && !_ibxMenuEl.hidden && _ibxMenuId === id;
+      if (same) _ibxMenuClose(true); else _ibxMenuOpen(id, e.target.closest('[data-ibx-more]'), kb);
+      return;
+    }
+    if (e.target.closest('[data-ibx-pri]')) {
+      it.pri = IBX_PRI[(IBX_PRI.indexOf(it.pri) + 1) % IBX_PRI.length];
+      _scheduleSave(); _ibxRender(true); _ibxRefocus(id, '[data-ibx-pri]');
+      return;
+    }
+    if (e.target.closest('[data-ibx-tag]')) {
+      const tags = _allTags(), k = tags.findIndex(function (t) { return t.id === it.tagId; });
+      it.tagId = tags[(k + 1) % tags.length].id;
+      _scheduleSave(); _ibxRender(true); _ibxRefocus(id, '[data-ibx-tag]');
+      return;
+    }
+    if (e.target.closest('[data-ibx-dur]')) {
+      const k = SB_DURS.findIndex(function (m) { return m > it.dur; });
+      it.dur = k < 0 ? SB_DURS[0] : SB_DURS[k];
+      _scheduleSave(); _ibxRender(true); _ibxRefocus(id, '[data-ibx-dur]');
+      return;
+    }
+    if (e.target.closest('[data-ibx-title]')) _ibxEdit(li);
+  }
+  /* ── priority · duplicate ── */
+  function _ibxSetPri(id, pri) {
+    const it = _ibxById(id);
+    if (!it || IBX_PRI.indexOf(pri) < 0 || it.pri === pri) return;
+    it.pri = pri;
+    _scheduleSave();
+    _ibxRender(true);
+  }
+  function _ibxDuplicate(id) {
+    const it = _ibxById(id);
+    if (!it) return;
+    if (_inbox.length >= IBX_MAX) { _toast('Inbox is full (' + IBX_MAX + ').'); return; }
+    const copy = _normInbox(Object.assign({}, it, { id: _ibxNewId(), createdAt: Date.now(), updatedAt: 0 }));
+    if (!copy) return;
+    _inbox.push(copy);
+    _ibxSort(); _scheduleSave(); _ibxRender(true);
+    const el = _el('.hub-tm-ibx-item[data-ibx-id="' + copy.id + '"]');
+    if (el) { el.classList.add('is-new'); setTimeout(function () { el.classList.remove('is-new'); }, 700); }
+  }
+
+  /* ── ⋮ menu: one floating menu, rebuilt for the item it belongs to ── */
+  let _ibxMenuEl = null, _ibxMenuId = '';
+  function _ibxMenuClose(refocus) {
+    if (!_ibxMenuEl || _ibxMenuEl.hidden) return;
+    _ibxMenuEl.hidden = true;
+    const id = _ibxMenuId;
+    _ibxMenuId = '';
+    const b = _el('.hub-tm-ibx-item[data-ibx-id="' + id + '"] [data-ibx-more]');
+    if (b) { b.setAttribute('aria-expanded', 'false'); if (refocus) b.focus({ preventScroll: true }); }
+  }
+  function _ibxMenuOpen(id, btn, focusFirst) {
+    const it = _ibxById(id);
+    if (!it || !btn || !_sectionEl) return;
+    if (!_ibxMenuEl) {
+      _ibxMenuEl = document.createElement('div');
+      _ibxMenuEl.className = 'hub-tm-ibx-menu';
+      _ibxMenuEl.setAttribute('role', 'menu');
+      _ibxMenuEl.hidden = true;
+      _sectionEl.appendChild(_ibxMenuEl);
+    }
+    const m = _ibxMenuEl, cur = it.pri || 'normal';
+    const row = function (attrs, cls, role, label, extra) {
+      return '<button type="button" class="hub-tm-ibx-mi' + (cls ? ' ' + cls : '') + '" role="' + role + '" ' + attrs + '>' + label + (extra || '') + '</button>';
+    };
+    m.innerHTML =
+      row('data-mi="edit"', '', 'menuitem', '<span class="hub-tm-ibx-mi-ic">' + TL_ICON.edit + '</span><span>Edit details</span>') +
+      '<div class="hub-tm-ibx-mi-sep" role="separator"></div>' +
+      '<div class="hub-tm-ibx-mi-cap" aria-hidden="true">Priority</div>' +
+      IBX_PRI.map(function (p) {
+        return row('data-mi="pri" data-pri="' + p + '"', 'hub-tm-ibx-mi--pri', 'menuitemradio" aria-checked="' + (p === cur),
+          '<span class="hub-tm-ibx-mi-ic"><span class="hub-tm-ibx-pri hub-tm-ibx-pri--' + p + '" data-pri="' + p + '">' + _ibxPriHtml(p).replace(/<span class="hub-tm-ibx-pri-t">.*<\/span>/, '') + '</span></span><span>' + IBX_PRI_LABEL[p] + '</span>',
+          '<span class="hub-tm-ibx-mi-tick" aria-hidden="true"></span>');
+      }).join('') +
+      '<div class="hub-tm-ibx-mi-sep" role="separator"></div>' +
+      row('data-mi="dup"', '', 'menuitem', '<span class="hub-tm-ibx-mi-ic">' + TL_ICON.copy + '</span><span>Duplicate</span>') +
+      row('data-mi="del"', 'hub-tm-ibx-mi--del', 'menuitem', '<span class="hub-tm-ibx-mi-ic">' + TL_ICON.del + '</span><span>Delete</span>');
+    _ibxMenuId = id;
+    document.querySelectorAll('#time-management [data-ibx-more][aria-expanded="true"]').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+    btn.setAttribute('aria-expanded', 'true');
+    m.hidden = false;
+    // place: right edge under the button, flip upwards / clamp to the viewport
+    const r = btn.getBoundingClientRect(), w = m.offsetWidth, h = m.offsetHeight, vw = window.innerWidth, vh = window.innerHeight;
+    let x = r.right - w, y = r.bottom + 6;
+    if (x < 8) x = Math.min(r.left, vw - w - 8);
+    if (y + h > vh - 8) y = Math.max(8, r.top - h - 6);
+    m.style.left = Math.round(Math.max(8, x)) + 'px';
+    m.style.top = Math.round(y) + 'px';
+    if (focusFirst) { const f = m.querySelector('.hub-tm-ibx-mi'); if (f) f.focus({ preventScroll: true }); }
+  }
+  function _ibxMenuAct(mi) {
+    const id = _ibxMenuId, act = mi.getAttribute('data-mi');
+    if (!id) return;
+    if (act === 'pri') { _ibxSetPri(id, mi.getAttribute('data-pri')); _ibxMenuClose(); _ibxRefocus(id, '[data-ibx-more]'); return; }
+    _ibxMenuClose();
+    if (act === 'edit') _ibxEditOpen(id);
+    else if (act === 'dup') _ibxDuplicate(id);
+    else if (act === 'del') _ibxRemove(id);
+  }
+
+  /* ── Edit dialog: everything about one Inbox task ── */
+  let _ibxEditId = '', _ibxEditNote0 = '';
+  function _ibxNoteToText(html) {                         // note is sanitised HTML → editable plain text (line breaks kept)
+    if (!html) return '';
+    const tpl = document.createElement('template');
+    tpl.innerHTML = _sanitizeHtml(html).replace(/<br\s*\/?>/gi, '\n').replace(/<\/(div|p|li|blockquote)>/gi, '\n');
+    return tpl.content.textContent.replace(/\n{3,}/g, '\n\n').replace(/[ \t]+\n/g, '\n').trim();
+  }
+  function _ibxTextToNote(txt) {
+    return _sanitizeHtml(_esc(txt).replace(/\r?\n/g, '<br>'));
+  }
+  function _ibxEditOpen(id) {
+    const it = _ibxById(id), dlg = _el('#hub-tm-ibx-modal');
+    if (!it || !dlg) return;
+    _ibxEditId = id;
+    _el('#tm-ibx-m-title').value = it.title;
+    const tagSel = _el('#tm-ibx-m-tag');
+    tagSel.innerHTML = _allTags().map(function (t) { return '<option value="' + _esc(t.id) + '">' + _esc(t.label) + '</option>'; }).join('');
+    tagSel.value = _tagById(it.tagId) ? it.tagId : 'work';
+    const durs = [15, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300, 360, 480];
+    if (durs.indexOf(it.dur) < 0) { durs.push(it.dur); durs.sort(function (a, b) { return a - b; }); }
+    const durSel = _el('#tm-ibx-m-dur');
+    durSel.innerHTML = durs.map(function (m) { return '<option value="' + m + '">' + _fmtDur(m) + '</option>'; }).join('');
+    durSel.value = String(it.dur);
+    const radio = _el('input[name="tm-ibx-m-pri"][value="' + (it.pri || 'normal') + '"]');
+    if (radio) radio.checked = true;
+    _ibxEditNote0 = _ibxNoteToText(it.note);
+    _el('#tm-ibx-m-note').value = _ibxEditNote0;
+    _el('#tm-ibx-m-ck').value = it.ck.join('\n');
+    _el('#tm-ibx-m-err').textContent = '';
+    _openModal(dlg, '#tm-ibx-m-title');
+  }
+  function _ibxEditSave() {
+    const it = _ibxById(_ibxEditId), dlg = _el('#hub-tm-ibx-modal');
+    if (!it) { _closeModal(dlg); return; }
+    const title = _el('#tm-ibx-m-title').value.replace(/\s+/g, ' ').trim().slice(0, 120);
+    if (!title) { _el('#tm-ibx-m-err').textContent = 'Give the task a title.'; _el('#tm-ibx-m-title').focus(); return; }
+    const pri = (_el('input[name="tm-ibx-m-pri"]:checked') || {}).value;
+    const noteTxt = _el('#tm-ibx-m-note').value.replace(/\r/g, '').trim();
+    it.title = title;
+    it.tagId = _el('#tm-ibx-m-tag').value || it.tagId;
+    it.dur = _clamp(Math.round((parseInt(_el('#tm-ibx-m-dur').value, 10) || it.dur) / SNAP) * SNAP, MIN_DUR, 480);
+    if (IBX_PRI.indexOf(pri) > -1) it.pri = pri;
+    if (noteTxt !== _ibxEditNote0) it.note = _ibxTextToNote(noteTxt);        // untouched notes keep their original formatting
+    it.ck = _el('#tm-ibx-m-ck').value.split(/\r?\n/).map(function (t) { return t.replace(/\s+/g, ' ').trim().slice(0, 200); }).filter(Boolean).slice(0, CK_MAX);
+    const id = it.id;
+    _scheduleSave();
+    _closeModal(dlg);
+    _ibxRender(true);
+    _ibxRefocus(id, '[data-ibx-more]');
+  }
+  function _bindIbxMenuAndDialog(sig) {
+    const dlg = _el('#hub-tm-ibx-modal');
+    document.addEventListener('pointerdown', function (e) {
+      if (!_ibxMenuEl || _ibxMenuEl.hidden) return;
+      if (_ibxMenuEl.contains(e.target) || (e.target.closest && e.target.closest('[data-ibx-more]'))) return;
+      _ibxMenuClose();
+    }, sig);
+    window.addEventListener('resize', function () { _ibxMenuClose(); }, sig);
+    const list = _el('#tm-ibx-list');
+    if (list) list.addEventListener('scroll', function () { _ibxMenuClose(); }, { passive: true, signal: _ui.signal });
+    if (_ibxMenuEl) { _ibxMenuEl.remove(); _ibxMenuEl = null; _ibxMenuId = ''; }   // a remount builds a fresh one
+    _sectionEl.addEventListener('click', function (e) {
+      const mi = e.target.closest && e.target.closest('.hub-tm-ibx-mi');
+      if (mi && _ibxMenuEl && _ibxMenuEl.contains(mi)) _ibxMenuAct(mi);
+    }, sig);
+    _sectionEl.addEventListener('keydown', function (e) {
+      if (!_ibxMenuEl || _ibxMenuEl.hidden || !_ibxMenuEl.contains(e.target)) return;
+      const items = Array.prototype.slice.call(_ibxMenuEl.querySelectorAll('.hub-tm-ibx-mi')), i = items.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+      else if (e.key === 'Home') { e.preventDefault(); items[0].focus(); }
+      else if (e.key === 'End') { e.preventDefault(); items[items.length - 1].focus(); }
+      else if (e.key === 'Tab') { _ibxMenuClose(true); }
+    }, sig);
+    if (!dlg) return;
+    _el('#tm-ibx-m-save').addEventListener('click', _ibxEditSave, sig);
+    _el('#tm-ibx-m-del').addEventListener('click', function () { const id = _ibxEditId; _closeModal(dlg); _ibxRemove(id); }, sig);
+    dlg.addEventListener('keydown', function (e) {
+      if (e.isComposing || e.keyCode === 229) return;
+      const ta = e.target.tagName === 'TEXTAREA';
+      if (e.key === 'Enter' && (!ta || e.ctrlKey || e.metaKey)) { e.preventDefault(); _ibxEditSave(); }
+    }, sig);
+  }
+  function _bindInbox() {
+    const sig = { signal: _ui.signal };
+    const btn = _el('#tm-btn-inbox'), list = _el('#tm-ibx-list'), inp = _el('#tm-ibx-input'), add = _el('#tm-ibx-add'), close = _el('#tm-ibx-close');
+    if (!btn || !list || !inp || !add || !close) return;
+    btn.addEventListener('click', function () { _ibxToggle(!_ibxOpen, true); }, sig);
+    close.addEventListener('click', function () { _ibxToggle(false); btn.focus({ preventScroll: true }); }, sig);
+    const commit = function () { if (_ibxAddMany([inp.value])) inp.value = ''; inp.focus({ preventScroll: true }); };
+    add.addEventListener('click', commit, sig);
+    inp.addEventListener('keydown', function (e) {
+      if (e.isComposing || e.keyCode === 229) return;                        // IME (Telex / VNI) composing
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); inp.value = ''; inp.blur(); }
+    }, sig);
+    inp.addEventListener('paste', function (e) {                             // paste a list → one task per line
+      const txt = ((e.clipboardData || window.clipboardData).getData('text') || '').trim();
+      if (!/\r?\n/.test(txt)) return;
+      e.preventDefault();
+      _ibxAddMany(txt.split(/\r?\n/));
+    }, sig);
+    list.addEventListener('pointerdown', _ibxDown, sig);
+    list.addEventListener('pointermove', _ibxMove, sig);
+    list.addEventListener('pointerup', _ibxUp, sig);
+    list.addEventListener('pointercancel', function () { _ibxEnd(); }, sig);
+    list.addEventListener('touchmove', function (e) { if (_ibx && _ibx.active && e.cancelable) e.preventDefault(); }, { passive: false, signal: _ui.signal });
+    list.addEventListener('contextmenu', function (e) { if (_ibx) e.preventDefault(); }, sig);
+    list.addEventListener('click', _ibxClick, sig);
+    list.addEventListener('keydown', function (e) {
+      const t = e.target;
+      if (t.hasAttribute && t.hasAttribute('data-ibx-title') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); _ibxEdit(t.closest('.hub-tm-ibx-item')); }
+    }, sig);
+    _bindIbxMenuAndDialog(sig);
+    _ibxRender(true);
+  }
+
+  /* ============================================================
      QUICK PLAN  ·  one line → one block (+ its checklist)
        [time | range] [duration] [#tag] title | item; item; item
        11:00 1h Plan Schedule | viết journal; làm bài tiểu luận
        @9h30 45p #study Đọc sách      ·      9:00-10:30 Họp      ·      1h30 Deep work
      Time: 11:00 · 9am · 9:30pm · @9 · @9h30 · 11:00-12:30 · now.   Duration: 1h · 90m · 45p · 1h30.
      No time → the next free slot.  Tag → #work, #study, #2 …   Items → after "|", split by ";".
+     v2 · MANY LINES: Shift+Enter (or paste a list) → one block per line; a line without a time follows the previous block.
+          DATES: mai · hôm nay · t2…t7 · cn · mon…sun · 25/11 · 2026-11-25 — sticks to the next lines; a line with only a date switches day.
+          REPEAT: 4x25p · 4x25p+5p (5-minute gap) · 3x 1h.
+          HISTORY: a known title brings back its tag + usual length; ↑/↓ + Tab (or click) accepts a suggestion.
      ============================================================ */
   function _qpClock(tok, forced) {
     const m = /^(\d{1,2})(?:[:h](\d{2})?)?(am|pm)?$/i.exec(tok);
@@ -2221,126 +3130,509 @@ const timeManagementModule = (function () {
     const d = new Date();
     return Math.ceil((d.getHours() * 60 + d.getMinutes()) / SNAP) * SNAP;
   }
-  /** First free window of `dur` minutes on `date`, starting the search at `from` (then wrapping to the top of the day). */
-  function _qpFindFree(date, dur, from) {
-    for (let pass = 0; pass < 2; pass++) {
+  /** First free window of `dur` minutes on `date`, starting at `from` (then — unless `noWrap` — wrapping to the top of the day). */
+  function _qpFindFree(date, dur, from, noWrap) {
+    for (let pass = 0; pass < (noWrap ? 1 : 2); pass++) {
       for (let c = pass ? 0 : from; c + dur <= DAY_MINS && (pass === 0 || c < from); c += SNAP) {
         if (!_overlap(date, c, c + dur)) return c;
       }
     }
     return null;
   }
-  function _qpParse(raw) {
-    raw = String(raw || '').replace(/\s+/g, ' ').trim();
-    if (!raw) return { empty: true };
-    const bar = raw.indexOf('|');
-    const head = (bar < 0 ? raw : raw.slice(0, bar)).trim();
-    const items = (bar < 0 ? '' : raw.slice(bar + 1)).split(';').map(function (x) { return x.trim(); }).filter(Boolean);
-    const date = _currentDate, words = [];
-    let start = null, end = null, dur = null, tag = null, lead = true;
+
+  /* ── v2 helpers ─────────────────────────────────────────────── */
+  const QP_MAX_BLOCKS = 40, QP_MAX_REPEAT = 12;
+  const QP_BULLET = /^(?:[-*•–·▪▸►]+|\d{1,2}[.)])\s+/;                 // "- ", "• ", "1. " in front of a pasted line
+  const QP_DATE_WORDS = { 'today': 0, 'hom nay': 0, 'tomorrow': 1, 'tmr': 1, 'tmrw': 1, 'mai': 1, 'ngay mai': 1, 'ngay mot': 2, 'hom qua': -1, 'yesterday': -1 };
+  const QP_WEEKDAYS = {
+    't2': 1, 't3': 2, 't4': 3, 't5': 4, 't6': 5, 't7': 6, 'cn': 0,
+    'thu hai': 1, 'thu ba': 2, 'thu tu': 3, 'thu nam': 4, 'thu sau': 5, 'thu bay': 6, 'chu nhat': 0,
+    'mon': 1, 'monday': 1, 'tue': 2, 'tuesday': 2, 'wed': 3, 'wednesday': 3, 'thur': 4, 'thurs': 4, 'thursday': 4,
+    'fri': 5, 'friday': 5, 'sat': 6, 'saturday': 6, 'sun': 0, 'sunday': 0
+  };
+  function _qpHas(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
+  /** Lower-case, accent-free ("Ôn Flashcard" → "on flashcard") so Vietnamese matches with or without diacritics. */
+  function _qpPlain(s) {
+    return String(s || '').toLowerCase().replace(/đ/g, 'd').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+  }
+  function _qpDateText(ds) {
+    const t = _todayStr(), n = Math.round((_parseDate(ds) - _parseDate(t)) / 86400000);
+    if (n === 0) return 'Today';
+    if (n === 1) return 'Tomorrow';
+    if (n === -1) return 'Yesterday';
+    const d = _parseDate(ds);
+    return DAY_SHORT[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth() + 1);
+  }
+  function _qpDurTok(m) {
+    if (m < 60) return m + 'p';
+    return m % 60 ? Math.floor(m / 60) + 'h' + _pad(m % 60) : (m / 60) + 'h';
+  }
+  /** One date word/number at the start of a line → { ds, used } | { error } | null. `next` is the following token (two-word dates). */
+  function _qpDateOf(tok, next) {
+    const p = _qpPlain(tok), two = next ? p + ' ' + _qpPlain(next) : '';
+    const rel = function (n) { return _dateToStr(_addDays(new Date(), n)); };
+    const wk = function (wd) { const d = new Date(); let n = (wd - d.getDay() + 7) % 7; if (n === 0) n = 7; return rel(n); };   // always the NEXT such day
+    if (two && _qpHas(QP_DATE_WORDS, two)) return { ds: rel(QP_DATE_WORDS[two]), used: 2 };
+    if (two && _qpHas(QP_WEEKDAYS, two)) return { ds: wk(QP_WEEKDAYS[two]), used: 2 };
+    if (tok.toLowerCase() === 'mốt') return { ds: rel(2), used: 1 };                     // "mốt" (with the accent) — bare "mot" means "one"
+    if (_qpHas(QP_DATE_WORDS, p)) return { ds: rel(QP_DATE_WORDS[p]), used: 1 };
+    if (_qpHas(QP_WEEKDAYS, p)) return { ds: wk(QP_WEEKDAYS[p]), used: 1 };
+    let m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(tok);
+    if (m) return _isDateStr(tok) ? { ds: tok, used: 1 } : { error: 'Not a valid date “' + tok + '”.' };
+    if ((m = /^(\d{1,2})\/(\d{1,2})(?:\/(\d{2}|\d{4}))?$/.exec(tok))) {
+      const dd = +m[1], mm = +m[2], today = _parseDate(_todayStr());
+      let yy = m[3] ? (m[3].length === 2 ? 2000 + +m[3] : +m[3]) : today.getFullYear();
+      let d = new Date(yy, mm - 1, dd);
+      if (d.getMonth() !== mm - 1 || d.getDate() !== dd) return { error: 'Not a valid date “' + tok + '”.' };
+      if (!m[3] && d < today) d = new Date(yy + 1, mm - 1, dd);                          // already past this year → next year
+      return { ds: _dateToStr(d), used: 1 };
+    }
+    return null;
+  }
+
+  /** Split the head of a line (everything before "|") into its parts. Shared by the parser and by the suggestion box. */
+  function _qpScan(head) {
+    const o = { date: null, now: false, start: null, end: null, dur: null, count: 1, gap: 0, tag: null, tagTok: '', words: [], lead: [], other: 0, error: '' };
     const toks = head.split(' ').filter(Boolean);
+    let lead = true;
     for (let i = 0; i < toks.length; i++) {
       const tok = toks[i];
       let m, v;
       if ((m = /^#(\S+)$/.exec(tok))) {
-        tag = _qpTag(m[1]);
-        if (!tag) return { error: 'No tag “#' + m[1] + '”. Try ' + _allTags().slice(0, 3).map(function (t) { return '#' + t.label.toLowerCase(); }).join(' ') + '.' };
+        o.tag = _qpTag(m[1]); o.tagTok = tok;
+        if (!o.tag) { o.error = 'No tag “#' + m[1] + '”. Try ' + _allTags().slice(0, 3).map(function (t) { return '#' + t.label.toLowerCase(); }).join(' ') + '.'; return o; }
         continue;
       }
       if (lead) {
-        if (/^now$/i.test(tok)) { start = _qpBase(date); continue; }
-        if ((v = _qpRange(tok))) { start = v[0]; end = v[1]; continue; }
+        if (/^now$/i.test(tok)) { o.now = true; o.other++; o.lead.push(tok); continue; }
+        const dt = _qpDateOf(tok, toks[i + 1]);
+        if (dt) {
+          if (dt.error) { o.error = dt.error; return o; }
+          o.date = dt.ds; o.lead.push(tok);
+          if (dt.used === 2) { i++; o.lead.push(toks[i]); }
+          continue;
+        }
+        if ((m = /^(\d{1,2})[x×](?:(\S*?))?$/i.exec(tok)) && (!m[2] || _qpDur(m[2].split('+')[0]) !== null)) {   // 4x · 4x25p · 4x25p+5p
+          const n = parseInt(m[1], 10);
+          if (n < 1 || n > QP_MAX_REPEAT) { o.error = 'Repeat 1–' + QP_MAX_REPEAT + ' times at most.'; return o; }
+          o.count = n; o.other++; o.lead.push(tok);
+          if (m[2]) {
+            const pr = m[2].split('+'), g = pr[1] ? _qpDur(pr[1]) : null;
+            o.dur = _qpDur(pr[0]);
+            if (pr[1] && g === null) { o.error = 'Gap “+' + pr[1] + '” isn’t a duration. Try +5p.'; return o; }
+            if (g !== null) o.gap = g;
+          }
+          continue;
+        }
+        if (o.count > 1 && (m = /^\+(\S+)$/.exec(tok)) && (v = _qpDur(m[1])) !== null) { o.gap = v; o.other++; o.lead.push(tok); continue; }
+        if ((v = _qpRange(tok))) { o.start = v[0]; o.end = v[1]; o.other++; o.lead.push(tok); continue; }
         v = tok.charAt(0) === '@' ? _qpClock(tok.slice(1), true) : _qpClock(tok, false);
-        if (v !== null) { start = v; continue; }
+        if (v !== null) { o.start = v; o.other++; o.lead.push(tok); continue; }
         v = _qpDur(tok);
-        if (v !== null) { dur = v; continue; }
+        if (v !== null) { o.dur = v; o.other++; o.lead.push(tok); continue; }
         lead = false;
       }
-      words.push(tok);
+      o.words.push(tok);
     }
-    const tg = tag || _tagOrFallback(_activeTagId), tagId = tg.id === FALLBACK_TAG.id ? 'work' : tg.id;
-    const title = words.join(' ').slice(0, 120);
-    let s, e, shortened = false;
+    return o;
+  }
+
+  /* ── History: what the user usually does with a title / a tag ── */
+  let _qpH = null, _qpHAt = 0, _qpHN = -1;
+  function _qpHist() {
+    const now = Date.now();
+    if (_qpH && _qpHN === _timeBlocks.length && now - _qpHAt < 4000) return _qpH;
+    const map = Object.create(null), tagDur = Object.create(null), tagAt = Object.create(null);
+    const top = function (o, byAt) { let best = null, bn = 0; Object.keys(o).forEach(function (k) { if (o[k] > bn) { best = k; bn = o[k]; } }); return best; };
+    _timeBlocks.forEach(function (b) {
+      if (b._qpv) return;                                                          // pencilled-in line of the current plan
+      const d = _toMins(b.endTime) - _toMins(b.startTime);
+      if (d < MIN_DUR) return;
+      const at = Number(b.createdAt) || 0, tid = b.tagId || '';
+      if (tid && (tagAt[tid] === undefined || at >= tagAt[tid])) { tagAt[tid] = at; tagDur[tid] = d; }
+      const title = String(b.title || '').trim(), key = _qpPlain(title), tg = _tagById(tid);
+      if (!key || (tg && key === _qpPlain(tg.label))) return;                       // placeholder titles ("Work") teach nothing
+      let h = map[key];
+      if (!h) h = map[key] = { title: title, n: 0, at: 0, lastDur: d, tags: {}, durs: {}, ck: {} };
+      h.n++;
+      if (at >= h.at) { h.at = at; h.title = title; h.lastDur = d; }
+      h.tags[tid] = (h.tags[tid] || 0) + 1;
+      h.durs[d] = (h.durs[d] || 0) + 1;
+      (b.checklist || []).forEach(function (it) {
+        const t = String((it && it.text) || '').trim(), kk = _qpPlain(t);
+        if (!kk) return;
+        (h.ck[kk] = h.ck[kk] || { text: t, n: 0 }).n++;
+      });
+    });
+    Object.keys(map).forEach(function (k) {
+      const h = map[k];
+      h.tagId = top(h.tags);
+      const dm = top(h.durs);
+      h.dur = h.durs[h.lastDur] === h.durs[dm] ? h.lastDur : parseInt(dm, 10);        // tie → the most recent length
+      h.items = Object.keys(h.ck).map(function (c) { return h.ck[c]; })
+        .filter(function (c) { return c.n >= 2; })                                    // only checklist items that keep coming back
+        .sort(function (a, b) { return b.n - a.n; }).slice(0, 5).map(function (c) { return c.text; });
+    });
+    _qpH = { map: map, tagDur: tagDur };
+    _qpHAt = now; _qpHN = _timeBlocks.length;
+    return _qpH;
+  }
+  function _qpSuggest(frag) {
+    const q = _qpPlain(frag);
+    if (q.length < 2) return [];
+    const H = _qpHist().map, out = [];
+    Object.keys(H).forEach(function (k) {
+      const sc = k.indexOf(q) === 0 ? 0 : k.indexOf(' ' + q) > -1 ? 1 : k.indexOf(q) > -1 ? 2 : -1;
+      if (sc >= 0) out.push({ h: H[k], key: k, sc: sc });
+    });
+    out.sort(function (a, b) { return a.sc - b.sc || b.h.n - a.h.n || b.h.at - a.h.at; });
+    return out.slice(0, 5);
+  }
+
+  /* ── Parse ONE line → blocks. ctx = { date, cursor:{date:mins} } (set by _qpPlan; absent for a bare call) ── */
+  function _qpParse(raw, ctx) {
+    ctx = ctx || {};
+    raw = String(raw || '').replace(/\s+/g, ' ').trim().replace(QP_BULLET, '');
+    if (!raw) return { empty: true };
+    const bar = raw.indexOf('|');
+    const head = (bar < 0 ? raw : raw.slice(0, bar)).trim();
+    const items = (bar < 0 ? '' : raw.slice(bar + 1)).split(';').map(function (x) { return x.trim(); }).filter(Boolean);
+    const sc = _qpScan(head);
+    if (sc.error) return { error: sc.error };
+    const date = sc.date || ctx.date || _currentDate;
+    if (sc.date && !sc.other && !sc.words.length && !sc.tag && !items.length) return { dateOnly: true, date: sc.date };
+
+    const title = sc.words.join(' ').slice(0, 120), hist = ctx.hist || _qpHist(), hit = title ? hist.map[_qpPlain(title)] : null;
+    let tg = sc.tag, learned = false;
+    if (!tg && hit) { const t = _tagById(hit.tagId); if (t) { tg = t; learned = true; } }
+    tg = tg || _tagOrFallback(_activeTagId);
+    const tagId = tg.id === FALLBACK_TAG.id ? 'work' : tg.id;
+    let dur = sc.dur;
+    if (dur === null && sc.end === null) {                                          // no length typed → what this title / tag usually takes
+      if (hit && hit.dur) { dur = hit.dur; learned = true; }
+      else if (hist.tagDur[tagId]) { dur = hist.tagDur[tagId]; learned = true; }
+    }
     if (dur !== null && dur < MIN_DUR) dur = MIN_DUR;
-    if (start !== null) {
-      s = start;
+
+    let s, e, shortened = false, timed = false;
+    if (sc.start !== null || sc.now) {
+      timed = true;
+      s = sc.now ? _qpBase(date) : sc.start;
       if (s >= DAY_MINS) return { error: 'That start time is past midnight.' };
-      e = end !== null ? end : s + (dur || 60);
-      if (end !== null && end === 0) e = DAY_MINS;
+      e = sc.end !== null ? sc.end : s + (dur || 60);
+      if (sc.end !== null && sc.end === 0) e = DAY_MINS;
       if (e <= s) return { error: 'End must be after start.' };
       if (e > DAY_MINS) e = DAY_MINS;
       const fb = _freeBounds(date, s);
       if (fb[1] - s < MIN_DUR) {
-        const hit = _others(date).find(function (o) { return s >= o.s && s < o.e; }) || _others(date).find(function (o) { return o.s === s; });
-        return { error: 'Taken' + (hit ? ': ' + hit.b.startTime + '–' + hit.b.endTime + ' “' + (hit.b.title || _tagOrFallback(hit.b.tagId).label) + '”' : '') + '.' };
+        const hitB = _others(date).find(function (o) { return s >= o.s && s < o.e; }) || _others(date).find(function (o) { return o.s === s; });
+        return { error: 'Taken' + (hitB ? ': ' + hitB.b.startTime + '–' + hitB.b.endTime + ' “' + (hitB.b.title || _tagOrFallback(hitB.b.tagId).label) + '”' : '') + '.' };
       }
       if (e > fb[1]) { e = fb[1]; shortened = true; }
     } else {
-      const d = dur || 60;
-      s = _qpFindFree(date, d, _qpBase(date));
-      if (s === null) return { error: 'No free ' + _fmtDur(d) + ' left on this day.' };
+      const d = dur || 60, chained = ctx.cursor && ctx.cursor[date] !== undefined;
+      s = _qpFindFree(date, d, chained ? ctx.cursor[date] : _qpBase(date), chained);
+      if (s === null) return { error: 'No free ' + _fmtDur(d) + ' left on ' + (date === _currentDate ? 'this day' : _qpDateText(date)) + '.' };
       e = s + d;
     }
-    return { s: s, e: e, tagId: tagId, tag: tg, title: title, items: items, shortened: shortened };
+
+    const blocks = [{ s: s, e: e }], len = e - s;
+    for (let i = 1; i < sc.count; i++) {
+      const prev = blocks[i - 1];
+      let ns = prev.e + sc.gap;
+      if (ns + len > DAY_MINS) return { error: 'Only ' + i + ' of ' + sc.count + ' fit before midnight.' };
+      if (_overlap(date, ns, ns + len)) {
+        if (timed) { const hb = _overlap(date, ns, ns + len); return { error: 'Block ' + (i + 1) + '/' + sc.count + ' hits ' + hb.startTime + '–' + hb.endTime + ' “' + (hb.title || _tagOrFallback(hb.tagId).label) + '”.' }; }
+        ns = _qpFindFree(date, len, ns, true);
+        if (ns === null) return { error: 'Only ' + i + ' of ' + sc.count + ' fit on this day.' };
+      }
+      blocks.push({ s: ns, e: ns + len });
+    }
+    blocks.forEach(function (b, i) {
+      b.title = sc.count > 1 ? (title || tg.label) + ' ' + (i + 1) + '/' + sc.count : (title || tg.label);
+    });
+    return { date: date, explicitDate: sc.date, tag: tg, tagId: tagId, items: items, blocks: blocks, shortened: shortened, learned: learned, count: sc.count };
+  }
+
+  /* ── Parse the whole box → one plan. Each accepted line is "pencilled in" (temporarily) so the next line sees it. ── */
+  function _qpPlan(raw) {
+    const plan = { empty: true, lines: [], blocks: [], errors: [], dates: [], jump: null };
+    const ctx = { date: _currentDate, cursor: {}, hist: _qpHist() };           // history is read BEFORE any line is pencilled in
+    let n = 0;
+    try {
+      String(raw || '').split(/\r?\n/).forEach(function (ln) {
+        if (!ln.replace(/\s+/g, '')) return;
+        n++; plan.empty = false;
+        const r = _qpParse(ln, ctx);
+        if (r.empty) { n--; return; }
+        if (r.dateOnly) { ctx.date = r.date; plan.jump = r.date; plan.lines.push({ n: n, dateOnly: true, date: r.date }); return; }
+        if (r.error) { plan.errors.push({ n: n, msg: r.error }); plan.lines.push({ n: n, error: r.error }); return; }
+        if (plan.blocks.length + r.blocks.length > QP_MAX_BLOCKS) {
+          const msg = 'Too many blocks at once (max ' + QP_MAX_BLOCKS + ').';
+          plan.errors.push({ n: n, msg: msg }); plan.lines.push({ n: n, error: msg }); return;
+        }
+        if (r.explicitDate) ctx.date = r.explicitDate;
+        r.blocks.forEach(function (b, i) {
+          plan.blocks.push({ line: n, date: r.date, s: b.s, e: b.e, title: b.title, tag: r.tag, tagId: r.tagId, items: i === 0 ? r.items : [] });
+          _timeBlocks.push({ id: 'qpv-' + plan.blocks.length, _qpv: true, date: r.date, startTime: _toTime(b.s), endTime: _toTime(b.e), title: b.title, tagId: r.tagId });
+        });
+        ctx.cursor[r.date] = r.blocks[r.blocks.length - 1].e;
+        if (plan.dates.indexOf(r.date) < 0) plan.dates.push(r.date);
+        plan.lines.push({ n: n, ok: true, r: r });
+      });
+    } finally {
+      for (let i = _timeBlocks.length - 1; i >= 0; i--) if (_timeBlocks[i]._qpv) _timeBlocks.splice(i, 1);
+    }
+    return plan;
+  }
+
+  /* ── Live preview ── */
+  function _qpAutosize() {
+    const inp = _el('#tm-qp-input');
+    if (!inp) return;
+    inp.style.height = 'auto';
+    inp.style.height = Math.min(inp.scrollHeight, 150) + 'px';
+  }
+  function _qpRenderPlan(plan) {
+    const box = _el('#tm-qp-plan');
+    if (!box) return;
+    const multi = plan.lines.length > 1 || plan.blocks.length > 1;
+    if (!multi) { box.hidden = true; box.textContent = ''; return; }
+    box.textContent = '';
+    let shown = 0, hidden = 0, lastDate = _currentDate;
+    const li = function (cls) { const x = document.createElement('li'); if (cls) x.className = cls; box.appendChild(x); return x; };
+    const span = function (p, cls, txt) { const s = document.createElement('span'); s.className = cls; s.textContent = txt; p.appendChild(s); return s; };
+    plan.lines.forEach(function (L) {
+      if (shown >= 8) { hidden += L.ok ? L.r.blocks.length : 1; return; }
+      if (L.dateOnly) { const x = li('is-date'); span(x, 'hub-tm-qp-plan-day', '▸ ' + _qpDateText(L.date)); lastDate = L.date; shown++; return; }
+      if (L.error) { const x = li('is-error'); span(x, 'hub-tm-qp-plan-n', 'Line ' + L.n); span(x, 'hub-tm-qp-plan-msg', L.error); shown++; return; }
+      L.r.blocks.forEach(function (b) {
+        if (shown >= 8) { hidden++; return; }
+        const x = li();
+        x.style.setProperty('--tm-c', _safeColor(L.r.tag.color));
+        span(x, 'hub-tm-qp-plan-dot', '');
+        span(x, 'hub-tm-qp-plan-time', _toTime(b.s) + '–' + _toTime(b.e));
+        span(x, 'hub-tm-qp-plan-title', b.title);
+        span(x, 'hub-tm-qp-plan-tag', L.r.tag.label + (L.r.learned ? ' · from history' : ''));
+        if (L.r.date !== lastDate) { span(x, 'hub-tm-qp-plan-day', _qpDateText(L.r.date)); lastDate = L.r.date; }
+        shown++;
+      });
+    });
+    if (hidden) { const x = li('is-more'); span(x, 'hub-tm-qp-plan-msg', '+ ' + hidden + ' more'); }
+    box.hidden = false;
   }
   function _qpUpdate() {
     const inp = _el('#tm-qp-input'), out = _el('#tm-qp-hint'), form = _el('#hub-tm-qp');
     if (!inp || !out || !form) return;
-    const r = _qpParse(inp.value);
-    out.classList.toggle('is-error', !!r.error);
-    if (r.empty) {
+    _qpAutosize();
+    const plan = _qpPlan(inp.value);
+    _qpRenderPlan(plan);
+    out.classList.toggle('is-error', !!plan.errors.length);
+    if (plan.empty) {
       const tg = _tagOrFallback(_activeTagId), f = _qpFindFree(_currentDate, 60, _qpBase(_currentDate));
       form.style.setProperty('--tm-c', _safeColor(tg.color));
       out.textContent = f !== null ? 'Next free ' + _toTime(f) + ' · ' + tg.label : '';
+      _qpSugUpdate();
       return;
     }
-    if (r.error) { out.textContent = r.error; return; }
-    form.style.setProperty('--tm-c', _safeColor(r.tag.color));
-    out.textContent = _toTime(r.s) + '–' + _toTime(r.e) + ' · ' + r.tag.label + (r.items.length ? ' · ' + r.items.length + ' item' + (r.items.length > 1 ? 's' : '') : '') + (r.shortened ? ' · fits before the next block' : '');
+    const first = plan.lines.find(function (L) { return L.ok; });
+    if (first) form.style.setProperty('--tm-c', _safeColor(first.r.tag.color));
+    if (plan.errors.length) {
+      const e0 = plan.errors[0], ok = plan.blocks.length;
+      out.textContent = (plan.lines.length > 1 ? 'Line ' + e0.n + ': ' : '') + e0.msg + (ok ? ' · Ctrl+Enter plans the other ' + ok : '');
+    } else if (!plan.blocks.length) {
+      out.textContent = plan.jump ? 'Enter jumps to ' + _qpDateText(plan.jump) : '';
+    } else if (plan.lines.length === 1 && plan.blocks.length === 1) {
+      const r = plan.lines[0].r, b = r.blocks[0];
+      out.textContent = _toTime(b.s) + '–' + _toTime(b.e) + ' · ' + r.tag.label + (r.date !== _currentDate ? ' · ' + _qpDateText(r.date) : '') +
+        (r.items.length ? ' · ' + r.items.length + ' item' + (r.items.length > 1 ? 's' : '') : '') +
+        (r.shortened ? ' · fits before the next block' : '') + (r.learned ? ' · from history' : '');
+    } else {
+      const lo = Math.min.apply(null, plan.blocks.map(function (b) { return b.s; })), hi = Math.max.apply(null, plan.blocks.map(function (b) { return b.e; }));
+      out.textContent = plan.blocks.length + ' blocks · ' + (plan.dates.length > 1 ? plan.dates.length + ' days' : _toTime(lo) + '–' + _toTime(hi)) + ' · Enter plans all';
+    }
+    _qpSugUpdate();
   }
-  function _qpSubmit() {
+
+  /* ── Suggestion box (history) ── */
+  let _qpSug = [], _qpSugI = -1, _qpSugHideT = 0;
+  function _qpLineAt(v, pos) {
+    const a = v.lastIndexOf('\n', Math.max(0, pos - 1)) + 1, z = v.indexOf('\n', pos);
+    return { a: a, z: z < 0 ? v.length : z };
+  }
+  function _qpSugHide() {
+    const box = _el('#tm-qp-sug'), inp = _el('#tm-qp-input');
+    _qpSug = []; _qpSugI = -1;
+    if (box) { box.hidden = true; box.textContent = ''; }
+    if (inp) { inp.setAttribute('aria-expanded', 'false'); inp.removeAttribute('aria-activedescendant'); }
+  }
+  function _qpSugUpdate() {
+    const inp = _el('#tm-qp-input'), box = _el('#tm-qp-sug');
+    if (!inp || !box) return;
+    if (document.activeElement !== inp || inp.selectionStart !== inp.selectionEnd) { _qpSugHide(); return; }
+    const v = inp.value, pos = inp.selectionStart, ln = _qpLineAt(v, pos), line = v.slice(ln.a, ln.z), rel = pos - ln.a;
+    const bar = line.indexOf('|');
+    if (bar >= 0 && rel > bar) { _qpSugHide(); return; }                         // caret is in the checklist part
+    const sc = _qpScan((bar < 0 ? line : line.slice(0, bar)).replace(QP_BULLET, '').replace(/\s+/g, ' ').trim());
+    if (sc.error || !sc.words.length) { _qpSugHide(); return; }
+    const list = _qpSuggest(sc.words.join(' '));
+    const typed = _qpPlain(sc.words.join(' ')), explicit = !!sc.tag && (sc.dur !== null || sc.end !== null);
+    if (!list.length || (list.length === 1 && list[0].key === typed && explicit)) { _qpSugHide(); return; }   // exact match and nothing left to add
+    _qpSug = list;
+    if (_qpSugI >= list.length) _qpSugI = -1;
+    box.textContent = '';
+    list.forEach(function (it, i) {
+      const li = document.createElement('li'), tg = _tagById(it.h.tagId) || FALLBACK_TAG;
+      li.id = 'tm-qp-sug-' + i; li.setAttribute('role', 'option'); li.setAttribute('data-i', String(i));
+      li.setAttribute('aria-selected', i === _qpSugI ? 'true' : 'false');
+      li.style.setProperty('--tm-c', _safeColor(tg.color));
+      const dot = document.createElement('i'); dot.className = 'hub-tm-qp-sug-dot'; li.appendChild(dot);
+      const t = document.createElement('b'); t.className = 'hub-tm-qp-sug-title'; t.textContent = it.h.title; li.appendChild(t);
+      const m = document.createElement('span'); m.className = 'hub-tm-qp-sug-meta';
+      m.textContent = tg.label + ' · ' + _fmtDur(it.h.dur || it.h.lastDur) + (it.h.n > 1 ? ' · ' + it.h.n + '×' : ''); li.appendChild(m);
+      box.appendChild(li);
+    });
+    box.hidden = false;
+    inp.setAttribute('aria-expanded', 'true');
+    if (_qpSugI >= 0) inp.setAttribute('aria-activedescendant', 'tm-qp-sug-' + _qpSugI); else inp.removeAttribute('aria-activedescendant');
+  }
+  function _qpSugMove(dir) {
+    if (!_qpSug.length) return;
+    _qpSugI = _qpSugI < 0 ? (dir > 0 ? 0 : _qpSug.length - 1) : (_qpSugI + dir + _qpSug.length) % _qpSug.length;
+    _qpSugUpdate();
+  }
+  /** Replace the line under the caret with "<lead> <len> #tag Title | items" — tokens already typed are kept. */
+  function _qpAccept(i) {
+    const inp = _el('#tm-qp-input'), it = _qpSug[i];
+    if (!inp || !it) return false;
+    const v = inp.value, ln = _qpLineAt(v, inp.selectionStart), line = v.slice(ln.a, ln.z);
+    const bar = line.indexOf('|'), headRaw = (bar < 0 ? line : line.slice(0, bar)).replace(QP_BULLET, '').replace(/\s+/g, ' ').trim();
+    const tail = bar < 0 ? '' : line.slice(bar + 1).trim();
+    const sc = _qpScan(headRaw);
+    if (sc.error) return false;
+    const parts = sc.lead.slice();
+    if (sc.dur === null && sc.end === null && (it.h.dur || it.h.lastDur)) parts.push(_qpDurTok(it.h.dur || it.h.lastDur));
+    const tg = sc.tag || _tagById(it.h.tagId);
+    if (tg) parts.push(sc.tagTok || '#' + (/^\S+$/.test(tg.label) ? tg.label.toLowerCase() : tg.id));
+    parts.push(it.h.title);
+    let out = parts.join(' ');
+    if (tail) out += ' | ' + tail;
+    else if (it.h.items.length) out += ' | ' + it.h.items.join('; ');
+    inp.value = v.slice(0, ln.a) + out + v.slice(ln.z);
+    const caret = ln.a + out.length;
+    inp.setSelectionRange(caret, caret);
+    _qpSugHide();
+    _qpUpdate();
+    return true;
+  }
+
+  /* ── Submit ── */
+  function _qpSubmit(opts) {
     const inp = _el('#tm-qp-input');
     if (!inp) return;
-    const r = _qpParse(inp.value);
-    if (r.empty) return;
-    if (r.error) { _qpUpdate(); return; }
-    const b = _normBlock({
-      id: _newId(), date: _currentDate, tagId: r.tagId, startTime: _toTime(r.s), endTime: _toTime(r.e),
-      title: r.title || r.tag.label, subtitle: '', createdAt: Date.now(),
-      checklist: r.items.slice(0, CK_MAX).map(function (t) { return { text: t }; })
+    opts = opts || {};
+    const plan = _qpPlan(inp.value);
+    if (plan.empty) return;
+    const clear = function () { inp.value = ''; _qpSugHide(); _qpUpdate(); };
+    if (!plan.blocks.length && !plan.errors.length) {                        // only a date → just go there
+      if (plan.jump) { _setDate(plan.jump); clear(); _toast('Showing ' + _qpDateText(plan.jump)); }
+      return;
+    }
+    if (plan.errors.length && !opts.skipInvalid) { _qpUpdate(); return; }
+    if (!plan.blocks.length) { _qpUpdate(); return; }
+    const made = [];
+    plan.blocks.forEach(function (p, k) {
+      const b = _normBlock({
+        id: _newId(k), date: p.date, tagId: p.tagId, startTime: _toTime(p.s), endTime: _toTime(p.e),
+        title: p.title, subtitle: '', createdAt: Date.now() + k,
+        checklist: p.items.slice(0, CK_MAX).map(function (t) { return { text: t }; })
+      });
+      if (b) made.push(b);
     });
-    if (!b) return;
-    _timeBlocks.push(b);
+    if (!made.length) return;
+    made.forEach(function (b) { _timeBlocks.push(b); });
+    _qpHN = -1;                                                              // history learns from the new blocks
     _scheduleSave();
+    const dates = plan.dates;
+    if (dates.length === 1 && dates[0] !== _currentDate) _setDate(dates[0]);
+    else if (_view === 'day') { _renderDayBlocks(); _updateSummary(); }
+    else _renderGrid({ animate: false, scroll: false });
     if (_view === 'day') {
-      _renderDayBlocks(); _updateSummary(); _dropFx(b.id);
-      const n = _el('.hub-tm-block[data-block-id="' + b.id + '"]');
-      if (n) { try { n.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) {} }
-    } else _renderGrid({ animate: false, scroll: false });
+      const mine = made.find(function (b) { return b.date === _currentDate; });
+      if (mine) {
+        _dropFx(mine.id);
+        const n = _el('.hub-tm-block[data-block-id="' + mine.id + '"]');
+        if (n) { try { n.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) {} }
+      }
+    }
     _tlRefresh();
-    inp.value = '';
-    _qpUpdate();
-    _toast('Planned ' + b.startTime + '–' + b.endTime + ' · ' + b.title, {
+    clear();
+    const skipped = plan.errors.length;
+    const msg = made.length === 1
+      ? 'Planned ' + made[0].startTime + '–' + made[0].endTime + ' · ' + made[0].title + (made[0].date !== _currentDate ? ' · ' + _qpDateText(made[0].date) : '')
+      : 'Planned ' + made.length + ' blocks · ' + (dates.length > 1 ? dates.length + ' days' : made[0].startTime + '–' + made[made.length - 1].endTime) + (skipped ? ' · skipped ' + skipped : '');
+    _toast(msg, {
       action: 'Undo',
       onAction: function () {
-        _timeBlocks = _timeBlocks.filter(function (x) { return x.id !== b.id; });
+        const ids = {};
+        made.forEach(function (b) { ids[b.id] = 1; });
+        _timeBlocks = _timeBlocks.filter(function (x) { return !ids[x.id]; });
+        _qpHN = -1;
         _scheduleSave();
         _renderGrid({ animate: false, scroll: false });
         _tlRefresh();
       }
     });
   }
+
   function _bindQuickPlan() {
-    const form = _el('#hub-tm-qp'), inp = _el('#tm-qp-input');
+    const form = _el('#hub-tm-qp'), inp = _el('#tm-qp-input'), box = _el('#tm-qp-sug');
     if (!form || !inp) return;
     const sig = { signal: _ui.signal };
-    inp.addEventListener('input', _qpUpdate, sig);
-    inp.addEventListener('focus', _qpUpdate, sig);
-    inp.addEventListener('keydown', function (e) {
-      if (e.key !== 'Escape') return;
-      e.preventDefault(); e.stopPropagation();
-      if (inp.value) { inp.value = ''; _qpUpdate(); } else inp.blur();
+    inp.addEventListener('input', function () { _qpSugI = -1; _qpUpdate(); }, sig);
+    inp.addEventListener('focus', function () { _qpUpdate(); }, sig);
+    inp.addEventListener('blur', function () { clearTimeout(_qpSugHideT); _qpSugHideT = setTimeout(_qpSugHide, 140); }, sig);
+    inp.addEventListener('click', _qpSugUpdate, sig);
+    inp.addEventListener('keyup', function (e) {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Home' || e.key === 'End') _qpSugUpdate();
     }, sig);
+    inp.addEventListener('keydown', function (e) {
+      if (e.isComposing || e.keyCode === 229) return;                        // IME (Telex/VNI) composing — Enter belongs to the IME
+      const open = !!(box && !box.hidden && _qpSug.length);
+      if (e.key === 'Escape') {
+        e.preventDefault(); e.stopPropagation();
+        if (open) _qpSugHide();
+        else if (inp.value) { inp.value = ''; _qpUpdate(); }
+        else inp.blur();
+        return;
+      }
+      if (open && e.key === 'ArrowDown') { e.preventDefault(); _qpSugMove(1); return; }
+      if (open && e.key === 'ArrowUp') { e.preventDefault(); _qpSugMove(-1); return; }
+      if (open && e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); _qpAccept(_qpSugI >= 0 ? _qpSugI : 0); return; }
+      if (e.key === 'Enter') {
+        if (e.shiftKey) return;                                              // Shift+Enter = new line
+        e.preventDefault();
+        if (open && _qpSugI >= 0) { _qpAccept(_qpSugI); return; }            // an arrow-picked suggestion
+        _qpSubmit({ skipInvalid: e.ctrlKey || e.metaKey });
+      }
+    }, sig);
+    inp.addEventListener('paste', function (e) {                             // paste a whole plan: tidy bullets/numbers, keep the lines
+      const t = (e.clipboardData || window.clipboardData) ? (e.clipboardData || window.clipboardData).getData('text') : '';
+      if (!t || (!/[\r\n]/.test(t) && !QP_BULLET.test(t))) return;
+      e.preventDefault();
+      const clean = t.replace(/\r\n?/g, '\n').split('\n').map(function (l) { return l.replace(/\s+$/, '').replace(QP_BULLET, ''); }).join('\n').replace(/\n{3,}/g, '\n\n').replace(/^\n+|\n+$/g, '');
+      inp.setRangeText(clean, inp.selectionStart, inp.selectionEnd, 'end');
+      _qpUpdate();
+    }, sig);
+    if (box) {
+      box.addEventListener('mousedown', function (e) { e.preventDefault(); }, sig);       // keep focus in the box
+      box.addEventListener('click', function (e) {
+        const li = e.target.closest && e.target.closest('li[data-i]');
+        if (li) { _qpAccept(parseInt(li.getAttribute('data-i'), 10)); inp.focus(); }
+      }, sig);
+    }
+    const ico = form.querySelector('.hub-tm-qp-ico');
+    if (ico) ico.addEventListener('click', function () { inp.focus(); }, sig);
     form.addEventListener('submit', function (e) { e.preventDefault(); _qpSubmit(); }, sig);
     _qpUpdate();
   }
@@ -2466,6 +3758,7 @@ const timeManagementModule = (function () {
     const err = _el('#hub-tm-details-error');
 
     _el('#tm-btn-details-save').addEventListener('click', _saveDetails);
+    _el('#tm-btn-details-inbox').addEventListener('click', function () { _blockToInbox(_editingId); });
     _el('#tm-btn-details-delete').addEventListener('click', function () {
       const b = _blockById(_editingId);
       if (!b) return;
