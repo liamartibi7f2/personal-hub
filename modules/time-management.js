@@ -3219,6 +3219,13 @@ const timeManagementModule = (function () {
     list.addEventListener('touchmove', function (e) { if (_ibx && _ibx.active && e.cancelable) e.preventDefault(); }, { passive: false, signal: _ui.signal });
     list.addEventListener('contextmenu', function (e) { if (_ibx) e.preventDefault(); }, sig);
     list.addEventListener('click', _ibxClick, sig);
+    const panel = _el('#hub-tm-inbox');                                      // wheel over the panel's header / input also scrolls the list
+    if (panel) panel.addEventListener('wheel', function (e) {
+      if (e.ctrlKey || e.defaultPrevented || list.contains(e.target)) return;   // pinch-zoom, or the list already handles it
+      if (list.scrollHeight <= list.clientHeight) return;                      // nothing to scroll: the page gets the wheel
+      list.scrollTop += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * list.clientHeight : e.deltaY;
+      e.preventDefault();
+    }, { passive: false, signal: _ui.signal });
     list.addEventListener('keydown', function (e) {
       const t = e.target;
       if (t.hasAttribute && t.hasAttribute('data-ibx-title') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); _ibxEdit(t.closest('.hub-tm-ibx-item')); }

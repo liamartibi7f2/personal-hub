@@ -4956,3 +4956,17 @@ body.theme-optimized #time-management .hub-tm-ibx-prisel { border-radius: 0; }
 
 /* Inbox: the item picked by a click (Delete removes it · Ctrl+C copies it) */
 #time-management .hub-tm-ibx-item.is-sel { --ibx-edge: var(--accent-primary); outline: 2px solid var(--accent-primary); outline-offset: -2px; }
+/* ==========================================================================
+   Mouse scrolling with the Inbox and the grid both open
+   - wheel is no longer trapped inside a pane: at the end of the grid / list it
+     carries on to the page (touch keeps "contain" so it doesn't rubber-band)
+   - fatter, easier-to-grab scrollbars for a mouse
+   ========================================================================== */
+@media (pointer: fine) {
+  .hub-tm-grid-scroll, .hub-tm-ibx-list { overscroll-behavior: auto; }
+  #time-management { --tm-sb-w: 11px; }
+  .hub-tm-ibx-list::-webkit-scrollbar { width: 11px; }
+  .hub-tm-ibx-list::-webkit-scrollbar-thumb { border-radius: 6px; }
+  .hub-tm-ibx-list::-webkit-scrollbar-thumb:hover,
+  #time-management .hub-tm-grid-scroll::-webkit-scrollbar-thumb:hover { background: var(--accent-primary); }
+}
