@@ -33,6 +33,8 @@ const timeManagementModule = (function () {
   const AUDIO_KEY    = 'hub_tm_audio';
   const STREAK_MIN      = 0.5;   // a day counts when >= 50% of its planned minutes are done
   const STREAK_REST_GAP = 2;     // up to 2 empty days in a row do not break a streak
+  const HABIT_GRACE     = 1;     // habit series: free skips per calendar week (Mon-Sun) before its own streak resets
+  const HABIT_WINDOW    = 30;    // habit series: "recent" success rate looks at this many days
   const MS_KEY          = 'hub_tm_milestones';   // local mirror (per account) of the synced milestone map
   /* Reward milestones: streak length -> difficulty tier (edit freely; keep ascending) */
   const MS_TIERS = [
@@ -111,7 +113,7 @@ const timeManagementModule = (function () {
   const SB_WEEKS = [1, 2, 4, 8, 12];
   const SB_PRESETS = [['once', 'Just this day', []], ['weekdays', 'Weekdays', [1, 2, 3, 4, 5]], ['weekends', 'Weekends', [6, 0]], ['all', 'Every day', [0, 1, 2, 3, 4, 5, 6]]];
   const SB_DAYS = [[1, 'Mon'], [2, 'Tue'], [3, 'Wed'], [4, 'Thu'], [5, 'Fri'], [6, 'Sat'], [0, 'Sun']];
-  let _sb = { tag: 'work', days: [], weeks: 1, ov: {}, dur: 30 };
+  let _sb = { tag: 'work', days: [], weeks: 1, ov: {}, dur: 30, habit: false, ck: [] };
 
   const ICON = {
     inbox:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>',
@@ -373,6 +375,7 @@ const timeManagementModule = (function () {
       habDone: b.habDone === true,
       gp: +b.gp > 0 ? Math.min(9999, Math.round(+b.gp * 100) / 100) : 0,       // gold this block earned in Habitica
       focusMs: _clamp(Math.round(Number(b.focusMs) || 0), 0, 86400000),      // time really focused on this block (Focus session)
+      seriesId: b.seriesId ? String(b.seriesId).replace(/[^\w-]/g, '').slice(0, 40) : '',   // habit series: blocks made together by Set Time with "Track as a habit"
       checklist: _normCk(b.checklist),
       ckDel: Array.isArray(b.ckDel) ? b.ckDel.map(String).slice(0, CK_MAX) : [],
       updatedAt: Number(b.updatedAt) || 0
@@ -858,6 +861,10 @@ const timeManagementModule = (function () {
                 '<label class="toggle-switch"><input type="checkbox" id="tm-details-done" aria-label="Completed"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>' +
               '</div>' +
             '</section>' +
+            '<section class="hub-tm-sec" id="tm-details-habit-sec" aria-labelledby="tm-sec-habit" hidden>' +
+              '<h4 class="hub-tm-sec-title" id="tm-sec-habit">Habit</h4>' +
+              '<div class="hub-tm-habit-card" id="tm-details-habit"></div>' +
+            '</section>' +
             '<section class="hub-tm-sec" aria-labelledby="tm-sec-desc">' +
               '<h4 class="hub-tm-sec-title" id="tm-sec-desc">Description</h4>' +
             '<div class="hub-tm-field"><span class="hub-tm-sr-only">Description</span>' +
@@ -1064,6 +1071,12 @@ const timeManagementModule = (function () {
               '<section class="hub-tm-sb-sec"><h4 class="hub-tm-sb-h"><i>4</i>Details</h4>' +
                 '<div class="hub-tm-sb-tags" id="tm-sb-tags" role="group" aria-label="Tag"></div>' +
                 '<div class="hub-tm-field"><label class="hub-tm-sr-only" for="tm-sb-title">Title</label><input type="text" class="hub-tm-input" id="tm-sb-title" maxlength="120" placeholder="Title (optional)" autocomplete="off"></div>' +
+                '<label class="hub-tm-sb-habit"><input type="checkbox" id="tm-sb-habit"><span class="hub-tm-sb-habit-box" aria-hidden="true"></span><span class="hub-tm-sb-habit-text"><b>Track as a habit</b><small>Own streak for this series · ' + HABIT_GRACE + ' free skip per week · best streak and totals are kept after a slip</small></span></label>' +
+              '</section>' +
+              '<section class="hub-tm-sb-sec"><h4 class="hub-tm-sb-h"><i>5</i>Checklist<em class="hub-tm-sb-opt">optional</em></h4>' +
+                '<div class="hub-tm-sb-ckadd"><label class="hub-tm-sr-only" for="tm-sb-ck-new">New task</label><input type="text" class="hub-tm-input" id="tm-sb-ck-new" maxlength="200" placeholder="Add a task — Enter to add" autocomplete="off"><button type="button" class="hub-tm-btn hub-tm-btn--outline" id="tm-sb-ck-add">Add</button></div>' +
+                '<ul class="hub-tm-sb-cklist" id="tm-sb-cklist"></ul>' +
+                '<p class="hub-tm-hint" id="tm-sb-ck-cap"></p>' +
               '</section>' +
             '</div>' +
             '<div class="hub-tm-sb-pane hub-tm-sb-preview">' +
@@ -1708,6 +1721,112 @@ const timeManagementModule = (function () {
     out.todayPct = t ? Math.round(t.d / t.p * 100) : 0;
     return out;
   }
+
+  /* ============================================================
+     HABIT SERIES  ·  own streak for blocks made with "Track as a habit"
+     - A series = every block sharing a seriesId (one Set Time run). Days with no block in the series are
+       simply not scheduled: they neither add to nor break the streak.
+     - A scheduled day "hits" when its block(s) are all checked done.
+     - A missed day is forgiven by a free skip (HABIT_GRACE per Mon-Sun week); the streak holds but does not grow.
+       With no skip left it resets the streak. Best streak, done days and success rate are never reset.
+     - Today never breaks anything while it is still pending. Derived from the blocks → follows sync for free.
+     ============================================================ */
+  let _habMemo = {};
+  function _habitReset() { _habMemo = {}; }
+  function _habitInfo(sid) {
+    if (_habMemo[sid]) return _habMemo[sid];
+    const today = _todayStr(), byDay = {};
+    _timeBlocks.forEach(function (b) {
+      if (b.seriesId !== sid) return;
+      const d = byDay[b.date] || (byDay[b.date] = { n: 0, k: 0, title: b.title, tagId: b.tagId });
+      d.n++; if (b.done) d.k++;
+    });
+    const keys = Object.keys(byDay).sort();
+    const out = { sid: sid, days: [], state: {}, cur: 0, best: 0, done: 0, past: 0, skips: 0, resets: 0, left: 0,
+                  recentDone: 0, recentPast: 0, total: keys.length, title: '', tagId: 'work', first: keys[0] || '', last: keys[keys.length - 1] || '',
+                  todayState: 'none', graceLeft: HABIT_GRACE, rate: null, recent: null };
+    if (!keys.length) return (_habMemo[sid] = out);
+    out.title = byDay[keys[0]].title; out.tagId = byDay[keys[0]].tagId;
+    const used = {}, cutoff = _dateToStr(_addDays(_parseDate(today), -(HABIT_WINDOW - 1)));
+    let run = 0;
+    keys.forEach(function (ds) {
+      const d = byDay[ds], hit = d.k === d.n;
+      let st;
+      if (ds > today && !hit) { st = 'future'; out.left++; }
+      else if (hit) { st = 'hit'; run++; out.done++; out.past++; if (run > out.best) out.best = run; }
+      else if (ds === today) { st = 'pending'; }
+      else {
+        const wk = _dateToStr(_weekStart(ds));
+        out.past++;
+        if ((used[wk] || 0) < HABIT_GRACE) { used[wk] = (used[wk] || 0) + 1; st = 'skip'; out.skips++; }
+        else { st = 'miss'; run = 0; out.resets++; }
+      }
+      if (ds >= cutoff && (st === 'hit' || st === 'skip' || st === 'miss')) { out.recentPast++; if (st === 'hit') out.recentDone++; }
+      out.state[ds] = st; out.days.push({ ds: ds, st: st });
+    });
+    out.cur = run;
+    out.todayState = out.state[today] || 'none';
+    out.graceLeft = Math.max(0, HABIT_GRACE - (used[_dateToStr(_weekStart(today))] || 0));
+    out.rate = out.past ? Math.round(out.done / out.past * 100) : null;
+    out.recent = out.recentPast ? Math.round(out.recentDone / out.recentPast * 100) : null;
+    return (_habMemo[sid] = out);
+  }
+  /** Series still running (a block today or later), soonest first. */
+  function _habitList() {
+    const today = _todayStr(), seen = {}, list = [];
+    _timeBlocks.forEach(function (b) {
+      if (!b.seriesId || seen[b.seriesId]) return;
+      seen[b.seriesId] = true;
+      const h = _habitInfo(b.seriesId);
+      if (h.last >= today) list.push(h);
+    });
+    return list.sort(function (a, b) { return a.first < b.first ? -1 : a.first > b.first ? 1 : 0; }).slice(0, 3);
+  }
+  function _habitTip(h) {
+    return 'Habit · ' + h.title + ' — streak ' + h.cur + 'd · best ' + h.best + 'd · ' + h.done + '/' + h.total + ' days' + (h.rate === null ? '' : ' · ' + h.rate + '% so far');
+  }
+  function _habitCells() {
+    const list = _habitList();
+    return list.map(function (h) {
+      const tier = _tierAt(h.cur);
+      return '<span class="hub-tm-stat hub-tm-stat--streak hub-tm-stat--habit' + (h.cur > 0 ? ' is-live' : '') + '"' + (tier ? ' data-tier="' + tier.k + '"' : '') + ' title="' + _esc(_habitTip(h)) + '">' +
+        '<span class="hub-tm-stat-k">' + _esc((h.title || 'Habit').slice(0, 16)) + '</span>' +
+        '<strong>' + ICON.flame + '<span>' + h.cur + 'd</span>' + (h.todayState === 'hit' ? '<span class="hub-tm-streak-ok">Done</span>' : '') + '</strong></span>';
+    }).join('');
+  }
+  function _habitChip(h) {
+    return '<span class="hub-tm-tl-habit' + (h.cur > 0 ? ' is-live' : '') + '" title="' + _esc(_habitTip(h)) + '">' + ICON.flame + h.cur + 'd</span>';
+  }
+  /** Panel inside the block editor: streak, totals, one dot per scheduled day. */
+  function _habitPanelHtml(b) {
+    const h = _habitInfo(b.seriesId), tier = _tierAt(h.cur), nx = MS_TIERS.filter(function (x) { return x.n > h.cur; })[0];
+    const stat = function (v, k) { return '<div class="hub-tm-habit-stat"><b>' + v + '</b><span>' + k + '</span></div>'; };
+    const dots = h.days.map(function (d) {
+      const dd = _parseDate(d.ds), lbl = DAY_SHORT[dd.getDay()] + ', ' + _dateLabel(dd) + ' · ' + ({ hit: 'done', skip: 'free skip', miss: 'missed', pending: 'today', future: 'planned' }[d.st] || '');
+      return '<i class="hub-tm-hdot is-' + d.st + (d.ds === b.date ? ' is-here' : '') + '" title="' + _esc(lbl) + '"></i>';
+    }).join('');
+    let hint;
+    if (h.todayState === 'hit') hint = 'Done today. Keep it going.';
+    else if (h.graceLeft > 0) hint = 'Free skip left this week: ' + h.graceLeft + '. One missed day will not reset your streak.';
+    else hint = 'No free skip left this week. A missed day resets the streak — your best and totals stay.';
+    return '<div class="hub-tm-habit-top"' + (tier ? ' data-tier="' + tier.k + '"' : '') + '>' +
+        '<div class="hub-tm-habit-big">' + ICON.flame + '<b>' + h.cur + '</b><span>day streak</span>' + (tier ? '<em class="hub-tm-ms-tier">' + tier.name + '</em>' : '') + '</div>' +
+        (nx ? '<span class="hub-tm-habit-next">Next: ' + nx.name + ' in ' + (nx.n - h.cur) + 'd</span>' : '') +
+      '</div>' +
+      '<div class="hub-tm-habit-stats">' + stat(h.best + 'd', 'Best') + stat(h.done + '/' + h.total, 'Days done') + stat(h.rate === null ? '—' : h.rate + '%', 'All time') +
+        stat(h.recent === null ? '—' : h.recent + '%', 'Last ' + HABIT_WINDOW + 'd') + stat(h.skips + ' / ' + h.resets, 'Skips / resets') + '</div>' +
+      '<div class="hub-tm-hdots" role="img" aria-label="Habit days">' + dots + '</div>' +
+      '<p class="hub-tm-hint">' + hint + '</p>' +
+      '<button type="button" class="hub-tm-sb-link hub-tm-habit-stop" data-habit-stop="' + _esc(b.seriesId) + '">Stop tracking this habit</button>';
+  }
+  function _paintHabit(b) {
+    const sec = _el('#tm-details-habit-sec');
+    if (!sec) return;
+    if (!b || !b.seriesId) { sec.hidden = true; _el('#tm-details-habit').innerHTML = ''; return; }
+    _habitReset();
+    sec.hidden = false;
+    _el('#tm-details-habit').innerHTML = _habitPanelHtml(b);
+  }
   /** Progress ring drawn around the day number. Circle everywhere, square for the TUI skin (CSS picks). */
   function _ringSvg(pct) {
     const dash = ' pathLength=\"100\" stroke-dasharray=\"' + pct + ' 100\"';
@@ -1811,7 +1930,10 @@ const timeManagementModule = (function () {
     _habChip();
     const sk = _streakInfo();
     _msCheck(sk);
-    const lead = _streakCells(sk);
+    _habitReset();
+    const sepHtml = '<span class="hub-tm-pulse-sep"></span>', hc = _habitCells();
+    let lead = _streakCells(sk);
+    if (hc) lead = lead ? lead.slice(0, -sepHtml.length) + hc + sepHtml : hc + sepHtml;
     const per = _tagTimes();
     _applyTagTimes(per);
     const box = _el('#hub-tm-summary');
@@ -3926,6 +4048,17 @@ const timeManagementModule = (function () {
     });
     _el('#tm-details-title').addEventListener('input', _syncDetails);
     _el('#tm-details-done').addEventListener('change', _syncDetails);
+    _el('#tm-details-habit').addEventListener('click', function (e) {
+      const st = e.target.closest('[data-habit-stop]');
+      if (!st) return;
+      const sid = st.getAttribute('data-habit-stop');
+      _confirm('The blocks stay on your calendar, but this series stops having its own streak. Its best streak and totals are no longer shown.', function () {
+        _timeBlocks.forEach(function (x) { if (x.seriesId === sid) x.seriesId = ''; });
+        _scheduleSave(); _habitReset(); _paintHabit(_blockById(_editingId));
+        _renderGrid({ animate: false, scroll: false }); _tlRefresh(); _updateSummary();
+        _toast('Habit tracking stopped');
+      }, { title: 'Stop tracking this habit?', label: 'Stop tracking' });
+    });
     _el('.hub-tm-quick').addEventListener('click', function (e) {          // quick length: End = Start + n
       const q = e.target.closest('.hub-tm-quick-btn');
       if (!q) return;
@@ -3982,6 +4115,7 @@ const timeManagementModule = (function () {
     _el('#block-desc-editor').innerHTML = _sanitizeHtml(b.subtitle);
     _el('#tm-details-done').checked = !!b.done;
     _ckOpen(b);
+    _paintHabit(b);
     _el('#tm-details-habstate').textContent = !_habOn() ? '' : b.habiticaId ? (b.habDone ? 'Completed in Habitica. Un-checking takes the gold back.' : 'Linked to a Habitica To-Do due when this block ends.') : 'Not in Habitica yet — it joins your next sync.';
     _savedRange = null;
     _el('#hub-tm-details-tags').innerHTML = _allTags().map(function (t) {
@@ -4577,7 +4711,10 @@ const timeManagementModule = (function () {
     const now = new Date();
     let s = 9 * 60;
     if (_currentDate === _todayStr()) s = Math.min(DAY_MINS - CREATE_DUR, Math.ceil((now.getHours() * 60 + now.getMinutes() + 1) / 30) * 30);
-    _sb = { tag: _tagOrFallback(_activeTagId).id === FALLBACK_TAG.id ? 'work' : _activeTagId, days: [], weeks: 1, ov: {}, dur: CREATE_DUR };
+    _sb = { tag: _tagOrFallback(_activeTagId).id === FALLBACK_TAG.id ? 'work' : _activeTagId, days: [], weeks: 1, ov: {}, dur: CREATE_DUR, habit: false, ck: [] };
+    _el('#tm-sb-habit').checked = false;
+    _el('#tm-sb-ck-new').value = '';
+    _sbCkRender();
     _el('#tm-input-start').value = _toTime(s);
     _el('#tm-input-end').value = _sbTimeVal(s + CREATE_DUR);
     _el('#tm-sb-title').value = '';
@@ -4687,6 +4824,19 @@ const timeManagementModule = (function () {
       _sbRender();
     });
     _el('#tm-input-end').addEventListener('input', _sbRender);
+    _el('#tm-sb-habit').addEventListener('change', function () { _sb.habit = this.checked; });
+    const ckNew = _el('#tm-sb-ck-new');
+    const ckAdd = function () { _sbCkAdd(ckNew.value); ckNew.value = ''; ckNew.focus(); };
+    _el('#tm-sb-ck-add').addEventListener('click', ckAdd);
+    ckNew.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); ckAdd(); } });
+    ckNew.addEventListener('paste', function (e) {            // pasting several lines adds one task per line
+      const txt = (e.clipboardData || window.clipboardData).getData('text');
+      if (/\n/.test(txt)) { e.preventDefault(); _sbCkAdd(txt); }
+    });
+    _el('#tm-sb-cklist').addEventListener('click', function (e) {
+      const d = e.target.closest('[data-sb-ck-del]');
+      if (d) { _sb.ck.splice(parseInt(d.getAttribute('data-sb-ck-del'), 10), 1); _sbCkRender(); }
+    });
     _el('#tm-sb-title').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); _sbApply(); } });
     _el('#tm-day-checks').addEventListener('change', function () {
       _sb.days = _all('#tm-day-checks input:checked').map(function (i) { return parseInt(i.value, 10); });
@@ -4720,16 +4870,41 @@ const timeManagementModule = (function () {
     _el('#tm-btn-apply-time').addEventListener('click', _sbApply);
   }
 
+  /* Checklist for the blocks Set Time creates: every block gets its own unchecked copy of these tasks */
+  function _sbCkRender() {
+    const ul = _el('#tm-sb-cklist'), cap = _el('#tm-sb-ck-cap');
+    if (!ul) return;
+    ul.innerHTML = _sb.ck.map(function (t, i) {
+      return '<li class="hub-tm-sb-ckitem"><span class="hub-tm-sb-cktext">' + _esc(t) + '</span><button type="button" class="hub-tm-sb-ckdel" data-sb-ck-del="' + i + '" aria-label="Remove task ' + _esc(t) + '">&times;</button></li>';
+    }).join('');
+    cap.textContent = _sb.ck.length
+      ? 'Each block gets its own copy of ' + _tlPlural(_sb.ck.length, 'task') + ' (max ' + CK_MAX + '), all unchecked.'
+      : 'Optional. Tasks you add here are put in every block this creates.';
+  }
+  function _sbCkAdd(text) {
+    String(text || '').split(/\r?\n/).forEach(function (line) {
+      const t = line.replace(/^\s*(?:[-*•]|\[[ xX]?\])\s*/, '').replace(/\s+/g, ' ').trim().slice(0, 200);
+      if (t && _sb.ck.length < CK_MAX && _sb.ck.indexOf(t) === -1) _sb.ck.push(t);
+    });
+    _sbCkRender();
+  }
+  function _sbCkFlush() {                                   // a task typed but not yet added must not be lost on Apply
+    const n = _el('#tm-sb-ck-new');
+    if (n && n.value.trim()) { _sbCkAdd(n.value); n.value = ''; }
+  }
+
   function _sbApply() {
+    _sbCkFlush();
     const c = _sbCompute();
     if (!c.ok || !c.rows.length) return;
     const tagId = _tagOrFallback(_sb.tag).id === FALLBACK_TAG.id ? 'work' : _sb.tag;
     const title = (_el('#tm-sb-title').value || '').trim().slice(0, 120) || _tagOrFallback(tagId).label;
     const ids = []; let skipped = c.conflicts;
+    const sid = _sb.habit ? 'hb-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) : '';
     c.rows.forEach(function (r, i) {
       if (_overlap(r.date, r.s, r.e)) { skipped++; return; }
       const id = _newId(i);
-      _timeBlocks.push({ id: id, date: r.date, tagId: tagId, startTime: _toTime(r.s), endTime: _toTime(r.e), title: title, subtitle: '', createdAt: Date.now() });
+      _timeBlocks.push({ id: id, date: r.date, tagId: tagId, startTime: _toTime(r.s), endTime: _toTime(r.e), title: title, subtitle: '', createdAt: Date.now(), seriesId: sid, checklist: _sb.ck.map(function (t) { return _ckNewItem(t); }) });
       ids.push(id);
     });
     _closeModal(_el('#hub-tm-set-time-modal'));
@@ -4737,15 +4912,17 @@ const timeManagementModule = (function () {
     _scheduleSave();
     _renderGrid({ animate: false, scroll: false });
     _tlRefresh();
-    _toast('Added ' + _tlPlural(ids.length, 'block') + (skipped ? ' · ' + skipped + ' skipped (time already taken)' : ''), {
+    _toast('Added ' + _tlPlural(ids.length, 'block') + (sid ? ' · habit streak on' : '') + (skipped ? ' · ' + skipped + ' skipped (time already taken)' : ''), {
       action: 'Undo',
       onAction: function () {
         _timeBlocks = _timeBlocks.filter(function (b) { return ids.indexOf(b.id) === -1; });
         _scheduleSave();
         _renderGrid({ animate: false, scroll: false });
         _tlRefresh();
+        _updateSummary();
       }
     });
+    _updateSummary();
   }
 
   /* ============================================================
@@ -5099,6 +5276,7 @@ const timeManagementModule = (function () {
     else if (late) meta.push('<b class="hub-tm-tl-badge is-late">Overdue</b>');
     else if (next) meta.push('<b class="hub-tm-tl-badge is-next">Up next</b>');
     meta.push('<span>' + _esc(tag.label) + '</span>');
+    if (b.seriesId) meta.push(_habitChip(_habitInfo(b.seriesId)));
     if (c.flat) meta.push('<span>' + _esc(b.startTime) + '–' + _esc(b.endTime) + '</span>');
     meta.push('<span>' + _fmtDur(e - s) + '</span>');
     if (b.done && b.gp > 0) meta.push('<span class="hub-tm-tl-gold">+' + _fmtGold(b.gp) + ' gold</span>');
@@ -5177,6 +5355,7 @@ const timeManagementModule = (function () {
     const box = _el('#hub-tm-timeline-list'), sc = _el('#hub-tm-tl-scroll');
     if (!box || !sc) return;
     const type = _el('#tm-timeline-sort').value, today = _todayStr(), nm = _tlNowMins();
+    _habitReset();
     _tlSyncControls();
     const spot = _tlPaintSpot(today, nm);
     const list = _tlFilter(today, nm), blocks = _timelineBlocks(type, list);
