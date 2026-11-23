@@ -34,6 +34,9 @@ const timeManagementModule = (function () {
   const STREAK_MIN      = 0.5;   // a day counts when >= 50% of its planned minutes are done
   const STREAK_REST_GAP = 2;     // up to 2 empty days in a row do not break a streak
   const HABIT_GRACE     = 1;     // habit series: free skips per calendar week (Mon-Sun) before its own streak resets
+  const RM_MAX_DAYS     = 90;    // roadmap: longest plan
+  const RM_DOW          = [[1, 'Mon'], [2, 'Tue'], [3, 'Wed'], [4, 'Thu'], [5, 'Fri'], [6, 'Sat'], [0, 'Sun']];   // [Date.getDay(), label], Monday first
+  const RM_KEY          = 'hub_tm_rm_open';   // roadmap strip expanded? ('0' = collapsed), per device
   const HABIT_WINDOW    = 30;    // habit series: "recent" success rate looks at this many days
   const MS_KEY          = 'hub_tm_milestones';   // local mirror (per account) of the synced milestone map
   /* Reward milestones: streak length -> difficulty tier (edit freely; keep ascending) */
@@ -124,6 +127,7 @@ const timeManagementModule = (function () {
     template: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>',
     repeat:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="17,1 21,5 17,9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7,23 3,19 7,15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
     timeline: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><rect x="7" y="10" width="4" height="8" rx="1"/><rect x="13" y="6" width="4" height="12" rx="1"/></svg>',
+    road:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h12l-2.5 4L17 12H5"/></svg>',
     review:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V11M10 20V4M16 20v-6M22 20H2"/></svg>',
     focus:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg>',
     flame:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3c1 3.2 4.5 5.2 4.5 9.5A4.5 4.5 0 0 1 12 17a4.5 4.5 0 0 1-4.5-4.5c0-1.7.8-2.9 1.8-3.9.2 1.1.8 1.9 1.6 2.2C10.6 8.1 11 5.6 12 3Z"/><path d="M12 21a3 3 0 0 1-3-3"/></svg>',
@@ -375,6 +379,8 @@ const timeManagementModule = (function () {
       habDone: b.habDone === true,
       gp: +b.gp > 0 ? Math.min(9999, Math.round(+b.gp * 100) / 100) : 0,       // gold this block earned in Habitica
       focusMs: _clamp(Math.round(Number(b.focusMs) || 0), 0, 86400000),      // time really focused on this block (Focus session)
+      rmId: b.rmId ? String(b.rmId).replace(/[^\w-]/g, '').slice(0, 40) : '',                // roadmap this block belongs to …
+      rmDay: _clamp(parseInt(b.rmDay, 10) || 0, 0, RM_MAX_DAYS),                              // … and which day of it (1-based, 0 = none)
       seriesId: b.seriesId ? String(b.seriesId).replace(/[^\w-]/g, '').slice(0, 40) : '',   // habit series: blocks made together by Set Time with "Track as a habit"
       checklist: _normCk(b.checklist),
       ckDel: Array.isArray(b.ckDel) ? b.ckDel.map(String).slice(0, CK_MAX) : [],
@@ -715,6 +721,7 @@ const timeManagementModule = (function () {
           '<button type="button" class="hub-tm-btn hub-tm-btn--tool" id="tm-btn-templates" title="Templates" aria-label="Templates">' + ICON.template + '<span class="hub-tm-btn-label">Templates</span></button>' +
           '<button type="button" class="hub-tm-btn hub-tm-btn--tool" id="tm-btn-set-time" title="Set Time (repeat blocks)" aria-label="Set Time">' + ICON.repeat + '<span class="hub-tm-btn-label">Set Time</span></button>' +
           '<button type="button" class="hub-tm-btn hub-tm-btn--tool" id="tm-btn-timeline" title="Timeline" aria-label="Timeline">' + ICON.timeline + '<span class="hub-tm-btn-label">Timeline</span></button>' +
+          '<button type="button" class="hub-tm-btn hub-tm-btn--tool" id="tm-btn-roadmap" title="Roadmap · multi-day plan" aria-label="Roadmap">' + ICON.road + '<span class="hub-tm-btn-label">Roadmap</span></button>' +
           '<button type="button" class="hub-tm-btn hub-tm-btn--tool" id="tm-btn-review" title="Weekly review" aria-label="Weekly review">' + ICON.review + '<span class="hub-tm-btn-label">Review</span></button>' +
             '</div>' +
           '<button type="button" class="hub-tm-btn hub-tm-btn--outline hub-tm-btn--habitica" id="tm-btn-habitica" title="Habitica" aria-label="Habitica"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/><polyline points="8.5,12 11,14.5 15.5,9.5"/></svg><span class="hub-tm-btn-label">Habitica</span></button>' +
@@ -744,6 +751,8 @@ const timeManagementModule = (function () {
           '<button type="submit" class="hub-tm-btn hub-tm-btn--primary" id="hub-tm-btn-add-tag">Create tag</button>' +
         '</form>' +
       '</div>' +
+
+      '<section class="hub-tm-rm" id="hub-tm-roadmap" aria-label="Roadmap" hidden></section>' +
 
       '<form class="hub-tm-qp" id="hub-tm-qp" autocomplete="off">' +
         '<div class="hub-tm-qp-field">' +
@@ -1031,6 +1040,45 @@ const timeManagementModule = (function () {
         '</div>' +
       '</div>' +
 
+      /* ── Roadmap ── */
+      '<div class="hub-tm-overlay" id="hub-tm-roadmap-modal" aria-hidden="true">' +
+        '<div class="hub-tm-dialog hub-tm-dialog--lg hub-tm-dialog--rm" role="dialog" aria-modal="true" aria-labelledby="hub-tm-rm-heading">' +
+          '<div class="hub-tm-dialog-head"><h3 class="hub-tm-dialog-title" id="hub-tm-rm-heading">Roadmap</h3><button type="button" class="hub-tm-dialog-close" data-close aria-label="Close">&times;</button></div>' +
+          '<div class="hub-tm-dialog-body hub-tm-rm-form">' +
+            '<div class="hub-tm-field"><label for="tm-rm-name">Name</label><input type="text" class="hub-tm-input" id="tm-rm-name" maxlength="60" placeholder="e.g. 30 days · Civil Law" autocomplete="off"></div>' +
+            '<div class="hub-tm-rm-row">' +
+              '<div class="hub-tm-field"><label for="tm-rm-start">Day 1 is</label><input type="date" class="hub-tm-input" id="tm-rm-start"></div>' +
+              '<div class="hub-tm-field"><label for="tm-rm-time">Daily start</label><input type="time" class="hub-tm-input" id="tm-rm-time" value="19:30"></div>' +
+              '<div class="hub-tm-field"><label for="tm-rm-dur">Length</label><select class="hub-tm-input" id="tm-rm-dur">' + [30, 45, 60, 90, 120, 150, 180, 240].map(function (m) { return '<option value="' + m + '">' + _fmtDur(m) + '</option>'; }).join('') + '</select></div>' +
+              '<div class="hub-tm-field"><label for="tm-rm-tag">Tag</label><select class="hub-tm-input" id="tm-rm-tag"></select></div>' +
+            '</div>' +
+            '<div class="hub-tm-rm-row hub-tm-rm-row--sched">' +
+              '<div class="hub-tm-field"><span class="hub-tm-rm-lab" id="tm-rm-dow-l">Study days</span><div class="hub-tm-rm-dows" id="tm-rm-dow" role="group" aria-labelledby="tm-rm-dow-l">' +
+                RM_DOW.map(function (d) { return '<label class="hub-tm-rm-dow"><input type="checkbox" data-dow="' + d[0] + '" checked><span>' + d[1] + '</span></label>'; }).join('') + '</div></div>' +
+              '<div class="hub-tm-field"><label for="tm-rm-due">Deadline <em class="hub-tm-sb-opt">optional</em></label><input type="date" class="hub-tm-input" id="tm-rm-due"></div>' +
+            '</div>' +
+            '<details class="hub-tm-rm-tools"><summary>Import · AI prompt · Export</summary><div class="hub-tm-rm-toolgrid">' +
+              '<div class="hub-tm-rm-tool"><h5>Import</h5><p>Paste rows from Excel or Google Sheets straight into the Plan box, or load a file (.csv .tsv .txt .md .json). You can also drop a file on the box.</p>' +
+                '<input type="file" id="tm-rm-file" accept=".csv,.tsv,.txt,.md,.json,text/plain,text/csv,application/json" hidden><button type="button" class="hub-tm-btn hub-tm-btn--outline" id="tm-rm-import">Choose file…</button></div>' +
+              '<div class="hub-tm-rm-tool"><h5>Ask an AI to draft it</h5><input type="text" class="hub-tm-input" id="tm-rm-ai-topic" maxlength="120" placeholder="Subject, e.g. Civil Law: contracts" aria-label="Subject" autocomplete="off">' +
+                '<div class="hub-tm-rm-aigrid"><label class="hub-tm-rm-mini"><span>Days</span><input type="number" class="hub-tm-input" id="tm-rm-ai-days" min="1" max="90" value="30"></label>' +
+                '<label class="hub-tm-rm-mini"><span>Phases</span><input type="number" class="hub-tm-input" id="tm-rm-ai-phases" min="1" max="12" value="5"></label>' +
+                '<label class="hub-tm-rm-mini"><span>Language</span><select class="hub-tm-input" id="tm-rm-ai-lang"><option value="Vietnamese">Tiếng Việt</option><option value="English">English</option></select></label></div>' +
+                '<button type="button" class="hub-tm-btn hub-tm-btn--outline" id="tm-rm-ai-copy">Copy prompt</button><p>Paste it into any AI, add your syllabus at the end, then paste the answer into the Plan box.</p></div>' +
+              '<div class="hub-tm-rm-tool"><h5>Export</h5><p>Share the plan or reuse it next semester.</p><div class="hub-tm-rm-btnrow">' +
+                '<button type="button" class="hub-tm-btn hub-tm-btn--outline" id="tm-rm-copy-text">Copy text</button><button type="button" class="hub-tm-btn hub-tm-btn--outline" id="tm-rm-copy-json">Copy JSON</button><button type="button" class="hub-tm-btn hub-tm-btn--outline" id="tm-rm-download">Download .json</button></div></div>' +
+            '</div></details>' +
+            '<div class="hub-tm-field">' +
+              '<div class="hub-tm-rm-planhead"><label for="tm-rm-text">Plan</label><button type="button" class="hub-tm-sb-link" id="tm-rm-starter">Load Civil Law starter</button></div>' +
+              '<textarea class="hub-tm-input hub-tm-rm-text" id="tm-rm-text" rows="13" spellcheck="false" aria-describedby="tm-rm-help tm-rm-status"></textarea>' +
+              '<p class="hub-tm-hint" id="tm-rm-help">One line per day: <code>Title | task | task | task</code>. A line starting with <code>#</code> begins a phase. Add <code>@20:00-22:00</code>, <code>@20:00</code> or <code>@90m</code> after a title to give that day its own time. Blocks already on your calendar are not changed when you save.</p>' +
+              '<p class="hub-tm-rm-status" id="tm-rm-status" role="status"></p>' +
+            '</div>' +
+          '</div>' +
+          '<div class="hub-tm-dialog-foot hub-tm-rm-foot"><button type="button" class="hub-tm-btn hub-tm-btn--outline hub-tm-rm-del" id="tm-rm-delete" hidden>Delete roadmap</button><span class="hub-tm-rm-spacer"></span><button type="button" class="hub-tm-btn hub-tm-btn--outline" data-close>Cancel</button><button type="button" class="hub-tm-btn hub-tm-btn--primary" id="tm-rm-save">Save roadmap</button></div>' +
+        '</div>' +
+      '</div>' +
+
       /* ── Set Time ── */
       '<div class="hub-tm-overlay" id="hub-tm-set-time-modal" aria-hidden="true">' +
         '<div class="hub-tm-dialog hub-tm-dialog--st" role="dialog" aria-modal="true" aria-labelledby="hub-tm-settime-heading">' +
@@ -1178,6 +1226,7 @@ const timeManagementModule = (function () {
     _bindConfirm();
     _bindSettings();
     _bindTemplates();
+    _bindRoadmap();
     _bindSetTime();
     _bindTimeline();
     _bindToast();
@@ -1931,6 +1980,7 @@ const timeManagementModule = (function () {
     const sk = _streakInfo();
     _msCheck(sk);
     _habitReset();
+    _renderRoadmap();
     const sepHtml = '<span class="hub-tm-pulse-sep"></span>', hc = _habitCells();
     let lead = _streakCells(sk);
     if (hc) lead = lead ? lead.slice(0, -sepHtml.length) + hc + sepHtml : hc + sepHtml;
@@ -4941,8 +4991,10 @@ const timeManagementModule = (function () {
   }
   function _renderTemplates() {
     const list = _el('#hub-tm-template-list');
-    if (!_templates.length) { list.innerHTML = '<p class="hub-tm-empty">No saved templates yet.<br>Plan a day, then save it with a name below.</p>'; return; }
-    list.innerHTML = _templates.map(function (t, i) {
+    const vis = _templates.map(function (t, i) { return [t, i]; }).filter(function (p) { return p[0].kind !== 'roadmap'; });   // roadmaps live in the strip, not here
+    if (!vis.length) { list.innerHTML = '<p class="hub-tm-empty">No saved templates yet.<br>Plan a day, then save it with a name below.</p>'; return; }
+    list.innerHTML = vis.map(function (p) {
+      const t = p[0], i = p[1];
       const n = (t.blocks || []).length;
       return '<div class="hub-tm-template-item"><div><span class="hub-tm-template-name">' + _esc(t.name) + '</span><span class="hub-tm-template-count">' + n + ' block' + (n !== 1 ? 's' : '') + '</span></div>' +
              '<div class="hub-tm-template-actions"><button type="button" class="hub-tm-btn hub-tm-btn--primary" data-tpl-load="' + i + '">Load</button>' +
@@ -4993,6 +5045,739 @@ const timeManagementModule = (function () {
     const existing = _blocksForDate(_currentDate).length;
     if (existing) _confirm('Replace the ' + existing + ' block' + (existing > 1 ? 's' : '') + ' on this day with “' + t.name + '”?', run, { title: 'Replace this day?', label: 'Replace' });
     else run();
+  }
+
+  /* ============================================================
+     ROADMAP  ·  multi-day plan strip (e.g. 30 days, grouped in phases)
+     - The plan (name, start date, daily time/length, study weekdays, rest days, deadline, phases, one title + checklist
+       per day) is stored as a template with kind:'roadmap', so it syncs with the account exactly like templates do.
+     - Blocks made from it carry rmId + rmDay. Progress is DERIVED from those blocks (block done, or its checklist
+       fully ticked = day done) → follows sync, Habitica and the Timeline for free.
+     - Day N is the Nth STUDY date from the start: weekdays you switch off and rest days you insert are skipped.
+     - Clicking today's cell fills the day in one click (time slot + title + checklist); other cells open a card.
+     - Status is never colour-only: done = ✓ + solid, partial = fill level, planned = dashed + •, overdue = hatch + !.
+     - Import: paste from Excel / Sheets, CSV / TSV / Markdown-table / AI output are all normalised to the plan text.
+     ============================================================ */
+  const RM_PH = 6;                                   // phase colours rotate through --tm-ph-0 … --tm-ph-5
+  const RM_CK_LEARN  = ['Đọc & ghi chú lý thuyết', 'Làm 2–3 câu hỏi / tình huống', 'Tóm tắt 5 dòng cuối buổi'];
+  const RM_CK_REVIEW = ['Lập sơ đồ hệ thống kiến thức', 'Giải 3 tình huống tổng hợp', 'Ghi lại các lỗi sai cần nhớ'];
+  const RM_STARTER = [                                // "*" = review day (uses RM_CK_REVIEW); everything here is editable in the dialog
+    ['Tuần 1 · Giao dịch dân sự', ['Khái niệm & đặc điểm của giao dịch dân sự', 'Điều kiện có hiệu lực của giao dịch dân sự', 'Hình thức & phân loại giao dịch dân sự', 'Giao dịch dân sự vô hiệu: các căn cứ', 'Hậu quả pháp lý của giao dịch dân sự vô hiệu', 'Chủ thể & đại diện trong giao dịch dân sự', '*Ôn tập tuần 1 · tình huống tổng hợp']],
+    ['Tuần 2 · Hợp đồng & Đặt cọc', ['Khái niệm, đặc điểm & phân loại hợp đồng', 'Giao kết hợp đồng: đề nghị & chấp nhận', 'Nội dung & hiệu lực của hợp đồng', 'Đặt cọc: khái niệm & hậu quả pháp lý', 'Đặt cọc so với các biện pháp bảo đảm khác', 'Thực hiện, sửa đổi & chấm dứt hợp đồng', '*Ôn tập tuần 2 · tình huống tổng hợp']],
+    ['Tuần 3 · Vi phạm & Phạt', ['Trách nhiệm dân sự do vi phạm nghĩa vụ', 'Phạt vi phạm hợp đồng', 'Bồi thường thiệt hại do vi phạm hợp đồng', 'Phạt vi phạm & bồi thường thiệt hại: quan hệ và áp dụng', 'Lãi chậm trả & các hậu quả pháp lý khác', 'Miễn trừ trách nhiệm: sự kiện bất khả kháng', '*Ôn tập tuần 3 · tình huống tổng hợp']],
+    ['Tuần 4 · BTTH ngoài hợp đồng', ['Khái niệm & căn cứ phát sinh BTTH ngoài hợp đồng', 'Nguyên tắc & năng lực chịu trách nhiệm bồi thường', 'BTTH do người của pháp nhân & nguồn nguy hiểm cao độ gây ra', 'Xác định thiệt hại & mức bồi thường', '*Ôn tập phần BTTH · tình huống tổng hợp']],
+    ['Ngày 27–30 · Tổng hợp', ['*Hệ thống hóa toàn bộ kiến thức: sơ đồ tư duy', '*Làm đề / tình huống tổng hợp 1', '*Làm đề / tình huống tổng hợp 2 & sửa lỗi sai', '*Rà soát cuối & chốt bài']]
+  ];
+  let _rm = { sel: 0, pickOn: '', scrolled: '' };
+
+  /* ---- Plan text: parse · normalise (import) · serialise ---- */
+  function _rmStarterText() {
+    const out = [];
+    RM_STARTER.forEach(function (p) {
+      out.push('# ' + p[0]);
+      p[1].forEach(function (d) { const rev = d.charAt(0) === '*'; out.push([rev ? d.slice(1) : d].concat(rev ? RM_CK_REVIEW : RM_CK_LEARN).join(' | ')); });
+    });
+    return out.join('\n');
+  }
+  /** Delimited text (TSV from a spreadsheet paste, CSV file) → rows; understands "quoted, cells" and "" escapes. */
+  function _rmParseDelimited(text, delim) {
+    const rows = []; let row = [], cell = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text.charAt(i);
+      if (q) { if (ch === '"') { if (text.charAt(i + 1) === '"') { cell += '"'; i++; } else q = false; } else cell += ch; }
+      else if (ch === '"' && cell === '') q = true;
+      else if (ch === delim) { row.push(cell); cell = ''; }
+      else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text.charAt(i + 1) === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += ch;
+    }
+    if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+    return rows;
+  }
+  function _rmDelim(text) {
+    const first = String(text).split(/\r?\n/)[0] || '', c = { ',': 0, ';': 0, '\t': 0 };
+    for (let i = 0; i < first.length; i++) if (c.hasOwnProperty(first.charAt(i))) c[first.charAt(i)]++;
+    return c['\t'] >= c[','] && c['\t'] >= c[';'] && c['\t'] ? '\t' : c[';'] > c[','] ? ';' : ',';
+  }
+  const RM_HEAD = {
+    day:   /^(day|ngày|ngay|#|no\.?|stt|số|so)$/i,
+    phase: /^(phase|cụm|cum|giai đoạn|giai doan|tuần|tuan|week|stage|module)$/i,
+    title: /^(title|tiêu đề|tieu de|chủ đề|chu de|topic|nội dung|noi dung|day title|bài|bai|subject)$/i,
+    task:  /^(tasks?|checklist|việc|viec|công việc|cong viec|todo|to-do|nhiệm vụ|nhiem vu)\s*\d*$/i
+  };
+  /** Table rows → plan text. Header row optional (Day / Phase / Title / Task…); a Phase column becomes "# …" lines. */
+  function _rmRowsToText(rows) {
+    rows = rows.map(function (r) { return r.map(function (c) { return String(c == null ? '' : c).replace(/\s+/g, ' ').replace(/\|/g, '/').trim(); }); })
+               .filter(function (r) { return r.some(Boolean); });
+    if (!rows.length) return '';
+    const kind = function (c) { for (const k in RM_HEAD) if (RM_HEAD[k].test(c)) return k; return ''; };
+    const first = rows[0].map(kind);
+    const hasHead = first.indexOf('title') > -1 || first.indexOf('task') > -1 || (first.indexOf('phase') > -1 && first.indexOf('day') > -1);
+    let role, body;
+    if (hasHead) { role = first.slice(); body = rows.slice(1); }
+    else {
+      body = rows; role = rows[0].map(function () { return ''; });
+      if (body.filter(function (r) { return /^\d{1,3}$/.test(r[0]); }).length >= body.length / 2) role[0] = 'day';
+    }
+    let ti = role.indexOf('title');
+    if (ti < 0) { ti = 0; while (ti < role.length - 1 && role[ti]) ti++; }
+    role[ti] = 'title';
+    const pi = role.indexOf('phase'), out = [];
+    let lastPh = '', emitted = '';
+    body.forEach(function (r) {
+      if (pi > -1 && r[pi]) lastPh = r[pi];
+      const title = r[ti];
+      if (!title) return;                                  // a row with only a phase label just sets the phase
+      if (pi > -1 && lastPh && lastPh !== emitted) { out.push('# ' + lastPh); emitted = lastPh; }
+      const tasks = r.filter(function (c, i) { return c && i !== ti && role[i] !== 'phase' && role[i] !== 'day'; });
+      out.push([title].concat(tasks).join(' | '));
+    });
+    return out.join('\n');
+  }
+  /** Whatever was pasted/imported (spreadsheet cells, Markdown table, AI answer in a code fence) → plain plan text. */
+  function _rmNormalize(text) {
+    let t = String(text || '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+    t = t.split('\n').filter(function (l) { return !/^\s*```/.test(l); }).join('\n');
+    if (t.indexOf('\t') > -1 && t.indexOf('|') === -1) return _rmRowsToText(_rmParseDelimited(t, '\t')) || t;
+    const lines = t.split('\n').filter(function (l) { return l.trim(); });
+    const md = lines.filter(function (l) { return /^\s*\|.*\|\s*$/.test(l); });
+    if (md.length >= 2 && md.length >= lines.length * 0.6) {
+      const rows = md.map(function (l) { return l.trim().replace(/^\||\|$/g, '').split('|').map(function (c) { return c.trim(); }); })
+                     .filter(function (r) { return !r.every(function (c) { return !c || /^:?-{2,}:?$/.test(c); }); });
+      return _rmRowsToText(rows) || t;
+    }
+    return t;
+  }
+  /** "Title @19:30-21:30" / "@20:00" / "@90m" / "@2h" → per-day time and/or length. Unknown @words stay in the title. */
+  function _rmTimeTokens(title) {
+    let s, d;
+    const t = title.replace(/\s*@(\S+)/g, function (m, tok) {
+      let x;
+      if ((x = /^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/.exec(tok))) { const a = +x[1] * 60 + +x[2], b = +x[3] * 60 + +x[4]; if (a < DAY_MINS && b > a && b <= DAY_MINS) { s = a; d = b - a; return ''; } }
+      else if ((x = /^(\d{1,2}):(\d{2})$/.exec(tok))) { const a = +x[1] * 60 + +x[2]; if (a < DAY_MINS) { s = a; return ''; } }
+      else if ((x = /^(\d+(?:\.\d+)?)h(?:(\d{1,2})m?)?$/i.exec(tok))) { d = Math.round(parseFloat(x[1]) * 60 + (+x[2] || 0)); return ''; }
+      else if ((x = /^(\d+)m$/i.exec(tok))) { d = +x[1]; return ''; }
+      return m;
+    }).trim();
+    if (d !== undefined) d = _clamp(d, MIN_DUR, 480);
+    return { t: t, s: s, d: d };
+  }
+  /** Plan text → { phases:[{name,from,to}], days:[{t,ck[],s?,d?}], errors[] }.  "# phase" lines + one "title | task | task" line per day. */
+  function _rmParse(text) {
+    const out = { phases: [], days: [], errors: [] };
+    let cur = null;
+    _rmNormalize(text).split('\n').forEach(function (raw, li) {
+      const line = raw.trim();
+      if (!line || line.slice(0, 2) === '//') return;
+      if (line.charAt(0) === '#') {
+        cur = { name: line.replace(/^#+\s*/, '').replace(/\*\*|__/g, '').slice(0, 60) || ('Phase ' + (out.phases.length + 1)), from: out.days.length + 1, to: out.days.length };
+        out.phases.push(cur);
+        return;
+      }
+      if (out.days.length >= RM_MAX_DAYS) { if (!out.errors.length) out.errors.push('A roadmap can have at most ' + RM_MAX_DAYS + ' days.'); return; }
+      const parts = line.replace(/\*\*|__|`/g, '').replace(/^[-*•]\s+/, '').split('|').map(function (s) { return s.replace(/\s+/g, ' ').trim(); });
+      const tk = _rmTimeTokens(parts[0].replace(/^(?:day|ngày)?\s*\d{1,2}\s*[.:)]\s+/i, ''));
+      if (!tk.t) { out.errors.push('Line ' + (li + 1) + ': a day needs a title before the first “|”.'); return; }
+      if (!cur) { cur = { name: 'Phase 1', from: 1, to: 0 }; out.phases.push(cur); }
+      const day = { t: tk.t.slice(0, 100), ck: parts.slice(1).filter(Boolean).slice(0, 10).map(function (t) { return t.slice(0, 200); }) };
+      if (tk.s !== undefined) day.s = tk.s;
+      if (tk.d !== undefined) day.d = tk.d;
+      out.days.push(day);
+      cur.to = out.days.length;
+    });
+    out.phases = out.phases.filter(function (p) { return p.to >= p.from; });
+    if (!out.days.length && !out.errors.length) out.errors.push('Add at least one day: one line per day.');
+    return out;
+  }
+  function _rmDayTokens(d) {
+    if (d.s !== undefined && d.d !== undefined) return ' @' + _toTime(d.s) + '-' + _toTime(Math.min(DAY_MINS, d.s + d.d));
+    if (d.s !== undefined) return ' @' + _toTime(d.s);
+    if (d.d !== undefined) return ' @' + d.d + 'm';
+    return '';
+  }
+  function _rmToText(R) {
+    const out = [];
+    R.phases.forEach(function (p) {
+      out.push('# ' + p.name);
+      for (let n = p.from; n <= p.to; n++) { const d = R.days[n - 1]; if (d) out.push([d.t + _rmDayTokens(d)].concat(d.ck || []).join(' | ')); }
+    });
+    return out.join('\n');
+  }
+  /** Shareable JSON (no start date / rest days / deadline: those belong to one person's run). */
+  function _rmExport(r) {
+    const R = r.rm;
+    return JSON.stringify({ v: 1, name: r.name, time: R.time, dur: R.dur, tagId: R.tagId, dow: R.dow, phases: R.phases, days: R.days }, null, 2);
+  }
+  function _rmFromJson(o) {
+    if (!o || typeof o !== 'object' || !Array.isArray(o.days) || !o.days.length) return null;
+    const days = o.days.slice(0, RM_MAX_DAYS).map(function (d) {
+      const x = { t: String((d && (d.t || d.title)) || '').slice(0, 100), ck: (Array.isArray(d && (d.ck || d.checklist)) ? (d.ck || d.checklist) : []).map(function (c) { return String(c).slice(0, 200); }).filter(Boolean).slice(0, 10) };
+      if (d && Number.isFinite(+d.s) && d.s !== null && d.s !== '') x.s = _clamp(+d.s, 0, DAY_MINS - MIN_DUR);
+      if (d && Number.isFinite(+d.d) && d.d !== null && d.d !== '') x.d = _clamp(+d.d, MIN_DUR, 480);
+      return x;
+    });
+    if (days.some(function (d) { return !d.t; })) return null;
+    let phases = Array.isArray(o.phases) ? o.phases.map(function (p) { return { name: String((p && p.name) || '').slice(0, 60) || 'Phase', from: Math.max(1, +p.from || 1), to: Math.min(days.length, +p.to || days.length) }; }).filter(function (p) { return p.to >= p.from; }) : [];
+    if (!phases.length) phases = [{ name: 'Phase 1', from: 1, to: days.length }];
+    return { name: o.name ? String(o.name).slice(0, 60) : '', time: o.time, dur: o.dur, tagId: o.tagId, dow: Array.isArray(o.dow) && o.dow.length === 7 ? o.dow.map(function (v) { return v ? 1 : 0; }) : null, phases: phases, days: days };
+  }
+  /** A ready-to-paste prompt: any AI can turn a syllabus into text this dialog understands. */
+  function _rmPrompt(o) {
+    const N = _clamp(parseInt(o.days, 10) || 30, 1, RM_MAX_DAYS), P = _clamp(parseInt(o.phases, 10) || 5, 1, 12);
+    return 'Create a ' + N + '-day study roadmap' + (o.topic ? ' for: ' + o.topic : '') + '.\n' +
+      'Write it in ' + (o.lang || 'Vietnamese') + '.\n\n' +
+      'Output ONLY plain text in exactly this format. No explanations, no Markdown, no numbering, no code block:\n\n' +
+      '# Phase name\n' +
+      'Day title | task 1 | task 2 | task 3\n' +
+      'Day title | task 1 | task 2 | task 3\n' +
+      '# Next phase name\n' +
+      'Day title | task 1 | task 2 | task 3\n\n' +
+      'Rules:\n' +
+      '- Exactly ' + N + ' day lines, grouped into ' + P + ' phases. A line starting with # starts a phase.\n' +
+      '- One line per day: a short title (max 80 characters), then exactly 3 short, concrete, checkable tasks separated by " | ".\n' +
+      '- End every phase with a review day. Make the last phase a final synthesis / practice-test phase.\n' +
+      '- Optional: add "@19:30-21:30" or "@90m" after a day title when that day needs a different time.\n' +
+      '- Never use the characters "|" or "#" inside a title or a task.\n\n' +
+      'My syllabus / outline:\n[paste it here]\n';
+  }
+
+  /* ---- Plan data: dates · progress ---- */
+  function _rmGet() {
+    for (let i = 0; i < _templates.length; i++) {
+      const t = _templates[i], R = t && t.kind === 'roadmap' && t.rm;
+      if (R && Array.isArray(R.days) && R.days.length && Array.isArray(R.phases) && R.phases.length && _isDateStr(R.start)) return t;
+    }
+    return null;
+  }
+  function _rmDur(R) { return _clamp(parseInt(R.dur, 10) || 120, MIN_DUR, 480); }
+  function _rmStartMins(R) { return /^\d{1,2}:\d{2}$/.test(R.time || '') ? _clamp(_toMins(R.time), 0, DAY_MINS - MIN_DUR) : 19 * 60 + 30; }
+  function _rmDayStart(R, day) { return day && day.s !== undefined ? _clamp(day.s, 0, DAY_MINS - MIN_DUR) : _rmStartMins(R); }
+  function _rmDayDur(R, day) { return day && day.d !== undefined ? _clamp(day.d, MIN_DUR, 480) : _rmDur(R); }
+  function _rmPct(b) { if (b.done) return 100; const l = b.checklist || []; return l.length ? Math.round(l.filter(function (i) { return i.done; }).length / l.length * 100) : 0; }
+  function _rmDowOn(R) { return Array.isArray(R.dow) && R.dow.length === 7 && R.dow.some(function (v) { return v; }); }
+  /** Is `ds` a study date? (weekday switched on and not an inserted rest day) */
+  function _rmStudy(R, ds) {
+    if (R.skip && R.skip.indexOf(ds) > -1) return false;
+    return !_rmDowOn(R) || !!R.dow[_parseDate(ds).getDay()];
+  }
+  /** The date of every day of the plan, in order. */
+  function _rmDates(R, N) {
+    N = N || R.days.length;
+    const out = []; let d = _parseDate(R.start), guard = 0;
+    while (out.length < N && guard++ < N * 14 + 800) { const ds = _dateToStr(d); if (_rmStudy(R, ds)) out.push(ds); d = _addDays(d, 1); }
+    while (out.length < N) { out.push(_dateToStr(d)); d = _addDays(d, 1); }
+    return out;
+  }
+
+  /** Free slot of `dur` minutes on `date`, as close to `pref` as possible (tries earlier first at equal distance). */
+  function _rmSlot(date, pref, dur) {
+    const maxS = DAY_MINS - dur;
+    pref = _clamp(Math.round(pref / SNAP) * SNAP, 0, maxS);
+    for (let d = 0; d <= DAY_MINS; d += SNAP) {
+      const c = [pref - d, pref + d];
+      for (let k = 0; k < 2; k++) {
+        const s = c[k];
+        if (s >= 0 && s <= maxS && !_overlap(date, s, s + dur)) return s;
+        if (d === 0) break;
+      }
+    }
+    return null;
+  }
+  function _rmCompute(r) {
+    const R = r.rm, N = R.days.length, today = _todayStr(), dates = _rmDates(R, N);
+    const before = dates.filter(function (d) { return d < today; }).length, todayN = dates.indexOf(today) + 1;   // todayN 0 = rest day / outside the plan
+    const best = {};
+    _timeBlocks.forEach(function (b) {
+      if (b.rmId !== r.id || !(b.rmDay >= 1 && b.rmDay <= N)) return;
+      if (!best[b.rmDay] || _rmPct(b) > _rmPct(best[b.rmDay])) best[b.rmDay] = b;
+    });
+    const phases = R.phases.map(function (p, k) { return { k: k, name: String(p.name || ('Phase ' + (k + 1))), from: Math.max(1, +p.from || 1), to: Math.min(N, +p.to || 1), n: 0, done: 0, sum: 0 }; });
+    const phaseOf = [];
+    phases.forEach(function (p) { for (let n = p.from; n <= p.to; n++) phaseOf[n] = p.k; });
+    const C = { r: r, R: R, N: N, today: today, dates: dates, before: before, todayN: todayN, started: dates[0] <= today, ended: dates[N - 1] < today,
+                days: [], phases: phases, done: 0, behind: 0, ahead: 0, mins: 0, pct: 0, due: null };
+    let sum = 0;
+    for (let n = 1; n <= N; n++) {
+      const b = best[n] || null, date = dates[n - 1], at = b ? b.date : date, pct = b ? _rmPct(b) : 0;
+      const state = pct >= 100 ? 'done' : pct > 0 ? 'part' : b ? 'plan' : 'empty';
+      const late = state !== 'done' && at < today;
+      const k = phaseOf[n] !== undefined ? phaseOf[n] : phases.length - 1, ph = phases[k];
+      ph.n++; ph.sum += pct; sum += pct;
+      if (state === 'done') { C.done++; ph.done++; if (b) C.mins += Math.max(0, _toMins(b.endTime) - _toMins(b.startTime)); if (n > before + (todayN ? 1 : 0)) C.ahead++; }
+      else if (n <= before) C.behind++;
+      C.days.push({ n: n, date: date, at: at, b: b, pct: pct, state: state, late: late, k: k, title: R.days[n - 1].t });
+    }
+    C.pct = Math.round(sum / N);
+    const rem = N - C.done;
+    if (_isDateStr(R.deadline) && rem > 0) {                  // deadline: are there enough study days left to finish?
+      const left = Math.round((_parseDate(R.deadline) - _parseDate(today)) / 86400000);
+      const todayDone = todayN && C.days[todayN - 1].state === 'done';
+      let from = _parseDate(today), avail = 0, guard = 0;
+      if (todayDone || !_rmStudy(R, today)) from = _addDays(from, 1);
+      for (let d = from; _dateToStr(d) <= R.deadline && guard < 900; d = _addDays(d, 1), guard++) if (_rmStudy(R, _dateToStr(d))) avail++;
+      C.due = { date: R.deadline, left: left, rem: rem, avail: avail, short: left < 0 ? rem : Math.max(0, rem - avail) };
+    }
+    return C;
+  }
+  function _rmDefault(C) {
+    if (C.todayN) return C.todayN;
+    if (!C.started) return 1;
+    if (C.ended) { const open = C.days.filter(function (d) { return d.state !== 'done'; })[0]; return open ? open.n : C.N; }
+    return Math.min(C.N, C.before + 1);                       // rest day: the next study day
+  }
+
+  /* ---- Rendering ---- */
+  function _rmStatusText(d, C) {
+    const bits = [d.state === 'done' ? 'Completed' : d.state === 'part' ? 'In progress, ' + d.pct + '% done' : d.state === 'plan' ? 'Planned' : 'Not planned yet'];
+    if (d.late) bits.push('Overdue');
+    if (d.date === C.today) bits.push('Today');
+    return bits.join(', ');
+  }
+  function _rmHeadHtml(C, open) {
+    const N = C.N;
+    let now, pace = '', kind = 'ok';
+    const gap = function (a) { return Math.round((_parseDate(a) - _parseDate(C.today)) / 86400000); };
+    if (!C.started) { now = 'Starts ' + _dateLabel(_parseDate(C.dates[0])); pace = 'Starts in ' + gap(C.dates[0]) + 'd'; kind = 'wait'; }
+    else if (C.ended) { now = 'Ended ' + _dateLabel(_parseDate(C.dates[N - 1])); kind = C.done >= N ? 'ok' : 'late'; pace = C.done >= N ? 'Complete' : (N - C.done) + ' unfinished'; }
+    else {
+      now = C.todayN ? 'Day ' + C.todayN + ' / ' + N + ' · ' + C.phases[C.days[C.todayN - 1].k].name
+                     : 'Rest day · next: Day ' + (C.before + 1) + ' on ' + _dateLabel(_parseDate(C.dates[C.before]));
+      if (C.behind) { pace = C.behind + ' behind'; kind = 'late'; } else if (C.ahead) pace = C.ahead + ' ahead'; else pace = 'On track';
+    }
+    let due = '';
+    if (C.due) {
+      const u = C.due, bad = u.short > 0 || u.left < 0;
+      due = '<span class="hub-tm-rm-due' + (bad ? ' is-late' : '') + '" title="' + _esc(u.avail + ' study days left before the deadline, ' + u.rem + ' days to finish') + '">Due ' + _esc(_dateLabel(_parseDate(u.date))) + ' · ' +
+        (u.left < 0 ? 'overdue ' + (-u.left) + 'd' : u.left + 'd left') + (u.left >= 0 && u.short > 0 ? ' · short by ' + u.short : '') + '</span>';
+    }
+    const segs = C.phases.filter(function (p) { return p.n; }).map(function (p) {
+      const pc = Math.round(p.sum / p.n);
+      return '<i class="hub-tm-rm-segp hub-tm-rm-ph--' + (p.k % RM_PH) + '" style="flex:' + p.n + ';--f:' + pc + '%" title="' + _esc(p.name + ' · ' + p.done + '/' + p.n + ' days') + '"></i>';
+    }).join('');
+    return '<button type="button" class="hub-tm-rm-toggle" data-rm-toggle aria-expanded="' + open + '" aria-controls="hub-tm-rm-body" title="' + (open ? 'Collapse' : 'Expand') + ' roadmap">' + TL_ICON.chev + '</button>' +
+      '<div class="hub-tm-rm-id"><span class="hub-tm-rm-eyebrow">Roadmap</span><strong title="' + _esc(C.r.name) + '">' + _esc(C.r.name) + '</strong></div>' +
+      '<span class="hub-tm-rm-now">' + _esc(now) + '</span>' +
+      '<div class="hub-tm-rm-meter"><div class="hub-tm-rm-seg" role="progressbar" aria-label="Roadmap progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + C.pct + '">' + segs + '</div><span class="hub-tm-rm-pct">' + C.pct + '%</span></div>' +
+      '<span class="hub-tm-rm-stat"><b>' + C.done + '/' + N + '</b> days</span>' +
+      '<span class="hub-tm-rm-stat"><b>' + _fmtDur(C.mins) + '</b> logged</span>' +
+      (pace ? '<span class="hub-tm-rm-pace is-' + kind + '">' + _esc(pace) + '</span>' : '') + due +
+      '<span class="hub-tm-rm-actions">' +
+        (C.behind > 0 ? '<button type="button" class="hub-tm-btn hub-tm-btn--primary hub-tm-rm-btn" data-rm-catchup title="Treat the missed days as rest days and start the unfinished ones today">Catch up</button>' : '') +
+        '<button type="button" class="hub-tm-btn hub-tm-btn--outline hub-tm-rm-btn" data-rm-jump>Today</button>' +
+        '<button type="button" class="hub-tm-btn hub-tm-btn--outline hub-tm-btn--icon" data-rm-edit title="Edit roadmap" aria-label="Edit roadmap">' + TL_ICON.edit + '</button></span>';
+  }
+  function _rmTrackHtml(C, sel) {
+    return '<ol class="hub-tm-rm-track">' + C.phases.filter(function (p) { return p.n; }).map(function (p) {
+      const cells = C.days.filter(function (d) { return d.k === p.k; }).map(function (d) {
+        const dt = _parseDate(d.at), lab = 'Day ' + d.n + ', ' + DAY_SHORT[dt.getDay()] + ' ' + _dateLabel(dt) + '. ' + d.title + '. ' + _rmStatusText(d, C);
+        const cls = 'hub-tm-rm-day is-' + d.state + (d.late ? ' is-late' : '') + (d.date === C.today ? ' is-today' : '') + (d.n === sel ? ' is-sel' : '');
+        return '<li><button type="button" class="' + cls + '" style="--p:' + d.pct + '" data-rm-day="' + d.n + '" tabindex="' + (d.n === sel ? 0 : -1) + '" aria-pressed="' + (d.n === sel) + '"' +
+          (d.date === C.today ? ' aria-current="date"' : '') + ' aria-label="' + _esc(lab) + '" title="' + _esc(lab) + '"><span class="hub-tm-rm-num">' + d.n + '</span></button></li>';
+      }).join('');
+      return '<li class="hub-tm-rm-phase hub-tm-rm-ph--' + (p.k % RM_PH) + '" style="--n:' + p.n + '">' +
+        '<div class="hub-tm-rm-phhead"><span class="hub-tm-rm-phname" title="' + _esc(p.name) + '">' + _esc(p.name) + '</span><span class="hub-tm-rm-phcount">' + p.done + '/' + p.n + '</span></div>' +
+        '<div class="hub-tm-rm-phbar" aria-hidden="true"><i style="width:' + Math.round(p.sum / p.n) + '%"></i></div>' +
+        '<ol class="hub-tm-rm-days">' + cells + '</ol></li>';
+    }).join('') + '</ol>';
+  }
+  function _rmCardHtml(C, n) {
+    const d = C.days[n - 1];
+    if (!d) return '';
+    const R = C.R, b = d.b, dt = _parseDate(d.at), ph = C.phases[d.k], today = C.today, day = R.days[n - 1];
+    const s = b ? _toMins(b.startTime) : _rmDayStart(R, day), e = b ? _toMins(b.endTime) : s + _rmDayDur(R, day);
+    const items = b
+      ? _ck(b).map(function (i) {
+          return '<li class="' + (i.done ? 'is-done' : '') + '"><label class="hub-tm-rm-ckrow"><span class="hub-tm-ck-box"><input type="checkbox" data-rm-ck="' + _esc(i.id) + '" data-rm-blk="' + _esc(b.id) + '"' + (i.done ? ' checked' : '') + '><span></span></span><span class="hub-tm-rm-cktext">' + _esc(i.text) + '</span></label></li>';
+        }).join('')
+      : (day.ck || []).map(function (t) { return '<li class="is-preview"><span class="hub-tm-rm-ckpre" aria-hidden="true"></span><span class="hub-tm-rm-cktext">' + _esc(t) + '</span></li>'; }).join('');
+    const btn = function (act, label, primary) { return '<button type="button" class="hub-tm-btn ' + (primary ? 'hub-tm-btn--primary' : 'hub-tm-btn--outline') + '" data-rm-act="' + act + '" data-rm-n="' + n + '">' + label + '</button>'; };
+    let acts = '';
+    if (b) { acts = btn('open', 'Open block', true); if (d.state !== 'done' && b.date !== today) acts += btn('today', 'Move to today', false); }
+    else if (d.date === today) acts = btn('plan', 'Plan today', true);
+    else if (d.date > today) acts = btn('plan', 'Plan on ' + _esc(_dateLabel(dt)), true) + btn('today', 'Do it today', false);
+    else acts = btn('today', 'Do it today', true);
+    if (d.state !== 'done' && d.date >= today) acts += btn('push', 'Push back 1 day', false);
+    const emptyCk = items ? '<ul class="hub-tm-rm-ck">' + items + '</ul>' : '<p class="hub-tm-rm-ckempty">No tasks for this day.</p>';
+    return '<div class="hub-tm-rm-card hub-tm-rm-ph--' + (d.k % RM_PH) + ' is-' + d.state + '">' +
+      '<div class="hub-tm-rm-cardmain">' +
+        '<div class="hub-tm-rm-chips"><span class="hub-tm-rm-chip is-day">Day ' + n + '</span><span class="hub-tm-rm-chip is-ph">' + _esc(ph.name) + '</span>' +
+          '<span class="hub-tm-rm-chip">' + DAY_SHORT[dt.getDay()] + ', ' + _esc(_dateLabel(dt)) + ' · ' + _toTime(s) + '–' + _toTime(Math.min(DAY_MINS, e)) + '</span>' +
+          '<span class="hub-tm-rm-chip is-st">' + _esc(_rmStatusText(d, C)) + '</span></div>' +
+        '<h4 class="hub-tm-rm-cardtitle">' + _esc(d.title) + '</h4>' + emptyCk +
+      '</div><div class="hub-tm-rm-cardacts">' + acts + '</div></div>';
+  }
+  const RM_SCAFFOLD =
+    '<div class="hub-tm-rm-head" id="hub-tm-rm-head"></div>' +
+    '<div class="hub-tm-rm-body" id="hub-tm-rm-body">' +
+      '<div class="hub-tm-rm-scroll" id="hub-tm-rm-scroll"><div id="hub-tm-rm-track"></div></div>' +
+      '<div id="hub-tm-rm-card" aria-live="polite"></div>' +
+      '<ul class="hub-tm-rm-legend" aria-label="Legend">' +
+        '<li><i class="hub-tm-rm-lg is-done"></i>Done</li><li><i class="hub-tm-rm-lg is-part"></i>In progress</li><li><i class="hub-tm-rm-lg is-plan"></i>Planned</li>' +
+        '<li><i class="hub-tm-rm-lg is-late"></i>Overdue</li><li><i class="hub-tm-rm-lg is-today"></i>Today</li>' +
+      '</ul>' +
+    '</div>';
+  function _renderRoadmap() {
+    const box = _el('#hub-tm-roadmap');
+    if (!box) return;
+    const r = _rmGet();
+    if (!r) { if (!box.hidden) box.hidden = true; return; }
+    const C = _rmCompute(r);
+    if (!box._built) { box.innerHTML = RM_SCAFFOLD; box._built = true; }
+    box.hidden = false;
+    const open = _lsGet(RM_KEY) !== '0';
+    box.classList.toggle('is-collapsed', !open);
+    const sel = (_rm.pickOn === C.today && _rm.sel >= 1 && _rm.sel <= C.N) ? _rm.sel : _rmDefault(C);
+    _tlSet(_el('#hub-tm-rm-head'), _rmHeadHtml(C, open));
+    if (!open) return;
+    _tlSet(_el('#hub-tm-rm-track'), _rmTrackHtml(C, sel));
+    _tlSet(_el('#hub-tm-rm-card'), _rmCardHtml(C, sel));
+    const key = r.id + '|' + C.today;
+    if (_rm.scrolled !== key && box.offsetParent !== null) {       // once per day: bring the current cell into view
+      _rm.scrolled = key;
+      const cell = box.querySelector('.hub-tm-rm-day.is-sel');
+      if (cell && cell.scrollIntoView) { try { cell.scrollIntoView({ inline: 'center', block: 'nearest' }); } catch (_) {} }
+    }
+  }
+
+  /* ---- Actions ---- */
+  function _rmCreate(r, n, date) {
+    const R = r.rm, day = R.days[n - 1], dur = _rmDayDur(R, day), s = _rmSlot(date, _rmDayStart(R, day), dur);
+    if (s === null) return null;
+    const b = _normBlock({
+      id: _newId('rm' + n), date: date, tagId: _tagOrFallback(R.tagId).id === FALLBACK_TAG.id ? 'work' : R.tagId,
+      startTime: _toTime(s), endTime: _toTime(s + dur), title: 'D' + n + ' · ' + day.t, subtitle: '', createdAt: Date.now(),
+      rmId: r.id, rmDay: n, checklist: (day.ck || []).map(function (t) { return { text: t }; })
+    });
+    if (b) _timeBlocks.push(b);
+    return b;
+  }
+  function _rmPlan(r, n, date) {
+    const b = _rmCreate(r, n, date);
+    if (!b) { _toast('No free ' + _fmtDur(_rmDayDur(r.rm, r.rm.days[n - 1])) + ' left on that day.'); _renderRoadmap(); return; }
+    _scheduleSave();
+    _toast('Day ' + n + ' planned · ' + b.startTime + '–' + b.endTime, {
+      action: 'Undo',
+      onAction: function () {
+        _timeBlocks = _timeBlocks.filter(function (x) { return x.id !== b.id; });
+        _scheduleSave(); _renderGrid({ animate: false, scroll: false }); _tlRefresh();
+      }
+    });
+    _setDate(date, { view: 'day', scrollMins: Math.max(0, _toMins(b.startTime) - 60) });
+    _tlRefresh();
+  }
+  function _rmToday(r, n) {
+    const C = _rmCompute(r), d = C.days[n - 1], b = d && d.b, today = C.today;
+    if (!d) return;
+    if (!b) { _rmPlan(r, n, today); return; }
+    if (b.date === today) return;
+    const dur = _toMins(b.endTime) - _toMins(b.startTime), s = _rmSlot(today, _toMins(b.startTime), dur);
+    if (s === null) { _toast('No free ' + _fmtDur(dur) + ' left today.'); return; }
+    const from = { date: b.date, s: b.startTime, e: b.endTime };
+    b.date = today; b.startTime = _toTime(s); b.endTime = _toTime(s + dur);
+    _scheduleSave();
+    _toast('Day ' + n + ' moved to today · ' + b.startTime + '–' + b.endTime, {
+      action: 'Undo',
+      onAction: function () {
+        if (_overlap(from.date, _toMins(from.s), _toMins(from.e), b.id)) { _toast('Can’t undo — that slot is taken now.'); return; }
+        b.date = from.date; b.startTime = from.s; b.endTime = from.e;
+        _scheduleSave(); _renderGrid({ animate: false, scroll: false }); _tlRefresh();
+      }
+    });
+    _setDate(today, { view: 'day', scrollMins: Math.max(0, s - 60) });
+    _tlRefresh();
+  }
+  /** Rest days change which date every later day lands on; unfinished blocks follow their day (later days first, so slots are free). */
+  function _rmRealign(r, snap) {
+    const C = _rmCompute(r); let failed = 0;
+    C.days.filter(function (d) { return d.b && d.state !== 'done' && d.b.date !== d.date && d.date >= C.today; })
+      .sort(function (a, b) { return b.n - a.n; })
+      .forEach(function (d) {
+        const b = d.b, dur = _toMins(b.endTime) - _toMins(b.startTime), s = _rmSlot(d.date, _toMins(b.startTime), dur);
+        if (s === null) { failed++; return; }
+        snap.moves.push({ b: b, date: b.date, s: b.startTime, e: b.endTime });
+        b.date = d.date; b.startTime = _toTime(s); b.endTime = _toTime(s + dur);
+      });
+    return failed;
+  }
+  function _rmReschedule(r, addSkips, msgFn) {
+    const snap = { skip: (r.rm.skip || []).slice(), moves: [] };
+    r.rm.skip = (r.rm.skip || []).concat(addSkips).filter(function (x, i, a) { return a.indexOf(x) === i; }).sort();
+    const failed = _rmRealign(r, snap);
+    _saveTemplates(); _scheduleSave();
+    _renderGrid({ animate: false, scroll: false }); _tlRefresh(); _renderRoadmap();
+    _toast(msgFn(_rmCompute(r)) + (failed ? ' · ' + failed + (failed > 1 ? ' blocks need' : ' block needs') + ' a new time' : ''), {
+      action: 'Undo',
+      onAction: function () {
+        r.rm.skip = snap.skip;
+        snap.moves.reverse().forEach(function (m) {
+          if (_overlap(m.date, _toMins(m.s), _toMins(m.e), m.b.id)) return;
+          m.b.date = m.date; m.b.startTime = m.s; m.b.endTime = m.e;
+        });
+        _saveTemplates(); _scheduleSave(); _renderGrid({ animate: false, scroll: false }); _tlRefresh(); _renderRoadmap();
+      }
+    });
+  }
+  /** Push Day n (and everything after it) back by one study day. */
+  function _rmPush(r, n) {
+    const C = _rmCompute(r), d = C.days[n - 1];
+    if (!d || d.state === 'done' || d.date < C.today) return;
+    _rmReschedule(r, [d.date], function (C2) { const e = C2.days[n - 1], dt = _parseDate(e.date); return 'Day ' + n + ' is now ' + DAY_SHORT[dt.getDay()] + ' ' + _dateLabel(dt); });
+  }
+  /** Missed study days become rest days, so the first unfinished day starts today and the rest follow. */
+  function _rmCatchUp(r) {
+    const C = _rmCompute(r), first = C.days.filter(function (d) { return d.state !== 'done'; })[0];
+    if (!first || first.date >= C.today) return;
+    const skips = [];
+    for (let d = _parseDate(first.date); _dateToStr(d) < C.today; d = _addDays(d, 1)) { const ds = _dateToStr(d); if (_rmStudy(r.rm, ds)) skips.push(ds); }
+    if (!skips.length) return;
+    _rmReschedule(r, skips, function (C2) { const e = C2.days[first.n - 1], dt = _parseDate(e.date); return 'Caught up · Day ' + first.n + ' is now ' + DAY_SHORT[dt.getDay()] + ' ' + _dateLabel(dt); });
+  }
+  function _rmSelect(n, focus) {
+    const r = _rmGet();
+    if (!r) return;
+    _rm.sel = n; _rm.pickOn = _todayStr();
+    _renderRoadmap();
+    if (focus) { const c = _el('.hub-tm-rm-day[data-rm-day="' + n + '"]'); if (c) c.focus({ preventScroll: false }); }
+  }
+  function _rmDayClick(n) {
+    const r = _rmGet();
+    if (!r) return;
+    const C = _rmCompute(r), d = C.days[n - 1];
+    if (!d) return;
+    if (d.date === C.today && !d.b) { _rm.sel = n; _rm.pickOn = C.today; _rmPlan(r, n, d.date); return; }   // today's empty cell: fill the day in one click
+    _rmSelect(n, true);
+  }
+
+  /* ---- Editor dialog ---- */
+  function _rmFormDow() {
+    const dow = [0, 0, 0, 0, 0, 0, 0];
+    _all('#tm-rm-dow input[data-dow]').forEach(function (i) { dow[parseInt(i.getAttribute('data-dow'), 10)] = i.checked ? 1 : 0; });
+    return dow;
+  }
+  function _rmSetDow(dow) {
+    _all('#tm-rm-dow input[data-dow]').forEach(function (i) { i.checked = !Array.isArray(dow) || dow.length !== 7 || !dow.some(function (v) { return v; }) ? true : !!dow[parseInt(i.getAttribute('data-dow'), 10)]; });
+  }
+  function _rmValidate() {
+    const p = _rmParse(_el('#tm-rm-text').value), st = _el('#tm-rm-status'), start = _el('#tm-rm-start').value, due = _el('#tm-rm-due').value, dow = _rmFormDow();
+    let msg, bad = false, warn = false;
+    if (p.errors.length) { msg = p.errors[0]; bad = true; }
+    else if (!_isDateStr(start)) { msg = 'Pick the date of Day 1.'; bad = true; }
+    else if (!dow.some(function (v) { return v; })) { msg = 'Pick at least one study day.'; bad = true; }
+    else {
+      const cur = _rmGet(), dates = _rmDates({ start: start, dow: dow, skip: cur ? (cur.rm.skip || []) : [] }, p.days.length), last = dates[dates.length - 1];
+      const e = _parseDate(last);
+      msg = p.days.length + ' days · ' + p.phases.length + ' phase' + (p.phases.length === 1 ? '' : 's') + ' · ' + _dateLabel(_parseDate(dates[0])) + ' → ' + _dateLabel(e) + ', ' + e.getFullYear();
+      if (due && !_isDateStr(due)) { msg = 'That deadline is not a valid date.'; bad = true; }
+      else if (_isDateStr(due) && due < dates[0]) { msg = 'The deadline is before Day 1.'; bad = true; }
+      else if (_isDateStr(due) && last > due) { msg += ' · ends after the deadline'; warn = true; }
+    }
+    st.textContent = msg; st.classList.toggle('is-error', bad); st.classList.toggle('is-warn', warn && !bad); _el('#tm-rm-save').disabled = bad;
+    return p;
+  }
+  function _openRoadmap() {
+    const r = _rmGet(), tags = _allTags();
+    _el('#tm-rm-tag').innerHTML = tags.map(function (t) { return '<option value="' + _esc(t.id) + '">' + _esc(t.label) + '</option>'; }).join('');
+    if (r) {
+      const R = r.rm;
+      _el('#tm-rm-name').value = r.name || '';
+      _el('#tm-rm-start').value = R.start;
+      _el('#tm-rm-time').value = _toTime(_rmStartMins(R));
+      _el('#tm-rm-dur').value = String(_rmDur(R));
+      _el('#tm-rm-due').value = _isDateStr(R.deadline) ? R.deadline : '';
+      _el('#tm-rm-text').value = _rmToText(R);
+      _el('#tm-rm-tag').value = tags.some(function (t) { return t.id === R.tagId; }) ? R.tagId : tags[0].id;
+      _rmSetDow(R.dow);
+    } else {
+      _el('#tm-rm-name').value = '30-day roadmap';
+      _el('#tm-rm-start').value = _todayStr();
+      _el('#tm-rm-time').value = '19:30';
+      _el('#tm-rm-dur').value = '120';
+      _el('#tm-rm-due').value = '';
+      _el('#tm-rm-text').value = _rmStarterText();
+      _el('#tm-rm-tag').value = tags.some(function (t) { return t.id === 'study'; }) ? 'study' : tags[0].id;
+      _rmSetDow(null);
+    }
+    _el('#tm-rm-delete').hidden = !r;
+    _rmValidate();
+    _openModal(_el('#hub-tm-roadmap-modal'), '#tm-rm-name');
+  }
+  function _rmSave() {
+    const p = _rmValidate();
+    if (p.errors.length || !p.days.length || _el('#tm-rm-save').disabled) return;
+    const name = (_el('#tm-rm-name').value || '').trim().slice(0, 60) || 'Roadmap', cur = _rmGet(), due = _el('#tm-rm-due').value;
+    const data = { start: _el('#tm-rm-start').value, time: _el('#tm-rm-time').value || '19:30', dur: parseInt(_el('#tm-rm-dur').value, 10) || 120, tagId: _el('#tm-rm-tag').value || 'work',
+                   dow: _rmFormDow(), skip: cur ? (cur.rm.skip || []) : [], deadline: _isDateStr(due) ? due : '', phases: p.phases, days: p.days };
+    if (cur) { cur.name = name; cur.rm = data; }
+    else _templates.push({ kind: 'roadmap', id: 'rm-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: name, createdAt: Date.now(), blocks: [], rm: data });
+    _saveTemplates();
+    _closeModal(_el('#hub-tm-roadmap-modal'));
+    _rm.sel = 0; _rm.pickOn = '';
+    _renderRoadmap();
+    _toast('Roadmap saved · ' + p.days.length + ' days');
+  }
+  function _rmCopy(text, okMsg) {
+    const ok = function () { _toast(okMsg); };
+    const fallback = function () {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+      document.body.appendChild(ta); ta.select();
+      let done = false; try { done = document.execCommand('copy'); } catch (_) {}
+      document.body.removeChild(ta);
+      if (done) ok(); else _toast('Couldn’t copy — select the text manually.');
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(ok, fallback); else fallback();
+  }
+  function _rmSetPlanText(text, label) {
+    const ta = _el('#tm-rm-text'), prev = ta.value;
+    ta.value = text;
+    const p = _rmValidate();
+    _toast(label + ' · ' + _tlPlural(p.days.length, 'day'), prev.trim() && prev !== text ? { action: 'Undo', onAction: function () { ta.value = prev; _rmValidate(); } } : undefined);
+  }
+  function _rmImportFile(file) {
+    if (!file) return;
+    if (file.size > 524288) { _toast('That file is too large (max 512 KB).'); return; }
+    const name = file.name || 'file', ext = (name.split('.').pop() || '').toLowerCase();
+    const read = file.text ? file.text() : new Promise(function (res, rej) { const fr = new FileReader(); fr.onload = function () { res(String(fr.result)); }; fr.onerror = rej; fr.readAsText(file); });
+    read.then(function (txt) {
+      txt = txt.replace(/^\uFEFF/, '');
+      if ((txt.match(/\uFFFD/g) || []).length > 3) { _toast('That file looks garbled — save it as UTF-8 and try again.'); return; }
+      if (ext === 'json') {
+        let obj; try { obj = JSON.parse(txt); } catch (_) { _toast('That JSON file can’t be read.'); return; }
+        const j = _rmFromJson(obj);
+        if (!j) { _toast('No roadmap found in that JSON file.'); return; }
+        if (j.name) _el('#tm-rm-name').value = j.name;
+        if (/^\d{1,2}:\d{2}$/.test(j.time || '')) _el('#tm-rm-time').value = _toTime(_toMins(j.time));
+        if (j.dur) { const m = String(_clamp(parseInt(j.dur, 10) || 120, 30, 240)); if (_el('#tm-rm-dur').querySelector('option[value="' + m + '"]')) _el('#tm-rm-dur').value = m; }
+        if (j.tagId && _el('#tm-rm-tag').querySelector('option[value="' + j.tagId + '"]')) _el('#tm-rm-tag').value = j.tagId;
+        if (j.dow) _rmSetDow(j.dow);
+        _rmSetPlanText(_rmToText(j), 'Imported ' + name);
+        return;
+      }
+      const out = (ext === 'csv' || ext === 'tsv') ? _rmRowsToText(_rmParseDelimited(txt, ext === 'tsv' ? '\t' : _rmDelim(txt))) : _rmNormalize(txt);
+      if (!out.trim()) { _toast('Nothing to import in ' + name + '.'); return; }
+      _rmSetPlanText(out, 'Imported ' + name);
+    }).catch(function () { _toast('Couldn’t read that file.'); });
+  }
+  function _bindRoadmap() {
+    _el('#tm-btn-roadmap').addEventListener('click', _openRoadmap);
+    _el('#tm-rm-save').addEventListener('click', _rmSave);
+    ['#tm-rm-text', '#tm-rm-start', '#tm-rm-due'].forEach(function (s) { _el(s).addEventListener('input', _rmValidate); });
+    _el('#tm-rm-dow').addEventListener('change', _rmValidate);
+    _el('#tm-rm-starter').addEventListener('click', function () {
+      const t = _el('#tm-rm-text'), put = function () { t.value = _rmStarterText(); _rmValidate(); };
+      if (t.value.trim()) _confirm('Replace the plan text with the Civil Law starter? Your current text will be lost.', put, { title: 'Load starter?', label: 'Replace' });
+      else put();
+    });
+    _el('#tm-rm-delete').addEventListener('click', function () {
+      const r = _rmGet();
+      if (!r) return;
+      _confirm('Delete the roadmap “' + r.name + '”? Blocks already on your calendar stay, but they are no longer tracked as a roadmap.', function () {
+        const i = _templates.indexOf(r);
+        if (i > -1) _templates.splice(i, 1);
+        _saveTemplates();
+        _closeModal(_el('#hub-tm-roadmap-modal'));
+        _renderRoadmap();
+        _toast('Roadmap deleted');
+      }, { title: 'Delete roadmap?', label: 'Delete' });
+    });
+
+    // Import · AI prompt · Export
+    const ta = _el('#tm-rm-text'), file = _el('#tm-rm-file');
+    _el('#tm-rm-import').addEventListener('click', function () { file.click(); });
+    file.addEventListener('change', function () { const f = file.files && file.files[0]; file.value = ''; _rmImportFile(f); });
+    ta.addEventListener('paste', function (e) {                 // spreadsheet cells / Markdown table → plan lines
+      const txt = (e.clipboardData || window.clipboardData).getData('text'), norm = _rmNormalize(txt);
+      if (norm.trim() && norm !== txt.replace(/\r\n?/g, '\n')) {
+        e.preventDefault();
+        ta.setRangeText(norm, ta.selectionStart, ta.selectionEnd, 'end');
+        const p = _rmValidate();
+        _toast('Converted pasted table · ' + _tlPlural(p.days.length, 'day'));
+      }
+    });
+    ta.addEventListener('dragover', function (e) { if (e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') > -1) { e.preventDefault(); ta.classList.add('is-drop'); } });
+    ta.addEventListener('dragleave', function () { ta.classList.remove('is-drop'); });
+    ta.addEventListener('drop', function (e) {
+      ta.classList.remove('is-drop');
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) { e.preventDefault(); _rmImportFile(f); }
+    });
+    _el('#tm-rm-ai-copy').addEventListener('click', function () {
+      _rmCopy(_rmPrompt({ topic: _el('#tm-rm-ai-topic').value.trim(), days: _el('#tm-rm-ai-days').value, phases: _el('#tm-rm-ai-phases').value, lang: _el('#tm-rm-ai-lang').value }),
+              'Prompt copied — paste it into your AI, add your syllabus, then paste its answer here.');
+    });
+    const cur = function () { const p = _rmParse(ta.value); return p.days.length && !p.errors.length ? p : null; };
+    _el('#tm-rm-copy-text').addEventListener('click', function () { const p = cur(); if (!p) { _toast('Fix the plan first.'); return; } _rmCopy(_rmToText(p), 'Plan text copied'); });
+    const asJson = function () {
+      const p = cur();
+      if (!p) { _toast('Fix the plan first.'); return null; }
+      return _rmExport({ name: _el('#tm-rm-name').value.trim() || 'Roadmap', rm: { time: _el('#tm-rm-time').value, dur: parseInt(_el('#tm-rm-dur').value, 10) || 120, tagId: _el('#tm-rm-tag').value, dow: _rmFormDow(), phases: p.phases, days: p.days } });
+    };
+    _el('#tm-rm-copy-json').addEventListener('click', function () { const j = asJson(); if (j) _rmCopy(j, 'JSON copied'); });
+    _el('#tm-rm-download').addEventListener('click', function () {
+      const j = asJson();
+      if (!j) return;
+      const a = document.createElement('a'), url = URL.createObjectURL(new Blob([j], { type: 'application/json' }));
+      a.href = url; a.download = ((_el('#tm-rm-name').value.trim() || 'roadmap').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') || 'roadmap') + '.json';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    });
+
+    const box = _el('#hub-tm-roadmap');
+    box.addEventListener('click', function (e) {
+      const t = e.target;
+      let n;
+      if (t.closest('[data-rm-toggle]')) { _lsSet(RM_KEY, _lsGet(RM_KEY) === '0' ? '1' : '0'); _renderRoadmap(); return; }
+      if (t.closest('[data-rm-edit]')) { _openRoadmap(); return; }
+      if (t.closest('[data-rm-catchup]')) { const r = _rmGet(); if (r) _rmCatchUp(r); return; }
+      if (t.closest('[data-rm-jump]')) {
+        const r = _rmGet();
+        if (!r) return;
+        _rm.sel = _rmDefault(_rmCompute(r)); _rm.pickOn = _todayStr();
+        if (_lsGet(RM_KEY) === '0') _lsSet(RM_KEY, '1');
+        _rm.scrolled = ''; _renderRoadmap();
+        return;
+      }
+      if ((n = t.closest('[data-rm-day]'))) { _rmDayClick(parseInt(n.getAttribute('data-rm-day'), 10)); return; }
+      if ((n = t.closest('[data-rm-act]'))) {
+        const r = _rmGet(), k = parseInt(n.getAttribute('data-rm-n'), 10), act = n.getAttribute('data-rm-act');
+        if (!r) return;
+        const C = _rmCompute(r), d = C.days[k - 1];
+        if (!d) return;
+        if (act === 'plan') _rmPlan(r, k, d.date);
+        else if (act === 'today') _rmToday(r, k);
+        else if (act === 'push') _rmPush(r, k);
+        else if (act === 'open' && d.b) { _setDate(d.b.date, { view: 'day', scrollMins: Math.max(0, _toMins(d.b.startTime) - 60) }); _focusBlock(d.b.id); }
+      }
+    });
+    box.addEventListener('change', function (e) {          // tick a task right inside the card
+      const cb = e.target.closest('[data-rm-ck]');
+      if (!cb) return;
+      const bid = cb.getAttribute('data-rm-blk'), iid = cb.getAttribute('data-rm-ck');
+      const b = _blockById(bid), it = b && _ck(b).find(function (i) { return i.id === iid; });
+      if (!it) return;
+      it.done = cb.checked;
+      _scheduleSave();
+      _fckSig = '';
+      _renderGrid({ animate: false, scroll: false });
+      _tlRefresh();
+      const again = box.querySelector('[data-rm-ck="' + iid + '"][data-rm-blk="' + bid + '"]');
+      if (again) again.focus({ preventScroll: true });
+      _ckNudge(b);
+    });
+    box.addEventListener('keydown', function (e) {          // arrow keys walk the strip (roving tabindex)
+      const cell = e.target.closest && e.target.closest('.hub-tm-rm-day');
+      if (!cell || e.ctrlKey || e.metaKey || e.altKey) return;
+      const cur = parseInt(cell.getAttribute('data-rm-day'), 10), r = _rmGet();
+      if (!r) return;
+      const N = r.rm.days.length;
+      let to = 0;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') to = Math.min(N, cur + 1);
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') to = Math.max(1, cur - 1);
+      else if (e.key === 'Home') to = 1;
+      else if (e.key === 'End') to = N;
+      if (!to) return;
+      e.preventDefault(); e.stopPropagation();
+      if (to !== cur) _rmSelect(to, true);
+    });
   }
 
   /* ============================================================
