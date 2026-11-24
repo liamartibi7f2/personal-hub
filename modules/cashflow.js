@@ -7697,11 +7697,11 @@ ${_aiShellHTML()}
     }
 
     try {
-      // ── 1. Read workbook from file buffer ──
+      // ── 1. Đọc workbook ──
       var buffer = await file.arrayBuffer();
       var wb = XLSX.read(new Uint8Array(buffer), { type: 'array' });
 
-      // ── 2. Đọc từng sheet → bộ đọc theo TÊN CỘT (hiểu cả file mới và file xuất kiểu cũ) ──
+      // ── 2. Đọc từng sheet theo TÊN CỘT (hiểu cả file mới và file xuất kiểu cũ) ──
       var sheetsData = wb.SheetNames.map(function (name) {
         return { name: name, rows: XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1 }) };
       });
@@ -7710,34 +7710,77 @@ ${_aiShellHTML()}
         uid: _uid,
         now: Date.now()
       });
+      if (!_catLookupExpense) _catLookupExpense = _buildCategoryLookup(EXPENSE_CATEGORIES, 'expense');
+      var extras = _parseImportExtras(sheetsData, {
+        genDebtId: _generateDebtId, genGoalId: function () { return _glId('goal'); }, genContribId: function () { return _glId('c'); },
+        catLookup: function (label) { var k = _catKey(label); return Object.prototype.hasOwnProperty.call(_catLookupExpense, k) ? _catLookupExpense[k] : ''; },
+        defaultKind: _bgDefaultKind,
+        prevGoals: _glEnsure()
+      });
       var importedTxs = parsed.transactions;
       var skippedRows = parsed.skippedRows;
-      var skippedSheets = parsed.skippedSheets;
+      var skippedSheets = parsed.skippedSheets.filter(function (n) {
+        return ['muc tieu', 'dong gop muc tieu', 'ngan sach', 'so du thang', 'thiet lap', 'cong no'].indexOf(_xlNorm(n)) === -1;
+      });
+      var hasExtras = extras.debts || extras.goals || extras.budgetPlans || extras.settings || extras.snapshots;
 
-      if (importedTxs.length === 0) {
+      if (importedTxs.length === 0 && !hasExtras) {
         _showStatusMsg(_t('importNoRows') + ' ' + skippedRows + ' ' + _t('importRowsInvalid'));
         return;
       }
 
-      // ═══ 4. STRICT OVERWRITE: replace entire state & persist ═══
-      _normalizeCategories(importedTxs);
-      _data.transactions = importedTxs;
-      _migrateSavingsLegs();   // file Excel lưu mỗi lệnh chuyển ví thành hai dòng → gộp lại
+      // ── 3. Bản sao dự phòng dữ liệu hiện tại (để khôi phục nếu nhập nhầm file) ──
+      try { localStorage.setItem(IMPORT_BACKUP_KEY, JSON.stringify({ at: Date.now(), data: _data, meta: _cashFlowMeta })); } catch (_) {}
+
+      // ═══ 4. GHI ĐÈ từng phần có trong file & lưu ═══
+      if (importedTxs.length > 0) {
+        _normalizeCategories(importedTxs);
+        _data.transactions = importedTxs;
+      }
+      if (extras.debts) _data.debts = extras.debts;
+      if (extras.goals) _data.goals = extras.goals;          // phải gán trước khi gộp lệnh chuyển ví (để nối lại mã giao dịch)
+      if (extras.snapshots) _data.balanceSnapshots = extras.snapshots;
+      if (extras.settings && typeof extras.settings.startingBalance === 'number') _data.startingBalance = extras.settings.startingBalance;
+      var metaChanged = false;
+      if (extras.budgetPlans) { _cashFlowMeta.budgetPlans = extras.budgetPlans; _cashFlowMeta.dailyLimits = extras.dailyLimits || {}; metaChanged = true; }
+      if (extras.settings) {
+        ['initBank', 'initCash', 'netWorthOffset', 'savingsBalance'].forEach(function (k) {
+          if (typeof extras.settings[k] === 'number') { _cashFlowMeta[k] = extras.settings[k]; metaChanged = true; }
+        });
+      }
+      _migrateSavingsLegs();   // file Excel lưu mỗi lệnh chuyển ví thành hai dòng → gộp lại (đồng thời nối lại mục tiêu)
+
+      // Liên kết không còn trỏ tới giao dịch nào thì bỏ để dữ liệu sạch
+      var ids = {}; _data.transactions.forEach(function (t) { ids[t.id] = 1; });
+      if (extras.goals) _glEnsure().forEach(function (g) {
+        (g.contribs || []).forEach(function (c) { c.txIds = (c.txIds || []).filter(function (id) { return ids[id]; }); });
+        _glRecheckStatus(g);
+      });
+      if (extras.debts) _data.debts.forEach(function (d) { if (d.lendTxId && !ids[d.lendTxId]) delete d.lendTxId; });
+      _glBackup();
       _isDataLoaded = true;
 
-      // ── BREAK THE OFFLINE SEAL: user explicitly imported data ──
+      // ── Người dùng chủ động nhập → gỡ chế độ offline ──
       if (_isOfflineMode) { _isOfflineMode = false; }
 
       await _persist();
+      if (metaChanged) _debouncedPersistMeta();
 
-      // ═══ 5. FULL UI REFRESH ═══
+      // ═══ 5. LÀM MỚI GIAO DIỆN ═══
       _renderAllViews();
       _updateChart();
 
-      var msg = _t('importSuccess') + ' ' + importedTxs.length + ' ' + _t('importSuccess1');
+      var vi = _getCFLang() !== 'en', parts = [];
+      if (importedTxs.length) parts.push(importedTxs.length + (vi ? ' giao dịch' : ' transactions'));
+      if (extras.debts) parts.push(extras.debts.length + (vi ? ' khoản nợ' : ' debts'));
+      if (extras.goals) parts.push(extras.goals.length + (vi ? ' mục tiêu (' + (extras.counts.contribs || 0) + ' lần nạp/rút)' : ' goals (' + (extras.counts.contribs || 0) + ' contributions)'));
+      if (extras.budgetPlans) parts.push((extras.counts.budgets || 0) + (vi ? ' dòng ngân sách' : ' budget lines'));
+      if (extras.settings && extras.counts.settings) parts.push(vi ? 'thiết lập số dư' : 'balance settings');
+      var msg = (vi ? 'Đã nhập: ' : 'Imported: ') + parts.join(' · ') + (vi ? ' (đã thay thế phần tương ứng).' : ' (replaced the matching data).');
       if (skippedRows > 0) msg += ' ' + _t('importSkipped') + ' ' + skippedRows + ' ' + _t('importInvalidRows');
       if (skippedSheets.length > 0) msg += ' ' + _t('importSkippedSheets') + ' ' + skippedSheets.join(', ');
-      _showStatusMsg(msg);
+      var el = _showStatusMsg(msg);
+      setTimeout(function () { if (el) el.style.display = 'none'; }, 7000);
 
     } catch (e) {
       console.error('[CashFlow] Import failed:', e);
@@ -8222,7 +8265,7 @@ ${_aiShellHTML()}
     // ── dữ liệu đã chuẩn hóa ──
     var data = (snap.rows || []).map(function (r, i) {
       return { s: _xlSerial(r.y, r.m, r.d), type: r.type === 'income' ? 'Thu nhập' : 'Chi phí', cat: r.cat, desc: r.desc || '', src: r.src,
-        amount: Math.abs(Number(r.amount) || 0), rep: !!r.rep, ord: i };
+        amount: Math.abs(Number(r.amount) || 0), rep: !!r.rep, ord: i, id: r.id || '', goal: r.goal || '' };
     });
     data.sort(function (a, b) { return (b.s - a.s) || (a.ord - b.ord); });
     var N = data.length;
@@ -8281,7 +8324,7 @@ ${_aiShellHTML()}
     function ddmmyyyy(sn) { var q = _xlFromSerial(sn); return ('0' + q.d).slice(-2) + '/' + ('0' + q.m).slice(-2) + '/' + q.y; }
 
     ws1.put(1, 2, 'CASHFLOW · BÁO CÁO TÀI CHÍNH CÁ NHÂN', X.title); ws1.fillRange(1, 2, 1, 13, X.title); ws1.merge(1, 2, 1, 13); ws1.height(1, 42);
-    ws1.put(2, 2, 'Xuất ngày ' + ddmmyyyy(todaySerial) + '  ·  ' + N + ' giao dịch  ·  dữ liệu từ ' + ddmmyyyy(minS) + ' đến ' + ddmmyyyy(maxS), X.sub);
+    ws1.put(2, 2, 'Xuất ngày ' + ddmmyyyy(todaySerial) + '  ·  ' + N + ' giao dịch  ·  ' + (snap.debts || []).length + ' khoản nợ  ·  ' + (snap.goals || []).length + ' mục tiêu  ·  dữ liệu từ ' + ddmmyyyy(minS) + ' đến ' + ddmmyyyy(maxS), X.sub);
     ws1.fillRange(2, 2, 2, 13, X.sub); ws1.merge(2, 2, 2, 13); ws1.height(2, 22);
     ws1.height(3, 8);
 
@@ -8498,9 +8541,9 @@ ${_aiShellHTML()}
     // ══════════════ SHEET 2: GIAO DỊCH ══════════════
     var ws2 = _xlSheet('Giao dịch');
     ws2.tab = C.teal; ws2.landscape = true; ws2.fit = true; ws2.freeze = { row: 4 }; ws2.titles = '$4:$4';
-    [13, 13, 28, 46, 17, 18, 15].forEach(function (w, k) { ws2.width(k + 1, w); });
+    [13, 13, 28, 46, 17, 18, 15, 26, 22].forEach(function (w, k) { ws2.width(k + 1, w); });
     var tTitle = sb.xf({ font: { b: 1, sz: 14, color: C.white }, fill: C.navy, al: { h: 'left', v: 'center', indent: 1 } });
-    ws2.put(1, 1, 'DANH SÁCH GIAO DỊCH', tTitle); ws2.fillRange(1, 1, 1, 7, tTitle); ws2.merge(1, 1, 1, 7); ws2.height(1, 32);
+    ws2.put(1, 1, 'DANH SÁCH GIAO DỊCH', tTitle); ws2.fillRange(1, 1, 1, 9, tTitle); ws2.merge(1, 1, 1, 9); ws2.height(1, 32);
     var infoL = sb.xf({ font: { b: 1, sz: 9, color: C.muted }, fill: C.bg, al: { h: 'left', v: 'center', indent: 1 } });
     var infoR = sb.xf({ font: { b: 1, sz: 9, color: C.muted }, fill: C.bg, al: { h: 'right', v: 'center' } });
     var infoCnt = sb.xf({ font: { b: 1, sz: 11, color: C.navy }, fill: C.bg, fmt: '#,##0" giao dịch"', al: { h: 'left', v: 'center' } });
@@ -8511,10 +8554,10 @@ ${_aiShellHTML()}
     ws2.put(2, 4, 'Tổng giá trị theo bộ lọc (Thu + Chi)', infoR);
     ws2.put(2, 5, { f: 'SUBTOTAL(109,F' + FIRST + ':F' + LAST + ')', v: totalAmt }, infoSum); ws2.merge(2, 5, 2, 6);
     ws2.put(2, 6, null, infoSum); ws2.put(2, 7, null, infoL); ws2.height(2, 24);
-    ws2.put(3, 1, 'Mẹo: bấm mũi tên ở tiêu đề cột để lọc / sắp xếp (lọc Loại = Chi phí để xem tổng chi). Thêm giao dịch bằng cách nhập dòng mới ngay dưới bảng.', X.hint);
-    ws2.fillRange(3, 1, 3, 7, X.hint); ws2.merge(3, 1, 3, 7); ws2.height(3, 20);
+    ws2.put(3, 1, 'Mẹo: bấm mũi tên ở tiêu đề cột để lọc / sắp xếp. Thêm giao dịch bằng cách nhập dòng mới ngay dưới bảng (để trống 2 cột Mã). Đừng xóa cột Mã — ứng dụng dùng nó để nối lại mục tiêu khi nhập file.', X.hint);
+    ws2.fillRange(3, 1, 3, 9, X.hint); ws2.merge(3, 1, 3, 9); ws2.height(3, 20);
 
-    var H2 = ['Ngày', 'Loại', 'Hạng mục', 'Mô tả', 'Nguồn', 'Số tiền', 'Tính báo cáo'];
+    var H2 = ['Ngày', 'Loại', 'Hạng mục', 'Mô tả', 'Nguồn', 'Số tiền', 'Tính báo cáo', 'Mã GD', 'Mã mục tiêu'];
     var th2 = sb.xf({ font: { b: 1, sz: 10, color: C.white }, fill: C.navy, al: { h: 'center', v: 'center' } });
     H2.forEach(function (h, k) { ws2.put(4, k + 1, h, th2); }); ws2.height(4, 26);
     var s2 = {
@@ -8522,14 +8565,16 @@ ${_aiShellHTML()}
       type: sb.xf({ font: { sz: 10 }, al: { h: 'center', v: 'center' } }),
       txt: sb.xf({ font: { sz: 10 }, al: { h: 'left', v: 'center', indent: 1 } }),
       amt: sb.xf({ font: { sz: 10, b: 1 }, fmt: F_VND, al: { h: 'right', v: 'center' } }),
-      rep: sb.xf({ font: { sz: 10 }, al: { h: 'center', v: 'center' } })
+      rep: sb.xf({ font: { sz: 10 }, al: { h: 'center', v: 'center' } }),
+      id: sb.xf({ font: { sz: 8, color: '9AA4B2' }, al: { h: 'left', v: 'center', indent: 1 } })
     };
     data.forEach(function (d, i) {
       var r = FIRST + i;
       ws2.put(r, 1, d.s, s2.date); ws2.put(r, 2, d.type, s2.type); ws2.put(r, 3, d.cat, s2.txt); ws2.put(r, 4, d.desc, s2.txt);
       ws2.put(r, 5, d.src, s2.txt); ws2.put(r, 6, d.amount, s2.amt); ws2.put(r, 7, d.rep ? 'Có' : 'Không', s2.rep);
+      ws2.put(r, 8, d.id, s2.id); ws2.put(r, 9, d.goal, s2.id);
     });
-    ws2.tables.push({ name: 'tblGiaoDich', ref: _xlRange(4, 1, 3 + Math.max(N, 1) + 1, 7), cols: H2 });
+    ws2.tables.push({ name: 'tblGiaoDich', ref: _xlRange(4, 1, 3 + Math.max(N, 1) + 1, 9), cols: H2 });
     var catRows = (snap.allCats || []).length;
     ws2.dv.push({ ref: 'B' + FIRST + ':B' + LAST, list: '"Thu nhập,Chi phí"', title: 'Loại không hợp lệ', error: 'Chọn Thu nhập hoặc Chi phí.' });
     ws2.dv.push({ ref: 'C' + FIRST + ':C' + LAST, list: "'Danh mục'!$B$4:$B$" + (3 + Math.max(catRows, 1)), title: 'Hạng mục', error: 'Chọn hạng mục trong danh sách (xem sheet Danh mục).' });
@@ -8544,39 +8589,170 @@ ${_aiShellHTML()}
     ws2.cf.push({ ref: 'G' + FIRST + ':G' + LAST, rules: [{ type: 'expression', dxf: sb.dxf({ font: { i: 1, color: '9AA4B2' } }), formula: '$G' + FIRST + '="Không"' }] });
     ws2.cf.push({ ref: 'A' + FIRST + ':G' + LAST, rules: [{ type: 'expression', dxf: sb.dxf({ fill: 'F6F8FB' }), formula: 'AND($A' + FIRST + '<>"",MOD(ROW(),2)=0)' }] });
 
+
+    // ══════════════ Bộ dựng sheet dạng bảng (dùng cho Công nợ, Mục tiêu, Đóng góp, Ngân sách, Thiết lập…) ══════════════
+    // cols: [{ h: tiêu đề, w: độ rộng, k: 'txt'|'amt'|'date'|'int'|'pct'|'id'|'ctr'|'num' }]; rows: mảng các mảng giá trị (hoặc {f, v})
+    var KSTYLE = {
+      txt: s2.txt, amt: s2.amt, date: s2.date, ctr: s2.rep, id: s2.id,
+      int: sb.xf({ font: { sz: 10 }, fmt: '0;[Red]-0', al: { h: 'center', v: 'center' } }),
+      num: sb.xf({ font: { sz: 10 }, fmt: F_NUM, al: { h: 'right', v: 'center' } }),
+      pct: sb.xf({ font: { sz: 10, b: 1 }, fmt: '0%', al: { h: 'center', v: 'center' } })
+    };
+    var infoInt = sb.xf({ font: { b: 1, sz: 11, color: C.navy }, fill: C.bg, fmt: '#,##0', al: { h: 'left', v: 'center' } });
+    function tableSheet(o) {
+      var ws = _xlSheet(o.name), n = o.cols.length, rows = o.rows || [];
+      ws.tab = o.tab; ws.landscape = true; ws.fit = true; ws.freeze = { row: 4 }; ws.titles = '$4:$4';
+      o.cols.forEach(function (c, k) { ws.width(k + 1, c.w || 16); });
+      ws.put(1, 1, o.title, tTitle); ws.fillRange(1, 1, 1, n, tTitle); ws.merge(1, 1, 1, n); ws.height(1, 32);
+      if (o.summary) {
+        ws.put(2, 1, o.summary.label, infoL); ws.put(2, 2, o.summary.cell, o.summary.fmt === 'int' ? infoInt : infoSum);
+        ws.fillRange(2, 3, 2, n, infoL);
+      } else ws.fillRange(2, 1, 2, n, infoL);
+      ws.height(2, 24);
+      ws.put(3, 1, o.hint, X.hint); ws.fillRange(3, 1, 3, n, X.hint); ws.merge(3, 1, 3, n); ws.height(3, 20);
+      o.cols.forEach(function (c, k) { ws.put(4, k + 1, c.h, th2); }); ws.height(4, 26);
+      rows.forEach(function (row, i) {
+        row.forEach(function (v, k) { ws.put(FIRST + i, k + 1, v, KSTYLE[o.cols[k].k || 'txt']); });
+      });
+      ws.tables.push({ name: o.table, ref: _xlRange(4, 1, 4 + Math.max(rows.length, 1), n), cols: o.cols.map(function (c) { return c.h; }) });
+      ws.cf.push({ ref: 'A' + FIRST + ':' + _xlColName(n) + '1000', rules: [{ type: 'expression', dxf: sb.dxf({ fill: 'F6F8FB' }), formula: 'AND($A' + FIRST + '<>"",MOD(ROW(),2)=0)' }] });
+      return ws;
+    }
+    function isoSerial(iso) { var m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(iso || ''); return m ? _xlSerial(+m[1], +m[2], +m[3]) : null; }
+    function dateSerial(dt) { return dt instanceof Date && !isNaN(dt.getTime()) ? _xlSerial(dt.getFullYear(), dt.getMonth() + 1, dt.getDate()) : null; }
+    var WALLET_VI = { bank: 'Chuyển khoản', cash: 'Tiền mặt', none: 'Không liên kết ví', savings: 'Tiết kiệm' };
+    var dxRed = sb.dxf({ font: { b: 1, color: C.red }, fill: C.redL }), dxAmb = sb.dxf({ font: { b: 1, color: C.amber }, fill: C.amberL }),
+      dxGrn = sb.dxf({ font: { b: 1, color: C.green }, fill: C.greenL });
+
     var sheets = [ws1, ws2];
 
-    // ══════════════ SHEET 3: CÔNG NỢ (nếu có) ══════════════
+    // ══════════════ SHEET 3: CÔNG NỢ ══════════════
     var debts = snap.debts || [];
-    if (debts.length) {
-      var ws3 = _xlSheet('Công nợ');
-      ws3.tab = C.amber; ws3.landscape = true; ws3.fit = true; ws3.freeze = { row: 4 }; ws3.titles = '$4:$4';
-      [24, 17, 14, 14, 12, 14, 14, 44].forEach(function (w, k) { ws3.width(k + 1, w); });
-      ws3.put(1, 1, 'CÔNG NỢ — TIỀN CHO MƯỢN', tTitle); ws3.fillRange(1, 1, 1, 8, tTitle); ws3.merge(1, 1, 1, 8); ws3.height(1, 32);
-      var pending = 0; debts.forEach(function (d) { if (!d.paid) pending += Number(d.amount) || 0; });
-      ws3.put(2, 1, 'Tổng nợ đang chờ thu', infoL); ws3.put(2, 2, { f: 'SUMIFS(B5:B1000,E5:E1000,"<>Có")', v: pending }, infoSum); ws3.fillRange(2, 3, 2, 8, infoL); ws3.height(2, 24);
-      ws3.put(3, 1, 'Cột «Trạng thái» và «Còn lại (ngày)» tự tính theo ngày hôm nay. Đổi cột «Đã trả» thành Có khi đã thu hồi.', X.hint);
-      ws3.fillRange(3, 1, 3, 8, X.hint); ws3.merge(3, 1, 3, 8); ws3.height(3, 20);
-      var H3 = ['Người mượn', 'Số tiền', 'Ngày mượn', 'Hẹn trả', 'Đã trả', 'Trạng thái', 'Còn lại (ngày)', 'Ghi chú'];
-      H3.forEach(function (h, k) { ws3.put(4, k + 1, h, th2); }); ws3.height(4, 26);
-      var sn = function (o) { return o ? _xlSerial(o.y, o.m, o.d) : null; };
-      debts.forEach(function (d, i) {
-        var r = FIRST + i, due = sn(d.due), st = d.paid ? 'Đã trả' : (due !== null && due < todaySerial ? 'Quá hạn' : 'Đang chờ');
-        ws3.put(r, 1, d.name || '', s2.txt); ws3.put(r, 2, Number(d.amount) || 0, s2.amt);
-        ws3.put(r, 3, sn(d.borrowed), s2.date); ws3.put(r, 4, due, s2.date); ws3.put(r, 5, d.paid ? 'Có' : 'Không', s2.rep);
-        ws3.put(r, 6, { f: 'IF(E' + r + '="Có","Đã trả",IF(D' + r + '="","Đang chờ",IF(D' + r + '<TODAY(),"Quá hạn","Đang chờ")))', v: st }, s2.rep);
-        ws3.put(r, 7, { f: 'IF(OR(E' + r + '="Có",D' + r + '=""),"",D' + r + '-TODAY())', v: (d.paid || due === null) ? '' : due - todaySerial }, sb.xf({ font: { sz: 10 }, fmt: '0;[Red]-0', al: { h: 'center', v: 'center' } }));
-        ws3.put(r, 8, d.note || '', s2.txt);
+    var H3 = ['Người mượn', 'Số tiền', 'Ngày mượn', 'Hẹn trả', 'Đã trả', 'Trạng thái', 'Còn lại (ngày)', 'Ghi chú',
+      'Loại lãi', 'Lãi (giá trị)', 'Tiền lãi', 'Tổng phải thu', 'Nguồn cho vay', 'Ngày trả', 'Lãi đã thu', 'Ví nhận', 'Mã khoản nợ', 'Mã GD cho vay'];
+    var ws3 = tableSheet({
+      name: 'Công nợ', tab: C.amber, title: 'CÔNG NỢ — TIỀN CHO MƯỢN', table: 'tblCongNo',
+      hint: 'Trạng thái và «Còn lại (ngày)» tự tính theo hôm nay. Đổi «Đã trả» thành Có khi đã thu hồi. Loại lãi: % (theo gốc) hoặc VND (cố định). Giữ nguyên cột Mã để nhập lại đúng liên kết.',
+      summary: { label: 'Tổng nợ đang chờ thu', cell: { f: 'SUMIFS(B5:B1000,E5:E1000,"<>Có")', v: debts.reduce(function (t, d) { return t + (d.paid ? 0 : Number(d.amount) || 0); }, 0) } },
+      cols: [{ h: H3[0], w: 24 }, { h: H3[1], w: 17, k: 'amt' }, { h: H3[2], w: 14, k: 'date' }, { h: H3[3], w: 14, k: 'date' }, { h: H3[4], w: 10, k: 'ctr' },
+        { h: H3[5], w: 14, k: 'ctr' }, { h: H3[6], w: 14, k: 'int' }, { h: H3[7], w: 40 }, { h: H3[8], w: 10, k: 'ctr' }, { h: H3[9], w: 13, k: 'num' },
+        { h: H3[10], w: 15, k: 'amt' }, { h: H3[11], w: 17, k: 'amt' }, { h: H3[12], w: 16, k: 'ctr' }, { h: H3[13], w: 14, k: 'date' }, { h: H3[14], w: 14, k: 'amt' },
+        { h: H3[15], w: 15, k: 'ctr' }, { h: H3[16], w: 24, k: 'id' }, { h: H3[17], w: 24, k: 'id' }],
+      rows: debts.map(function (d, i) {
+        var r = FIRST + i, due = isoSerial(d.due ? d.due.y + '-' + d.due.m + '-' + d.due.d : ''), bor = isoSerial(d.borrowed ? d.borrowed.y + '-' + d.borrowed.m + '-' + d.borrowed.d : '');
+        var st = d.paid ? 'Đã trả' : (due !== null && due < todaySerial ? 'Quá hạn' : 'Đang chờ');
+        var lend = d.lendSource === 'cash' ? 'Tiền mặt' : d.lendSource === 'bank' ? 'Chuyển khoản' : 'Không trừ ví';
+        return [d.name || '', Number(d.amount) || 0, bor, due, d.paid ? 'Có' : 'Không',
+          { f: 'IF(E' + r + '="Có","Đã trả",IF(D' + r + '="","Đang chờ",IF(D' + r + '<TODAY(),"Quá hạn","Đang chờ")))', v: st },
+          { f: 'IF(OR(E' + r + '="Có",D' + r + '=""),"",D' + r + '-TODAY())', v: (d.paid || due === null) ? '' : due - todaySerial },
+          d.note || '', d.interestType === 'fixed' ? 'VND' : '%', Number(d.interestValue) || 0, Number(d.interestAmount) || 0,
+          { f: 'B' + r + '+K' + r, v: (Number(d.amount) || 0) + (Number(d.interestAmount) || 0) },
+          lend, dateSerial(d.paidAt), Number(d.interestPaid) || 0, d.paidSource ? (WALLET_VI[d.paidSource] || '') : '', d.id || '', d.lendTxId || ''];
+      })
+    });
+    ws3.dv.push({ ref: 'E' + FIRST + ':E1000', list: '"Có,Không"', title: 'Đã trả', error: 'Chọn Có hoặc Không.' });
+    ws3.dv.push({ ref: 'I' + FIRST + ':I1000', list: '"%,VND"', title: 'Loại lãi', error: 'Chọn % hoặc VND.' });
+    ws3.dv.push({ ref: 'M' + FIRST + ':M1000', list: '"Tiền mặt,Chuyển khoản,Không trừ ví"', title: 'Nguồn cho vay', error: 'Chọn nguồn tiền trong danh sách.' });
+    ws3.cf.push({ ref: 'F' + FIRST + ':F1000', rules: [
+      { type: 'expression', dxf: dxRed, formula: '$F' + FIRST + '="Quá hạn"' }, { type: 'expression', dxf: dxAmb, formula: '$F' + FIRST + '="Đang chờ"' },
+      { type: 'expression', dxf: dxGrn, formula: '$F' + FIRST + '="Đã trả"' }] });
+    sheets.push(ws3);
+
+    // ══════════════ SHEET 4–5: MỤC TIÊU TIẾT KIỆM + ĐÓNG GÓP ══════════════
+    var goals = snap.goals || [], GSTAT = { active: 'Đang thực hiện', achieved: 'Đã đạt', archived: 'Đã lưu trữ' };
+    var CS = 'Đóng góp mục tiêu', CSQ = "'" + CS + "'";
+    var contribRows = [], goalRows = [], gTotT = 0, gTotS = 0;
+    goals.forEach(function (g, gi) {
+      var saved = 0;
+      g.contribs.slice().sort(function (a, b) { return (isoSerial(a.date) || 0) - (isoSerial(b.date) || 0); }).forEach(function (c) {
+        saved += c.amount;
+        contribRows.push([g.name, isoSerial(c.date), c.initial ? 'Số dư ban đầu' : (c.amount < 0 ? 'Rút' : 'Nạp'), c.amount, WALLET_VI[c.wallet] || 'Không liên kết ví', c.note || '', g.id, c.id, (c.txIds || []).join(';')]);
       });
-      ws3.tables.push({ name: 'tblCongNo', ref: _xlRange(4, 1, 4 + debts.length, 8), cols: H3 });
-      ws3.dv.push({ ref: 'E' + FIRST + ':E1000', list: '"Có,Không"', title: 'Đã trả', error: 'Chọn Có hoặc Không.' });
-      ws3.cf.push({ ref: 'F' + FIRST + ':F1000', rules: [
-        { type: 'expression', dxf: sb.dxf({ font: { b: 1, color: C.red }, fill: C.redL }), formula: '$F' + FIRST + '="Quá hạn"' },
-        { type: 'expression', dxf: sb.dxf({ font: { b: 1, color: C.amber }, fill: C.amberL }), formula: '$F' + FIRST + '="Đang chờ"' },
-        { type: 'expression', dxf: sb.dxf({ font: { b: 1, color: C.green }, fill: C.greenL }), formula: '$F' + FIRST + '="Đã trả"' }] });
-      ws3.cf.push({ ref: 'A' + FIRST + ':H1000', rules: [{ type: 'expression', dxf: sb.dxf({ fill: 'F6F8FB' }), formula: 'AND($A' + FIRST + '<>"",MOD(ROW(),2)=0)' }] });
-      sheets.push(ws3);
+      var r = FIRST + gi; gTotT += g.target; gTotS += Math.max(0, saved);
+      goalRows.push([g.name, g.icon || '', g.target,
+        { f: 'SUMIFS(' + CSQ + '!$D$5:$D$5000,' + CSQ + '!$G$5:$G$5000,J' + r + ')', v: saved },
+        { f: 'MAX(0,C' + r + '-D' + r + ')', v: Math.max(0, g.target - saved) },
+        { f: 'IF(C' + r + '=0,0,MAX(0,MIN(1,D' + r + '/C' + r + ')))', v: g.target ? Math.max(0, Math.min(1, saved / g.target)) : 0 },
+        isoSerial(g.deadline), GSTAT[g.status] || GSTAT.active, dateSerial(g.createdAt), g.id]);
+    });
+    var ws5 = tableSheet({
+      name: 'Mục tiêu', tab: C.green, title: 'MỤC TIÊU TIẾT KIỆM', table: 'tblMucTieu',
+      hint: '«Đã tích lũy» cộng tự động từ sheet «' + CS + '». Sửa Số tiền mục tiêu / Hạn chót / Trạng thái trực tiếp ở đây; thêm lần nạp ở sheet đóng góp.',
+      summary: { label: 'Tổng đã tích lũy', cell: { f: 'SUM(D5:D1000)', v: gTotS } },
+      cols: [{ h: 'Tên mục tiêu', w: 28 }, { h: 'Biểu tượng', w: 11, k: 'ctr' }, { h: 'Số tiền mục tiêu', w: 18, k: 'amt' }, { h: 'Đã tích lũy', w: 18, k: 'amt' },
+        { h: 'Còn thiếu', w: 18, k: 'amt' }, { h: '% hoàn thành', w: 14, k: 'pct' }, { h: 'Hạn chót', w: 14, k: 'date' }, { h: 'Trạng thái', w: 17, k: 'ctr' },
+        { h: 'Ngày tạo', w: 14, k: 'date' }, { h: 'Mã mục tiêu', w: 26, k: 'id' }],
+      rows: goalRows
+    });
+    ws5.dv.push({ ref: 'H' + FIRST + ':H1000', list: '"' + [GSTAT.active, GSTAT.achieved, GSTAT.archived].join(',') + '"', title: 'Trạng thái', error: 'Chọn trạng thái trong danh sách.' });
+    ws5.cf.push({ ref: 'F' + FIRST + ':F1000', rules: [{ type: 'dataBar', color: '5FBF8F' }] });
+    ws5.cf.push({ ref: 'H' + FIRST + ':H1000', rules: [{ type: 'expression', dxf: dxGrn, formula: '$H' + FIRST + '="' + GSTAT.achieved + '"' },
+      { type: 'expression', dxf: sb.dxf({ font: { i: 1, color: '9AA4B2' } }), formula: '$H' + FIRST + '="' + GSTAT.archived + '"' }] });
+    sheets.push(ws5);
+
+    var ws6 = tableSheet({
+      name: CS, tab: C.green, title: 'LỊCH SỬ NẠP / RÚT CỦA MỤC TIÊU', table: 'tblDongGop',
+      hint: 'Số tiền âm = rút. «Mã GD liên kết» nối với lệnh chuyển ví ở sheet Giao dịch (nhiều mã cách nhau dấu ;). Giữ nguyên các cột Mã.',
+      summary: { label: 'Số lần', cell: { f: 'COUNTA(A5:A5000)', v: contribRows.length }, fmt: 'int' },
+      cols: [{ h: 'Tên mục tiêu', w: 28 }, { h: 'Ngày', w: 14, k: 'date' }, { h: 'Loại', w: 16, k: 'ctr' }, { h: 'Số tiền', w: 18, k: 'amt' }, { h: 'Ví', w: 20, k: 'ctr' },
+        { h: 'Ghi chú', w: 40 }, { h: 'Mã mục tiêu', w: 26, k: 'id' }, { h: 'Mã đóng góp', w: 26, k: 'id' }, { h: 'Mã GD liên kết', w: 30, k: 'id' }],
+      rows: contribRows
+    });
+    ws6.dv.push({ ref: 'E' + FIRST + ':E5000', list: '"Chuyển khoản,Tiền mặt,Không liên kết ví"', title: 'Ví', error: 'Chọn ví trong danh sách.' });
+    ws6.cf.push({ ref: 'D' + FIRST + ':D5000', rules: [{ type: 'expression', dxf: sb.dxf({ font: { b: 1, color: C.red } }), formula: '$D' + FIRST + '<0' }] });
+    sheets.push(ws6);
+
+    // ══════════════ SHEET 6: NGÂN SÁCH ══════════════
+    var KIND_VI = { fixed: 'Cố định', flex: 'Linh hoạt', goal: 'Mục tiêu' };
+    var bRows = [], br0 = FIRST;
+    function monthRange(mk) {
+      var m = /^(\d{4})-(\d{1,2})$/.exec(mk); if (!m) return [0, 0];
+      return [_xlSerial(+m[1], +m[2], 1), _xlSerial(+m[1], +m[2] + 1, 1) - 1];
     }
+    (snap.budgetRows || []).forEach(function (b) {
+      var r = br0 + bRows.length, rg = monthRange(b.month), spent = calc('Chi phí', true, b.label, rg[0], rg[1]).sum;
+      var first = 'DATE(VALUE(LEFT($A' + r + ',4)),VALUE(MID($A' + r + ',6,2)),1)';
+      bRows.push([b.month, b.label, b.limit, KIND_VI[b.kind] || KIND_VI.flex,
+        { f: 'SUMIFS(GD_SoTien,GD_Loai,"Chi phí",GD_TinhBC,"<>Không",GD_HangMuc,$B' + r + ',GD_Ngay,">="&' + first + ',GD_Ngay,"<"&EDATE(' + first + ',1))', v: spent },
+        { f: 'C' + r + '-E' + r, v: b.limit - spent }, { f: 'IF(C' + r + '=0,0,E' + r + '/C' + r + ')', v: b.limit ? spent / b.limit : 0 }, b.id]);
+    });
+    (snap.dailyRows || []).forEach(function (d) { bRows.push([d.month, '⏱ Hạn mức chi tiêu mỗi ngày', d.amount, 'Hằng ngày', null, null, null, '__daily__']); });
+    var ws7 = tableSheet({
+      name: 'Ngân sách', tab: '3B6FD4', title: 'NGÂN SÁCH THEO THÁNG', table: 'tblNganSach',
+      hint: 'Sửa «Hạn mức» để đổi ngân sách; «Đã chi», «Còn lại», «% sử dụng» tự tính từ sheet Giao dịch. Tháng viết dạng YYYY-MM (vd 2026-11).',
+      summary: { label: 'Số dòng', cell: { f: 'COUNTA(A5:A1000)', v: bRows.length }, fmt: 'int' },
+      cols: [{ h: 'Tháng', w: 12, k: 'ctr' }, { h: 'Hạng mục', w: 32 }, { h: 'Hạn mức', w: 18, k: 'amt' }, { h: 'Loại', w: 14, k: 'ctr' }, { h: 'Đã chi', w: 18, k: 'amt' },
+        { h: 'Còn lại', w: 18, k: 'amt' }, { h: '% sử dụng', w: 13, k: 'pct' }, { h: 'Mã hạng mục', w: 20, k: 'id' }],
+      rows: bRows
+    });
+    ws7.dv.push({ ref: 'D' + FIRST + ':D1000', list: '"Cố định,Linh hoạt,Mục tiêu,Hằng ngày"', title: 'Loại', error: 'Chọn loại trong danh sách.' });
+    ws7.cf.push({ ref: 'G' + FIRST + ':G1000', rules: [{ type: 'expression', dxf: dxRed, formula: 'AND(ISNUMBER($G' + FIRST + '),$G' + FIRST + '>1)' },
+      { type: 'expression', dxf: dxAmb, formula: 'AND(ISNUMBER($G' + FIRST + '),$G' + FIRST + '>0.8)' }] });
+    sheets.push(ws7);
+
+    // ══════════════ SHEET 7: SỐ DƯ THÁNG (nếu có) ══════════════
+    var snaps = snap.snapshots || [], ws8 = null;
+    if (snaps.length) {
+      ws8 = tableSheet({
+        name: 'Số dư tháng', tab: '9AA4B2', title: 'SỐ DƯ CHỐT THEO THÁNG', table: 'tblSoDuThang',
+        hint: 'Số dư các tài khoản được chốt theo tháng trong ứng dụng. Giữ nguyên để nhập lại.',
+        cols: [{ h: 'Năm', w: 10, k: 'ctr' }, { h: 'Tháng', w: 10, k: 'ctr' }, { h: 'Tài khoản', w: 24 }, { h: 'Số tiền', w: 20, k: 'amt' }],
+        rows: snaps.map(function (b) { return [b.year, b.month, b.account, b.amount]; })
+      });
+      sheets.push(ws8);
+    }
+
+    // ══════════════ SHEET 8: THIẾT LẬP ══════════════
+    var st = snap.settings || {};
+    var ws9 = tableSheet({
+      name: 'Thiết lập', tab: '9AA4B2', title: 'THIẾT LẬP SỐ DƯ', table: 'tblThietLap',
+      hint: 'Các số dư gốc dùng để tính Tài sản ròng trong ứng dụng. Chỉ sửa cột «Giá trị»; cột «Mã» là khóa để nhập lại.',
+      cols: [{ h: 'Mục', w: 36 }, { h: 'Giá trị', w: 20, k: 'amt' }, { h: 'Mã', w: 20, k: 'id' }],
+      rows: [['Số dư ngân hàng ban đầu', Number(st.initBank) || 0, 'initBank'], ['Số dư tiền mặt ban đầu', Number(st.initCash) || 0, 'initCash'],
+        ['Điều chỉnh tài sản ròng', Number(st.netWorthOffset) || 0, 'netWorthOffset'], ['Số dư tiết kiệm (gốc)', Number(st.savingsBalance) || 0, 'savingsBalance'],
+        ['Số dư khởi điểm', Number(st.startingBalance) || 0, 'startingBalance']]
+    });
+    sheets.push(ws9);
 
     // ══════════════ SHEET: DANH MỤC ══════════════
     var ws4 = _xlSheet('Danh mục');
@@ -8603,7 +8779,7 @@ ${_aiShellHTML()}
       return { name: 'GD_' + k, ref: "'Giao dịch'!$" + colLetter[k] + '$' + FIRST + ':$' + colLetter[k] + '$' + LAST };
     });
     names.push({ name: '_xlnm.Print_Titles', sheet: 1, ref: "'Giao dịch'!$4:$4" });
-    if (debts.length) names.push({ name: '_xlnm.Print_Titles', sheet: 2, ref: "'Công nợ'!$4:$4" });
+    names.push({ name: '_xlnm.Print_Titles', sheet: 2, ref: "'Công nợ'!$4:$4" });
 
     return _xlPackage(sheets, sb, sst, names, { created: exp, title: 'CashFlow — Báo cáo tài chính' });
   }
@@ -8653,10 +8829,10 @@ ${_aiShellHTML()}
     return 'uncategorized';
   }
 
-  var _XL_SKIP_SHEETS = ['tong quan', 'summary', 'tom tat', 'danh muc', 'cong no', 'huong dan'];
+  var _XL_SKIP_SHEETS = ['tong quan', 'summary', 'tom tat', 'danh muc', 'cong no', 'huong dan', 'muc tieu', 'dong gop muc tieu', 'ngan sach', 'so du thang', 'thiet lap'];
 
   function _parseImportSheets(sheets, ctx) {
-    var out = [], skippedRows = 0, skippedSheets = [];
+    var out = [], skippedRows = 0, skippedSheets = [], seenIds = {};
 
     sheets.forEach(function (sh) {
       var nm = _xlNorm(sh.name), rows = sh.rows || [];
@@ -8675,7 +8851,8 @@ ${_aiShellHTML()}
       var col = {
         date: find(['ngay', 'date', 'ngay giao dich']), month: find(['thang', 'month']), year: find(['nam', 'year']),
         type: find(['loai', 'type']), desc: find(['mo ta', 'description', 'noi dung']), cat: find(['hang muc', 'category']),
-        src: find(['nguon', 'source', 'nguon tien']), amt: find(['so tien', 'amount'])
+        src: find(['nguon', 'source', 'nguon tien']), amt: find(['so tien', 'amount']),
+        id: find(['ma gd', 'id']), goal: find(['ma muc tieu'])
       };
       var sheetIsIncome = nm.indexOf('income') !== -1 || /(^| )thu( |$)/.test(nm);
 
@@ -8710,15 +8887,213 @@ ${_aiShellHTML()}
         if (type === 'income' && _xlNorm(category) === 'thu no') category = 'thu-no';
         if (type === 'expense' && _xlNorm(category).indexOf('cho vay') !== -1) category = 'cho-vay';
 
-        out.push({
-          id: ctx.uid(), type: type, amount: Math.abs(amount), year: year, month: month, day: day,
+        // Mã giao dịch có sẵn trong file (xuất từ ứng dụng) được giữ lại nếu không trùng; ngược lại tạo mã mới
+        var rid = col.id >= 0 && row[col.id] !== undefined && row[col.id] !== null ? String(row[col.id]).trim() : '';
+        if (!rid || seenIds[rid]) rid = ctx.uid();
+        seenIds[rid] = 1;
+        var tx = {
+          id: rid, type: type, amount: Math.abs(amount), year: year, month: month, day: day,
           desc: col.desc >= 0 ? String(row[col.desc] === undefined || row[col.desc] === null ? '' : row[col.desc]).trim() : '',
           category: category, source: col.src >= 0 ? _xlParseSource(row[col.src]) : 'uncategorized', createdAt: ctx.now
-        });
+        };
+        var rg = col.goal >= 0 && row[col.goal] !== undefined && row[col.goal] !== null ? String(row[col.goal]).trim() : '';
+        if (rg) tx.goalId = rg;
+        out.push(tx);
       }
     });
 
     return { transactions: out, skippedRows: skippedRows, skippedSheets: skippedSheets };
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  //   NHẬP CÁC SHEET MỚI: Công nợ · Mục tiêu · Đóng góp · Ngân sách · Số dư tháng · Thiết lập
+  //   Mỗi mục chỉ được thay thế khi file CÓ sheet tương ứng (file cũ không có → giữ nguyên dữ liệu hiện tại).
+  //   ctx = { genDebtId(), genGoalId(), genContribId(), catLookup(label) → mã|'', defaultKind(catId), prevGoals[] }
+  // ──────────────────────────────────────────────────────────────
+  function _xlSheetByName(sheets, names) {
+    for (var i = 0; i < sheets.length; i++) { if (names.indexOf(_xlNorm(sheets[i].name)) !== -1) return sheets[i]; }
+    return null;
+  }
+  /** Tìm dòng tiêu đề (trong 15 dòng đầu) chứa cột `must`; trả về { hi, head } hoặc null */
+  function _xlFindHeader(rows, must) {
+    for (var i = 0; i < Math.min(rows.length, 15); i++) {
+      var head = (rows[i] || []).map(_xlNorm);
+      if (head.indexOf(must) !== -1) return { hi: i, head: head };
+    }
+    return null;
+  }
+  function _xlCols(head, spec) {
+    var out = {};
+    Object.keys(spec).forEach(function (k) {
+      out[k] = -1;
+      for (var j = 0; j < spec[k].length; j++) { var ix = head.indexOf(spec[k][j]); if (ix !== -1) { out[k] = ix; break; } }
+    });
+    return out;
+  }
+  function _xlCell(row, ix) { return ix >= 0 && row[ix] !== undefined && row[ix] !== null ? row[ix] : ''; }
+  function _xlText(row, ix) { return String(_xlCell(row, ix)).trim(); }
+  function _xlNum(v) {
+    if (typeof v === 'number') return isFinite(v) ? v : NaN;
+    var t = String(v === undefined || v === null ? '' : v).replace(/[^\d,.\-]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.');
+    return t === '' || t === '-' ? NaN : Number(t);
+  }
+  function _xlIso(v) {
+    var d = _xlParseDate(v);
+    return d && d.y >= 1990 && d.y <= 2100 && d.m >= 1 && d.m <= 12 && d.d >= 1 && d.d <= 31 ? d.y + '-' + String(d.m).padStart(2, '0') + '-' + String(d.d).padStart(2, '0') : '';
+  }
+  function _xlRowBlank(row) {
+    if (!row) return true;
+    for (var q = 0; q < row.length; q++) { if (row[q] !== null && row[q] !== undefined && String(row[q]).trim() !== '') return false; }
+    return true;
+  }
+  function _xlWalletKey(v) {
+    var n = _xlNorm(v);
+    if (/tien mat|cash/.test(n)) return 'cash';
+    if (/chuyen khoan|bank|ngan hang/.test(n)) return 'bank';
+    if (/tiet kiem|saving/.test(n)) return 'savings';
+    return 'none';
+  }
+  function _xlMonthKey(v) {
+    if (typeof v === 'number') { var d = _xlParseDate(v); return d ? d.y + '-' + String(d.m).padStart(2, '0') : ''; }
+    var s = String(v === undefined || v === null ? '' : v).trim(), m = /^(\d{4})[-\/](\d{1,2})/.exec(s);
+    if (m && +m[2] >= 1 && +m[2] <= 12) return m[1] + '-' + String(+m[2]).padStart(2, '0');
+    m = /^(\d{1,2})[-\/](\d{4})$/.exec(s);
+    if (m && +m[1] >= 1 && +m[1] <= 12) return m[2] + '-' + String(+m[1]).padStart(2, '0');
+    return '';
+  }
+
+  function _parseImportExtras(sheets, ctx) {
+    var res = { debts: null, goals: null, budgetPlans: null, dailyLimits: null, settings: null, snapshots: null, counts: {} };
+
+    // ── Công nợ ──
+    var sh = _xlSheetByName(sheets, ['cong no']), hd = sh && _xlFindHeader(sh.rows || [], 'nguoi muon');
+    if (hd) {
+      var c = _xlCols(hd.head, {
+        name: ['nguoi muon'], amt: ['so tien'], bor: ['ngay muon'], due: ['hen tra'], paid: ['da tra'], note: ['ghi chu'],
+        itype: ['loai lai'], ival: ['lai gia tri'], iamt: ['tien lai'], lsrc: ['nguon cho vay'], paidAt: ['ngay tra'],
+        ipaid: ['lai da thu'], psrc: ['vi nhan'], id: ['ma khoan no'], lend: ['ma gd cho vay']
+      });
+      var debts = [], dSeen = {};
+      for (var r = hd.hi + 1; r < sh.rows.length; r++) {
+        var row = sh.rows[r];
+        if (_xlRowBlank(row)) continue;
+        var name = _xlText(row, c.name), amount = _xlNum(_xlCell(row, c.amt));
+        if (!name || !(amount > 0)) continue;
+        var paid = /^(co|yes|true|1|da tra)$/.test(_xlNorm(_xlCell(row, c.paid)));
+        var it = _xlNorm(_xlCell(row, c.itype)), itype = /fixed|co dinh|vnd/.test(it) ? 'fixed' : 'pct';
+        var ival = _xlNum(_xlCell(row, c.ival)); if (!(ival > 0)) ival = 0;
+        var iamt = _xlNum(_xlCell(row, c.iamt)); if (!(iamt > 0)) iamt = _calcInterest(amount, itype, ival);
+        var ls = _xlWalletKey(_xlCell(row, c.lsrc)); if (ls !== 'cash' && ls !== 'bank') ls = 'none';
+        var did = _xlText(row, c.id); if (!did || dSeen[did]) did = ctx.genDebtId(); dSeen[did] = 1;
+        var debt = {
+          id: did, debtorName: name.slice(0, 120), amount: amount, dateBorrowed: _xlIso(_xlCell(row, c.bor)), expectedReturnDate: _xlIso(_xlCell(row, c.due)),
+          status: paid ? 'paid' : 'pending', note: _xlText(row, c.note), createdAt: Date.now() + debts.length,
+          lendSource: ls, interestType: itype, interestValue: ival, interestAmount: iamt
+        };
+        var lt = _xlText(row, c.lend); if (lt) debt.lendTxId = lt;
+        if (paid) {
+          var pd = _xlParseDate(_xlCell(row, c.paidAt));
+          debt.paidAt = pd ? new Date(pd.y, pd.m - 1, pd.d, 12, 0, 0).getTime() : Date.now();
+          var ip = _xlNum(_xlCell(row, c.ipaid)); if (ip > 0) debt.interestPaid = ip;
+          var ps = _xlWalletKey(_xlCell(row, c.psrc)); if (ps === 'cash' || ps === 'bank') debt.paidSource = ps;
+        }
+        debts.push(debt);
+      }
+      res.debts = debts; res.counts.debts = debts.length;
+    }
+
+    // ── Mục tiêu + đóng góp ──
+    sh = _xlSheetByName(sheets, ['muc tieu']); hd = sh && _xlFindHeader(sh.rows || [], 'so tien muc tieu');
+    if (hd) {
+      var gc = _xlCols(hd.head, { name: ['ten muc tieu'], icon: ['bieu tuong'], target: ['so tien muc tieu'], dl: ['han chot'], stt: ['trang thai'], created: ['ngay tao'], id: ['ma muc tieu'] });
+      var goals = [], byId = {}, byName = {}, gSeen = {};
+      for (var gr = hd.hi + 1; gr < sh.rows.length; gr++) {
+        var grow = sh.rows[gr];
+        if (_xlRowBlank(grow)) continue;
+        var gname = _xlText(grow, gc.name); if (!gname) continue;
+        var gid = _xlText(grow, gc.id); if (!gid || gSeen[gid]) gid = ctx.genGoalId(); gSeen[gid] = 1;
+        var prev = null; (ctx.prevGoals || []).forEach(function (pg) { if (pg && pg.id === gid) prev = pg; });
+        var sn = _xlNorm(_xlCell(grow, gc.stt)), status = /dat|achiev/.test(sn) ? 'achieved' : /luu tru|archiv/.test(sn) ? 'archived' : 'active';
+        var cd = _xlParseDate(_xlCell(grow, gc.created));
+        var tg = _xlNum(_xlCell(grow, gc.target));
+        var g = {
+          id: gid, name: gname.slice(0, 80), icon: _xlText(grow, gc.icon) || (prev && prev.icon) || '🎯', target: tg > 0 ? tg : 0,
+          deadline: _xlIso(_xlCell(grow, gc.dl)), createdAt: cd ? new Date(cd.y, cd.m - 1, cd.d, 12).getTime() : Date.now(), status: status, contribs: []
+        };
+        goals.push(g); byId[gid] = g; if (!byName[_xlNorm(gname)]) byName[_xlNorm(gname)] = g;
+      }
+      var cs = _xlSheetByName(sheets, ['dong gop muc tieu']), ch = cs && _xlFindHeader(cs.rows || [], 'ma dong gop');
+      var nContrib = 0;
+      if (ch) {
+        var cc = _xlCols(ch.head, { name: ['ten muc tieu'], date: ['ngay'], kind: ['loai'], amt: ['so tien'], wallet: ['vi'], note: ['ghi chu'], gid: ['ma muc tieu'], id: ['ma dong gop'], tx: ['ma gd lien ket'] });
+        var cSeen = {};
+        for (var cr = ch.hi + 1; cr < cs.rows.length; cr++) {
+          var crow = cs.rows[cr];
+          if (_xlRowBlank(crow)) continue;
+          var tgt = byId[_xlText(crow, cc.gid)] || byName[_xlNorm(_xlText(crow, cc.name))];
+          var amt = _xlNum(_xlCell(crow, cc.amt));
+          if (!tgt || !isFinite(amt) || amt === 0) continue;
+          var kind = _xlNorm(_xlCell(crow, cc.kind));
+          if (/^rut|withdraw/.test(kind) && amt > 0) amt = -amt;
+          var cdate = _xlIso(_xlCell(crow, cc.date)) || (new Date().toISOString().slice(0, 10));
+          var cid = _xlText(crow, cc.id); if (!cid || cSeen[cid]) cid = ctx.genContribId(); cSeen[cid] = 1;
+          var contrib = { id: cid, amount: amt, date: cdate, wallet: _xlWalletKey(_xlCell(crow, cc.wallet)), txIds: _xlText(crow, cc.tx).split(/[;,\s]+/).filter(Boolean), note: _xlText(crow, cc.note), createdAt: Date.now() + nContrib };
+          if (contrib.wallet !== 'bank' && contrib.wallet !== 'cash') contrib.wallet = 'none';
+          if (/ban dau|initial/.test(kind)) contrib.initial = true;
+          tgt.contribs.push(contrib); nContrib++;
+        }
+      }
+      res.goals = goals; res.counts.goals = goals.length; res.counts.contribs = nContrib;
+    }
+
+    // ── Ngân sách ──
+    sh = _xlSheetByName(sheets, ['ngan sach']); hd = sh && _xlFindHeader(sh.rows || [], 'han muc');
+    if (hd) {
+      var bc = _xlCols(hd.head, { month: ['thang'], label: ['hang muc'], limit: ['han muc'], kind: ['loai'], id: ['ma hang muc'] });
+      var plans = {}, daily = {}, nb = 0;
+      for (var br = hd.hi + 1; br < sh.rows.length; br++) {
+        var brow = sh.rows[br];
+        if (_xlRowBlank(brow)) continue;
+        var mk = _xlMonthKey(_xlCell(brow, bc.month)), lim = _xlNum(_xlCell(brow, bc.limit));
+        if (!mk || !(lim > 0)) continue;
+        var cid2 = _xlText(brow, bc.id), kindN = _xlNorm(_xlCell(brow, bc.kind));
+        if (cid2 === '__daily__' || /hang ngay|daily/.test(kindN)) { daily[mk] = Math.round(lim); nb++; continue; }
+        if (!cid2) cid2 = ctx.catLookup(_xlText(brow, bc.label));
+        if (!cid2) continue;
+        var kd = /co dinh|fixed/.test(kindN) ? 'fixed' : /linh hoat|flex/.test(kindN) ? 'flex' : /muc tieu|goal/.test(kindN) ? 'goal' : ctx.defaultKind(cid2);
+        (plans[mk] = plans[mk] || {})[cid2] = { limit: Math.round(lim), kind: kd };
+        nb++;
+      }
+      res.budgetPlans = plans; res.dailyLimits = daily; res.counts.budgets = nb;
+    }
+
+    // ── Số dư chốt theo tháng ──
+    sh = _xlSheetByName(sheets, ['so du thang']); hd = sh && _xlFindHeader(sh.rows || [], 'tai khoan');
+    if (hd) {
+      var sc = _xlCols(hd.head, { y: ['nam'], m: ['thang'], acc: ['tai khoan'], amt: ['so tien'] }), snaps = [];
+      for (var sr = hd.hi + 1; sr < sh.rows.length; sr++) {
+        var srow = sh.rows[sr];
+        if (_xlRowBlank(srow)) continue;
+        var yy = _xlNum(_xlCell(srow, sc.y)), mm = _xlNum(_xlCell(srow, sc.m)), aa = _xlNum(_xlCell(srow, sc.amt));
+        if (!(yy >= 2000 && yy <= 2100) || !(mm >= 1 && mm <= 12) || !isFinite(aa)) continue;
+        snaps.push({ year: yy, month: mm, accountId: _xlText(srow, sc.acc), amount: aa });
+      }
+      res.snapshots = snaps; res.counts.snapshots = snaps.length;
+    }
+
+    // ── Thiết lập số dư ──
+    sh = _xlSheetByName(sheets, ['thiet lap']); hd = sh && _xlFindHeader(sh.rows || [], 'gia tri');
+    if (hd) {
+      var tc = _xlCols(hd.head, { val: ['gia tri'], key: ['ma'] }), set = {}, ok = ['initBank', 'initCash', 'netWorthOffset', 'savingsBalance', 'startingBalance'], nset = 0;
+      for (var tr = hd.hi + 1; tr < sh.rows.length; tr++) {
+        var trow = sh.rows[tr];
+        if (_xlRowBlank(trow)) continue;
+        var key = _xlText(trow, tc.key), v = _xlNum(_xlCell(trow, tc.val));
+        if (ok.indexOf(key) !== -1 && isFinite(v)) { set[key] = v; nset++; }
+      }
+      res.settings = set; res.counts.settings = nset;
+    }
+    return res;
   }
   // ==== XLSX-CORE-END ======================================================
 
@@ -8749,12 +9124,13 @@ ${_aiShellHTML()}
     _data.transactions.forEach(function (tx) {
       if (tx.type !== 'transfer') { _exportTxs.push(tx); return; }
       var route = ' [' + _walletLabel(tx.from) + ' → ' + _walletLabel(tx.to) + ']';
-      var base = { amount: tx.amount, year: tx.year, month: tx.month, day: tx.day, desc: (tx.desc || '') + route, category: 'tiet-kiem' };
-      _exportTxs.push(Object.assign({ type: 'expense', source: tx.from }, base), Object.assign({ type: 'income', source: tx.to }, base));
+      var base = { amount: tx.amount, year: tx.year, month: tx.month, day: tx.day, desc: (tx.desc || '') + route, category: 'tiet-kiem', goalId: tx.goalId || '' };
+      // chân chi giữ mã gốc, chân thu thêm hậu tố "~2": khi nhập lại, hai chân được gộp về một lệnh chuyển ví và liên kết mục tiêu được giữ
+      _exportTxs.push(Object.assign({ type: 'expense', source: tx.from, id: tx.id }, base), Object.assign({ type: 'income', source: tx.to, id: (tx.id || '') + '~2' }, base));
     });
     var rows = _exportTxs.filter(function (tx) { return tx.type === 'income' || tx.type === 'expense'; }).map(function (tx) {
       return { y: tx.year || fallbackYear, m: tx.month || 1, d: tx.day || 1, type: tx.type, cat: catLabel(tx), desc: tx.desc || '',
-        src: SRC_VI[tx.source] || 'Chưa phân loại', amount: tx.amount || 0, rep: reported(tx) };
+        src: SRC_VI[tx.source] || 'Chưa phân loại', amount: tx.amount || 0, rep: reported(tx), id: tx.id || '', goal: tx.goalId || '' };
     });
 
     var expenseCats = [], incomeCats = [], budgets = {}, allCats = [], seen = {};
@@ -8777,11 +9153,45 @@ ${_aiShellHTML()}
     _ensureDebtData();
     var debts = _data.debts.map(function (d) {
       return { name: d.debtorName, amount: d.amount, borrowed: iso(d.dateBorrowed), due: iso(d.expectedReturnDate),
-        paid: _getDebtStatus(d) === 'paid', note: d.note || '' };
+        paid: _getDebtStatus(d) === 'paid', note: d.note || '',
+        id: d.id || '', interestType: d.interestType === 'fixed' ? 'fixed' : 'pct', interestValue: Number(d.interestValue) || 0,
+        interestAmount: Number(d.interestAmount) || 0, lendSource: d.lendSource || 'none', lendTxId: d.lendTxId || '',
+        paidAt: d.paidAt ? new Date(d.paidAt) : null, interestPaid: Number(d.interestPaid) || 0, paidSource: d.paidSource || '' };
+    });
+
+    // Mục tiêu tiết kiệm + các lần nạp/rút
+    var goals = _glEnsure().map(function (g) {
+      var cs = (g.contribs || []).map(function (c) {
+        return { id: c.id || '', date: iso(c.date), amount: Number(c.amount) || 0, wallet: c.wallet || 'none', note: c.note || '',
+          txIds: Array.isArray(c.txIds) ? c.txIds.slice() : [], initial: !!c.initial };
+      });
+      return { id: g.id || '', name: g.name || '', icon: _glIsImgIcon(g.icon) ? '' : (g.icon || ''), target: Number(g.target) || 0,
+        deadline: iso(g.deadline), status: g.status || 'active', createdAt: g.createdAt ? new Date(g.createdAt) : null, contribs: cs };
+    });
+
+    // Ngân sách theo tháng + hạn mức chi tiêu mỗi ngày
+    var plans = (_cashFlowMeta && _cashFlowMeta.budgetPlans) || {}, budgetRows = [], dailyRows = [];
+    Object.keys(plans).sort().forEach(function (mk) {
+      var items = plans[mk] || {};
+      Object.keys(items).forEach(function (id) {
+        var e = items[id] || {}, lim = Number(e.limit) || 0;
+        if (lim > 0) budgetRows.push({ month: mk, id: id, label: _categoryDisplayName(id, 'expense'), limit: lim, kind: e.kind || 'flex' });
+      });
+    });
+    var dls = (_cashFlowMeta && _cashFlowMeta.dailyLimits) || {};
+    Object.keys(dls).sort().forEach(function (mk) { if (Number(dls[mk]) > 0) dailyRows.push({ month: mk, amount: Number(dls[mk]) }); });
+
+    var settings = {
+      initBank: Number(_cashFlowMeta && _cashFlowMeta.initBank) || 0, initCash: Number(_cashFlowMeta && _cashFlowMeta.initCash) || 0,
+      netWorthOffset: Number(_cashFlowMeta && _cashFlowMeta.netWorthOffset) || 0, savingsBalance: Number(_cashFlowMeta && _cashFlowMeta.savingsBalance) || 0,
+      startingBalance: Number(_data.startingBalance) || 0
+    };
+    var snapshots = (_data.balanceSnapshots || []).map(function (b) {
+      return { year: Number(b.year) || 0, month: Number(b.month) || 0, account: String(b.accountId == null ? '' : b.accountId), amount: Number(b.amount) || 0 };
     });
 
     return {
-      rows: rows, debts: debts, expenseCats: expenseCats, incomeCats: incomeCats, allCats: allCats, budgets: budgets,
+      rows: rows, debts: debts, goals: goals, budgetRows: budgetRows, dailyRows: dailyRows, settings: settings, snapshots: snapshots, expenseCats: expenseCats, incomeCats: incomeCats, allCats: allCats, budgets: budgets,
       balances: { netWorth: _computeLiveNetWorth(), savings: _calcSavingsBalance(), bank: _calcBankBalance(),
         cash: _calcCashBalance(), uncategorized: _calcUncategorizedBalance(), pendingDebt: _getTotalPendingDebt() },
       viewYear: _currentMonth ? _currentMonth.year : fallbackYear,
@@ -8792,7 +9202,7 @@ ${_aiShellHTML()}
 
   /** Xuất báo cáo Excel đầy đủ (4 sheet, công thức, biểu đồ). Lỗi → quay về bản xuất cơ bản. */
   function _exportToXlsx() {
-    if (!_data || !_data.transactions || _data.transactions.length === 0) {
+    if (!_data || !_data.transactions || (_data.transactions.length === 0 && !(_data.debts || []).length && !(_data.goals || []).length)) {
       var statusEl = document.getElementById('hub-cf-status-msg');
       if (!statusEl) return;
       statusEl.textContent = 'No transactions to export.';
@@ -12656,6 +13066,7 @@ ${_aiShellHTML()}
     });
   }
   var GL_BACKUP_KEY = 'hub_cf_goals_backup_v1';
+  var IMPORT_BACKUP_KEY = 'hub_cf_preimport_backup_v1';   // bản sao dữ liệu trước lần nhập Excel gần nhất
   var GL_DAYS_PER_MONTH = 30.4375;
 
   var GOALS_I18N = {
