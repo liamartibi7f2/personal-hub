@@ -20389,29 +20389,40 @@ body.theme-optimized .heatmap-limit-pill:hover .heatmap-limit-value {
 
 /* ============================================================
    AI ADVISOR v2 — Kế hoạch chi tiêu + Hỏi đáp (.cfx-*)
-   Dùng token của theme: --primary, --text-*, --bg-*, --glass-border
+   Dùng token của theme: --accent-primary, --accent-secondary,
+   --text-*, --bg-*, --glass-border, --font-body, --font-mono
    ============================================================ */
 
 .cfx-ai {
-  --cfx-accent: var(--primary, #00e676);
+  --cfx-accent: var(--accent-primary, #00f0ff);
+  --cfx-accent-2: var(--accent-secondary, var(--cfx-accent));
+  --cfx-on-accent: #041016;
   --cfx-accent-soft: color-mix(in srgb, var(--cfx-accent) 12%, transparent);
   --cfx-accent-line: color-mix(in srgb, var(--cfx-accent) 32%, transparent);
   --cfx-surface: color-mix(in srgb, var(--bg-surface, #12121a) 78%, transparent);
   --cfx-surface-2: color-mix(in srgb, var(--bg-elevated, #1a1a26) 60%, transparent);
   --cfx-line: var(--glass-border, rgba(255, 255, 255, 0.08));
-  --cfx-ok: var(--cfx-accent);
-  --cfx-warn: #ffb347;
+  --cfx-ok: var(--success, var(--cfx-accent));
+  --cfx-warn: var(--warning, #ffb347);
   --cfx-danger: var(--danger, #ff4466);
   --cfx-info: var(--text-secondary, #8b8b9e);
-  --cfx-mono: var(--font-mono, 'JetBrains Mono', monospace);
+  --cfx-font-ui: var(--font-body, 'Inter', sans-serif);
+  --cfx-font-display: var(--font-mono, 'JetBrains Mono', monospace);
+  --cfx-font-mono: var(--font-mono, 'JetBrains Mono', monospace);
+  --cfx-mono: var(--cfx-font-mono);
+  --cfx-r-lg: 16px;
+  --cfx-r-md: 12px;
+  --cfx-r-sm: 8px;
+  --cfx-r-pill: 99px;
 
+  font-family: var(--cfx-font-ui);
   display: flex;
   flex-direction: column;
   gap: 14px;
   margin-top: var(--space-lg, 24px);
   padding: 18px;
   border: 1px solid var(--cfx-accent-line);
-  border-radius: var(--radius-lg, 20px);
+  border-radius: var(--cfx-r-lg);
   background:
     radial-gradient(120% 80% at 100% 0%, color-mix(in srgb, var(--cfx-accent) 7%, transparent) 0%, transparent 55%),
     var(--cfx-surface);
@@ -20451,7 +20462,7 @@ body.theme-optimized .heatmap-limit-pill:hover .heatmap-limit-value {
 .cfx-ai__dot.is-off { background: var(--cfx-warn); box-shadow: 0 0 8px var(--cfx-warn); }
 .cfx-ai.is-busy .cfx-ai__dot { animation: cfxPulse 1s ease-in-out infinite; }
 .cfx-sep { opacity: 0.5; }
-.cfx-ai__tools { display: flex; align-items: center; gap: 8px; }
+.cfx-ai__tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 .cfx-select {
   appearance: none; -webkit-appearance: none; cursor: pointer;
@@ -20605,9 +20616,9 @@ body.theme-optimized .heatmap-limit-pill:hover .heatmap-limit-value {
 .cfx-btn:hover { border-color: var(--cfx-accent-line); color: var(--cfx-accent); transform: translateY(-1px); }
 .cfx-btn--primary {
   background: linear-gradient(135deg, var(--cfx-accent), color-mix(in srgb, var(--cfx-accent) 70%, #000));
-  color: #06120c; border-color: transparent; box-shadow: 0 6px 22px color-mix(in srgb, var(--cfx-accent) 30%, transparent);
+  color: var(--cfx-on-accent); border-color: transparent; box-shadow: 0 6px 22px color-mix(in srgb, var(--cfx-accent) 30%, transparent);
 }
-.cfx-btn--primary:hover { color: #06120c; box-shadow: 0 8px 28px color-mix(in srgb, var(--cfx-accent) 45%, transparent); }
+.cfx-btn--primary:hover { color: var(--cfx-on-accent); box-shadow: 0 8px 28px color-mix(in srgb, var(--cfx-accent) 45%, transparent); }
 
 .cfx-empty-plan { text-align: center; padding: 36px 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--text-secondary); }
 .cfx-empty-plan strong { color: var(--text-primary); }
@@ -20615,7 +20626,7 @@ body.theme-optimized .heatmap-limit-pill:hover .heatmap-limit-value {
 .cfx-empty-plan__icon { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; color: var(--cfx-accent); background: var(--cfx-accent-soft); }
 
 /* ── Chat ── */
-.cfx-chat { display: flex; flex-direction: column; gap: 12px; height: 580px; min-height: 0; }
+.cfx-chat { position: relative; display: flex; flex-direction: column; gap: 12px; height: 620px; min-height: 0; }
 .cfx-chat[hidden] { display: none !important; }
 .cfx-chat__scroll {
   flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 18px;
@@ -20717,18 +20728,13 @@ body.theme-optimized .heatmap-limit-pill:hover .heatmap-limit-value {
 .cfx-input__field::placeholder { color: var(--text-muted); }
 .cfx-send {
   width: 40px; height: 40px; flex-shrink: 0; display: grid; place-items: center; border: 0; border-radius: 12px; cursor: pointer;
-  color: #06120c; background: linear-gradient(135deg, var(--cfx-accent), color-mix(in srgb, var(--cfx-accent) 70%, #000));
+  color: var(--cfx-on-accent); background: linear-gradient(135deg, var(--cfx-accent), color-mix(in srgb, var(--cfx-accent) 70%, #000));
   box-shadow: 0 4px 16px color-mix(in srgb, var(--cfx-accent) 30%, transparent); transition: transform 0.15s, box-shadow 0.2s;
 }
 .cfx-send:hover { transform: scale(1.05); }
 .cfx-send:active { transform: scale(0.95); }
 .cfx-ai.is-busy .cfx-send { background: var(--cfx-surface-2); color: var(--cfx-danger); box-shadow: inset 0 0 0 1px var(--cfx-danger); }
 .cfx-hint { font-family: var(--cfx-mono); font-size: 0.62rem; color: var(--text-muted); text-align: center; letter-spacing: 0.03em; }
-
-/* ── Light theme ── */
-[data-theme="solar-zen"] .cfx-ai { box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08); }
-[data-theme="solar-zen"] .cfx-btn--primary, [data-theme="solar-zen"] .cfx-send { color: #fff; }
-[data-theme="solar-zen"] .cfx-chat__scroll { background: rgba(0, 0, 0, 0.025); }
 
 /* ── Animations ── */
 @keyframes cfxFadeUp   { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
@@ -20759,13 +20765,856 @@ body.theme-optimized .heatmap-limit-pill:hover .heatmap-limit-value {
   .cfx-action { flex-wrap: wrap; }
 }
 
-/* ── AI Advisor v2 · Optimize mode ──────────────────────────────
-   body.theme-optimized đặt "background-image: none !important" cho mọi phần tử,
-   làm mất các nền dùng linear-gradient. Dùng màu phẳng (background-color) thay thế. */
-body.theme-optimized .cfx-pace__fill { background-color: var(--tone, var(--cfx-accent, #00ff41)) !important; }
-body.theme-optimized .cfx-btn--primary,
-body.theme-optimized .cfx-send { background-color: var(--cfx-accent, #00ff41) !important; }
-body.theme-optimized .cfx-ai.is-busy .cfx-send { background-color: var(--cfx-surface-2) !important; }
+/* ── AI Advisor v2 · Quản lý cuộc hội thoại (.cfx-convbar / .cfx-hist / .cfx-conv) ── */
+.cfx-convbar { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 0 0 auto; }
+.cfx-convbar__hist {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 12px;
+  border-radius: 10px; cursor: pointer; font: inherit; font-size: 0.78rem; font-weight: 600;
+  color: var(--text-secondary); background-color: var(--cfx-surface-2); border: 1px solid var(--cfx-line);
+  transition: color 0.2s, border-color 0.2s, background-color 0.2s;
+}
+.cfx-convbar__hist b {
+  min-width: 20px; height: 20px; padding: 0 6px; display: inline-grid; place-items: center; border-radius: 99px;
+  font-size: 0.68rem; font-weight: 700; color: var(--cfx-accent); background-color: var(--cfx-accent-soft);
+}
+.cfx-convbar__hist:hover, .cfx-convbar__hist[aria-expanded="true"] {
+  color: var(--cfx-accent); border-color: var(--cfx-accent-line); background-color: var(--cfx-accent-soft);
+}
+.cfx-convbar__title { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 4px; }
+.cfx-convbar__name {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 0.86rem; font-weight: 600; color: var(--text-primary);
+}
+.cfx-convbar__name.is-placeholder { color: var(--text-muted); font-weight: 500; }
+.cfx-convbar__btn {
+  flex: 0 0 auto; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; cursor: pointer;
+  color: var(--text-muted); background-color: transparent; border: 1px solid transparent; transition: all 0.2s;
+}
+.cfx-convbar__btn:hover { color: var(--cfx-accent); background-color: var(--cfx-accent-soft); }
+.cfx-convbar__btn.is-ok { color: var(--cfx-accent); border-color: var(--cfx-accent-line); }
+.cfx-convbar__new {
+  width: 36px; height: 36px; color: var(--text-secondary); background-color: var(--cfx-surface-2); border-color: var(--cfx-line);
+}
+.cfx-convbar__new:hover { border-color: var(--cfx-accent-line); }
+.cfx-convbar__input {
+  flex: 1 1 auto; min-width: 0; height: 36px; padding: 0 12px; border-radius: 10px; font: inherit; font-size: 0.86rem;
+  color: var(--text-primary); background-color: var(--cfx-surface-2); border: 1px solid var(--cfx-accent-line); outline: none;
+}
+.cfx-convbar__input:focus { border-color: var(--cfx-accent); box-shadow: 0 0 0 3px var(--cfx-accent-soft); }
+
+/* Bảng lịch sử (phủ lên khung chat) */
+.cfx-hist {
+  position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; gap: 12px; padding: 14px;
+  border-radius: 16px; overflow: hidden;
+  background-color: var(--bg-deep, #0a0a0f);
+  background-image: linear-gradient(var(--cfx-surface-2), var(--cfx-surface-2));
+  border: 1px solid var(--cfx-accent-line); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  animation: cfx-hist-in 0.22s ease-out;
+}
+.cfx-hist[hidden] { display: none; }
+@keyframes cfx-hist-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.cfx-hist__head { display: flex; align-items: center; gap: 10px; }
+.cfx-hist__head strong { font-size: 0.95rem; color: var(--text-primary); }
+.cfx-hist__count {
+  min-width: 22px; height: 22px; padding: 0 7px; display: inline-grid; place-items: center; border-radius: 99px;
+  font-size: 0.7rem; font-weight: 700; color: var(--cfx-accent); background-color: var(--cfx-accent-soft);
+}
+.cfx-hist__count:empty { display: none; }
+.cfx-hist__x {
+  margin-left: auto; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; cursor: pointer;
+  color: var(--text-secondary); background-color: var(--cfx-surface-2); border: 1px solid var(--cfx-line);
+  transition: color 0.2s, border-color 0.2s, background-color 0.2s;
+}
+.cfx-hist__x:hover { color: var(--cfx-accent); border-color: var(--cfx-accent-line); background-color: var(--cfx-accent-soft); }
+.cfx-hist__search {
+  display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 12px; color: var(--text-muted);
+  background-color: var(--cfx-surface-2); border: 1px solid var(--cfx-line); transition: border-color 0.2s, box-shadow 0.2s;
+}
+.cfx-hist__search:focus-within { border-color: var(--cfx-accent-line); box-shadow: 0 0 0 3px var(--cfx-accent-soft); }
+.cfx-hist__search input {
+  flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent;
+  font: inherit; font-size: 0.86rem; color: var(--text-primary);
+}
+.cfx-hist__search input::placeholder { color: var(--text-muted); }
+.cfx-hist__list {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px;
+  padding-right: 2px; overscroll-behavior: contain;
+}
+.cfx-hist__list::-webkit-scrollbar { width: 6px; }
+.cfx-hist__list::-webkit-scrollbar-thumb { background: var(--cfx-accent-line); border-radius: 6px; }
+.cfx-hist__group { display: flex; flex-direction: column; gap: 6px; }
+.cfx-hist__label {
+  padding: 0 4px; font-family: var(--cfx-mono); font-size: 0.66rem; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted);
+}
+.cfx-hist__empty {
+  margin: auto; padding: 24px 12px; display: flex; flex-direction: column; align-items: center; gap: 8px;
+  text-align: center; color: var(--text-muted);
+}
+.cfx-hist__empty svg { color: var(--cfx-accent); opacity: 0.8; }
+.cfx-hist__empty strong { color: var(--text-primary); font-size: 0.9rem; }
+.cfx-hist__empty span { max-width: 260px; font-size: 0.78rem; line-height: 1.5; }
+.cfx-hist__foot { display: flex; gap: 8px; padding-top: 2px; }
+.cfx-hist__btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 40px; padding: 0 14px;
+  border-radius: 11px; cursor: pointer; font: inherit; font-size: 0.8rem; font-weight: 600;
+  color: var(--text-secondary); background-color: var(--cfx-surface-2); border: 1px solid var(--cfx-line); transition: all 0.2s;
+}
+.cfx-hist__btn--primary {
+  flex: 1 1 auto; color: var(--cfx-accent); background-color: var(--cfx-accent-soft); border-color: var(--cfx-accent-line);
+}
+.cfx-hist__btn--primary:hover { filter: brightness(1.15); }
+.cfx-hist__btn--danger:hover:not(:disabled),
+.cfx-hist__btn--danger.is-confirm {
+  color: var(--cfx-danger); border-color: color-mix(in srgb, var(--cfx-danger) 50%, transparent);
+  background-color: color-mix(in srgb, var(--cfx-danger) 12%, transparent);
+}
+.cfx-hist__btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Một cuộc trò chuyện */
+.cfx-conv {
+  position: relative; display: flex; align-items: stretch; gap: 4px; border-radius: 12px;
+  background-color: var(--cfx-surface-2); border: 1px solid var(--cfx-line); transition: border-color 0.2s, background-color 0.2s;
+}
+.cfx-conv:hover { border-color: var(--cfx-accent-line); }
+.cfx-conv.is-active { border-color: var(--cfx-accent); background-color: var(--cfx-accent-soft); }
+.cfx-conv__main {
+  flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; padding: 11px 6px 11px 14px;
+  text-align: left; cursor: pointer; background: transparent; border: 0; color: inherit; font: inherit;
+}
+.cfx-conv__title { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 0.88rem; font-weight: 600; color: var(--text-primary); }
+.cfx-conv__title > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cfx-conv__pinmark { flex: 0 0 auto; display: inline-flex; color: var(--cfx-accent); font-style: normal; }
+.cfx-conv__pinmark svg { width: 13px; height: 13px; }
+.cfx-conv__meta { font-size: 0.7rem; color: var(--text-muted); }
+.cfx-conv__snip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.76rem; color: var(--text-secondary); opacity: 0.85; }
+.cfx-conv__acts { flex: 0 0 auto; display: flex; align-items: center; gap: 2px; padding-right: 6px; }
+.cfx-conv__ic {
+  width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; cursor: pointer;
+  color: var(--text-muted); background-color: transparent; border: 1px solid transparent; transition: all 0.2s;
+}
+.cfx-conv__ic:hover { color: var(--cfx-accent); background-color: var(--cfx-accent-soft); }
+.cfx-conv__ic.is-on { color: var(--cfx-accent); }
+.cfx-conv__ic.is-ok { color: var(--cfx-accent); border-color: var(--cfx-accent-line); }
+.cfx-conv__ic.is-danger:hover { color: var(--cfx-danger); background-color: color-mix(in srgb, var(--cfx-danger) 14%, transparent); }
+@media (hover: hover) {
+  .cfx-conv__acts { opacity: 0; transition: opacity 0.15s; }
+  .cfx-conv:hover .cfx-conv__acts, .cfx-conv:focus-within .cfx-conv__acts, .cfx-conv.is-active .cfx-conv__acts { opacity: 1; }
+}
+.cfx-conv__editrow, .cfx-conv__confirm { flex: 1; display: flex; align-items: center; gap: 6px; padding: 8px 8px 8px 12px; min-width: 0; }
+.cfx-conv__edit {
+  flex: 1; min-width: 0; height: 36px; padding: 0 10px; border-radius: 9px; font: inherit; font-size: 0.86rem; color: var(--text-primary);
+  background-color: var(--bg-deep, #0a0a0f); border: 1px solid var(--cfx-accent-line); outline: none;
+}
+.cfx-conv__edit:focus { border-color: var(--cfx-accent); box-shadow: 0 0 0 3px var(--cfx-accent-soft); }
+.cfx-conv__confirm { flex-wrap: wrap; font-size: 0.82rem; color: var(--text-primary); }
+.cfx-conv__confirm span { flex: 1 1 140px; font-weight: 500; }
+.cfx-conv__yes, .cfx-conv__no {
+  height: 34px; padding: 0 14px; border-radius: 9px; cursor: pointer; font: inherit; font-size: 0.78rem; font-weight: 600;
+  border: 1px solid var(--cfx-line);
+}
+.cfx-conv__yes { color: #fff; background-color: var(--cfx-danger); border-color: var(--cfx-danger); }
+.cfx-conv__no { color: var(--text-secondary); background-color: transparent; }
+
+@media (pointer: coarse) {
+  .cfx-conv__ic, .cfx-convbar__btn { width: 40px; height: 40px; }
+  .cfx-conv__ic { width: 38px; height: 38px; }
+  .cfx-convbar__hist, .cfx-convbar__new, .cfx-hist__btn, .cfx-hist__x { min-height: 44px; }
+  .cfx-convbar__new { width: 44px; }
+  .cfx-conv__yes, .cfx-conv__no { height: 42px; }
+  .cfx-conv__acts { padding-right: 2px; gap: 0; }
+}
+@media (max-width: 520px) {
+  .cfx-chat { height: min(640px, 78dvh); }
+  .cfx-convbar__hist span { display: none; }
+  .cfx-hist { padding: 12px; }
+  .cfx-hist__btn--danger span { display: none; }
+  .cfx-hist__btn--danger.is-confirm span { display: inline; }
+  .cfx-conv__main { padding: 10px 14px 30px; }
+  .cfx-conv__snip { display: none; }
+  .cfx-conv__acts { position: absolute; right: 4px; bottom: 4px; padding: 0; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) { .cfx-hist { animation: none; } }
+
+/* ============================================================
+   5-THEME PERSONALITIES FOR AI ADVISOR (.cfx-ai)
+   1) Cyberpunk       · "Neural HUD"
+   2) Solar Zen       · "Editorial Financial Ledger"
+   3) Lo-Fi Twilight  · "Cassette Study Journal"
+   4) Ember Noir      · "Forge Ledger"
+   5) Optimize Mode   · "TUI · Matrix Command Terminal"
+   ============================================================ */
+
+/* ── 1) CYBERPUNK · "Neural HUD" ── */
+:where(:root:not([data-theme])) .cfx-ai,
+[data-theme="cyberpunk"] .cfx-ai {
+  --cfx-accent: var(--accent-primary, #00f0ff);
+  --cfx-accent-2: var(--accent-secondary, #ff00aa);
+  --cfx-on-accent: #03131a;
+  --cfx-font-ui: var(--font-body, 'Inter', sans-serif);
+  --cfx-font-display: var(--font-mono, 'JetBrains Mono', monospace);
+  --cfx-r-lg: 6px;
+  --cfx-r-md: 4px;
+  --cfx-r-sm: 2px;
+
+  border-radius: var(--cfx-r-lg);
+  border-color: color-mix(in srgb, var(--cfx-accent) 44%, transparent);
+  background:
+    radial-gradient(110% 70% at 100% 0%, color-mix(in srgb, var(--cfx-accent) 11%, transparent), transparent 55%),
+    radial-gradient(80% 60% at 0% 100%, color-mix(in srgb, var(--cfx-accent-2) 6%, transparent), transparent 55%),
+    var(--cfx-surface);
+  box-shadow:
+    inset 0 0 28px color-mix(in srgb, var(--cfx-accent) 7%, transparent),
+    0 12px 42px rgba(0, 0, 0, 0.48);
+}
+:where(:root:not([data-theme])) .cfx-ai::before,
+[data-theme="cyberpunk"] .cfx-ai::before,
+:where(:root:not([data-theme])) .cfx-ai::after,
+[data-theme="cyberpunk"] .cfx-ai::after {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 0 solid var(--cfx-accent);
+  pointer-events: none;
+  z-index: 2;
+}
+:where(:root:not([data-theme])) .cfx-ai::before,
+[data-theme="cyberpunk"] .cfx-ai::before {
+  top: -1px;
+  left: -1px;
+  border-width: 2px 0 0 2px;
+}
+:where(:root:not([data-theme])) .cfx-ai::after,
+[data-theme="cyberpunk"] .cfx-ai::after {
+  right: -1px;
+  bottom: -1px;
+  border-width: 0 2px 2px 0;
+}
+:where(:root:not([data-theme])) .cfx-ai .cfx-ai__titles h4,
+[data-theme="cyberpunk"] .cfx-ai .cfx-ai__titles h4,
+:where(:root:not([data-theme])) .cfx-ai .cfx-card__head h5,
+[data-theme="cyberpunk"] .cfx-ai .cfx-card__head h5,
+:where(:root:not([data-theme])) .cfx-ai .cfx-empty h5,
+[data-theme="cyberpunk"] .cfx-ai .cfx-empty h5,
+:where(:root:not([data-theme])) .cfx-ai .cfx-md-h,
+[data-theme="cyberpunk"] .cfx-ai .cfx-md-h,
+:where(:root:not([data-theme])) .cfx-ai .cfx-hist__head strong,
+[data-theme="cyberpunk"] .cfx-ai .cfx-hist__head strong {
+  font-family: var(--cfx-font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+:where(:root:not([data-theme])) .cfx-ai .cfx-ai__titles h4::before,
+[data-theme="cyberpunk"] .cfx-ai .cfx-ai__titles h4::before,
+:where(:root:not([data-theme])) .cfx-ai .cfx-card__head h5::before,
+[data-theme="cyberpunk"] .cfx-ai .cfx-card__head h5::before {
+  content: "// ";
+  color: var(--cfx-accent);
+}
+:where(:root:not([data-theme])) .cfx-ai .cfx-ai__logo,
+[data-theme="cyberpunk"] .cfx-ai .cfx-ai__logo,
+:where(:root:not([data-theme])) .cfx-ai .cfx-empty__logo,
+[data-theme="cyberpunk"] .cfx-ai .cfx-empty__logo,
+:where(:root:not([data-theme])) .cfx-ai .cfx-send,
+[data-theme="cyberpunk"] .cfx-ai .cfx-send,
+:where(:root:not([data-theme])) .cfx-ai .cfx-btn--primary,
+[data-theme="cyberpunk"] .cfx-ai .cfx-btn--primary,
+:where(:root:not([data-theme])) .cfx-ai .cfx-msg__avatar,
+[data-theme="cyberpunk"] .cfx-ai .cfx-msg__avatar {
+  border-radius: var(--cfx-r-sm);
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+}
+:where(:root:not([data-theme])) .cfx-ai .cfx-card,
+[data-theme="cyberpunk"] .cfx-ai .cfx-card,
+:where(:root:not([data-theme])) .cfx-ai .cfx-hero,
+[data-theme="cyberpunk"] .cfx-ai .cfx-hero,
+:where(:root:not([data-theme])) .cfx-ai .cfx-kpi,
+[data-theme="cyberpunk"] .cfx-ai .cfx-kpi,
+:where(:root:not([data-theme])) .cfx-ai .cfx-tabs,
+[data-theme="cyberpunk"] .cfx-ai .cfx-tabs,
+:where(:root:not([data-theme])) .cfx-ai .cfx-tab,
+[data-theme="cyberpunk"] .cfx-ai .cfx-tab,
+:where(:root:not([data-theme])) .cfx-ai .cfx-select,
+[data-theme="cyberpunk"] .cfx-ai .cfx-select,
+:where(:root:not([data-theme])) .cfx-ai .cfx-iconbtn,
+[data-theme="cyberpunk"] .cfx-ai .cfx-iconbtn,
+:where(:root:not([data-theme])) .cfx-ai .cfx-insight,
+[data-theme="cyberpunk"] .cfx-ai .cfx-insight,
+:where(:root:not([data-theme])) .cfx-ai .cfx-action,
+[data-theme="cyberpunk"] .cfx-ai .cfx-action,
+:where(:root:not([data-theme])) .cfx-ai .cfx-link,
+[data-theme="cyberpunk"] .cfx-ai .cfx-link,
+:where(:root:not([data-theme])) .cfx-ai .cfx-btn,
+[data-theme="cyberpunk"] .cfx-ai .cfx-btn,
+:where(:root:not([data-theme])) .cfx-ai .cfx-chat__scroll,
+[data-theme="cyberpunk"] .cfx-ai .cfx-chat__scroll,
+:where(:root:not([data-theme])) .cfx-ai .cfx-msg__bubble,
+[data-theme="cyberpunk"] .cfx-ai .cfx-msg__bubble,
+:where(:root:not([data-theme])) .cfx-ai .cfx-tile,
+[data-theme="cyberpunk"] .cfx-ai .cfx-tile,
+:where(:root:not([data-theme])) .cfx-ai .cfx-input,
+[data-theme="cyberpunk"] .cfx-ai .cfx-input,
+:where(:root:not([data-theme])) .cfx-ai .cfx-convbar__hist,
+[data-theme="cyberpunk"] .cfx-ai .cfx-convbar__hist,
+:where(:root:not([data-theme])) .cfx-ai .cfx-convbar__new,
+[data-theme="cyberpunk"] .cfx-ai .cfx-convbar__new,
+:where(:root:not([data-theme])) .cfx-ai .cfx-convbar__input,
+[data-theme="cyberpunk"] .cfx-ai .cfx-convbar__input,
+:where(:root:not([data-theme])) .cfx-ai .cfx-hist,
+[data-theme="cyberpunk"] .cfx-ai .cfx-hist,
+:where(:root:not([data-theme])) .cfx-ai .cfx-hist__x,
+[data-theme="cyberpunk"] .cfx-ai .cfx-hist__x,
+:where(:root:not([data-theme])) .cfx-ai .cfx-hist__search,
+[data-theme="cyberpunk"] .cfx-ai .cfx-hist__search,
+:where(:root:not([data-theme])) .cfx-ai .cfx-hist__btn,
+[data-theme="cyberpunk"] .cfx-ai .cfx-hist__btn,
+:where(:root:not([data-theme])) .cfx-ai .cfx-conv,
+[data-theme="cyberpunk"] .cfx-ai .cfx-conv,
+:where(:root:not([data-theme])) .cfx-ai .cfx-conv__ic,
+[data-theme="cyberpunk"] .cfx-ai .cfx-conv__ic,
+:where(:root:not([data-theme])) .cfx-ai .cfx-conv__edit,
+[data-theme="cyberpunk"] .cfx-ai .cfx-conv__edit,
+:where(:root:not([data-theme])) .cfx-ai .cfx-conv__yes,
+[data-theme="cyberpunk"] .cfx-ai .cfx-conv__yes,
+:where(:root:not([data-theme])) .cfx-ai .cfx-conv__no,
+[data-theme="cyberpunk"] .cfx-ai .cfx-conv__no,
+:where(:root:not([data-theme])) .cfx-ai .cfx-seg__btn,
+[data-theme="cyberpunk"] .cfx-ai .cfx-seg__btn,
+:where(:root:not([data-theme])) .cfx-ai .cfx-table-wrap,
+[data-theme="cyberpunk"] .cfx-ai .cfx-table-wrap {
+  border-radius: var(--cfx-r-md);
+}
+:where(:root:not([data-theme])) .cfx-ai .cfx-chip,
+[data-theme="cyberpunk"] .cfx-ai .cfx-chip {
+  border-radius: var(--cfx-r-sm);
+  font-family: var(--cfx-font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+}
+:where(:root:not([data-theme])) .cfx-ai .cfx-hero,
+[data-theme="cyberpunk"] .cfx-ai .cfx-hero {
+  background-image:
+    repeating-linear-gradient(0deg, transparent 0 3px, color-mix(in srgb, var(--cfx-accent) 4%, transparent) 3px 4px),
+    linear-gradient(135deg, color-mix(in srgb, var(--tone) 11%, transparent), transparent 70%);
+}
+:where(:root:not([data-theme])) .cfx-ai .cfx-chat__scroll,
+[data-theme="cyberpunk"] .cfx-ai .cfx-chat__scroll {
+  background:
+    repeating-linear-gradient(0deg, transparent 0 5px, color-mix(in srgb, var(--cfx-accent) 3%, transparent) 5px 6px),
+    color-mix(in srgb, var(--bg-deep, #05050a) 68%, transparent);
+}
+:where(:root:not([data-theme])) .cfx-ai .cfx-tab.is-active,
+[data-theme="cyberpunk"] .cfx-ai .cfx-tab.is-active {
+  box-shadow:
+    inset 0 0 0 1px var(--cfx-accent-line),
+    0 0 16px color-mix(in srgb, var(--cfx-accent) 24%, transparent);
+}
+:where(:root:not([data-theme])) .cfx-ai .cfx-pace__fill,
+[data-theme="cyberpunk"] .cfx-ai .cfx-pace__fill {
+  box-shadow: 0 0 16px color-mix(in srgb, var(--tone) 55%, transparent);
+}
+
+/* ── 2) SOLAR ZEN · "Editorial Financial Ledger" ── */
+[data-theme="solar-zen"] .cfx-ai {
+  --cfx-accent: var(--accent-primary, #4f46e5);
+  --cfx-accent-2: var(--accent-secondary, #7c3aed);
+  --cfx-on-accent: #ffffff;
+  --cfx-surface: var(--bg-surface, #ffffff);
+  --cfx-surface-2: var(--bg-elevated, #f8fafc);
+  --cfx-line: rgba(15, 23, 42, 0.11);
+  --cfx-ok: #16a34a;
+  --cfx-warn: #d97706;
+  --cfx-danger: #dc2626;
+  --cfx-font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+
+  border-radius: 18px;
+  border-color: rgba(15, 23, 42, 0.12);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 14px 38px rgba(15, 23, 42, 0.08);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+[data-theme="solar-zen"] .cfx-ai .cfx-ai__logo,
+[data-theme="solar-zen"] .cfx-ai .cfx-empty__logo {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  background: color-mix(in srgb, var(--cfx-accent) 9%, #ffffff);
+}
+[data-theme="solar-zen"] .cfx-ai .cfx-ai__dot {
+  box-shadow: none;
+}
+[data-theme="solar-zen"] .cfx-ai .cfx-ai__titles h4,
+[data-theme="solar-zen"] .cfx-ai .cfx-card__head h5,
+[data-theme="solar-zen"] .cfx-ai .cfx-empty h5,
+[data-theme="solar-zen"] .cfx-ai .cfx-md-h,
+[data-theme="solar-zen"] .cfx-ai .cfx-convbar__name,
+[data-theme="solar-zen"] .cfx-ai .cfx-hist__head strong,
+[data-theme="solar-zen"] .cfx-ai .cfx-hero__value {
+  font-family: var(--cfx-font-display);
+  letter-spacing: -0.01em;
+}
+[data-theme="solar-zen"] .cfx-ai .cfx-ai__titles h4 { font-size: 1.16rem; font-weight: 700; }
+[data-theme="solar-zen"] .cfx-ai .cfx-card__head h5 { font-size: 0.96rem; font-weight: 700; }
+[data-theme="solar-zen"] .cfx-ai .cfx-tabs {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 0;
+  padding: 0;
+  gap: 8px;
+}
+[data-theme="solar-zen"] .cfx-ai .cfx-tab {
+  border-radius: 8px 8px 0 0;
+  border-bottom: 2px solid transparent;
+  font-family: var(--cfx-font-display);
+  font-size: 0.9rem;
+}
+[data-theme="solar-zen"] .cfx-ai .cfx-tab.is-active {
+  background: color-mix(in srgb, var(--cfx-accent) 7%, transparent);
+  box-shadow: none;
+  border-bottom-color: var(--cfx-accent);
+  color: var(--cfx-accent);
+}
+[data-theme="solar-zen"] .cfx-ai .cfx-card,
+[data-theme="solar-zen"] .cfx-ai .cfx-hero,
+[data-theme="solar-zen"] .cfx-ai .cfx-kpi,
+[data-theme="solar-zen"] .cfx-ai .cfx-tile {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.1);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.03);
+}
+[data-theme="solar-zen"] .cfx-ai .cfx-hero {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--tone) 7%, #ffffff), #ffffff 68%);
+  border-color: color-mix(in srgb, var(--tone) 28%, rgba(15, 23, 42, 0.1));
+}
+[data-theme="solar-zen"] .cfx-ai .cfx-pace__fill { box-shadow: none; }
+[data-theme="solar-zen"] .cfx-ai .cfx-chat__scroll {
+  background-color: #fbfcfd;
+  background-image: repeating-linear-gradient(180deg, transparent 0 31px, rgba(15, 23, 42, 0.045) 31px 32px);
+  border-color: rgba(15, 23, 42, 0.11);
+}
+[data-theme="solar-zen"] .cfx-ai .cfx-msg__bubble {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.1);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+}
+[data-theme="solar-zen"] .cfx-ai .cfx-msg--user .cfx-msg__bubble {
+  background: color-mix(in srgb, var(--cfx-accent) 9%, #ffffff);
+  border-color: color-mix(in srgb, var(--cfx-accent) 28%, transparent);
+}
+[data-theme="solar-zen"] .cfx-ai .cfx-select,
+[data-theme="solar-zen"] .cfx-ai .cfx-iconbtn,
+[data-theme="solar-zen"] .cfx-ai .cfx-input,
+[data-theme="solar-zen"] .cfx-ai .cfx-chip,
+[data-theme="solar-zen"] .cfx-ai .cfx-btn,
+[data-theme="solar-zen"] .cfx-ai .cfx-convbar__hist,
+[data-theme="solar-zen"] .cfx-ai .cfx-convbar__new,
+[data-theme="solar-zen"] .cfx-ai .cfx-convbar__input,
+[data-theme="solar-zen"] .cfx-ai .cfx-hist__x,
+[data-theme="solar-zen"] .cfx-ai .cfx-hist__search,
+[data-theme="solar-zen"] .cfx-ai .cfx-hist__btn,
+[data-theme="solar-zen"] .cfx-ai .cfx-conv {
+  background-color: #ffffff;
+  border-color: rgba(15, 23, 42, 0.12);
+}
+[data-theme="solar-zen"] .cfx-ai .cfx-hist {
+  background-color: #ffffff;
+  background-image: none;
+  border-color: rgba(15, 23, 42, 0.14);
+  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.14);
+}
+[data-theme="solar-zen"] .cfx-ai .cfx-conv.is-active {
+  background-color: color-mix(in srgb, var(--cfx-accent) 8%, #ffffff);
+  border-color: var(--cfx-accent);
+}
+[data-theme="solar-zen"] .cfx-ai .cfx-conv__edit { background-color: #f8fafc; }
+[data-theme="solar-zen"] .cfx-ai .cfx-btn--primary,
+[data-theme="solar-zen"] .cfx-ai .cfx-send {
+  color: var(--cfx-on-accent);
+  background: linear-gradient(135deg, var(--cfx-accent), var(--cfx-accent-2));
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--cfx-accent) 26%, transparent);
+}
+
+/* ── 3) LO-FI TWILIGHT · "Cassette Study Journal" ── */
+[data-theme="lofi-twilight"] .cfx-ai {
+  --cfx-accent: var(--accent-primary, #bb9af7);
+  --cfx-accent-2: var(--accent-secondary, #ff9e64);
+  --cfx-on-accent: #1a1b26;
+  --cfx-font-ui: ui-rounded, "SF Pro Rounded", "Nunito", var(--font-body, 'Inter', sans-serif);
+  --cfx-font-display: ui-rounded, "SF Pro Rounded", "Nunito", var(--font-body, 'Inter', sans-serif);
+  --cfx-r-lg: 24px;
+  --cfx-r-md: 18px;
+  --cfx-r-sm: 14px;
+
+  border-radius: var(--cfx-r-lg);
+  border: 1.5px dashed color-mix(in srgb, var(--cfx-accent) 48%, transparent);
+  background:
+    radial-gradient(110% 80% at 100% 0%, color-mix(in srgb, var(--cfx-accent-2) 10%, transparent), transparent 58%),
+    color-mix(in srgb, var(--bg-surface, #24283b) 86%, transparent);
+  box-shadow: 0 12px 36px rgba(10, 12, 24, 0.45);
+}
+[data-theme="lofi-twilight"] .cfx-ai .cfx-ai__titles h4,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-empty h5,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-card__head h5 {
+  font-family: var(--cfx-font-display);
+  font-weight: 800;
+}
+[data-theme="lofi-twilight"] .cfx-ai .cfx-ai__titles h4::before,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-empty h5::before {
+  content: "♪ ";
+  color: var(--cfx-accent-2);
+}
+[data-theme="lofi-twilight"] .cfx-ai .cfx-card,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-hero,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-tile,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-conv,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-hist,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-chat__scroll {
+  border-radius: var(--cfx-r-md);
+  border: 1.5px dashed color-mix(in srgb, var(--text-primary, #c0caf5) 22%, transparent);
+}
+[data-theme="lofi-twilight"] .cfx-ai .cfx-card,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-kpi,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-tile,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-conv {
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--cfx-accent) 26%, transparent);
+}
+[data-theme="lofi-twilight"] .cfx-ai .cfx-kpi {
+  border-radius: var(--cfx-r-md);
+  border-top-width: 3px;
+}
+[data-theme="lofi-twilight"] .cfx-ai .cfx-chat__scroll {
+  background-color: color-mix(in srgb, var(--bg-deep, #1a1b26) 72%, transparent);
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--text-primary, #c0caf5) 11%, transparent) 1px, transparent 1.6px);
+  background-size: 18px 18px;
+}
+[data-theme="lofi-twilight"] .cfx-ai .cfx-tabs {
+  border-radius: 999px;
+  padding: 5px;
+}
+[data-theme="lofi-twilight"] .cfx-ai .cfx-tab,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-btn,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-convbar__hist,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-hist__btn,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-seg__btn,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-link,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-chip,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-send {
+  border-radius: 999px;
+}
+[data-theme="lofi-twilight"] .cfx-ai .cfx-btn,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-send {
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--cfx-accent) 32%, transparent);
+}
+[data-theme="lofi-twilight"] .cfx-ai .cfx-btn--primary,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-send {
+  background: linear-gradient(135deg, var(--cfx-accent), var(--cfx-accent-2));
+  color: var(--cfx-on-accent);
+}
+[data-theme="lofi-twilight"] .cfx-ai .cfx-msg__bubble {
+  border-radius: 20px;
+  border-top-left-radius: 6px;
+}
+[data-theme="lofi-twilight"] .cfx-ai .cfx-msg--user .cfx-msg__bubble {
+  border-top-left-radius: 20px;
+  border-top-right-radius: 6px;
+}
+[data-theme="lofi-twilight"] .cfx-ai .cfx-input,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-hist__search,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-select,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-iconbtn,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-convbar__new,
+[data-theme="lofi-twilight"] .cfx-ai .cfx-convbar__input {
+  border-radius: var(--cfx-r-sm);
+}
+[data-theme="lofi-twilight"] .cfx-ai .cfx-hist {
+  background-color: var(--bg-surface, #24283b);
+  background-image: linear-gradient(160deg, color-mix(in srgb, var(--cfx-accent) 10%, transparent), color-mix(in srgb, var(--cfx-accent-2) 6%, transparent));
+}
+
+/* ── 4) EMBER NOIR · "Forge Ledger" ── */
+[data-theme="ember-noir"] .cfx-ai {
+  --cfx-accent: var(--accent-primary, #ff9f43);
+  --cfx-accent-2: var(--accent-secondary, #ff6a4d);
+  --cfx-on-accent: #1a0e04;
+  --cfx-surface: var(--bg-surface, #1a1411);
+  --cfx-surface-2: var(--bg-elevated, #261d18);
+  --cfx-line: var(--ember-brass-line, rgba(224, 170, 100, 0.22));
+  --cfx-font-ui: var(--font-body, 'Barlow', sans-serif);
+  --cfx-font-display: var(--font-mono, 'Barlow Condensed', sans-serif);
+  --cfx-font-mono: var(--font-mono, 'Barlow Condensed', sans-serif);
+  --cfx-mono: var(--font-mono, 'Barlow Condensed', sans-serif);
+  --em-rivet: radial-gradient(circle at 38% 34%, #ffe2bb 0 0.7px, #e0a04c 1.7px, #8a5014 3.1px, transparent 3.3px);
+
+  border-radius: 12px;
+  border: 1px solid rgba(224, 170, 100, 0.42);
+  background-color: var(--bg-surface, #1a1411);
+  background-image:
+    var(--em-rivet) left 10px top 10px / 9px 9px no-repeat,
+    var(--em-rivet) right 10px top 10px / 9px 9px no-repeat,
+    var(--em-rivet) left 10px bottom 10px / 9px 9px no-repeat,
+    var(--em-rivet) right 10px bottom 10px / 9px 9px no-repeat,
+    radial-gradient(75% 40% at 50% -10%, rgba(255, 159, 67, 0.14), transparent 70%),
+    repeating-linear-gradient(135deg, rgba(224, 170, 100, 0.028) 0 1px, transparent 1px 7px);
+  box-shadow:
+    inset 0 0 0 4px var(--bg-surface, #1a1411),
+    inset 0 0 0 5px var(--ember-brass-line, rgba(224, 170, 100, 0.22)),
+    0 14px 44px rgba(0, 0, 0, 0.65);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+[data-theme="ember-noir"] .cfx-ai .cfx-ai__head {
+  padding-bottom: 12px;
+  border-bottom: 3px double rgba(224, 170, 100, 0.42);
+}
+[data-theme="ember-noir"] .cfx-ai .cfx-ai__dot {
+  border-radius: 2px;
+  transform: rotate(45deg);
+  box-shadow: 0 0 10px rgba(255, 159, 67, 0.55);
+}
+[data-theme="ember-noir"] .cfx-ai .cfx-ai__titles h4,
+[data-theme="ember-noir"] .cfx-ai .cfx-card__head h5,
+[data-theme="ember-noir"] .cfx-ai .cfx-hist__head strong,
+[data-theme="ember-noir"] .cfx-ai .cfx-tab,
+[data-theme="ember-noir"] .cfx-ai .cfx-btn,
+[data-theme="ember-noir"] .cfx-ai .cfx-hist__btn,
+[data-theme="ember-noir"] .cfx-ai .cfx-convbar__hist {
+  font-family: var(--cfx-font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+[data-theme="ember-noir"] .cfx-ai .cfx-ai__titles h4::before,
+[data-theme="ember-noir"] .cfx-ai .cfx-card__head h5::before {
+  content: "◆ ";
+  color: var(--ember-brass, #e0aa64);
+}
+[data-theme="ember-noir"] .cfx-ai .cfx-card,
+[data-theme="ember-noir"] .cfx-ai .cfx-hero,
+[data-theme="ember-noir"] .cfx-ai .cfx-kpi,
+[data-theme="ember-noir"] .cfx-ai .cfx-conv,
+[data-theme="ember-noir"] .cfx-ai .cfx-hist,
+[data-theme="ember-noir"] .cfx-ai .cfx-chat__scroll {
+  border-color: var(--ember-brass-line, rgba(224, 170, 100, 0.22));
+  border-radius: 10px;
+}
+[data-theme="ember-noir"] .cfx-ai .cfx-kpi {
+  border-top: 2px solid var(--ember-brass, #e0aa64);
+}
+[data-theme="ember-noir"] .cfx-ai .cfx-chat__scroll {
+  background-color: var(--bg-deep, #110c0a);
+}
+[data-theme="ember-noir"] .cfx-ai .cfx-hist {
+  background-color: var(--bg-deep, #110c0a);
+  background-image: linear-gradient(180deg, rgba(255, 159, 67, 0.06), transparent 45%);
+  border-color: rgba(224, 170, 100, 0.48);
+  box-shadow:
+    inset 0 0 0 4px var(--bg-surface, #1a1411),
+    inset 0 0 0 5px var(--ember-brass-line, rgba(224, 170, 100, 0.22)),
+    0 18px 50px rgba(0, 0, 0, 0.72);
+}
+[data-theme="ember-noir"] .cfx-ai .cfx-btn,
+[data-theme="ember-noir"] .cfx-ai .cfx-select,
+[data-theme="ember-noir"] .cfx-ai .cfx-iconbtn,
+[data-theme="ember-noir"] .cfx-ai .cfx-convbar__hist,
+[data-theme="ember-noir"] .cfx-ai .cfx-convbar__new,
+[data-theme="ember-noir"] .cfx-ai .cfx-hist__x,
+[data-theme="ember-noir"] .cfx-ai .cfx-hist__btn,
+[data-theme="ember-noir"] .cfx-ai .cfx-seg__btn {
+  border-radius: 8px;
+  border-color: rgba(224, 170, 100, 0.34);
+  box-shadow: inset 0 1px 0 rgba(255, 220, 180, 0.08), inset 0 -2px 0 rgba(0, 0, 0, 0.35);
+}
+[data-theme="ember-noir"] .cfx-ai .cfx-btn--primary,
+[data-theme="ember-noir"] .cfx-ai .cfx-send {
+  border-radius: 8px;
+  color: var(--cfx-on-accent);
+  background: linear-gradient(180deg, #ffb865, #ff9f43 55%, #f08a2a);
+  border: 1px solid #ffd69c;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 210, 0.55),
+    inset 0 -2px 0 rgba(120, 50, 0, 0.38),
+    0 8px 18px -8px rgba(255, 159, 67, 0.55);
+}
+
+/* ── 5) OPTIMIZE MODE · "TUI · Matrix Command Terminal" ── */
+html body.theme-optimized .cfx-ai {
+  --cfx-accent: #00ff41;
+  --cfx-accent-2: #00cc33;
+  --cfx-on-accent: #000000;
+  --cfx-accent-soft: rgba(0, 255, 65, 0.1);
+  --cfx-accent-line: rgba(0, 255, 65, 0.45);
+  --cfx-surface: #000000;
+  --cfx-surface-2: #0a0a0a;
+  --cfx-line: rgba(0, 255, 65, 0.25);
+  --cfx-ok: #00ff41;
+  --cfx-warn: #ffb000;
+  --cfx-danger: #ff4444;
+  --cfx-info: #aaaaaa;
+  --cfx-font-ui: var(--font-mono, 'JetBrains Mono', monospace);
+  --cfx-font-display: var(--font-mono, 'JetBrains Mono', monospace);
+  --cfx-font-mono: var(--font-mono, 'JetBrains Mono', monospace);
+  --cfx-mono: var(--font-mono, 'JetBrains Mono', monospace);
+
+  font-family: var(--cfx-font-mono);
+  background-color: #000000 !important;
+  border: 1px solid #00ff41 !important;
+  border-radius: 0 !important;
+  color: #e8e8e8;
+}
+html body.theme-optimized .cfx-ai::before,
+html body.theme-optimized .cfx-ai::after {
+  display: none !important;
+}
+html body.theme-optimized .cfx-ai * {
+  border-radius: 0 !important;
+  clip-path: none !important;
+  font-family: var(--cfx-font-mono);
+}
+html body.theme-optimized .cfx-ai .cfx-ai__dot {
+  transform: none !important;
+  background-color: #00ff41;
+}
+html body.theme-optimized .cfx-ai .cfx-ai__head {
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(0, 255, 65, 0.35);
+}
+html body.theme-optimized .cfx-ai .cfx-ai__titles h4,
+html body.theme-optimized .cfx-ai .cfx-card__head h5,
+html body.theme-optimized .cfx-ai .cfx-hist__head strong {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #00ff41;
+}
+html body.theme-optimized .cfx-ai .cfx-ai__titles h4::before,
+html body.theme-optimized .cfx-ai .cfx-card__head h5::before {
+  content: "> ";
+  color: #00ff41;
+}
+html body.theme-optimized .cfx-ai .cfx-empty h5::before {
+  content: "> ";
+  color: #00ff41;
+}
+html body.theme-optimized .cfx-ai .cfx-tabs {
+  padding: 0;
+  gap: 0;
+  background-color: #000000 !important;
+  border: 1px solid rgba(0, 255, 65, 0.35);
+}
+html body.theme-optimized .cfx-ai .cfx-tab {
+  color: #aaaaaa;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+html body.theme-optimized .cfx-ai .cfx-tab + .cfx-tab {
+  border-left: 1px solid rgba(0, 255, 65, 0.35);
+}
+html body.theme-optimized .cfx-ai .cfx-tab.is-active {
+  background-color: #00ff41 !important;
+  color: #000000 !important;
+}
+html body.theme-optimized .cfx-ai .cfx-tab.is-active span::before { content: "[ "; }
+html body.theme-optimized .cfx-ai .cfx-tab.is-active span::after { content: " ]"; }
+html body.theme-optimized .cfx-ai .cfx-hero,
+html body.theme-optimized .cfx-ai .cfx-card,
+html body.theme-optimized .cfx-ai .cfx-kpi,
+html body.theme-optimized .cfx-ai .cfx-chat__scroll,
+html body.theme-optimized .cfx-ai .cfx-input,
+html body.theme-optimized .cfx-ai .cfx-select,
+html body.theme-optimized .cfx-ai .cfx-iconbtn,
+html body.theme-optimized .cfx-ai .cfx-tile,
+html body.theme-optimized .cfx-ai .cfx-msg__bubble,
+html body.theme-optimized .cfx-ai .cfx-convbar__hist,
+html body.theme-optimized .cfx-ai .cfx-convbar__new,
+html body.theme-optimized .cfx-ai .cfx-hist__x,
+html body.theme-optimized .cfx-ai .cfx-hist__search,
+html body.theme-optimized .cfx-ai .cfx-hist__btn,
+html body.theme-optimized .cfx-ai .cfx-conv {
+  background-color: #0a0a0a !important;
+  border: 1px solid rgba(0, 255, 65, 0.28) !important;
+}
+html body.theme-optimized .cfx-ai .cfx-chat__scroll,
+html body.theme-optimized .cfx-ai .cfx-hist,
+html body.theme-optimized .cfx-ai .cfx-convbar__input,
+html body.theme-optimized .cfx-ai .cfx-conv__edit {
+  background-color: #000000 !important;
+}
+html body.theme-optimized .cfx-ai .cfx-hist {
+  border: 1px solid #00ff41 !important;
+}
+html body.theme-optimized .cfx-ai .cfx-msg--user .cfx-msg__bubble {
+  background-color: rgba(0, 255, 65, 0.08) !important;
+  border: 1px dashed #00ff41 !important;
+}
+html body.theme-optimized .cfx-ai .cfx-pace__fill {
+  background-color: var(--tone, #00ff41) !important;
+}
+html body.theme-optimized .cfx-ai .cfx-btn--primary,
+html body.theme-optimized .cfx-ai .cfx-send {
+  background-color: #00ff41 !important;
+  border: 1px solid #00ff41 !important;
+  color: #000000 !important;
+}
+html body.theme-optimized .cfx-ai.is-busy .cfx-send {
+  background-color: #0a0a0a !important;
+  border-color: #ff4444 !important;
+  color: #ff4444 !important;
+}
+html body.theme-optimized .cfx-ai .cfx-chip::before,
+html body.theme-optimized .cfx-ai .cfx-seg__btn::before { content: "["; color: #666666; }
+html body.theme-optimized .cfx-ai .cfx-chip::after,
+html body.theme-optimized .cfx-ai .cfx-seg__btn::after { content: "]"; color: #666666; }
+html body.theme-optimized .cfx-ai .cfx-btn:hover,
+html body.theme-optimized .cfx-ai .cfx-tile:hover,
+html body.theme-optimized .cfx-ai .cfx-chip:hover,
+html body.theme-optimized .cfx-ai .cfx-seg__btn:hover,
+html body.theme-optimized .cfx-ai .cfx-seg__btn.is-active,
+html body.theme-optimized .cfx-ai .cfx-iconbtn:hover,
+html body.theme-optimized .cfx-ai .cfx-convbar__hist:hover,
+html body.theme-optimized .cfx-ai .cfx-convbar__hist[aria-expanded="true"],
+html body.theme-optimized .cfx-ai .cfx-convbar__new:hover,
+html body.theme-optimized .cfx-ai .cfx-hist__x:hover,
+html body.theme-optimized .cfx-ai .cfx-hist__btn--primary:hover {
+  transform: none !important;
+  background-color: #00ff41 !important;
+  border-color: #00ff41 !important;
+  color: #000000 !important;
+}
+html body.theme-optimized .cfx-ai .cfx-tile:hover *,
+html body.theme-optimized .cfx-ai .cfx-chip:hover::before,
+html body.theme-optimized .cfx-ai .cfx-chip:hover::after,
+html body.theme-optimized .cfx-ai .cfx-seg__btn:hover::before,
+html body.theme-optimized .cfx-ai .cfx-seg__btn:hover::after,
+html body.theme-optimized .cfx-ai .cfx-seg__btn.is-active::before,
+html body.theme-optimized .cfx-ai .cfx-seg__btn.is-active::after {
+  color: #000000 !important;
+}
+html body.theme-optimized .cfx-ai .cfx-conv:hover,
+html body.theme-optimized .cfx-ai .cfx-conv.is-active,
+html body.theme-optimized .cfx-ai .cfx-hist__btn--primary {
+  background-color: rgba(0, 255, 65, 0.12) !important;
+  border-color: #00ff41 !important;
+}
+html body.theme-optimized .cfx-ai .cfx-convbar__hist b,
+html body.theme-optimized .cfx-ai .cfx-hist__count {
+  background-color: rgba(0, 255, 65, 0.14) !important;
+  color: #00ff41 !important;
+}
+html body.theme-optimized .cfx-ai .cfx-convbar__hist:hover b,
+html body.theme-optimized .cfx-ai .cfx-convbar__hist[aria-expanded="true"] b {
+  background-color: #000000 !important;
+  color: #00ff41 !important;
+}
+html body.theme-optimized .cfx-ai .cfx-conv__yes {
+  background-color: #ff4444 !important;
+  border-color: #ff4444 !important;
+  color: #000000 !important;
+}
+html body.theme-optimized .cfx-ai .cfx-hist__btn--danger:hover:not(:disabled),
+html body.theme-optimized .cfx-ai .cfx-hist__btn--danger.is-confirm {
+  background-color: #ff4444 !important;
+  border-color: #ff4444 !important;
+  color: #000000 !important;
+}
 
 
 /* ============================================================
