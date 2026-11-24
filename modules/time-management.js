@@ -34,8 +34,10 @@ const timeManagementModule = (function () {
   const STREAK_MIN      = 0.5;   // a day counts when >= 50% of its planned minutes are done
   const STREAK_REST_GAP = 2;     // up to 2 empty days in a row do not break a streak
   const HABIT_GRACE     = 1;     // habit series: free skips per calendar week (Mon-Sun) before its own streak resets
-  const RM_MAX_DAYS     = 90;    // roadmap: longest plan
+  const RM_MAX_DAYS     = 365;   // roadmap: longest plan (a year)
   const RM_DOW          = [[1, 'Mon'], [2, 'Tue'], [3, 'Wed'], [4, 'Thu'], [5, 'Fri'], [6, 'Sat'], [0, 'Sun']];   // [Date.getDay(), label], Monday first
+  const RM_DURS         = [15, 30, 45, 60, 90, 120, 150, 180, 240];   // quick session lengths (minutes)
+  const RM_ACTIVE_KEY   = 'hub_tm_rm_active';   // which roadmap the strip shows, per device
   const RM_KEY          = 'hub_tm_rm_open';   // roadmap strip expanded? ('0' = collapsed), per device
   const HABIT_WINDOW    = 30;    // habit series: "recent" success rate looks at this many days
   const MS_KEY          = 'hub_tm_milestones';   // local mirror (per account) of the synced milestone map
@@ -100,6 +102,7 @@ const timeManagementModule = (function () {
   const TL_STATUS = [['all', 'All'], ['todo', 'To do'], ['done', 'Done']];
   const TL_SORTS = ['nearest', 'newest', 'duration'];
   const TL_SVG = function (p) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>'; };
+  const RM_ICON_LIB = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5z"/><path d="m3 13 9 5 9-5"/><path d="m3 17.5 9 5 9-5" opacity=".55"/></svg>';
   const TL_ICON = {
     search: TL_SVG('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>'),
     copy:   TL_SVG('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>'),
@@ -721,7 +724,7 @@ const timeManagementModule = (function () {
           '<button type="button" class="hub-tm-btn hub-tm-btn--tool" id="tm-btn-templates" title="Templates" aria-label="Templates">' + ICON.template + '<span class="hub-tm-btn-label">Templates</span></button>' +
           '<button type="button" class="hub-tm-btn hub-tm-btn--tool" id="tm-btn-set-time" title="Set Time (repeat blocks)" aria-label="Set Time">' + ICON.repeat + '<span class="hub-tm-btn-label">Set Time</span></button>' +
           '<button type="button" class="hub-tm-btn hub-tm-btn--tool" id="tm-btn-timeline" title="Timeline" aria-label="Timeline">' + ICON.timeline + '<span class="hub-tm-btn-label">Timeline</span></button>' +
-          '<button type="button" class="hub-tm-btn hub-tm-btn--tool" id="tm-btn-roadmap" title="Roadmap · multi-day plan" aria-label="Roadmap">' + ICON.road + '<span class="hub-tm-btn-label">Roadmap</span></button>' +
+          '<button type="button" class="hub-tm-btn hub-tm-btn--tool" id="tm-btn-roadmap" title="Roadmaps · plans, templates, archive" aria-label="Roadmap">' + ICON.road + '<span class="hub-tm-btn-label">Roadmap</span></button>' +
           '<button type="button" class="hub-tm-btn hub-tm-btn--tool" id="tm-btn-review" title="Weekly review" aria-label="Weekly review">' + ICON.review + '<span class="hub-tm-btn-label">Review</span></button>' +
             '</div>' +
           '<button type="button" class="hub-tm-btn hub-tm-btn--outline hub-tm-btn--habitica" id="tm-btn-habitica" title="Habitica" aria-label="Habitica"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/><polyline points="8.5,12 11,14.5 15.5,9.5"/></svg><span class="hub-tm-btn-label">Habitica</span></button>' +
@@ -1040,42 +1043,109 @@ const timeManagementModule = (function () {
         '</div>' +
       '</div>' +
 
+      /* ── Roadmap library ── */
+      '<div class="hub-tm-overlay" id="hub-tm-rmlib-modal" aria-hidden="true">' +
+        '<div class="hub-tm-dialog hub-tm-dialog--rml" role="dialog" aria-modal="true" aria-labelledby="hub-tm-rmlib-heading">' +
+          '<div class="hub-tm-dialog-head hub-tm-sb-head">' +
+            '<span class="hub-tm-sb-badge">' + RM_ICON_LIB + '</span>' +
+            '<div class="hub-tm-sb-headtext"><h3 class="hub-tm-dialog-title" id="hub-tm-rmlib-heading">Roadmap library</h3><p class="hub-tm-sb-sub">Run several roadmaps, reuse templates and keep a record of finished ones</p></div>' +
+            '<button type="button" class="hub-tm-dialog-close" data-close aria-label="Close">&times;</button>' +
+          '</div>' +
+          '<div class="hub-tm-tl-seg hub-tm-rml-tabs" id="hub-tm-rmlib-tabs" role="tablist" aria-label="Library sections"></div>' +
+          '<div class="hub-tm-dialog-body hub-tm-rml" id="hub-tm-rmlib-panel" role="tabpanel" tabindex="-1"></div>' +
+          '<div class="hub-tm-dialog-foot hub-tm-dialog-foot--split">' +
+            '<p class="hub-tm-sb-foot">Archiving or deleting a roadmap never removes blocks already on your calendar.</p>' +
+            '<div class="hub-tm-sb-actions"><button type="button" class="hub-tm-btn hub-tm-btn--outline" data-close>Close</button><button type="button" class="hub-tm-btn hub-tm-btn--primary" data-rml-act="new">+ New roadmap</button></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
       /* ── Roadmap ── */
       '<div class="hub-tm-overlay" id="hub-tm-roadmap-modal" aria-hidden="true">' +
-        '<div class="hub-tm-dialog hub-tm-dialog--lg hub-tm-dialog--rm" role="dialog" aria-modal="true" aria-labelledby="hub-tm-rm-heading">' +
-          '<div class="hub-tm-dialog-head"><h3 class="hub-tm-dialog-title" id="hub-tm-rm-heading">Roadmap</h3><button type="button" class="hub-tm-dialog-close" data-close aria-label="Close">&times;</button></div>' +
-          '<div class="hub-tm-dialog-body hub-tm-rm-form">' +
-            '<div class="hub-tm-field"><label for="tm-rm-name">Name</label><input type="text" class="hub-tm-input" id="tm-rm-name" maxlength="60" placeholder="e.g. 30 days · Civil Law" autocomplete="off"></div>' +
-            '<div class="hub-tm-rm-row">' +
-              '<div class="hub-tm-field"><label for="tm-rm-start">Day 1 is</label><input type="date" class="hub-tm-input" id="tm-rm-start"></div>' +
-              '<div class="hub-tm-field"><label for="tm-rm-time">Daily start</label><input type="time" class="hub-tm-input" id="tm-rm-time" value="19:30"></div>' +
-              '<div class="hub-tm-field"><label for="tm-rm-dur">Length</label><select class="hub-tm-input" id="tm-rm-dur">' + [30, 45, 60, 90, 120, 150, 180, 240].map(function (m) { return '<option value="' + m + '">' + _fmtDur(m) + '</option>'; }).join('') + '</select></div>' +
-              '<div class="hub-tm-field"><label for="tm-rm-tag">Tag</label><select class="hub-tm-input" id="tm-rm-tag"></select></div>' +
+        '<div class="hub-tm-dialog hub-tm-dialog--rm" role="dialog" aria-modal="true" aria-labelledby="hub-tm-rm-heading">' +
+          '<div class="hub-tm-dialog-head hub-tm-sb-head">' +
+            '<span class="hub-tm-sb-badge">' + ICON.road + '</span>' +
+            '<div class="hub-tm-sb-headtext"><h3 class="hub-tm-dialog-title" id="hub-tm-rm-heading">Roadmap</h3><p class="hub-tm-sb-sub">Plan a multi-day path and follow it day by day</p></div>' +
+            '<button type="button" class="hub-tm-dialog-close" data-close aria-label="Close">&times;</button>' +
+          '</div>' +
+          '<div class="hub-tm-sb-body">' +
+            '<div class="hub-tm-sb-pane hub-tm-sb-controls">' +
+              '<section class="hub-tm-sb-sec"><h4 class="hub-tm-sb-h"><i>1</i>Basics</h4>' +
+                '<div class="hub-tm-field"><label for="tm-rm-name">Name</label><input type="text" class="hub-tm-input" id="tm-rm-name" maxlength="60" placeholder="e.g. 30 days · Civil Law" autocomplete="off"></div>' +
+                '<div class="hub-tm-field"><label for="tm-rm-tag">Tag for the blocks</label><select class="hub-tm-input" id="tm-rm-tag"></select></div>' +
+              '</section>' +
+              '<section class="hub-tm-sb-sec"><h4 class="hub-tm-sb-h"><i>2</i>Calendar</h4>' +
+                '<div class="hub-tm-rm-pair">' +
+                  '<div class="hub-tm-field"><label for="tm-rm-start">Day 1 is</label><input type="date" class="hub-tm-input" id="tm-rm-start"></div>' +
+                  '<div class="hub-tm-field"><label for="tm-rm-due">Deadline <em class="hub-tm-sb-opt">optional</em></label><input type="date" class="hub-tm-input" id="tm-rm-due"></div>' +
+                '</div>' +
+                '<div class="hub-tm-sb-chips" id="tm-rm-dowp" role="group" aria-label="Study day presets">' +
+                  '<button type="button" data-rm-dowp="all" aria-pressed="false">Every day</button><button type="button" data-rm-dowp="wk" aria-pressed="false">Weekdays</button><button type="button" data-rm-dowp="we" aria-pressed="false">Weekends</button>' +
+                '</div>' +
+                '<fieldset class="hub-tm-field"><legend class="hub-tm-sr-only">Study days</legend><div class="hub-tm-sb-days" id="tm-rm-dow">' +
+                  RM_DOW.map(function (d) { return '<label class="hub-tm-day-check"><input type="checkbox" data-dow="' + d[0] + '" checked><span>' + d[1] + '</span></label>'; }).join('') +
+                '</div></fieldset>' +
+                '<p class="hub-tm-hint">Day 1, Day 2 … fall on the study days you switch on. Use “Push back” or “Catch up” later to add rest days.</p>' +
+              '</section>' +
+              '<section class="hub-tm-sb-sec"><h4 class="hub-tm-sb-h"><i>3</i>Daily session</h4>' +
+                '<div class="hub-tm-field"><label for="tm-rm-time">Starts at</label><input type="time" class="hub-tm-input" id="tm-rm-time" value="19:30"></div>' +
+                '<div class="hub-tm-sb-chips" id="tm-rm-durs" role="group" aria-label="Session length">' +
+                  RM_DURS.map(function (m) { return '<button type="button" data-rm-dur="' + m + '" aria-pressed="false">' + _fmtDur(m) + '</button>'; }).join('') +
+                '</div><input type="hidden" id="tm-rm-dur" value="120">' +
+                '<p class="hub-tm-hint" id="tm-rm-sess-cap"></p>' +
+              '</section>' +
             '</div>' +
-            '<div class="hub-tm-rm-row hub-tm-rm-row--sched">' +
-              '<div class="hub-tm-field"><span class="hub-tm-rm-lab" id="tm-rm-dow-l">Study days</span><div class="hub-tm-rm-dows" id="tm-rm-dow" role="group" aria-labelledby="tm-rm-dow-l">' +
-                RM_DOW.map(function (d) { return '<label class="hub-tm-rm-dow"><input type="checkbox" data-dow="' + d[0] + '" checked><span>' + d[1] + '</span></label>'; }).join('') + '</div></div>' +
-              '<div class="hub-tm-field"><label for="tm-rm-due">Deadline <em class="hub-tm-sb-opt">optional</em></label><input type="date" class="hub-tm-input" id="tm-rm-due"></div>' +
-            '</div>' +
-            '<details class="hub-tm-rm-tools"><summary>Import · AI prompt · Export</summary><div class="hub-tm-rm-toolgrid">' +
-              '<div class="hub-tm-rm-tool"><h5>Import</h5><p>Paste rows from Excel or Google Sheets straight into the Plan box, or load a file (.csv .tsv .txt .md .json). You can also drop a file on the box.</p>' +
-                '<input type="file" id="tm-rm-file" accept=".csv,.tsv,.txt,.md,.json,text/plain,text/csv,application/json" hidden><button type="button" class="hub-tm-btn hub-tm-btn--outline" id="tm-rm-import">Choose file…</button></div>' +
-              '<div class="hub-tm-rm-tool"><h5>Ask an AI to draft it</h5><input type="text" class="hub-tm-input" id="tm-rm-ai-topic" maxlength="120" placeholder="Subject, e.g. Civil Law: contracts" aria-label="Subject" autocomplete="off">' +
-                '<div class="hub-tm-rm-aigrid"><label class="hub-tm-rm-mini"><span>Days</span><input type="number" class="hub-tm-input" id="tm-rm-ai-days" min="1" max="90" value="30"></label>' +
-                '<label class="hub-tm-rm-mini"><span>Phases</span><input type="number" class="hub-tm-input" id="tm-rm-ai-phases" min="1" max="12" value="5"></label>' +
-                '<label class="hub-tm-rm-mini"><span>Language</span><select class="hub-tm-input" id="tm-rm-ai-lang"><option value="Vietnamese">Tiếng Việt</option><option value="English">English</option></select></label></div>' +
-                '<button type="button" class="hub-tm-btn hub-tm-btn--outline" id="tm-rm-ai-copy">Copy prompt</button><p>Paste it into any AI, add your syllabus at the end, then paste the answer into the Plan box.</p></div>' +
-              '<div class="hub-tm-rm-tool"><h5>Export</h5><p>Share the plan or reuse it next semester.</p><div class="hub-tm-rm-btnrow">' +
-                '<button type="button" class="hub-tm-btn hub-tm-btn--outline" id="tm-rm-copy-text">Copy text</button><button type="button" class="hub-tm-btn hub-tm-btn--outline" id="tm-rm-copy-json">Copy JSON</button><button type="button" class="hub-tm-btn hub-tm-btn--outline" id="tm-rm-download">Download .json</button></div></div>' +
-            '</div></details>' +
-            '<div class="hub-tm-field">' +
-              '<div class="hub-tm-rm-planhead"><label for="tm-rm-text">Plan</label><button type="button" class="hub-tm-sb-link" id="tm-rm-starter">Load Civil Law starter</button></div>' +
-              '<textarea class="hub-tm-input hub-tm-rm-text" id="tm-rm-text" rows="13" spellcheck="false" aria-describedby="tm-rm-help tm-rm-status"></textarea>' +
-              '<p class="hub-tm-hint" id="tm-rm-help">One line per day: <code>Title | task | task | task</code>. A line starting with <code>#</code> begins a phase. Add <code>@20:00-22:00</code>, <code>@20:00</code> or <code>@90m</code> after a title to give that day its own time. Blocks already on your calendar are not changed when you save.</p>' +
+            '<div class="hub-tm-sb-pane hub-tm-sb-preview hub-tm-rm-work">' +
+              '<div class="hub-tm-sb-phead"><h4 class="hub-tm-sb-h">Plan</h4>' +
+                '<div class="hub-tm-tl-seg hub-tm-rm-tabs" id="tm-rm-tabs" role="tablist" aria-label="Plan workspace">' +
+                  '<button type="button" role="tab" id="tm-rm-tab-edit" aria-controls="tm-rm-pane-edit" aria-selected="true">Edit</button>' +
+                  '<button type="button" role="tab" id="tm-rm-tab-preview" aria-controls="tm-rm-pane-preview" aria-selected="false" tabindex="-1">Preview</button>' +
+                  '<button type="button" role="tab" id="tm-rm-tab-ai" aria-controls="tm-rm-pane-ai" aria-selected="false" tabindex="-1">AI prompt</button>' +
+                  '<button type="button" role="tab" id="tm-rm-tab-io" aria-controls="tm-rm-pane-io" aria-selected="false" tabindex="-1">Import · Export</button>' +
+                '</div></div>' +
+              '<div class="hub-tm-rm-panes">' +
+                '<section class="hub-tm-rm-pane" id="tm-rm-pane-edit" role="tabpanel" aria-labelledby="tm-rm-tab-edit">' +
+                  '<div class="hub-tm-rm-snip" id="tm-rm-snip" role="group" aria-label="Insert a line">' +
+                    '<span class="hub-tm-rm-snip-l">Insert</span>' +
+                    '<button type="button" data-rm-ins="phase">+ Phase</button><button type="button" data-rm-ins="day">+ Day</button><button type="button" data-rm-ins="rule">+ Weekday time</button>' +
+                    '<span class="hub-tm-rm-spacer"></span><button type="button" data-rm-ins="starter">Load starter plan</button>' +
+                  '</div>' +
+                  '<textarea class="hub-tm-input hub-tm-rm-text" id="tm-rm-text" spellcheck="false" aria-label="Plan" aria-describedby="tm-rm-help"></textarea>' +
+                  '<p class="hub-tm-hint" id="tm-rm-help">One line per day: <code>Title | task | task | task</code>. <code>PHASE: name</code> starts a phase. Optional times: <code>@15m</code> after a phase name, <code>@20:00-22:00</code> after a day title, or a line such as <code>@Sun 11:30</code>. Paste rows from Excel or Sheets and they are converted for you.</p>' +
+                '</section>' +
+                '<section class="hub-tm-rm-pane" id="tm-rm-pane-preview" role="tabpanel" aria-labelledby="tm-rm-tab-preview" hidden><div id="tm-rm-preview"></div></section>' +
+                '<section class="hub-tm-rm-pane" id="tm-rm-pane-ai" role="tabpanel" aria-labelledby="tm-rm-tab-ai" hidden>' +
+                  '<p class="hub-tm-rm-lead">Let any AI draft the plan, then paste its answer into the Edit tab.</p>' +
+                  '<ol class="hub-tm-rm-steps"><li><b>Describe</b> what you need below.</li><li><b>Copy</b> the prompt into ChatGPT, Claude or Gemini and add your syllabus at the end.</li><li><b>Paste</b> the answer into the Edit tab. Phases, times and tasks are recognised for you.</li></ol>' +
+                  '<div class="hub-tm-field"><label for="tm-rm-ai-topic">Subject</label><input type="text" class="hub-tm-input" id="tm-rm-ai-topic" maxlength="120" placeholder="e.g. Civil Law: contracts, or Daily English dictation" autocomplete="off"></div>' +
+                  '<div class="hub-tm-field"><label for="tm-rm-ai-extra">Extra requirements <em class="hub-tm-sb-opt">optional</em></label><textarea class="hub-tm-input hub-tm-rm-ai-extra" id="tm-rm-ai-extra" rows="3" maxlength="600" placeholder="e.g. 15 min a day in phases 1-2 and 30 min in phases 3-4; Sundays at 11:30"></textarea></div>' +
+                  '<div class="hub-tm-rm-trio">' +
+                    '<div class="hub-tm-field"><label for="tm-rm-ai-days">Days</label><input type="number" class="hub-tm-input" id="tm-rm-ai-days" min="1" max="365" value="30"></div>' +
+                    '<div class="hub-tm-field"><label for="tm-rm-ai-phases">Phases</label><input type="number" class="hub-tm-input" id="tm-rm-ai-phases" min="1" max="40" value="5"></div>' +
+                    '<div class="hub-tm-field"><label for="tm-rm-ai-lang">Language</label><select class="hub-tm-input" id="tm-rm-ai-lang"><option value="Vietnamese">Tiếng Việt</option><option value="English">English</option></select></div>' +
+                  '</div>' +
+                  '<details class="hub-tm-rm-det"><summary>Show the prompt that will be copied</summary><textarea class="hub-tm-input hub-tm-rm-promptview" id="tm-rm-prompt-view" rows="9" readonly aria-label="Prompt"></textarea></details>' +
+                  '<div class="hub-tm-rm-actrow"><button type="button" class="hub-tm-btn hub-tm-btn--primary" id="tm-rm-ai-copy">Copy prompt</button></div>' +
+                '</section>' +
+                '<section class="hub-tm-rm-pane" id="tm-rm-pane-io" role="tabpanel" aria-labelledby="tm-rm-tab-io" hidden>' +
+                  '<div class="hub-tm-rm-iocard"><h5>Import</h5>' +
+                    '<button type="button" class="hub-tm-rm-drop" id="tm-rm-drop"><b>Drop a file here, or click to browse</b><small>CSV · TSV · TXT · MD · JSON · up to 512 KB</small></button>' +
+                    '<input type="file" id="tm-rm-file" accept=".csv,.tsv,.txt,.md,.json,text/plain,text/csv,application/json" hidden>' +
+                    '<p class="hub-tm-hint">Tip: you can also paste rows straight from Excel or Google Sheets into the Edit tab. A Phase column becomes phases automatically.</p></div>' +
+                  '<div class="hub-tm-rm-iocard"><h5>Export</h5>' +
+                    '<div class="hub-tm-rm-exp"><div><b>Plan text</b><small>The same lines you see in the Edit tab</small></div><button type="button" class="hub-tm-btn hub-tm-btn--outline" id="tm-rm-copy-text">Copy</button></div>' +
+                    '<div class="hub-tm-rm-exp"><div><b>JSON</b><small>Keeps phases, weekday rules and session settings</small></div><div class="hub-tm-rm-btnrow"><button type="button" class="hub-tm-btn hub-tm-btn--outline" id="tm-rm-copy-json">Copy</button><button type="button" class="hub-tm-btn hub-tm-btn--outline" id="tm-rm-download">Download</button></div></div>' +
+                    '<div class="hub-tm-rm-exp"><div><b>Library template</b><small>Keep this plan to re-run later with a new start date</small></div><button type="button" class="hub-tm-btn hub-tm-btn--outline" id="tm-rm-save-tpl">Save</button></div>' +
+                    '<p class="hub-tm-hint">Exports leave out your start date, rest days and deadline, so a plan can be shared and reused.</p></div>' +
+                '</section>' +
+              '</div>' +
               '<p class="hub-tm-rm-status" id="tm-rm-status" role="status"></p>' +
             '</div>' +
           '</div>' +
-          '<div class="hub-tm-dialog-foot hub-tm-rm-foot"><button type="button" class="hub-tm-btn hub-tm-btn--outline hub-tm-rm-del" id="tm-rm-delete" hidden>Delete roadmap</button><span class="hub-tm-rm-spacer"></span><button type="button" class="hub-tm-btn hub-tm-btn--outline" data-close>Cancel</button><button type="button" class="hub-tm-btn hub-tm-btn--primary" id="tm-rm-save">Save roadmap</button></div>' +
+          '<div class="hub-tm-dialog-foot hub-tm-dialog-foot--split">' +
+            '<div class="hub-tm-rm-footl"><button type="button" class="hub-tm-btn hub-tm-btn--outline hub-tm-rm-del" id="tm-rm-delete" hidden>Delete roadmap</button><p class="hub-tm-sb-foot">Blocks already on your calendar are not changed when you save. Tip: Ctrl + Enter saves from the editor.</p></div>' +
+            '<div class="hub-tm-sb-actions"><button type="button" class="hub-tm-btn hub-tm-btn--outline" data-close>Cancel</button><button type="button" class="hub-tm-btn hub-tm-btn--primary" id="tm-rm-save">Save roadmap</button></div>' +
+          '</div>' +
         '</div>' +
       '</div>' +
 
@@ -4991,7 +5061,7 @@ const timeManagementModule = (function () {
   }
   function _renderTemplates() {
     const list = _el('#hub-tm-template-list');
-    const vis = _templates.map(function (t, i) { return [t, i]; }).filter(function (p) { return p[0].kind !== 'roadmap'; });   // roadmaps live in the strip, not here
+    const vis = _templates.map(function (t, i) { return [t, i]; }).filter(function (p) { return !p[0].kind; });   // roadmaps live in the strip, not here
     if (!vis.length) { list.innerHTML = '<p class="hub-tm-empty">No saved templates yet.<br>Plan a day, then save it with a name below.</p>'; return; }
     list.innerHTML = vis.map(function (p) {
       const t = p[0], i = p[1];
@@ -5059,6 +5129,7 @@ const timeManagementModule = (function () {
      - Import: paste from Excel / Sheets, CSV / TSV / Markdown-table / AI output are all normalised to the plan text.
      ============================================================ */
   const RM_PH = 6;                                   // phase colours rotate through --tm-ph-0 … --tm-ph-5
+  const RM_PAGE = 31;                                // days shown at once in the strip; longer plans page through windows of this size (+ an overview map)
   const RM_CK_LEARN  = ['Đọc & ghi chú lý thuyết', 'Làm 2–3 câu hỏi / tình huống', 'Tóm tắt 5 dòng cuối buổi'];
   const RM_CK_REVIEW = ['Lập sơ đồ hệ thống kiến thức', 'Giải 3 tình huống tổng hợp', 'Ghi lại các lỗi sai cần nhớ'];
   const RM_STARTER = [                                // "*" = review day (uses RM_CK_REVIEW); everything here is editable in the dialog
@@ -5068,7 +5139,9 @@ const timeManagementModule = (function () {
     ['Tuần 4 · BTTH ngoài hợp đồng', ['Khái niệm & căn cứ phát sinh BTTH ngoài hợp đồng', 'Nguyên tắc & năng lực chịu trách nhiệm bồi thường', 'BTTH do người của pháp nhân & nguồn nguy hiểm cao độ gây ra', 'Xác định thiệt hại & mức bồi thường', '*Ôn tập phần BTTH · tình huống tổng hợp']],
     ['Ngày 27–30 · Tổng hợp', ['*Hệ thống hóa toàn bộ kiến thức: sơ đồ tư duy', '*Làm đề / tình huống tổng hợp 1', '*Làm đề / tình huống tổng hợp 2 & sửa lỗi sai', '*Rà soát cuối & chốt bài']]
   ];
-  let _rm = { sel: 0, pickOn: '', scrolled: '' };
+  let _rm = { sel: 0, pickOn: '', scrolled: '', pg: -1, editId: null };   // pg: window the person paged to (-1 = follow the selected day)
+  const RM_TABS = ['edit', 'preview', 'ai', 'io'];
+  let _rmTab = 'edit';
 
   /* ---- Plan text: parse · normalise (import) · serialise ---- */
   function _rmStarterText() {
@@ -5133,6 +5206,48 @@ const timeManagementModule = (function () {
     });
     return out.join('\n');
   }
+  const RM_DOW_KEY = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 0, t2: 1, t3: 2, t4: 3, t5: 4, t6: 5, t7: 6, cn: 0 };
+  const RM_PHASE_RE = /^(?:#+\s*|(?:phase|giai đoạn|giai doan|cụm|cum)\s*:\s*)/i;     // "# name" · "PHASE: name" · "Giai đoạn: name"
+  /** "Sun" · "Sat,Sun" · "Mon-Fri" · "weekdays" · "weekend" · "T7,CN"  →  [Date.getDay() numbers] or null when unreadable. */
+  function _rmDowList(str) {
+    const order = [1, 2, 3, 4, 5, 6, 0], out = [];
+    const one = function (w) {
+      w = w.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (w === 'weekdays') return [1, 2, 3, 4, 5];
+      if (w === 'weekend' || w === 'weekends') return [6, 0];
+      if (w === 'daily' || w === 'everyday' || w === 'all') return order.slice();
+      const k = RM_DOW_KEY.hasOwnProperty(w) ? w : w.slice(0, 3);
+      return RM_DOW_KEY.hasOwnProperty(k) && (w.length >= 3 || k === w) ? [RM_DOW_KEY[k]] : null;
+    };
+    const parts = String(str).split(/[,;/&]+/);
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i].trim();
+      if (!p) continue;
+      const rg = /^([A-Za-z0-9]+)\s*-\s*([A-Za-z0-9]+)$/.exec(p);
+      let got = null;
+      if (rg) {
+        const a = one(rg[1]), b = one(rg[2]);
+        if (a && b && a.length === 1 && b.length === 1) { got = []; for (let k = order.indexOf(a[0]); ; k = (k + 1) % 7) { got.push(order[k]); if (order[k] === b[0] || got.length > 7) break; } }
+      } else got = one(p);
+      if (!got) return null;
+      got.forEach(function (v) { if (out.indexOf(v) < 0) out.push(v); });
+    }
+    return out;
+  }
+  /** AI answers often lose the phase markers. A line with no "|" that sits after a blank line and right before a day line is a phase title. */
+  function _rmRecoverPhases(t) {
+    const lines = t.split('\n');
+    if (lines.some(function (l) { return RM_PHASE_RE.test(l.trim().replace(/\*\*|__/g, '')); })) return t;
+    const out = lines.slice(); let found = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i].trim();
+      if (!l || l.indexOf('|') > -1 || l.charAt(0) === '@' || l.slice(0, 2) === '//') continue;
+      let j = i + 1;
+      while (j < lines.length && !lines[j].trim()) j++;
+      if ((i === 0 || !lines[i - 1].trim()) && j < lines.length && lines[j].indexOf('|') > -1) { out[i] = '# ' + l; found++; }
+    }
+    return found ? out.join('\n') : t;
+  }
   /** Whatever was pasted/imported (spreadsheet cells, Markdown table, AI answer in a code fence) → plain plan text. */
   function _rmNormalize(text) {
     let t = String(text || '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
@@ -5145,37 +5260,55 @@ const timeManagementModule = (function () {
                      .filter(function (r) { return !r.every(function (c) { return !c || /^:?-{2,}:?$/.test(c); }); });
       return _rmRowsToText(rows) || t;
     }
-    return t;
+    return _rmRecoverPhases(t);
   }
   /** "Title @19:30-21:30" / "@20:00" / "@90m" / "@2h" → per-day time and/or length. Unknown @words stay in the title. */
   function _rmTimeTokens(title) {
     let s, d;
-    const t = title.replace(/\s*@(\S+)/g, function (m, tok) {
+    const glued = String(title).replace(/@(\d+(?:\.\d+)?)\s+(min|mins|minutes?|phút|phut|h|hr|hrs|hours?|giờ|gio)(?![\p{L}])/giu, '@$1$2');
+    const t = glued.replace(/\s*@(\S+)/g, function (m, tok) {
+      tok = tok.replace(/[–—]/g, '-');
       let x;
       if ((x = /^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/.exec(tok))) { const a = +x[1] * 60 + +x[2], b = +x[3] * 60 + +x[4]; if (a < DAY_MINS && b > a && b <= DAY_MINS) { s = a; d = b - a; return ''; } }
       else if ((x = /^(\d{1,2}):(\d{2})$/.exec(tok))) { const a = +x[1] * 60 + +x[2]; if (a < DAY_MINS) { s = a; return ''; } }
-      else if ((x = /^(\d+(?:\.\d+)?)h(?:(\d{1,2})m?)?$/i.exec(tok))) { d = Math.round(parseFloat(x[1]) * 60 + (+x[2] || 0)); return ''; }
-      else if ((x = /^(\d+)m$/i.exec(tok))) { d = +x[1]; return ''; }
+      else if ((x = /^(\d+(?:\.\d+)?)(?:h|hr|hrs|hour|hours|giờ|gio)(?:(\d{1,2})(?:m|min|mins|phút|phut|p)?)?$/i.exec(tok))) { d = Math.round(parseFloat(x[1]) * 60 + (+x[2] || 0)); return ''; }
+      else if ((x = /^(\d+)(?:m|min|mins|minute|minutes|phút|phut|p)$/i.exec(tok))) { d = +x[1]; return ''; }
       return m;
     }).trim();
     if (d !== undefined) d = _clamp(d, MIN_DUR, 480);
     return { t: t, s: s, d: d };
   }
   /** Plan text → { phases:[{name,from,to}], days:[{t,ck[],s?,d?}], errors[] }.  "# phase" lines + one "title | task | task" line per day. */
+  /** Plan text → { phases:[{name,from,to,s?,d?}], days:[{t,ck[],s?,d?}], rules:[{dow[],s?,d?}], errors[] }.
+   *  "PHASE: name" (or "# name") lines, one "title | task | task" line per day, "@Sun 11:30" rule lines. */
   function _rmParse(text) {
-    const out = { phases: [], days: [], errors: [] };
+    const out = { phases: [], days: [], rules: [], errors: [] };
     let cur = null;
     _rmNormalize(text).split('\n').forEach(function (raw, li) {
       const line = raw.trim();
       if (!line || line.slice(0, 2) === '//') return;
-      if (line.charAt(0) === '#') {
-        cur = { name: line.replace(/^#+\s*/, '').replace(/\*\*|__/g, '').slice(0, 60) || ('Phase ' + (out.phases.length + 1)), from: out.days.length + 1, to: out.days.length };
+      if (line.charAt(0) === '@') {                                  // rule: weekdays + time and/or length
+        const m = /^@(\S+)\s+(.+)$/.exec(line), dows = m ? _rmDowList(m[1]) : null;
+        const tk = m ? _rmTimeTokens(m[2].split(/\s+/).map(function (w) { return '@' + w; }).join(' ')) : null;
+        if (!dows || !dows.length || tk.t || (tk.s === undefined && tk.d === undefined)) { out.errors.push('Line ' + (li + 1) + ': can’t read the rule “' + line.slice(0, 40) + '”. Example: @Sun 11:30'); return; }
+        const r = { dow: dows };
+        if (tk.s !== undefined) r.s = tk.s;
+        if (tk.d !== undefined) r.d = tk.d;
+        out.rules.push(r);
+        return;
+      }
+      const clean = line.replace(/\*\*|__/g, '');
+      if (RM_PHASE_RE.test(clean)) {
+        const tk = _rmTimeTokens(clean.replace(RM_PHASE_RE, ''));
+        cur = { name: (tk.t || ('Phase ' + (out.phases.length + 1))).slice(0, 60), from: out.days.length + 1, to: out.days.length };
+        if (tk.s !== undefined) cur.s = tk.s;
+        if (tk.d !== undefined) cur.d = tk.d;
         out.phases.push(cur);
         return;
       }
       if (out.days.length >= RM_MAX_DAYS) { if (!out.errors.length) out.errors.push('A roadmap can have at most ' + RM_MAX_DAYS + ' days.'); return; }
       const parts = line.replace(/\*\*|__|`/g, '').replace(/^[-*•]\s+/, '').split('|').map(function (s) { return s.replace(/\s+/g, ' ').trim(); });
-      const tk = _rmTimeTokens(parts[0].replace(/^(?:day|ngày)?\s*\d{1,2}\s*[.:)]\s+/i, ''));
+      const tk = _rmTimeTokens(parts[0].replace(/^(?:day|ngày)?\s*\d{1,3}\s*[.:)]\s+/i, ''));
       if (!tk.t) { out.errors.push('Line ' + (li + 1) + ': a day needs a title before the first “|”.'); return; }
       if (!cur) { cur = { name: 'Phase 1', from: 1, to: 0 }; out.phases.push(cur); }
       const day = { t: tk.t.slice(0, 100), ck: parts.slice(1).filter(Boolean).slice(0, 10).map(function (t) { return t.slice(0, 200); }) };
@@ -5194,10 +5327,17 @@ const timeManagementModule = (function () {
     if (d.d !== undefined) return ' @' + d.d + 'm';
     return '';
   }
+  function _rmRuleTime(x) {
+    return x.s !== undefined && x.d !== undefined ? _toTime(x.s) + '-' + _toTime(Math.min(DAY_MINS, x.s + x.d)) : x.s !== undefined ? _toTime(x.s) : x.d + 'm';
+  }
   function _rmToText(R) {
     const out = [];
+    (R.rules || []).forEach(function (r) {
+      const names = RM_DOW.filter(function (d) { return r.dow.indexOf(d[0]) > -1; }).map(function (d) { return d[1]; }).join(',');
+      if (names && (r.s !== undefined || r.d !== undefined)) out.push('@' + names + ' ' + _rmRuleTime(r));
+    });
     R.phases.forEach(function (p) {
-      out.push('# ' + p.name);
+      out.push('# ' + p.name + _rmDayTokens(p));
       for (let n = p.from; n <= p.to; n++) { const d = R.days[n - 1]; if (d) out.push([d.t + _rmDayTokens(d)].concat(d.ck || []).join(' | ')); }
     });
     return out.join('\n');
@@ -5205,7 +5345,7 @@ const timeManagementModule = (function () {
   /** Shareable JSON (no start date / rest days / deadline: those belong to one person's run). */
   function _rmExport(r) {
     const R = r.rm;
-    return JSON.stringify({ v: 1, name: r.name, time: R.time, dur: R.dur, tagId: R.tagId, dow: R.dow, phases: R.phases, days: R.days }, null, 2);
+    return JSON.stringify({ v: 1, name: r.name, time: R.time, dur: R.dur, tagId: R.tagId, dow: R.dow, rules: R.rules || [], phases: R.phases, days: R.days }, null, 2);
   }
   function _rmFromJson(o) {
     if (!o || typeof o !== 'object' || !Array.isArray(o.days) || !o.days.length) return null;
@@ -5216,42 +5356,113 @@ const timeManagementModule = (function () {
       return x;
     });
     if (days.some(function (d) { return !d.t; })) return null;
-    let phases = Array.isArray(o.phases) ? o.phases.map(function (p) { return { name: String((p && p.name) || '').slice(0, 60) || 'Phase', from: Math.max(1, +p.from || 1), to: Math.min(days.length, +p.to || days.length) }; }).filter(function (p) { return p.to >= p.from; }) : [];
+    let phases = Array.isArray(o.phases) ? o.phases.map(function (p) {
+      const x = { name: String((p && p.name) || '').slice(0, 60) || 'Phase', from: Math.max(1, +p.from || 1), to: Math.min(days.length, +p.to || days.length) };
+      if (p && p.s !== undefined && p.s !== null && Number.isFinite(+p.s)) x.s = _clamp(+p.s, 0, DAY_MINS - MIN_DUR);
+      if (p && p.d !== undefined && p.d !== null && Number.isFinite(+p.d)) x.d = _clamp(+p.d, MIN_DUR, 480);
+      return x;
+    }).filter(function (p) { return p.to >= p.from; }) : [];
+    const rules = (Array.isArray(o.rules) ? o.rules : []).map(function (r) {
+      const dow = (Array.isArray(r && r.dow) ? r.dow : []).map(Number).filter(function (v) { return v >= 0 && v <= 6 && v % 1 === 0; });
+      const x = { dow: dow };
+      if (r && r.s !== undefined && r.s !== null && Number.isFinite(+r.s)) x.s = _clamp(+r.s, 0, DAY_MINS - MIN_DUR);
+      if (r && r.d !== undefined && r.d !== null && Number.isFinite(+r.d)) x.d = _clamp(+r.d, MIN_DUR, 480);
+      return x;
+    }).filter(function (r) { return r.dow.length && (r.s !== undefined || r.d !== undefined); });
     if (!phases.length) phases = [{ name: 'Phase 1', from: 1, to: days.length }];
-    return { name: o.name ? String(o.name).slice(0, 60) : '', time: o.time, dur: o.dur, tagId: o.tagId, dow: Array.isArray(o.dow) && o.dow.length === 7 ? o.dow.map(function (v) { return v ? 1 : 0; }) : null, phases: phases, days: days };
+    return { name: o.name ? String(o.name).slice(0, 60) : '', time: o.time, dur: o.dur, tagId: o.tagId, dow: Array.isArray(o.dow) && o.dow.length === 7 ? o.dow.map(function (v) { return v ? 1 : 0; }) : null, phases: phases, rules: rules, days: days };
   }
   /** A ready-to-paste prompt: any AI can turn a syllabus into text this dialog understands. */
+  function _rmSplit(N, P) { const base = Math.floor(N / P), extra = N % P, out = []; for (let i = 0; i < P; i++) out.push(base + (i < extra ? 1 : 0)); return out; }
+  /** A self-explanatory prompt for ANY AI: states the task, the three line types with a worked example, the exact phase sizes,
+   *  how to express time rules (so the AI never has to guess calendar weekdays) and a final self-check. */
   function _rmPrompt(o) {
-    const N = _clamp(parseInt(o.days, 10) || 30, 1, RM_MAX_DAYS), P = _clamp(parseInt(o.phases, 10) || 5, 1, 12);
-    return 'Create a ' + N + '-day study roadmap' + (o.topic ? ' for: ' + o.topic : '') + '.\n' +
-      'Write it in ' + (o.lang || 'Vietnamese') + '.\n\n' +
-      'Output ONLY plain text in exactly this format. No explanations, no Markdown, no numbering, no code block:\n\n' +
-      '# Phase name\n' +
-      'Day title | task 1 | task 2 | task 3\n' +
-      'Day title | task 1 | task 2 | task 3\n' +
-      '# Next phase name\n' +
-      'Day title | task 1 | task 2 | task 3\n\n' +
-      'Rules:\n' +
-      '- Exactly ' + N + ' day lines, grouped into ' + P + ' phases. A line starting with # starts a phase.\n' +
-      '- One line per day: a short title (max 80 characters), then exactly 3 short, concrete, checkable tasks separated by " | ".\n' +
-      '- End every phase with a review day. Make the last phase a final synthesis / practice-test phase.\n' +
-      '- Optional: add "@19:30-21:30" or "@90m" after a day title when that day needs a different time.\n' +
-      '- Never use the characters "|" or "#" inside a title or a task.\n\n' +
-      'My syllabus / outline:\n[paste it here]\n';
+    const N = _clamp(parseInt(o.days, 10) || 30, 1, RM_MAX_DAYS), P = _clamp(parseInt(o.phases, 10) || 4, 1, Math.min(40, N)), lang = o.lang || 'Vietnamese';
+    const split = _rmSplit(N, P), time = /^\d{1,2}:\d{2}$/.test(o.time || '') ? _toTime(_toMins(o.time)) : '', dur = parseInt(o.dur, 10) || 0;
+    const L = [
+      'TASK',
+      'Create a ' + N + '-day study roadmap' + (o.topic ? ' for: ' + o.topic : '') + '.',
+      'Write every title and task in ' + lang + '.',
+      '',
+      'OUTPUT FORMAT (follow it exactly)',
+      'Reply with the plan only, as plain text: no introduction, no closing remarks, no code block, and no Markdown formatting (no headings, bold, bullet points, numbering or tables).',
+      'Use exactly these line types:',
+      '',
+      '1) PHASE line - starts a new phase:',
+      'PHASE: Phase name',
+      '',
+      '2) DAY line - one per day, placed directly under its phase:',
+      'Day title | task 1 | task 2 | task 3',
+      '',
+      '3) RULE line (optional) - a different start time or length on certain weekdays. Write it before the first PHASE line:',
+      '@Sun 11:30',
+      '',
+      'STRUCTURE',
+      '- ' + P + ' PHASE lines and ' + N + ' DAY lines in total (' + split.map(function (n, i) { return 'phase ' + (i + 1) + ' = ' + n + ' days'; }).join(', ') + ').',
+      '- Each DAY line: a title of at most 80 characters, then exactly 3 short, concrete, checkable tasks, separated by " | ".',
+      '- The last day of every phase is a review day. The last phase is a final synthesis / practice-test phase.',
+      '- Keep the word PHASE: exactly as written (do not translate it). Never use the characters "|" or "@" inside a title or a task.',
+      '',
+      'TIME (optional)',
+      (time && dur ? 'The app already starts every session at ' + time + ' and runs it for ' + (dur >= 60 && dur % 60 === 0 ? dur / 60 + (dur === 60 ? ' hour' : ' hours') : dur + ' minutes') + ', so only add time information where something differs.'
+                   : 'The app already has a default start time and length, so only add time information where something differs.'),
+      '- Different length for a whole phase: add @15m, @30m or @1h30 at the end of its PHASE line.',
+      '- Different start and/or length on certain weekdays: a RULE line such as @Sun 11:30 or @Sat,Sun 09:00-10:00 (use Mon Tue Wed Thu Fri Sat Sun).',
+      '- One special day only: add @06:15-06:45 at the end of that day title.',
+      '- Do not work out calendar dates or weekdays yourself.',
+      '',
+      'EXAMPLE (a different subject, only to show the format; your plan must be longer)',
+      '@Sun 10:00',
+      'PHASE: Chord basics @15m',
+      'Open chords A and D | Play each chord 10 times cleanly | Switch between A and D 20 times | Record a 30 second clip',
+      'Open chords E and G | Play each chord 10 times cleanly | Switch between E and G 20 times | Strum a 4 bar loop',
+      'Review of chord basics | Replay both days without notes | List 3 weak spots | Re-test the weakest chord',
+      'PHASE: First songs @30m',
+      'Song one: verse | Learn the chord order | Play it with a metronome at 60 bpm | Play it twice without stopping',
+      'Song one: chorus | Learn the strumming pattern | Join verse and chorus | Record the full song',
+      'Review of first songs | Play song one from memory | Note 3 places where you slow down | Fix the hardest place 10 times',
+      '',
+      'MY REQUIREMENTS',
+      o.extra ? o.extra : '(none)',
+      '',
+      'MY SYLLABUS / MATERIALS',
+      '[paste your syllabus or materials here, or delete this line]',
+      '',
+      'BEFORE YOU ANSWER, CHECK: exactly ' + P + ' PHASE lines, exactly ' + N + ' DAY lines, 3 tasks on every DAY line, every phase ends with a review day, and nothing else in the reply.'
+    ];
+    return L.join('\n') + '\n';
   }
-
   /* ---- Plan data: dates · progress ---- */
+  /* ---- Many roadmaps: every roadmap is a template record (kind 'roadmap'); archivedAt hides it from the strip ---- */
+  function _rmValid(t) { const R = t && t.kind === 'roadmap' && t.rm; return !!(R && Array.isArray(R.days) && R.days.length && Array.isArray(R.phases) && R.phases.length && _isDateStr(R.start)); }
+  function _rmAll() { return _templates.filter(_rmValid).sort(function (a, b) { return (a.createdAt || 0) - (b.createdAt || 0); }); }
+  function _rmLive() { return _rmAll().filter(function (t) { return !t.archivedAt; }); }
+  function _rmArch() { return _rmAll().filter(function (t) { return !!t.archivedAt; }).sort(function (a, b) { return b.archivedAt - a.archivedAt; }); }
+  function _rmById(id) { return _rmAll().filter(function (t) { return t.id === id; })[0] || null; }
+  /** The roadmap the strip shows: the one picked on this device, else the oldest running one. */
   function _rmGet() {
-    for (let i = 0; i < _templates.length; i++) {
-      const t = _templates[i], R = t && t.kind === 'roadmap' && t.rm;
-      if (R && Array.isArray(R.days) && R.days.length && Array.isArray(R.phases) && R.phases.length && _isDateStr(R.start)) return t;
-    }
-    return null;
+    const live = _rmLive();
+    if (!live.length) return null;
+    const id = _lsGet(RM_ACTIVE_KEY);
+    return live.filter(function (t) { return t.id === id; })[0] || live[0];
   }
+  function _rmSetActive(id) { _lsSet(RM_ACTIVE_KEY, id); _rm.sel = 0; _rm.pickOn = ''; _rm.pg = -1; _rm.scrolled = ''; }
+  function _rmEditing() { return _rm.editId ? _rmById(_rm.editId) : null; }
   function _rmDur(R) { return _clamp(parseInt(R.dur, 10) || 120, MIN_DUR, 480); }
   function _rmStartMins(R) { return /^\d{1,2}:\d{2}$/.test(R.time || '') ? _clamp(_toMins(R.time), 0, DAY_MINS - MIN_DUR) : 19 * 60 + 30; }
-  function _rmDayStart(R, day) { return day && day.s !== undefined ? _clamp(day.s, 0, DAY_MINS - MIN_DUR) : _rmStartMins(R); }
-  function _rmDayDur(R, day) { return day && day.d !== undefined ? _clamp(day.d, MIN_DUR, 480) : _rmDur(R); }
+  /** Start and length for Day n on `date`: roadmap default → phase → weekday rule → the day's own @token. */
+  function _rmWhen(R, n, date) {
+    let s = _rmStartMins(R), d = _rmDur(R);
+    const day = R.days[n - 1] || {}, dow = _parseDate(date).getDay();
+    const ph = (R.phases || []).filter(function (p) { return n >= p.from && n <= p.to; })[0];
+    if (ph && ph.s !== undefined) s = ph.s;
+    if (ph && ph.d !== undefined) d = ph.d;
+    (R.rules || []).forEach(function (r) { if (r.dow.indexOf(dow) > -1) { if (r.s !== undefined) s = r.s; if (r.d !== undefined) d = r.d; } });
+    if (day.s !== undefined) s = day.s;
+    if (day.d !== undefined) d = day.d;
+    d = _clamp(d, MIN_DUR, 480);
+    return { s: _clamp(s, 0, DAY_MINS - d), d: d };
+  }
   function _rmPct(b) { if (b.done) return 100; const l = b.checklist || []; return l.length ? Math.round(l.filter(function (i) { return i.done; }).length / l.length * 100) : 0; }
   function _rmDowOn(R) { return Array.isArray(R.dow) && R.dow.length === 7 && R.dow.some(function (v) { return v; }); }
   /** Is `ds` a study date? (weekday switched on and not an inserted rest day) */
@@ -5333,7 +5544,7 @@ const timeManagementModule = (function () {
     return bits.join(', ');
   }
   function _rmHeadHtml(C, open) {
-    const N = C.N;
+    const N = C.N, live = _rmLive();
     let now, pace = '', kind = 'ok';
     const gap = function (a) { return Math.round((_parseDate(a) - _parseDate(C.today)) / 86400000); };
     if (!C.started) { now = 'Starts ' + _dateLabel(_parseDate(C.dates[0])); pace = 'Starts in ' + gap(C.dates[0]) + 'd'; kind = 'wait'; }
@@ -5354,7 +5565,10 @@ const timeManagementModule = (function () {
       return '<i class="hub-tm-rm-segp hub-tm-rm-ph--' + (p.k % RM_PH) + '" style="flex:' + p.n + ';--f:' + pc + '%" title="' + _esc(p.name + ' · ' + p.done + '/' + p.n + ' days') + '"></i>';
     }).join('');
     return '<button type="button" class="hub-tm-rm-toggle" data-rm-toggle aria-expanded="' + open + '" aria-controls="hub-tm-rm-body" title="' + (open ? 'Collapse' : 'Expand') + ' roadmap">' + TL_ICON.chev + '</button>' +
-      '<div class="hub-tm-rm-id"><span class="hub-tm-rm-eyebrow">Roadmap</span><strong title="' + _esc(C.r.name) + '">' + _esc(C.r.name) + '</strong></div>' +
+      '<div class="hub-tm-rm-id"><span class="hub-tm-rm-eyebrow">Roadmap' + (live.length > 1 ? ' ' + (live.indexOf(C.r) + 1) + '/' + live.length : '') + '</span>' +
+        (live.length > 1
+          ? '<select class="hub-tm-rm-pick" data-rm-pick aria-label="Switch roadmap" title="' + _esc(C.r.name) + '">' + live.map(function (t) { return '<option value="' + _esc(t.id) + '"' + (t.id === C.r.id ? ' selected' : '') + '>' + _esc(t.name) + '</option>'; }).join('') + '</select>'
+          : '<strong title="' + _esc(C.r.name) + '">' + _esc(C.r.name) + '</strong>') + '</div>' +
       '<span class="hub-tm-rm-now">' + _esc(now) + '</span>' +
       '<div class="hub-tm-rm-meter"><div class="hub-tm-rm-seg" role="progressbar" aria-label="Roadmap progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + C.pct + '">' + segs + '</div><span class="hub-tm-rm-pct">' + C.pct + '%</span></div>' +
       '<span class="hub-tm-rm-stat"><b>' + C.done + '/' + N + '</b> days</span>' +
@@ -5362,28 +5576,65 @@ const timeManagementModule = (function () {
       (pace ? '<span class="hub-tm-rm-pace is-' + kind + '">' + _esc(pace) + '</span>' : '') + due +
       '<span class="hub-tm-rm-actions">' +
         (C.behind > 0 ? '<button type="button" class="hub-tm-btn hub-tm-btn--primary hub-tm-rm-btn" data-rm-catchup title="Treat the missed days as rest days and start the unfinished ones today">Catch up</button>' : '') +
+        (C.done >= N ? '<button type="button" class="hub-tm-btn hub-tm-btn--primary hub-tm-rm-btn" data-rm-archive title="Finish this roadmap and keep a summary of it in the library">Archive</button>' : '') +
         '<button type="button" class="hub-tm-btn hub-tm-btn--outline hub-tm-rm-btn" data-rm-jump>Today</button>' +
+        '<button type="button" class="hub-tm-btn hub-tm-btn--outline hub-tm-btn--icon" data-rm-lib title="Roadmap library: templates, archive, other roadmaps" aria-label="Roadmap library">' + RM_ICON_LIB + '</button>' +
         '<button type="button" class="hub-tm-btn hub-tm-btn--outline hub-tm-btn--icon" data-rm-edit title="Edit roadmap" aria-label="Edit roadmap">' + TL_ICON.edit + '</button></span>';
   }
-  function _rmTrackHtml(C, sel) {
+  /* ---- Long roadmaps: one WINDOW of RM_PAGE days at a time + an overview map of the whole plan ---- */
+  function _rmPageCount(C) { return Math.max(1, Math.ceil(C.N / RM_PAGE)); }
+  function _rmPage(C, sel) {
+    const pages = _rmPageCount(C);
+    return _rm.pg >= 0 ? Math.min(_rm.pg, pages - 1) : Math.min(pages - 1, Math.floor((sel - 1) / RM_PAGE));
+  }
+  function _rmTrackHtml(C, sel, pg) {
+    const a = pg * RM_PAGE + 1, b = Math.min(C.N, a + RM_PAGE - 1);
     return '<ol class="hub-tm-rm-track">' + C.phases.filter(function (p) { return p.n; }).map(function (p) {
-      const cells = C.days.filter(function (d) { return d.k === p.k; }).map(function (d) {
+      const all = C.days.filter(function (d) { return d.k === p.k; }), shown = all.filter(function (d) { return d.n >= a && d.n <= b; });
+      if (!shown.length) return '';
+      const cut0 = shown[0].n !== all[0].n, cut1 = shown[shown.length - 1].n !== all[all.length - 1].n;
+      const cells = shown.map(function (d) {
         const dt = _parseDate(d.at), lab = 'Day ' + d.n + ', ' + DAY_SHORT[dt.getDay()] + ' ' + _dateLabel(dt) + '. ' + d.title + '. ' + _rmStatusText(d, C);
         const cls = 'hub-tm-rm-day is-' + d.state + (d.late ? ' is-late' : '') + (d.date === C.today ? ' is-today' : '') + (d.n === sel ? ' is-sel' : '');
         return '<li><button type="button" class="' + cls + '" style="--p:' + d.pct + '" data-rm-day="' + d.n + '" tabindex="' + (d.n === sel ? 0 : -1) + '" aria-pressed="' + (d.n === sel) + '"' +
           (d.date === C.today ? ' aria-current="date"' : '') + ' aria-label="' + _esc(lab) + '" title="' + _esc(lab) + '"><span class="hub-tm-rm-num">' + d.n + '</span></button></li>';
       }).join('');
-      return '<li class="hub-tm-rm-phase hub-tm-rm-ph--' + (p.k % RM_PH) + '" style="--n:' + p.n + '">' +
-        '<div class="hub-tm-rm-phhead"><span class="hub-tm-rm-phname" title="' + _esc(p.name) + '">' + _esc(p.name) + '</span><span class="hub-tm-rm-phcount">' + p.done + '/' + p.n + '</span></div>' +
+      return '<li class="hub-tm-rm-phase hub-tm-rm-ph--' + (p.k % RM_PH) + '" style="--n:' + shown.length + '">' +
+        '<div class="hub-tm-rm-phhead"><span class="hub-tm-rm-phname" title="' + _esc(p.name + ' · Days ' + all[0].n + '–' + all[all.length - 1].n) + '">' + (cut0 ? '… ' : '') + _esc(p.name) + (cut1 ? ' …' : '') + '</span><span class="hub-tm-rm-phcount">' + p.done + '/' + p.n + '</span></div>' +
         '<div class="hub-tm-rm-phbar" aria-hidden="true"><i style="width:' + Math.round(p.sum / p.n) + '%"></i></div>' +
         '<ol class="hub-tm-rm-days">' + cells + '</ol></li>';
     }).join('') + '</ol>';
+  }
+  /** ‹ Days 32–62 of 200 › · Go to day [ ] — only for plans longer than one window. */
+  function _rmNavHtml(C, pg, sel) {
+    const pages = _rmPageCount(C);
+    if (pages < 2) return '';
+    const a = pg * RM_PAGE + 1, b = Math.min(C.N, a + RM_PAGE - 1);
+    const arrow = function (dir, off, label) {
+      return '<button type="button" class="hub-tm-btn hub-tm-btn--outline hub-tm-btn--icon hub-tm-rm-pgbtn is-' + (dir < 0 ? 'prev' : 'next') + '" data-rm-page="' + dir + '" aria-label="' + label + '"' + (off ? ' disabled' : '') + '>' + TL_ICON.chev + '</button>';
+    };
+    return arrow(-1, pg === 0, 'Previous days') +
+      '<span class="hub-tm-rm-range" aria-live="polite">Days <b>' + a + '–' + b + '</b> of ' + C.N + '</span>' +
+      arrow(1, pg >= pages - 1, 'Next days') +
+      '<label class="hub-tm-rm-goto"><span>Go to day</span><input type="number" class="hub-tm-input" data-rm-goto min="1" max="' + C.N + '" value="' + sel + '" inputmode="numeric" aria-label="Go to day number"></label>';
+  }
+  /** The whole plan on one line: one bar per day (taller = further along), grouped by phase. Click anywhere to jump there. */
+  function _rmMapHtml(C, pg, sel) {
+    if (C.N <= RM_PAGE) return '';
+    const a = pg * RM_PAGE + 1, b = Math.min(C.N, a + RM_PAGE - 1);
+    return '<div class="hub-tm-rm-map" aria-hidden="true">' + C.phases.filter(function (p) { return p.n; }).map(function (p) {
+      const all = C.days.filter(function (d) { return d.k === p.k; });
+      const ticks = all.map(function (d) {
+        return '<i class="hub-tm-rm-md is-' + d.state + (d.late ? ' is-late' : '') + (d.date === C.today ? ' is-today' : '') + (d.n >= a && d.n <= b ? ' is-win' : '') + (d.n === sel ? ' is-sel' : '') + '"></i>';
+      }).join('');
+      return '<div class="hub-tm-rm-mph hub-tm-rm-ph--' + (p.k % RM_PH) + '" style="flex:' + all.length + '" data-rm-mph="' + all[0].n + '" data-rm-mcount="' + all.length + '" title="' + _esc(p.name + ' · ' + p.done + '/' + p.n + ' days') + '">' + ticks + '</div>';
+    }).join('') + '</div>';
   }
   function _rmCardHtml(C, n) {
     const d = C.days[n - 1];
     if (!d) return '';
     const R = C.R, b = d.b, dt = _parseDate(d.at), ph = C.phases[d.k], today = C.today, day = R.days[n - 1];
-    const s = b ? _toMins(b.startTime) : _rmDayStart(R, day), e = b ? _toMins(b.endTime) : s + _rmDayDur(R, day);
+    const w = _rmWhen(R, n, d.at), s = b ? _toMins(b.startTime) : w.s, e = b ? _toMins(b.endTime) : s + w.d;
     const items = b
       ? _ck(b).map(function (i) {
           return '<li class="' + (i.done ? 'is-done' : '') + '"><label class="hub-tm-rm-ckrow"><span class="hub-tm-ck-box"><input type="checkbox" data-rm-ck="' + _esc(i.id) + '" data-rm-blk="' + _esc(b.id) + '"' + (i.done ? ' checked' : '') + '><span></span></span><span class="hub-tm-rm-cktext">' + _esc(i.text) + '</span></label></li>';
@@ -5408,6 +5659,8 @@ const timeManagementModule = (function () {
   const RM_SCAFFOLD =
     '<div class="hub-tm-rm-head" id="hub-tm-rm-head"></div>' +
     '<div class="hub-tm-rm-body" id="hub-tm-rm-body">' +
+      '<div class="hub-tm-rm-navrow" id="hub-tm-rm-nav" hidden></div>' +
+      '<div id="hub-tm-rm-map" hidden></div>' +
       '<div class="hub-tm-rm-scroll" id="hub-tm-rm-scroll"><div id="hub-tm-rm-track"></div></div>' +
       '<div id="hub-tm-rm-card" aria-live="polite"></div>' +
       '<ul class="hub-tm-rm-legend" aria-label="Legend">' +
@@ -5415,9 +5668,26 @@ const timeManagementModule = (function () {
         '<li><i class="hub-tm-rm-lg is-late"></i>Overdue</li><li><i class="hub-tm-rm-lg is-today"></i>Today</li>' +
       '</ul>' +
     '</div>';
+  /* Roadmap skin: one look per theme (cyber / solar / lofi / ember / tui). CSS keys off data-skin. */
+  function _rmSkin() {
+    const b = document.body;
+    if (b && b.classList.contains('theme-optimized')) return 'tui';
+    const t = document.documentElement.getAttribute('data-theme') || (b && b.getAttribute('data-theme')) || '';
+    return t === 'solar-zen' ? 'solar' : t === 'lofi-twilight' ? 'lofi' : t === 'ember-noir' ? 'ember' : 'cyber';
+  }
+  function _rmApplySkin() {
+    const k = _rmSkin();
+    ['#hub-tm-roadmap', '#tm-btn-roadmap', '#hub-tm-rmlib-modal'].forEach(function (s) { const n = _el(s); if (n && n.getAttribute('data-skin') !== k) n.setAttribute('data-skin', k); });
+  }
+  function _rmWatchSkin() {
+    if (_rm.skinObs || !window.MutationObserver) return;
+    _rm.skinObs = new MutationObserver(_rmApplySkin);
+    [document.documentElement, document.body].forEach(function (n) { if (n) _rm.skinObs.observe(n, { attributes: true, attributeFilter: ['data-theme', 'class'] }); });
+  }
   function _renderRoadmap() {
     const box = _el('#hub-tm-roadmap');
     if (!box) return;
+    _rmApplySkin(); _rmWatchSkin();
     const r = _rmGet();
     if (!r) { if (!box.hidden) box.hidden = true; return; }
     const C = _rmCompute(r);
@@ -5428,19 +5698,17 @@ const timeManagementModule = (function () {
     const sel = (_rm.pickOn === C.today && _rm.sel >= 1 && _rm.sel <= C.N) ? _rm.sel : _rmDefault(C);
     _tlSet(_el('#hub-tm-rm-head'), _rmHeadHtml(C, open));
     if (!open) return;
-    _tlSet(_el('#hub-tm-rm-track'), _rmTrackHtml(C, sel));
+    const pg = _rmPage(C, sel), long = C.N > RM_PAGE, nav = _el('#hub-tm-rm-nav'), map = _el('#hub-tm-rm-map');
+    nav.hidden = map.hidden = !long;
+    _tlSet(nav, _rmNavHtml(C, pg, sel));
+    _tlSet(map, _rmMapHtml(C, pg, sel));
+    _tlSet(_el('#hub-tm-rm-track'), _rmTrackHtml(C, sel, pg));
     _tlSet(_el('#hub-tm-rm-card'), _rmCardHtml(C, sel));
-    const key = r.id + '|' + C.today;
-    if (_rm.scrolled !== key && box.offsetParent !== null) {       // once per day: bring the current cell into view
-      _rm.scrolled = key;
-      const cell = box.querySelector('.hub-tm-rm-day.is-sel');
-      if (cell && cell.scrollIntoView) { try { cell.scrollIntoView({ inline: 'center', block: 'nearest' }); } catch (_) {} }
-    }
   }
 
   /* ---- Actions ---- */
   function _rmCreate(r, n, date) {
-    const R = r.rm, day = R.days[n - 1], dur = _rmDayDur(R, day), s = _rmSlot(date, _rmDayStart(R, day), dur);
+    const R = r.rm, day = R.days[n - 1], w = _rmWhen(R, n, date), dur = w.d, s = _rmSlot(date, w.s, dur);
     if (s === null) return null;
     const b = _normBlock({
       id: _newId('rm' + n), date: date, tagId: _tagOrFallback(R.tagId).id === FALLBACK_TAG.id ? 'work' : R.tagId,
@@ -5452,7 +5720,7 @@ const timeManagementModule = (function () {
   }
   function _rmPlan(r, n, date) {
     const b = _rmCreate(r, n, date);
-    if (!b) { _toast('No free ' + _fmtDur(_rmDayDur(r.rm, r.rm.days[n - 1])) + ' left on that day.'); _renderRoadmap(); return; }
+    if (!b) { _toast('No free ' + _fmtDur(_rmWhen(r.rm, n, date).d) + ' left on that day.'); _renderRoadmap(); return; }
     _scheduleSave();
     _toast('Day ' + n + ' planned · ' + b.startTime + '–' + b.endTime, {
       action: 'Undo',
@@ -5534,7 +5802,7 @@ const timeManagementModule = (function () {
   function _rmSelect(n, focus) {
     const r = _rmGet();
     if (!r) return;
-    _rm.sel = n; _rm.pickOn = _todayStr();
+    _rm.sel = n; _rm.pickOn = _todayStr(); _rm.pg = -1;          // the window follows the selected day
     _renderRoadmap();
     if (focus) { const c = _el('.hub-tm-rm-day[data-rm-day="' + n + '"]'); if (c) c.focus({ preventScroll: false }); }
   }
@@ -5553,9 +5821,94 @@ const timeManagementModule = (function () {
     _all('#tm-rm-dow input[data-dow]').forEach(function (i) { dow[parseInt(i.getAttribute('data-dow'), 10)] = i.checked ? 1 : 0; });
     return dow;
   }
+  const RM_DOW_PRESETS = { all: [1, 1, 1, 1, 1, 1, 1], wk: [0, 1, 1, 1, 1, 1, 0], we: [1, 0, 0, 0, 0, 0, 1] };   // index = Date.getDay()
   function _rmSetDow(dow) {
-    _all('#tm-rm-dow input[data-dow]').forEach(function (i) { i.checked = !Array.isArray(dow) || dow.length !== 7 || !dow.some(function (v) { return v; }) ? true : !!dow[parseInt(i.getAttribute('data-dow'), 10)]; });
+    const none = !Array.isArray(dow) || dow.length !== 7 || !dow.some(function (v) { return v; });
+    _all('#tm-rm-dow input[data-dow]').forEach(function (i) { i.checked = none ? true : !!dow[parseInt(i.getAttribute('data-dow'), 10)]; });
   }
+  function _rmSetDur(m) {
+    m = _clamp(parseInt(m, 10) || 120, MIN_DUR, 480);
+    _el('#tm-rm-dur').value = String(m);
+    _all('#tm-rm-durs button').forEach(function (b) { b.setAttribute('aria-pressed', String(parseInt(b.getAttribute('data-rm-dur'), 10) === m)); });
+  }
+  /** The roadmap as the dialog currently describes it (form fields + the parsed plan). */
+  function _rmDraft(p) {
+    const cur = _rmEditing(), due = _el('#tm-rm-due').value;
+    return { start: _el('#tm-rm-start').value, time: _el('#tm-rm-time').value || '19:30', dur: parseInt(_el('#tm-rm-dur').value, 10) || 120, tagId: _el('#tm-rm-tag').value || 'work',
+             dow: _rmFormDow(), rules: p.rules, skip: cur ? (cur.rm.skip || []) : [], deadline: _isDateStr(due) ? due : '', phases: p.phases, days: p.days };
+  }
+  /** Preview: one cell per day (coloured by phase) and a schedule table with the real date and time of every day.
+   *  Rows whose time differs from the rest of their phase are highlighted, so weekday rules are easy to verify. */
+  function _rmPreviewHtml(R) {
+    const N = R.days.length, dates = _rmDates(R, N), tm = function (w) { return _toTime(w.s) + '–' + _toTime(Math.min(DAY_MINS, w.s + w.d)); };
+    const when = [];
+    for (let n = 1; n <= N; n++) when[n] = _rmWhen(R, n, dates[n - 1]);
+    const strip = R.phases.map(function (p, k) {
+      let cells = '';
+      for (let n = p.from; n <= p.to; n++) { const dt = _parseDate(dates[n - 1]); cells += '<i class="hub-tm-rm-ph--' + (k % RM_PH) + '" title="' + _esc('Day ' + n + ' · ' + DAY_SHORT[dt.getDay()] + ' ' + _dateLabel(dt) + ' · ' + tm(when[n])) + '">' + n + '</i>'; }
+      return cells;
+    }).join('');
+    const body = R.phases.map(function (p, k) {
+      const count = {}; let top = '', topN = 0, rows = '';
+      for (let n = p.from; n <= p.to; n++) { const t = tm(when[n]); count[t] = (count[t] || 0) + 1; if (count[t] > topN) { topN = count[t]; top = t; } }
+      for (let n = p.from; n <= p.to; n++) {
+        const dt = _parseDate(dates[n - 1]), t = tm(when[n]), d = R.days[n - 1];
+        rows += '<li class="hub-tm-rm-pvrow' + (t !== top ? ' is-alt' : '') + '"><span class="n">' + n + '</span><span class="dt">' + DAY_SHORT[dt.getDay()] + ' ' + _esc(_dateLabel(dt)) + '</span><span class="tm">' + t + '</span><span class="tt" title="' + _esc(d.t) + '">' + _esc(d.t) + '</span><span class="ck">' + d.ck.length + (d.ck.length === 1 ? ' task' : ' tasks') + '</span></li>';
+      }
+      const a = _parseDate(dates[p.from - 1]), b = _parseDate(dates[p.to - 1]);
+      return '<section class="hub-tm-rm-pvph hub-tm-rm-ph--' + (k % RM_PH) + '"><header><b>' + _esc(p.name) + '</b><span>' + (p.to - p.from + 1) + ' days · ' + _esc(_dateLabel(a)) + (p.to > p.from ? ' – ' + _esc(_dateLabel(b)) : '') + ' · ' + top + '</span></header><ol>' + rows + '</ol></section>';
+    }).join('');
+    return '<div class="hub-tm-rm-pvstrip" role="img" aria-label="Days of the roadmap, coloured by phase">' + strip + '</div>' + body;
+  }
+  function _rmRenderPreview() {
+    const p = _rmParse(_el('#tm-rm-text').value), box = _el('#tm-rm-preview');
+    if (p.errors.length || !p.days.length || !_isDateStr(_el('#tm-rm-start').value)) { box.innerHTML = '<p class="hub-tm-rm-empty">Fix the plan on the Edit tab to see the preview.</p>'; return; }
+    box.innerHTML = _rmPreviewHtml(_rmDraft(p));
+  }
+  function _rmPromptOpts() {
+    return { topic: _el('#tm-rm-ai-topic').value.trim(), extra: _el('#tm-rm-ai-extra').value.trim(), days: _el('#tm-rm-ai-days').value, phases: _el('#tm-rm-ai-phases').value, lang: _el('#tm-rm-ai-lang').value, time: _el('#tm-rm-time').value, dur: _el('#tm-rm-dur').value };
+  }
+  function _rmRefreshPrompt() { _el('#tm-rm-prompt-view').value = _rmPrompt(_rmPromptOpts()); }
+  function _rmShowTab(name) {
+    if (RM_TABS.indexOf(name) < 0) name = 'edit';
+    RM_TABS.forEach(function (t) {
+      const on = t === name, tab = _el('#tm-rm-tab-' + t);
+      tab.setAttribute('aria-selected', String(on)); tab.tabIndex = on ? 0 : -1; _el('#tm-rm-pane-' + t).hidden = !on;
+    });
+    _rmTab = name;
+    if (name === 'preview') _rmRenderPreview();
+    if (name === 'ai') _rmRefreshPrompt();
+  }
+  /** Insert a ready-made line into the plan text and select the placeholder so it can be overtyped. */
+  function _rmInsert(kind) {
+    const ta = _el('#tm-rm-text'), v = ta.value;
+    if (kind === 'starter') {
+      const put = function () { ta.value = _rmStarterText(); _rmValidate(); };
+      if (v.trim()) _confirm('Replace the plan text with the starter plan? Your current text will be lost.', put, { title: 'Load starter plan?', label: 'Replace' }); else put();
+      return;
+    }
+    if (kind === 'rule') {
+      ta.value = '@Sun 11:30' + (v ? '\n' + v : '');
+      ta.focus(); ta.setSelectionRange(1, 10);
+    } else {
+      const pos = ta.selectionEnd, nl = v.indexOf('\n', pos), end = nl < 0 ? v.length : nl, lead = v ? '\n' : '';
+      const snip = kind === 'phase' ? 'PHASE: New phase' : 'New day | task | task | task';
+      ta.setRangeText(lead + snip, end, end, 'end');
+      const from = end + lead.length + (kind === 'phase' ? 7 : 0);
+      ta.focus(); ta.setSelectionRange(from, from + (kind === 'phase' ? 9 : 7));
+    }
+    _rmValidate();
+  }
+  /** Keep everything that mirrors the form in step: session caption, day presets, and the visible tab. */
+  function _rmSyncUi() {
+    const t = _el('#tm-rm-time').value, dur = parseInt(_el('#tm-rm-dur').value, 10) || 120;
+    _el('#tm-rm-sess-cap').textContent = /^\d{1,2}:\d{2}$/.test(t) ? 'Each day: ' + _toTime(_toMins(t)) + ' → ' + _toTime(Math.min(DAY_MINS, _toMins(t) + dur)) + ' (' + _fmtDur(dur) + '). The plan can override this per phase, weekday or day.' : 'Pick a start time.';
+    const sel = _rmFormDow();
+    _all('#tm-rm-dowp button').forEach(function (b) { b.setAttribute('aria-pressed', String(sel.join() === RM_DOW_PRESETS[b.getAttribute('data-rm-dowp')].join())); });
+    if (_rmPane('preview')) _rmRenderPreview();
+    if (_rmPane('ai')) _rmRefreshPrompt();
+  }
+  function _rmPane(t) { const p = _el('#tm-rm-pane-' + t); return !!p && !p.hidden; }
   function _rmValidate() {
     const p = _rmParse(_el('#tm-rm-text').value), st = _el('#tm-rm-status'), start = _el('#tm-rm-start').value, due = _el('#tm-rm-due').value, dow = _rmFormDow();
     let msg, bad = false, warn = false;
@@ -5563,54 +5916,81 @@ const timeManagementModule = (function () {
     else if (!_isDateStr(start)) { msg = 'Pick the date of Day 1.'; bad = true; }
     else if (!dow.some(function (v) { return v; })) { msg = 'Pick at least one study day.'; bad = true; }
     else {
-      const cur = _rmGet(), dates = _rmDates({ start: start, dow: dow, skip: cur ? (cur.rm.skip || []) : [] }, p.days.length), last = dates[dates.length - 1];
+      const cur = _rmEditing(), dates = _rmDates({ start: start, dow: dow, skip: cur ? (cur.rm.skip || []) : [] }, p.days.length), last = dates[dates.length - 1];
       const e = _parseDate(last);
-      msg = p.days.length + ' days · ' + p.phases.length + ' phase' + (p.phases.length === 1 ? '' : 's') + ' · ' + _dateLabel(_parseDate(dates[0])) + ' → ' + _dateLabel(e) + ', ' + e.getFullYear();
+      const sizes = p.phases.length > 1 && p.phases.length <= 8 ? ' (' + p.phases.map(function (x) { return x.to - x.from + 1; }).join(' + ') + ')' : '';
+      msg = p.days.length + ' days · ' + p.phases.length + ' phase' + (p.phases.length === 1 ? '' : 's') + sizes + ' · ' + _dateLabel(_parseDate(dates[0])) + ' → ' + _dateLabel(e) + ', ' + e.getFullYear();
+      const bare = p.days.filter(function (d) { return !d.ck.length; }).length;
+      if (bare) { msg += ' · ' + bare + (bare === 1 ? ' day has' : ' days have') + ' no tasks (is a title meant to be a phase?)'; warn = true; }
       if (due && !_isDateStr(due)) { msg = 'That deadline is not a valid date.'; bad = true; }
       else if (_isDateStr(due) && due < dates[0]) { msg = 'The deadline is before Day 1.'; bad = true; }
       else if (_isDateStr(due) && last > due) { msg += ' · ends after the deadline'; warn = true; }
     }
-    st.textContent = msg; st.classList.toggle('is-error', bad); st.classList.toggle('is-warn', warn && !bad); _el('#tm-rm-save').disabled = bad;
+    st.textContent = msg;
+    st.classList.toggle('is-error', bad); st.classList.toggle('is-warn', warn && !bad);
+    _el('#tm-rm-save').disabled = bad;
+    _rmSyncUi();
     return p;
   }
-  function _openRoadmap() {
-    const r = _rmGet(), tags = _allTags();
+  /** Editor. opts.id = edit that roadmap · opts.spec = new roadmap from a template / a re-run · nothing = edit the active one (or start a blank one). */
+  function _openRoadmap(opts) {
+    opts = opts && (opts.id || opts.spec) ? opts : {};
+    const spec = opts.spec || null, r = opts.id ? _rmById(opts.id) : (spec ? null : _rmGet()), tags = _allTags();
+    _rm.editId = r ? r.id : null;
     _el('#tm-rm-tag').innerHTML = tags.map(function (t) { return '<option value="' + _esc(t.id) + '">' + _esc(t.label) + '</option>'; }).join('');
+    const tagOf = function (id, fb) { return tags.some(function (t) { return t.id === id; }) ? id : (tags.some(function (t) { return t.id === fb; }) ? fb : tags[0].id); };
     if (r) {
       const R = r.rm;
       _el('#tm-rm-name').value = r.name || '';
       _el('#tm-rm-start').value = R.start;
       _el('#tm-rm-time').value = _toTime(_rmStartMins(R));
-      _el('#tm-rm-dur').value = String(_rmDur(R));
+      _rmSetDur(_rmDur(R));
       _el('#tm-rm-due').value = _isDateStr(R.deadline) ? R.deadline : '';
       _el('#tm-rm-text').value = _rmToText(R);
-      _el('#tm-rm-tag').value = tags.some(function (t) { return t.id === R.tagId; }) ? R.tagId : tags[0].id;
+      _el('#tm-rm-tag').value = tagOf(R.tagId);
       _rmSetDow(R.dow);
+    } else if (spec) {
+      _el('#tm-rm-name').value = spec.name || '';
+      _el('#tm-rm-start').value = _todayStr();
+      _el('#tm-rm-time').value = /^\d{1,2}:\d{2}$/.test(spec.time || '') ? _toTime(_toMins(spec.time)) : '19:30';
+      _rmSetDur(spec.dur || 120);
+      _el('#tm-rm-due').value = '';
+      _el('#tm-rm-text').value = spec.text || '';
+      _el('#tm-rm-tag').value = tagOf(spec.tagId, 'study');
+      _rmSetDow(spec.dow || null);
     } else {
       _el('#tm-rm-name').value = '30-day roadmap';
       _el('#tm-rm-start').value = _todayStr();
       _el('#tm-rm-time').value = '19:30';
-      _el('#tm-rm-dur').value = '120';
+      _rmSetDur(120);
       _el('#tm-rm-due').value = '';
       _el('#tm-rm-text').value = _rmStarterText();
-      _el('#tm-rm-tag').value = tags.some(function (t) { return t.id === 'study'; }) ? 'study' : tags[0].id;
+      _el('#tm-rm-tag').value = tagOf('study');
       _rmSetDow(null);
     }
+    const mode = r ? 'edit' : (spec && spec.rerun ? 'rerun' : spec ? 'tpl' : 'new');
+    _el('#hub-tm-rm-heading').textContent = { edit: 'Edit roadmap', rerun: 'Re-run roadmap', tpl: 'New roadmap from template', 'new': 'New roadmap' }[mode];
+    const sub = _el('#hub-tm-roadmap-modal .hub-tm-sb-sub');
+    if (sub) sub.textContent = { edit: 'Change the plan, the schedule or the daily session', rerun: 'Pick a new Day 1. Progress starts again from zero', tpl: 'Pick Day 1, adjust anything, then start', 'new': 'Plan a multi-day path and follow it day by day' }[mode];
+    _el('#tm-rm-save').textContent = { edit: 'Save roadmap', rerun: 'Start run', tpl: 'Start roadmap', 'new': 'Create roadmap' }[mode];
     _el('#tm-rm-delete').hidden = !r;
+    _rmShowTab('edit');
     _rmValidate();
-    _openModal(_el('#hub-tm-roadmap-modal'), '#tm-rm-name');
+    _openModal(_el('#hub-tm-roadmap-modal'), spec ? '#tm-rm-start' : '#tm-rm-name');
   }
   function _rmSave() {
     const p = _rmValidate();
     if (p.errors.length || !p.days.length || _el('#tm-rm-save').disabled) return;
-    const name = (_el('#tm-rm-name').value || '').trim().slice(0, 60) || 'Roadmap', cur = _rmGet(), due = _el('#tm-rm-due').value;
-    const data = { start: _el('#tm-rm-start').value, time: _el('#tm-rm-time').value || '19:30', dur: parseInt(_el('#tm-rm-dur').value, 10) || 120, tagId: _el('#tm-rm-tag').value || 'work',
-                   dow: _rmFormDow(), skip: cur ? (cur.rm.skip || []) : [], deadline: _isDateStr(due) ? due : '', phases: p.phases, days: p.days };
+    const name = (_el('#tm-rm-name').value || '').trim().slice(0, 60) || 'Roadmap', cur = _rmEditing(), data = _rmDraft(p);
+    let saved = cur;
     if (cur) { cur.name = name; cur.rm = data; }
-    else _templates.push({ kind: 'roadmap', id: 'rm-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: name, createdAt: Date.now(), blocks: [], rm: data });
+    else { saved = { kind: 'roadmap', id: 'rm-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: name, createdAt: Date.now(), blocks: [], rm: data }; _templates.push(saved); }
+    _rm.editId = null;
     _saveTemplates();
+    if (!saved.archivedAt) _rmSetActive(saved.id);
+    if (_rmLibOpen()) _renderRmLib();
     _closeModal(_el('#hub-tm-roadmap-modal'));
-    _rm.sel = 0; _rm.pickOn = '';
+    _rm.sel = 0; _rm.pickOn = ''; _rm.pg = -1;
     _renderRoadmap();
     _toast('Roadmap saved · ' + p.days.length + ' days');
   }
@@ -5646,7 +6026,7 @@ const timeManagementModule = (function () {
         if (!j) { _toast('No roadmap found in that JSON file.'); return; }
         if (j.name) _el('#tm-rm-name').value = j.name;
         if (/^\d{1,2}:\d{2}$/.test(j.time || '')) _el('#tm-rm-time').value = _toTime(_toMins(j.time));
-        if (j.dur) { const m = String(_clamp(parseInt(j.dur, 10) || 120, 30, 240)); if (_el('#tm-rm-dur').querySelector('option[value="' + m + '"]')) _el('#tm-rm-dur').value = m; }
+        if (j.dur) _rmSetDur(j.dur);
         if (j.tagId && _el('#tm-rm-tag').querySelector('option[value="' + j.tagId + '"]')) _el('#tm-rm-tag').value = j.tagId;
         if (j.dow) _rmSetDow(j.dow);
         _rmSetPlanText(_rmToText(j), 'Imported ' + name);
@@ -5657,59 +6037,321 @@ const timeManagementModule = (function () {
       _rmSetPlanText(out, 'Imported ' + name);
     }).catch(function () { _toast('Couldn’t read that file.'); });
   }
+
+  /* ============================================================
+     ROADMAP LIBRARY  ·  several roadmaps · templates · re-run · archive + summary
+     • Roadmaps: everything running; Open switches the strip to it
+     • Templates: 4 built-in plans + your own (Save as template), "Use" opens the editor with a fresh Day 1
+     • Archive: finished roadmaps with a summary (days done, on time, hours); Re-run starts the same plan again
+     ============================================================ */
+  const RM_LIB = [{"name": "Ôn thi 14 ngày", "blurb": "Rà soát lỗ hổng, luyện theo chuyên đề rồi làm đề tổng hợp trước ngày thi.", "time": "19:30", "dur": 120, "tagId": "study", "dow": [1, 1, 1, 1, 1, 1, 1], "text": "# Nền tảng · rà soát lỗ hổng\nLập bản đồ nội dung thi | Liệt kê toàn bộ chủ đề trong đề cương | Chấm mức nắm vững từng chủ đề từ 1 đến 5 | Chọn 3 chủ đề yếu nhất để ưu tiên\nChủ đề trọng tâm số 1 | Đọc lại tài liệu và ghi chú ý chính | Làm 5 câu hỏi về chủ đề này | Tóm tắt lại trong 5 dòng\nChủ đề trọng tâm số 2 | Đọc lại tài liệu và ghi chú ý chính | Làm 5 câu hỏi về chủ đề này | Tóm tắt lại trong 5 dòng\nChủ đề trọng tâm số 3 | Đọc lại tài liệu và ghi chú ý chính | Làm 5 câu hỏi về chủ đề này | Tóm tắt lại trong 5 dòng\nÔn tập giai đoạn nền tảng | Vẽ sơ đồ liên kết các chủ đề đã học | Làm 10 câu hỏi hỗn hợp | Ghi lại các lỗi sai cần nhớ\n# Củng cố · luyện theo chuyên đề\nChủ đề quan trọng số 4 | Đọc lại tài liệu và ghi chú ý chính | Làm 8 câu hỏi về chủ đề này | Tóm tắt lại trong 5 dòng\nChủ đề quan trọng số 5 | Đọc lại tài liệu và ghi chú ý chính | Làm 8 câu hỏi về chủ đề này | Tóm tắt lại trong 5 dòng\nChủ đề quan trọng số 6 | Đọc lại tài liệu và ghi chú ý chính | Làm 8 câu hỏi về chủ đề này | Tóm tắt lại trong 5 dòng\nSửa toàn bộ lỗi sai | Xem lại danh sách lỗi sai từ đầu đến giờ | Làm lại 10 câu từng làm sai | Viết một mẹo tránh lặp lại mỗi loại lỗi\nÔn tập giai đoạn củng cố | Tóm tắt mỗi chủ đề trên một tờ giấy | Làm 15 câu hỏi hỗn hợp | Chọn 2 điểm còn yếu để dồn sức\n# Nước rút · đề tổng hợp\nĐề tổng hợp số 1 | Làm đề trong thời gian thật | Chấm điểm và ghi lại lỗi sai | Học lại 3 phần sai nhiều nhất\nĐề tổng hợp số 2 | Làm đề trong thời gian thật | Chấm điểm và so với đề số 1 | Học lại 3 phần sai nhiều nhất\nRà soát điểm yếu cuối cùng | Đọc lại toàn bộ danh sách lỗi sai | Làm 10 câu ở phần yếu nhất | Rút gọn tờ tóm tắt xuống một trang\nChốt kiến thức và chuẩn bị thi | Đọc lại tờ tóm tắt một trang | Chuẩn bị giấy tờ và dụng cụ cho ngày thi | Đi ngủ đúng giờ và không học bài mới", "id": "lib:exam14"}, {"name": "Sprint 30 ngày", "blurb": "Một mục tiêu lớn chia thành 5 giai đoạn, mỗi giai đoạn kết thúc bằng một buổi rà soát.", "time": "19:30", "dur": 90, "tagId": "work", "dow": [1, 1, 1, 1, 1, 1, 1], "text": "# Định hướng · mục tiêu và phạm vi\nChốt mục tiêu sprint | Viết mục tiêu trong một câu đo được | Liệt kê 3 tiêu chí hoàn thành | Ghi ra rủi ro lớn nhất\nChia nhỏ công việc | Tách mục tiêu thành 10 đầu việc | Ước lượng thời gian cho từng việc | Xếp thứ tự ưu tiên\nChuẩn bị công cụ và tài liệu | Gom mọi tài liệu cần dùng vào một nơi | Dựng bảng theo dõi tiến độ | Loại bỏ một thứ hay gây xao nhãng\nBản nháp thô của việc số 1 | Làm bản thô trong thời gian giới hạn | Ghi chú những chỗ chưa rõ | Tra cứu một điểm còn vướng\nBản nháp thô của việc số 2 | Làm bản thô trong thời gian giới hạn | Ghi chú những chỗ chưa rõ | Tra cứu một điểm còn vướng\nRà soát giai đoạn 1 | Đối chiếu tiến độ với kế hoạch | Điều chỉnh danh sách đầu việc | Chọn trọng tâm cho giai đoạn sau\n# Xây nền · làm phần cốt lõi\nPhần cốt lõi A | Làm trọn vẹn phần việc quan trọng nhất | Kiểm tra kết quả theo tiêu chí hoàn thành | Ghi 3 dòng bài học\nPhần cốt lõi B | Làm trọn vẹn phần việc quan trọng tiếp theo | Kiểm tra kết quả theo tiêu chí hoàn thành | Ghi 3 dòng bài học\nPhần cốt lõi C | Làm trọn vẹn phần việc quan trọng tiếp theo | Kiểm tra kết quả theo tiêu chí hoàn thành | Ghi 3 dòng bài học\nGhép các phần lại | Ghép các phần A, B, C với nhau | Ghi lại chỗ lệch hoặc mâu thuẫn | Sửa 3 lỗi quan trọng nhất\nXin phản hồi sớm | Chọn một người đáng tin để xem thử | Ghi lại toàn bộ góp ý | Phân loại góp ý thành làm ngay, để sau, bỏ qua\nRà soát giai đoạn 2 | Đối chiếu tiến độ với kế hoạch | Điều chỉnh danh sách đầu việc | Chọn trọng tâm cho giai đoạn sau\n# Tăng tốc · mở rộng và cải thiện\nSửa theo phản hồi | Làm các góp ý đã chọn làm ngay | Kiểm tra lại từng chỗ đã sửa | Ghi lại điều còn tồn đọng\nMở rộng phần A | Thêm phần còn thiếu của phần A | Kiểm tra theo tiêu chí hoàn thành | Cập nhật bảng theo dõi\nMở rộng phần B | Thêm phần còn thiếu của phần B | Kiểm tra theo tiêu chí hoàn thành | Cập nhật bảng theo dõi\nCải thiện điểm yếu lớn nhất | Xác định điểm yếu ảnh hưởng nhiều nhất | Thử một cách làm mới trong thời gian giới hạn | So sánh kết quả trước và sau\nTự kiểm tra toàn bộ lần 1 | Đi qua toàn bộ sản phẩm từ đầu đến cuối | Đánh dấu mọi chỗ chưa đạt tiêu chí | Xếp hạng các chỗ cần sửa theo mức quan trọng\nRà soát giai đoạn 3 | Đối chiếu tiến độ với kế hoạch | Điều chỉnh danh sách đầu việc | Chọn trọng tâm cho giai đoạn sau\n# Hoàn thiện · đánh bóng\nĐánh bóng phần mở đầu | Viết lại phần mở đầu cho rõ và gọn | Loại bỏ chi tiết thừa | Đọc to một lần để kiểm tra\nĐánh bóng phần chính | Rà từng mục và sửa chỗ còn rời rạc | Làm nổi bật điểm quan trọng nhất | Đọc to một lần để kiểm tra\nĐánh bóng phần kết | Viết lại phần kết cho có sức nặng | Kiểm tra lời hứa ở phần mở đầu đã được giữ chưa | Đọc to một lần để kiểm tra\nKiểm tra chi tiết nhỏ | Soát lỗi chính tả và định dạng | Kiểm tra số liệu và nguồn tham khảo | Sửa tất cả lỗi đã ghi lại\nXin phản hồi lần hai | Gửi bản gần hoàn chỉnh cho một người khác | Ghi lại toàn bộ góp ý | Chọn tối đa 5 góp ý quan trọng nhất\nRà soát giai đoạn 4 | Đối chiếu tiến độ với kế hoạch | Điều chỉnh danh sách đầu việc | Chọn trọng tâm cho giai đoạn sau\n# Chốt · hoàn tất và trình bày\nSửa theo phản hồi lần hai | Làm 5 góp ý đã chọn | Kiểm tra lại từng chỗ đã sửa | Khóa phiên bản đã sửa\nKiểm tra toàn diện | Đối chiếu sản phẩm với 3 tiêu chí hoàn thành | Sửa mọi chỗ chưa đạt | Ghi lại kết quả kiểm tra\nChuẩn bị bản giao hoặc trình bày | Tóm tắt kết quả trong một trang | Chuẩn bị các tệp cần bàn giao | Kiểm tra tệp mở được trên thiết bị khác\nTập trình bày hoặc tự duyệt | Trình bày thử trong thời gian quy định | Ghi lại chỗ vấp hoặc chỗ mơ hồ | Sửa lại nội dung theo đó\nChỉnh lần cuối và đóng gói | Soát nhanh toàn bộ một lần cuối | Đóng gói và lưu bản sao dự phòng | Gửi hoặc nộp sản phẩm\nTổng kết sprint | So kết quả với mục tiêu ban đầu | Ghi 3 điều làm tốt và 3 điều cần đổi | Chọn mục tiêu cho sprint tiếp theo", "id": "lib:sprint30"}, {"name": "Tập thói quen 21 ngày", "blurb": "Bắt đầu thật nhỏ, tăng dần từng nấc và biến hành động thành phản xạ trong 3 tuần.", "time": "07:00", "dur": 30, "tagId": "personal", "dow": [1, 1, 1, 1, 1, 1, 1], "text": "# Khởi động · làm thật nhỏ\nChọn thói quen và gắn vào một mốc | Viết thói quen thành một hành động rất nhỏ | Gắn nó vào việc bạn đã làm mỗi ngày | Chuẩn bị sẵn đồ dùng từ tối hôm trước\nLàm bản nhỏ nhất | Làm thói quen trong 2 phút | Đánh dấu hoàn thành ngay sau khi làm | Ghi cảm giác trong một dòng\nGiữ nhịp, không cần giỏi | Làm đúng mốc đã chọn | Làm bản nhỏ nhất nếu hôm nay bận | Đánh dấu hoàn thành\nDọn đường cho thói quen | Bỏ một vật cản khỏi chỗ làm | Đặt một nhắc nhở dễ thấy | Làm thói quen và đánh dấu\nTự thưởng nhỏ | Làm thói quen đúng mốc | Dành một phần thưởng nhỏ ngay sau đó | Ghi lại điều làm bạn dễ chịu\nLàm khi không có hứng | Làm bản nhỏ nhất dù không muốn | Ghi lại lý do muốn bỏ qua | Đánh dấu hoàn thành\nNhìn lại tuần đầu | Đếm số ngày đã làm | Chọn mốc nào dễ giữ nhất | Quyết định mức tăng cho tuần tới\n# Duy trì · tăng dần\nTăng một nấc nhỏ | Làm thói quen ở mức mới, nhỉnh hơn một chút | Giữ nguyên mốc thời gian | Đánh dấu hoàn thành\nGiữ nhịp ở mức mới | Làm đúng mốc và đúng mức mới | Ghi lại chỗ thấy khó | Đánh dấu hoàn thành\nChuẩn bị cho ngày bận | Viết kế hoạch bản nhỏ nhất cho ngày bận | Đặt sẵn đồ dùng ở nơi dễ lấy | Làm thói quen và đánh dấu\nRủ một người đồng hành | Kể cho một người về thói quen của bạn | Hẹn báo cáo kết quả cuối tuần | Làm thói quen và đánh dấu\nKhông bỏ hai ngày liên tiếp | Làm thói quen đúng mốc | Nếu hôm qua lỡ, làm bù bản nhỏ nhất | Đánh dấu hoàn thành\nĐo lại tiến bộ | So với ngày đầu tiên, ghi một điểm khác biệt | Làm thói quen đúng mốc | Đánh dấu hoàn thành\nNhìn lại tuần hai | Đếm số ngày đã làm | Ghi lại điều gì giúp bạn giữ nhịp | Quyết định mức cho tuần cuối\n# Ăn sâu · thành tự động\nĐưa lên mức mục tiêu | Làm thói quen ở mức mục tiêu | Giữ nguyên mốc thời gian | Đánh dấu hoàn thành\nLàm không cần nhắc | Thử làm mà không dùng nhắc nhở | Ghi lại có quên hay không | Đánh dấu hoàn thành\nLàm ở nơi khác | Làm thói quen ở một địa điểm khác | Mang theo đồ dùng cần thiết | Đánh dấu hoàn thành\nLàm khi mệt | Làm bản nhỏ nhất khi cảm thấy mệt | Ghi lại điều giúp bạn vượt qua | Đánh dấu hoàn thành\nKể lại câu chuyện của bạn | Viết 5 dòng về thay đổi sau 3 tuần | Ghi điều bạn tự hào nhất | Làm thói quen và đánh dấu\nLên kế hoạch cho sau 21 ngày | Chọn mức duy trì lâu dài | Chọn một người hoặc công cụ để giữ nhịp | Làm thói quen và đánh dấu\nTổng kết 21 ngày | Đếm tổng số ngày đã làm | Ghi 3 điều học được về bản thân | Chọn thói quen tiếp theo hoặc nâng mức hiện tại", "id": "lib:habit21"}, {"name": "Tiểu luận 4 tuần", "blurb": "20 buổi từ thứ Hai đến thứ Sáu: chọn đề, dàn ý, viết, rồi chỉnh sửa và nộp.", "time": "19:30", "dur": 120, "tagId": "study", "dow": [0, 1, 1, 1, 1, 1, 0], "text": "# Tuần 1 · chọn đề và tìm tài liệu\nHiểu yêu cầu đề bài | Đọc kỹ đề và gạch chân từ khóa | Ghi lại yêu cầu về độ dài, định dạng và hạn nộp | Viết 3 câu hỏi mà bài cần trả lời\nChọn hướng tiếp cận | Liệt kê 3 hướng có thể viết | So sánh ưu nhược điểm của từng hướng | Chọn một hướng và viết luận điểm chính\nTìm nguồn tài liệu | Tìm ít nhất 8 nguồn đáng tin | Lưu thông tin trích dẫn của từng nguồn | Chọn 5 nguồn dùng chính\nĐọc và ghi chú nguồn số 1 và 2 | Đọc kỹ hai nguồn đầu tiên | Ghi lại các ý dùng được kèm số trang | Viết một đoạn tóm tắt cho mỗi nguồn\nĐọc và ghi chú nguồn số 3, 4, 5 | Đọc kỹ ba nguồn còn lại | Ghi lại các ý dùng được kèm số trang | Tổng hợp điểm chung và điểm khác nhau giữa các nguồn\n# Tuần 2 · dàn ý và bản nháp đầu\nLập dàn ý chi tiết | Chia bài thành các phần chính | Gán nguồn và luận điểm cho từng phần | Ước lượng số chữ cho mỗi phần\nViết phần mở đầu | Viết câu dẫn và nêu vấn đề | Viết luận điểm trung tâm của bài | Đọc lại và rút gọn còn một đoạn\nViết thân bài phần 1 | Viết theo dàn ý đã lập | Chèn dẫn chứng kèm trích dẫn | Đánh dấu chỗ cần bổ sung\nViết thân bài phần 2 | Viết theo dàn ý đã lập | Chèn dẫn chứng kèm trích dẫn | Đánh dấu chỗ cần bổ sung\nRà soát tuần 2 | Đọc lại toàn bộ phần đã viết | Kiểm tra mạch lập luận giữa các đoạn | Lập danh sách việc cho tuần tới\n# Tuần 3 · viết và hoàn chỉnh lập luận\nViết thân bài phần 3 | Viết theo dàn ý đã lập | Chèn dẫn chứng kèm trích dẫn | Đánh dấu chỗ cần bổ sung\nViết phần kết | Tóm lại luận điểm trung tâm | Nêu ý nghĩa hoặc hướng mở rộng | Kiểm tra phần kết trả lời được các câu hỏi ban đầu\nCủng cố lập luận | Tìm đoạn nào còn thiếu lý lẽ | Bổ sung lý lẽ hoặc ví dụ cho các đoạn đó | Bỏ những ý không phục vụ luận điểm\nBổ sung dẫn chứng và trích dẫn | Điền các chỗ đã đánh dấu cần bổ sung | Kiểm tra mọi trích dẫn có nguồn | Lập danh mục tài liệu tham khảo\nRà soát bản nháp hoàn chỉnh | Đọc từ đầu đến cuối một lần liền mạch | Ghi lại mọi chỗ đọc thấy vướng | Xếp hạng các chỗ cần sửa theo mức quan trọng\n# Tuần 4 · chỉnh sửa và nộp bài\nSửa cấu trúc | Di chuyển hoặc gộp các đoạn chưa hợp lý | Viết lại câu chuyển giữa các phần | Đọc lại mạch bài một lần\nSửa câu chữ | Rút gọn câu dài và bỏ từ thừa | Thay các từ lặp lại nhiều lần | Đọc to một lần để kiểm tra\nKiểm tra trích dẫn và tài liệu tham khảo | Đối chiếu từng trích dẫn với danh mục | Thống nhất cách ghi trích dẫn | Sửa mọi chỗ sai hoặc thiếu\nĐịnh dạng và đọc lần cuối | Áp dụng đúng định dạng được yêu cầu | Soát lỗi chính tả | Đọc lần cuối và lưu bản sao dự phòng\nNộp bài | Kiểm tra lại hạn nộp và cách nộp | Nộp bài và lưu xác nhận | Ghi 3 điều rút ra cho bài tiếp theo", "id": "lib:essay4"}];
+  let _rml = { tab: '', focus: '' };
+  const RM_LIB_TABS = [['live', 'Roadmaps'], ['tpl', 'Templates'], ['arch', 'Archive']];
+
+  function _rmLibOpen() { const m = _el('#hub-tm-rmlib-modal'); return !!(m && m.classList.contains('is-open')); }
+  function _rmCopy2(o) { return JSON.parse(JSON.stringify(o)); }
+
+  /* ---- Templates: built-in + yours (kind 'roadmap-tpl') ---- */
+  function _rmTplList() {
+    const out = RM_LIB.map(function (e) {
+      const p = _rmParse(e.text);
+      return { id: e.id, name: e.name, blurb: e.blurb, builtin: true, time: e.time, dur: e.dur, tagId: e.tagId, dow: e.dow, rules: p.rules || [], phases: p.phases, days: p.days };
+    });
+    _templates.forEach(function (t) {
+      const x = t && t.kind === 'roadmap-tpl' && t.rmt;
+      if (!x || !Array.isArray(x.days) || !x.days.length || !Array.isArray(x.phases) || !x.phases.length) return;
+      out.push({ id: t.id, name: t.name, blurb: x.blurb || '', builtin: false, time: x.time, dur: x.dur, tagId: x.tagId, dow: x.dow, rules: x.rules || [], phases: x.phases, days: x.days });
+    });
+    return out;
+  }
+  function _rmTplById(id) { return _rmTplList().filter(function (t) { return t.id === id; })[0] || null; }
+  function _rmTplAdd(spec, name) {
+    name = String(name || '').trim().slice(0, 60) || 'Roadmap';
+    const t = { kind: 'roadmap-tpl', id: 'rmt-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: name, createdAt: Date.now(), blocks: [],
+                rmt: _rmCopy2({ v: 1, time: spec.time, dur: spec.dur, tagId: spec.tagId, dow: spec.dow, rules: spec.rules || [], phases: spec.phases, days: spec.days }) };
+    _templates.push(t);
+    _saveTemplates();
+    if (_rmLibOpen()) _renderRmLib();
+    _toast('Saved to your templates · “' + name + '”', { action: 'Undo', onAction: function () {
+      const i = _templates.indexOf(t);
+      if (i > -1) { _templates.splice(i, 1); _saveTemplates(); if (_rmLibOpen()) _renderRmLib(); }
+    } });
+    return t;
+  }
+  function _rmSpecOf(r) { const R = r.rm; return { time: R.time, dur: R.dur, tagId: R.tagId, dow: R.dow, rules: R.rules || [], phases: R.phases, days: R.days }; }
+  function _rmDowLabel(dow) {
+    if (!Array.isArray(dow) || dow.length !== 7 || !dow.some(function (v) { return v; }) || dow.every(function (v) { return v; })) return 'Every day';
+    if (dow.join('') === '0111110') return 'Mon–Fri';
+    return RM_DOW.filter(function (d) { return dow[d[0]]; }).map(function (d) { return d[1]; }).join(' ');
+  }
+
+  /* ---- Summary of one roadmap (running or finished) ---- */
+  function _rmSummary(r) {
+    const C = _rmCompute(r), R = r.rm;
+    let onTime = 0, focus = 0, planned = 0;
+    C.days.forEach(function (d) {
+      planned += _rmWhen(R, d.n, d.date).d;
+      if (d.state !== 'done') return;
+      if (d.b && d.b.date <= d.date) onTime++;
+      if (d.b) focus += d.b.focusMs || 0;
+    });
+    return { C: C, N: C.N, done: C.done, onTime: onTime, mins: C.mins, planned: planned, focusMins: Math.round(focus / 60000), pct: C.pct, first: C.dates[0], last: C.dates[C.N - 1] };
+  }
+  function _rmRange(a, b) { const e = _parseDate(b); return _dateLabel(_parseDate(a)) + ' → ' + _dateLabel(e) + ', ' + e.getFullYear(); }
+  function _rmPace(C) {
+    const gap = Math.round((_parseDate(C.dates[0]) - _parseDate(C.today)) / 86400000);
+    if (!C.started) return ['Starts in ' + gap + 'd', 'wait'];
+    if (C.ended) return C.done >= C.N ? ['Complete', 'done'] : [(C.N - C.done) + ' unfinished', 'late'];
+    if (C.done >= C.N) return ['Complete', 'done'];
+    return C.behind ? [C.behind + ' behind', 'late'] : C.ahead ? [C.ahead + ' ahead', 'ok'] : ['On track', 'ok'];
+  }
+  function _rmStatHtml(label, val, sub, tip) {
+    return '<div class="hub-tm-rml-stat"' + (tip ? ' title="' + _esc(tip) + '"' : '') + '><dt>' + _esc(label) + '</dt><dd>' + val + (sub ? '<small>' + sub + '</small>' : '') + '</dd></div>';
+  }
+  function _rmStatsHtml(S, cls) {
+    return '<dl class="hub-tm-rml-stats' + (cls ? ' ' + cls : '') + '">' +
+      _rmStatHtml('Days done', S.done, '/ ' + S.N) +
+      _rmStatHtml('On time', S.onTime, '/ ' + S.done, 'Done on or before the day it was scheduled') +
+      _rmStatHtml('Logged', _fmtDur(S.mins), '/ ' + _fmtDur(S.planned) + ' planned', 'Time of the blocks of completed days') +
+      _rmStatHtml('Focus', S.focusMins ? _fmtDur(S.focusMins) : '—', '', 'Time really spent in Focus sessions') + '</dl>';
+  }
+  function _rmSegHtml(S) {
+    return S.C.phases.filter(function (p) { return p.n; }).map(function (p) {
+      return '<i class="hub-tm-rml-segp hub-tm-rm-ph--' + (p.k % RM_PH) + '" style="flex:' + p.n + ';--f:' + Math.round(p.sum / p.n) + '%" title="' + _esc(p.name + ' · ' + p.done + '/' + p.n + ' days') + '"></i>';
+    }).join('');
+  }
+
+  /* ---- Rendering ---- */
+  function _rmCardHtml2(r, i, archived) {
+    const S = _rmSummary(r), C = S.C, pace = archived ? ['Archived', 'arch'] : _rmPace(C), isActive = !archived && _rmGet() === r;
+    const btn = function (act, label, cls) { return '<button type="button" class="hub-tm-btn ' + (cls || 'hub-tm-btn--outline') + '" data-rml-act="' + act + '" data-id="' + _esc(r.id) + '">' + label + '</button>'; };
+    const acts = archived
+      ? btn('rerun', 'Re-run', 'hub-tm-btn--primary') + btn('restore', 'Restore') + btn('save-tpl', 'Save as template') + btn('delete', 'Delete', 'hub-tm-btn--outline is-danger is-end')
+      : btn('open', isActive ? 'Showing' : 'Open', C.done >= C.N ? 'hub-tm-btn--outline' : 'hub-tm-btn--primary') + btn('edit', 'Edit') + btn('rerun', 'Re-run') + btn('save-tpl', 'Save as template') +
+        btn('archive', 'Archive', (C.done >= C.N ? 'hub-tm-btn--primary' : 'hub-tm-btn--outline') + ' is-end');
+    return '<li class="hub-tm-rml-card hub-tm-rm-ph--' + (i % RM_PH) + (archived ? ' is-archived' : '') + (isActive ? ' is-active' : '') + (_rml.focus === r.id ? ' is-focus' : '') + '" data-card="' + _esc(r.id) + '">' +
+      '<div class="hub-tm-rml-head"><span class="hub-tm-rml-no" aria-hidden="true"></span>' +
+        '<div class="hub-tm-rml-tt"><h4>' + _esc(r.name) + '</h4><p class="hub-tm-rml-meta">' + _tlPlural(S.N, 'day') + ' · ' + _tlPlural(C.phases.length, 'phase') + ' · ' + _esc(_rmRange(S.first, S.last)) + '</p></div>' +
+        '<span class="hub-tm-rml-badge is-' + pace[1] + '">' + _esc(pace[0]) + '</span></div>' +
+      '<div class="hub-tm-rml-bar"><div class="hub-tm-rml-seg" role="progressbar" aria-label="Progress of ' + _esc(r.name) + '" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + S.pct + '">' + _rmSegHtml(S) + '</div><span class="hub-tm-rml-pct">' + S.pct + '%</span></div>' +
+      _rmStatsHtml(S) +
+      '<div class="hub-tm-rml-acts">' + acts + '</div></li>';
+  }
+  function _rmTplCardHtml(t, i) {
+    const N = t.days.length, btn = function (act, label, cls) { return '<button type="button" class="hub-tm-btn ' + (cls || 'hub-tm-btn--outline') + '" data-rml-act="' + act + '" data-id="' + _esc(t.id) + '">' + label + '</button>'; };
+    const strip = t.phases.map(function (p, k) { const n = p.to - p.from + 1; return '<i class="hub-tm-rml-segp hub-tm-rm-ph--' + (k % RM_PH) + '" style="flex:' + n + ';--f:100%" title="' + _esc(p.name + ' · ' + _tlPlural(n, 'day')) + '"></i>'; }).join('');
+    return '<li class="hub-tm-rml-tpl hub-tm-rm-ph--' + (i % RM_PH) + '" data-card="' + _esc(t.id) + '">' +
+      '<div class="hub-tm-rml-head"><span class="hub-tm-rml-no" aria-hidden="true"></span><div class="hub-tm-rml-tt"><h4>' + _esc(t.name) + '</h4></div><span class="hub-tm-rml-kind">' + (t.builtin ? 'Built-in' : 'Yours') + '</span></div>' +
+      (t.blurb ? '<p class="hub-tm-rml-blurb">' + _esc(t.blurb) + '</p>' : '') +
+      '<div class="hub-tm-rml-phs" aria-hidden="true">' + strip + '</div>' +
+      '<ul class="hub-tm-rml-chips"><li>' + _tlPlural(N, 'day') + '</li><li>' + _tlPlural(t.phases.length, 'phase') + '</li><li>' + _esc(_fmtDur(t.dur || 120)) + ' / day</li><li>' + _esc(_rmDowLabel(t.dow)) + '</li></ul>' +
+      '<div class="hub-tm-rml-acts">' + btn('use', 'Use template', 'hub-tm-btn--primary') + (t.builtin ? '' : btn('tpl-del', 'Delete', 'hub-tm-btn--outline is-danger is-end')) + '</div></li>';
+  }
+  function _rmEmptyHtml(title, text, act, label) {
+    return '<div class="hub-tm-rml-empty"><b>' + _esc(title) + '</b><p>' + _esc(text) + '</p>' + (act ? '<button type="button" class="hub-tm-btn hub-tm-btn--primary" data-rml-act="' + act + '">' + _esc(label) + '</button>' : '') + '</div>';
+  }
+  function _renderRmLib() {
+    const tabsEl = _el('#hub-tm-rmlib-tabs'), panel = _el('#hub-tm-rmlib-panel');
+    if (!tabsEl || !panel) return;
+    const live = _rmLive(), arch = _rmArch(), tpls = _rmTplList(), mine = tpls.filter(function (t) { return !t.builtin; });
+    const count = { live: live.length, tpl: tpls.length, arch: arch.length };
+    if (!_rml.tab) _rml.tab = live.length ? 'live' : 'tpl';
+    tabsEl.innerHTML = RM_LIB_TABS.map(function (t) {
+      const on = t[0] === _rml.tab;
+      return '<button type="button" role="tab" id="hub-tm-rmlib-tab-' + t[0] + '" data-rml-tab="' + t[0] + '" aria-selected="' + on + '" aria-controls="hub-tm-rmlib-panel"' + (on ? '' : ' tabindex="-1"') + '>' + t[1] + '<i>' + count[t[0]] + '</i></button>';
+    }).join('');
+    panel.setAttribute('aria-labelledby', 'hub-tm-rmlib-tab-' + _rml.tab);
+    let html = '';
+    if (_rml.tab === 'live') {
+      html = live.length
+        ? '<ol class="hub-tm-rml-list">' + live.map(function (r, i) { return _rmCardHtml2(r, i, false); }).join('') + '</ol>'
+        : _rmEmptyHtml('No roadmap running', 'Start from a template, or build your own plan with the editor.', 'new', '+ New roadmap');
+    } else if (_rml.tab === 'tpl') {
+      html = '<p class="hub-tm-rml-sec">Built-in</p><ol class="hub-tm-rml-grid">' + tpls.filter(function (t) { return t.builtin; }).map(function (t, i) { return _rmTplCardHtml(t, i); }).join('') + '</ol>' +
+        '<p class="hub-tm-rml-sec">Your templates</p>' +
+        (mine.length ? '<ol class="hub-tm-rml-grid">' + mine.map(function (t, i) { return _rmTplCardHtml(t, i + 2); }).join('') + '</ol>'
+                     : _rmEmptyHtml('No saved templates yet', 'Use “Save as template” on any roadmap, or in the editor’s Import / Export tab.'));
+    } else {
+      if (!arch.length) html = _rmEmptyHtml('Nothing archived yet', 'When a roadmap is complete, archive it to keep a summary and re-run it later.');
+      else {
+        const T = { N: 0, done: 0, onTime: 0, mins: 0, planned: 0, focusMins: 0 };
+        arch.forEach(function (r) { const S = _rmSummary(r); T.N += S.N; T.done += S.done; T.onTime += S.onTime; T.mins += S.mins; T.planned += S.planned; T.focusMins += S.focusMins; });
+        html = '<p class="hub-tm-rml-sec">All finished roadmaps · ' + _tlPlural(arch.length, 'roadmap') + '</p>' + _rmStatsHtml(T, 'is-total') +
+          '<p class="hub-tm-rml-sec">History</p><ol class="hub-tm-rml-list">' + arch.map(function (r, i) { return _rmCardHtml2(r, i, true); }).join('') + '</ol>';
+      }
+    }
+    panel.innerHTML = html;
+  }
+  function _openRmLib(o) {
+    o = o || {};
+    _rmApplySkin();
+    _rml.tab = o.tab || '';
+    _rml.focus = o.focus || '';
+    _renderRmLib();
+    _openModal(_el('#hub-tm-rmlib-modal'), '#hub-tm-rmlib-tabs [aria-selected="true"]');
+    if (_rml.focus) { const c = _el('#hub-tm-rmlib-panel [data-card="' + _rml.focus + '"]'); if (c && c.scrollIntoView) { try { c.scrollIntoView({ block: 'nearest' }); } catch (_) {} } }
+  }
+  function _rmCloseLib() { _closeModal(_el('#hub-tm-rmlib-modal')); }
+
+  /* ---- Actions ---- */
+  function _rmRunName(name) {
+    const base = String(name || 'Roadmap').replace(/\s*·\s*#\d+$/, '');
+    const n = _rmAll().filter(function (t) { return t.name === base || t.name.indexOf(base + ' · #') === 0; }).length + 1;
+    return (base + ' · #' + n).slice(0, 60);
+  }
+  function _rmRerun(r) {
+    const S = _rmSpecOf(r);
+    _rmCloseLib();
+    _openRoadmap({ spec: { name: _rmRunName(r.name), time: S.time, dur: S.dur, tagId: S.tagId, dow: S.dow, text: _rmToText({ rules: S.rules, phases: S.phases, days: S.days }), rerun: true } });
+  }
+  function _rmUseTpl(t) {
+    _rmCloseLib();
+    _openRoadmap({ spec: { name: t.name, time: t.time, dur: t.dur, tagId: t.tagId, dow: t.dow, text: _rmToText({ rules: t.rules, phases: t.phases, days: t.days }) } });
+  }
+  function _rmArchive(r, fromStrip) {
+    const S = _rmSummary(r);
+    r.archivedAt = Date.now();
+    _saveTemplates();
+    _renderRoadmap();
+    const msg = 'Archived “' + r.name + '” · ' + S.done + '/' + S.N + ' days, ' + S.onTime + ' on time, ' + _fmtDur(S.mins) + ' logged';
+    if (fromStrip) _openRmLib({ tab: 'arch', focus: r.id }); else _renderRmLib();
+    _toast(msg, { action: 'Undo', onAction: function () { r.archivedAt = 0; _saveTemplates(); _renderRoadmap(); if (_rmLibOpen()) _renderRmLib(); } });
+  }
+  function _rmRestore(r) {
+    r.archivedAt = 0;
+    _saveTemplates();
+    _rmSetActive(r.id);
+    _renderRoadmap();
+    _rml.tab = 'live';
+    _renderRmLib();
+    _toast('Restored “' + r.name + '”');
+  }
+  function _rmOpenMain(r) {
+    _rmSetActive(r.id);
+    if (_lsGet(RM_KEY) === '0') _lsSet(RM_KEY, '1');
+    _rmCloseLib();
+    _renderRoadmap();
+    const box = _el('#hub-tm-roadmap');
+    if (box && box.scrollIntoView) { try { box.scrollIntoView({ block: 'nearest' }); } catch (_) {} }
+  }
+  function _bindRmLib() {
+    const modal = _el('#hub-tm-rmlib-modal'), tabs = _el('#hub-tm-rmlib-tabs');
+    if (!modal) return;
+    const go = function (tab, focusTab) { _rml.tab = tab; _rml.focus = ''; _renderRmLib(); if (focusTab) { const b = _el('#hub-tm-rmlib-tab-' + tab); if (b) b.focus(); } };
+    tabs.addEventListener('click', function (e) { const b = e.target.closest('[data-rml-tab]'); if (b) go(b.getAttribute('data-rml-tab'), false); });
+    tabs.addEventListener('keydown', function (e) {                 // ← → Home End move between tabs
+      const ids = RM_LIB_TABS.map(function (t) { return t[0]; }), i = ids.indexOf(_rml.tab);
+      let to = -1;
+      if (e.key === 'ArrowRight') to = (i + 1) % ids.length; else if (e.key === 'ArrowLeft') to = (i + ids.length - 1) % ids.length;
+      else if (e.key === 'Home') to = 0; else if (e.key === 'End') to = ids.length - 1;
+      if (to < 0) return;
+      e.preventDefault(); go(ids[to], true);
+    });
+    modal.addEventListener('click', function (e) {
+      const b = e.target.closest('[data-rml-act]');
+      if (!b) return;
+      const act = b.getAttribute('data-rml-act'), id = b.getAttribute('data-id'), r = id ? _rmById(id) : null;
+      if (act === 'new') { _rmCloseLib(); _openRoadmap({ spec: { name: '30-day roadmap', text: _rmStarterText() } }); return; }
+      if (act === 'use') { const t = _rmTplById(id); if (t) _rmUseTpl(t); return; }
+      if (act === 'tpl-del') {
+        const rec = _templates.filter(function (x) { return x.id === id && x.kind === 'roadmap-tpl'; })[0];
+        if (!rec) return;
+        _confirm('Delete the template “' + rec.name + '”? Roadmaps you already started from it are not affected.', function () {
+          const i = _templates.indexOf(rec);
+          if (i > -1) _templates.splice(i, 1);
+          _saveTemplates(); _renderRmLib(); _toast('Template deleted');
+        }, { title: 'Delete template?', label: 'Delete' });
+        return;
+      }
+      if (!r) return;
+      if (act === 'open') _rmOpenMain(r);
+      else if (act === 'edit') { _rmCloseLib(); _openRoadmap({ id: r.id }); }
+      else if (act === 'rerun') _rmRerun(r);
+      else if (act === 'archive') _rmArchive(r, false);
+      else if (act === 'restore') _rmRestore(r);
+      else if (act === 'save-tpl') _rmTplAdd(_rmSpecOf(r), r.name);
+      else if (act === 'delete') {
+        _confirm('Delete the roadmap “' + r.name + '” and its summary? Blocks already on your calendar stay, but are no longer tracked.', function () {
+          const i = _templates.indexOf(r);
+          if (i > -1) _templates.splice(i, 1);
+          _saveTemplates(); _renderRoadmap(); _renderRmLib(); _toast('Roadmap deleted');
+        }, { title: 'Delete roadmap?', label: 'Delete' });
+      }
+    });
+  }
+
   function _bindRoadmap() {
-    _el('#tm-btn-roadmap').addEventListener('click', _openRoadmap);
+    _bindRmLib();
+    _el('#tm-btn-roadmap').addEventListener('click', function () { _openRmLib(); });
     _el('#tm-rm-save').addEventListener('click', _rmSave);
-    ['#tm-rm-text', '#tm-rm-start', '#tm-rm-due'].forEach(function (s) { _el(s).addEventListener('input', _rmValidate); });
+    ['#tm-rm-text', '#tm-rm-start', '#tm-rm-due', '#tm-rm-time'].forEach(function (s) { _el(s).addEventListener('input', _rmValidate); });
     _el('#tm-rm-dow').addEventListener('change', _rmValidate);
-    _el('#tm-rm-starter').addEventListener('click', function () {
-      const t = _el('#tm-rm-text'), put = function () { t.value = _rmStarterText(); _rmValidate(); };
-      if (t.value.trim()) _confirm('Replace the plan text with the Civil Law starter? Your current text will be lost.', put, { title: 'Load starter?', label: 'Replace' });
-      else put();
+    _el('#tm-rm-dowp').addEventListener('click', function (e) { const b = e.target.closest('[data-rm-dowp]'); if (b) { _rmSetDow(RM_DOW_PRESETS[b.getAttribute('data-rm-dowp')]); _rmValidate(); } });
+    _el('#tm-rm-durs').addEventListener('click', function (e) { const b = e.target.closest('[data-rm-dur]'); if (b) { _rmSetDur(b.getAttribute('data-rm-dur')); _rmValidate(); } });
+    _el('#tm-rm-snip').addEventListener('click', function (e) { const b = e.target.closest('[data-rm-ins]'); if (b) _rmInsert(b.getAttribute('data-rm-ins')); });
+    const tabs = _el('#tm-rm-tabs');
+    tabs.addEventListener('click', function (e) { const b = e.target.closest('[role="tab"]'); if (b) _rmShowTab(b.id.replace('tm-rm-tab-', '')); });
+    tabs.addEventListener('keydown', function (e) {             // ← → Home End move between tabs
+      const i = RM_TABS.indexOf(_rmTab);
+      let to = -1;
+      if (e.key === 'ArrowRight') to = (i + 1) % RM_TABS.length; else if (e.key === 'ArrowLeft') to = (i + RM_TABS.length - 1) % RM_TABS.length;
+      else if (e.key === 'Home') to = 0; else if (e.key === 'End') to = RM_TABS.length - 1;
+      if (to < 0) return;
+      e.preventDefault(); _rmShowTab(RM_TABS[to]); _el('#tm-rm-tab-' + RM_TABS[to]).focus();
     });
     _el('#tm-rm-delete').addEventListener('click', function () {
-      const r = _rmGet();
+      const r = _rmEditing();
       if (!r) return;
       _confirm('Delete the roadmap “' + r.name + '”? Blocks already on your calendar stay, but they are no longer tracked as a roadmap.', function () {
         const i = _templates.indexOf(r);
         if (i > -1) _templates.splice(i, 1);
         _saveTemplates();
+        _rm.editId = null;
         _closeModal(_el('#hub-tm-roadmap-modal'));
         _renderRoadmap();
+        if (_rmLibOpen()) _renderRmLib();
         _toast('Roadmap deleted');
       }, { title: 'Delete roadmap?', label: 'Delete' });
     });
 
-    // Import · AI prompt · Export
-    const ta = _el('#tm-rm-text'), file = _el('#tm-rm-file');
-    _el('#tm-rm-import').addEventListener('click', function () { file.click(); });
-    file.addEventListener('change', function () { const f = file.files && file.files[0]; file.value = ''; _rmImportFile(f); });
-    ta.addEventListener('paste', function (e) {                 // spreadsheet cells / Markdown table → plan lines
+    // Import: paste (spreadsheet / Markdown) · file picker · drag & drop
+    const ta = _el('#tm-rm-text'), file = _el('#tm-rm-file'), drop = _el('#tm-rm-drop');
+    ta.addEventListener('keydown', function (e) { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); _rmSave(); } });
+    ta.addEventListener('paste', function (e) {
       const txt = (e.clipboardData || window.clipboardData).getData('text'), norm = _rmNormalize(txt);
       if (norm.trim() && norm !== txt.replace(/\r\n?/g, '\n')) {
         e.preventDefault();
         ta.setRangeText(norm, ta.selectionStart, ta.selectionEnd, 'end');
         const p = _rmValidate();
-        _toast('Converted pasted table · ' + _tlPlural(p.days.length, 'day'));
+        _toast('Pasted text cleaned up · ' + _tlPlural(p.days.length, 'day') + ' · ' + _tlPlural(p.phases.length, 'phase'));
       }
     });
-    ta.addEventListener('dragover', function (e) { if (e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') > -1) { e.preventDefault(); ta.classList.add('is-drop'); } });
-    ta.addEventListener('dragleave', function () { ta.classList.remove('is-drop'); });
-    ta.addEventListener('drop', function (e) {
-      ta.classList.remove('is-drop');
-      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-      if (f) { e.preventDefault(); _rmImportFile(f); }
-    });
+    const dropOn = function (el) {
+      el.addEventListener('dragover', function (e) { if (e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') > -1) { e.preventDefault(); el.classList.add('is-drop'); } });
+      el.addEventListener('dragleave', function () { el.classList.remove('is-drop'); });
+      el.addEventListener('drop', function (e) {
+        el.classList.remove('is-drop');
+        const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (f) { e.preventDefault(); _rmImportFile(f); _rmShowTab('edit'); }
+      });
+    };
+    dropOn(ta); dropOn(drop);
+    drop.addEventListener('click', function () { file.click(); });
+    file.addEventListener('change', function () { const f = file.files && file.files[0]; file.value = ''; if (f) { _rmImportFile(f); _rmShowTab('edit'); } });
+
+    // AI prompt
+    ['#tm-rm-ai-topic', '#tm-rm-ai-extra', '#tm-rm-ai-days', '#tm-rm-ai-phases', '#tm-rm-ai-lang'].forEach(function (s) { _el(s).addEventListener('input', _rmRefreshPrompt); });
     _el('#tm-rm-ai-copy').addEventListener('click', function () {
-      _rmCopy(_rmPrompt({ topic: _el('#tm-rm-ai-topic').value.trim(), days: _el('#tm-rm-ai-days').value, phases: _el('#tm-rm-ai-phases').value, lang: _el('#tm-rm-ai-lang').value }),
-              'Prompt copied — paste it into your AI, add your syllabus, then paste its answer here.');
+      _rmCopy(_rmPrompt(_rmPromptOpts()), 'Prompt copied — paste it into your AI, add your syllabus, then paste its answer into the Edit tab.');
     });
+
+    // Export
     const cur = function () { const p = _rmParse(ta.value); return p.days.length && !p.errors.length ? p : null; };
     _el('#tm-rm-copy-text').addEventListener('click', function () { const p = cur(); if (!p) { _toast('Fix the plan first.'); return; } _rmCopy(_rmToText(p), 'Plan text copied'); });
     const asJson = function () {
       const p = cur();
       if (!p) { _toast('Fix the plan first.'); return null; }
-      return _rmExport({ name: _el('#tm-rm-name').value.trim() || 'Roadmap', rm: { time: _el('#tm-rm-time').value, dur: parseInt(_el('#tm-rm-dur').value, 10) || 120, tagId: _el('#tm-rm-tag').value, dow: _rmFormDow(), phases: p.phases, days: p.days } });
+      return _rmExport({ name: _el('#tm-rm-name').value.trim() || 'Roadmap', rm: { time: _el('#tm-rm-time').value, dur: parseInt(_el('#tm-rm-dur').value, 10) || 120, tagId: _el('#tm-rm-tag').value, dow: _rmFormDow(), rules: p.rules, phases: p.phases, days: p.days } });
     };
     _el('#tm-rm-copy-json').addEventListener('click', function () { const j = asJson(); if (j) _rmCopy(j, 'JSON copied'); });
     _el('#tm-rm-download').addEventListener('click', function () {
@@ -5721,19 +6363,41 @@ const timeManagementModule = (function () {
       setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
     });
 
+    _el('#tm-rm-save-tpl').addEventListener('click', function () {
+      const p = cur();
+      if (!p) { _toast('Fix the plan first.'); return; }
+      _rmTplAdd({ time: _el('#tm-rm-time').value || '19:30', dur: parseInt(_el('#tm-rm-dur').value, 10) || 120, tagId: _el('#tm-rm-tag').value || 'work', dow: _rmFormDow(), rules: p.rules || [], phases: p.phases, days: p.days }, _el('#tm-rm-name').value);
+    });
+
     const box = _el('#hub-tm-roadmap');
     box.addEventListener('click', function (e) {
       const t = e.target;
       let n;
       if (t.closest('[data-rm-toggle]')) { _lsSet(RM_KEY, _lsGet(RM_KEY) === '0' ? '1' : '0'); _renderRoadmap(); return; }
-      if (t.closest('[data-rm-edit]')) { _openRoadmap(); return; }
+      if (t.closest('[data-rm-edit]')) { const r = _rmGet(); if (r) _openRoadmap({ id: r.id }); return; }
+      if (t.closest('[data-rm-lib]')) { _openRmLib(); return; }
+      if (t.closest('[data-rm-archive]')) { const r = _rmGet(); if (r) _rmArchive(r, true); return; }
       if (t.closest('[data-rm-catchup]')) { const r = _rmGet(); if (r) _rmCatchUp(r); return; }
       if (t.closest('[data-rm-jump]')) {
         const r = _rmGet();
         if (!r) return;
-        _rm.sel = _rmDefault(_rmCompute(r)); _rm.pickOn = _todayStr();
+        _rm.sel = _rmDefault(_rmCompute(r)); _rm.pickOn = _todayStr(); _rm.pg = -1;
         if (_lsGet(RM_KEY) === '0') _lsSet(RM_KEY, '1');
         _rm.scrolled = ''; _renderRoadmap();
+        return;
+      }
+      if ((n = t.closest('[data-rm-page]'))) {                                   // ‹ › step one window
+        const r = _rmGet();
+        if (!r) return;
+        const C = _rmCompute(r), sel = (_rm.pickOn === C.today && _rm.sel >= 1 && _rm.sel <= C.N) ? _rm.sel : _rmDefault(C);
+        _rm.pg = _clamp(_rmPage(C, sel) + parseInt(n.getAttribute('data-rm-page'), 10), 0, _rmPageCount(C) - 1);
+        _renderRoadmap();
+        return;
+      }
+      if ((n = t.closest('[data-rm-mph]'))) {                                    // overview map: click = jump to that day
+        const r = _rmGet(), rc = n.getBoundingClientRect(), from = parseInt(n.getAttribute('data-rm-mph'), 10), cnt = parseInt(n.getAttribute('data-rm-mcount'), 10);
+        if (!r || !rc.width) return;
+        _rmSelect(_clamp(from + Math.floor((e.clientX - rc.left) / rc.width * cnt), from, from + cnt - 1), false);
         return;
       }
       if ((n = t.closest('[data-rm-day]'))) { _rmDayClick(parseInt(n.getAttribute('data-rm-day'), 10)); return; }
@@ -5749,6 +6413,14 @@ const timeManagementModule = (function () {
       }
     });
     box.addEventListener('change', function (e) {          // tick a task right inside the card
+      const pk = e.target.closest && e.target.closest('[data-rm-pick]');
+      if (pk) { _rmSetActive(pk.value); _renderRoadmap(); return; }
+      const go = e.target.closest && e.target.closest('[data-rm-goto]');
+      if (go) {                                            // "Go to day [n]"
+        const r = _rmGet(), v = parseInt(go.value, 10);
+        if (r && v >= 1) _rmSelect(Math.min(v, r.rm.days.length), false);
+        return;
+      }
       const cb = e.target.closest('[data-rm-ck]');
       if (!cb) return;
       const bid = cb.getAttribute('data-rm-blk'), iid = cb.getAttribute('data-rm-ck');
@@ -5764,14 +6436,31 @@ const timeManagementModule = (function () {
       _ckNudge(b);
     });
     box.addEventListener('keydown', function (e) {          // arrow keys walk the strip (roving tabindex)
+      if (e.key === 'Enter' && e.target.closest && e.target.closest('[data-rm-goto]')) { e.preventDefault(); e.target.dispatchEvent(new Event('change', { bubbles: true })); return; }
       const cell = e.target.closest && e.target.closest('.hub-tm-rm-day');
       if (!cell || e.ctrlKey || e.metaKey || e.altKey) return;
       const cur = parseInt(cell.getAttribute('data-rm-day'), 10), r = _rmGet();
       if (!r) return;
       const N = r.rm.days.length;
+      // Up / Down: the cell right above / below on screen (the grid wraps), falling back to ±1 day
+      const vert = function (dir) {
+        const cells = Array.prototype.slice.call(box.querySelectorAll('.hub-tm-rm-day')), me = cell.getBoundingClientRect();
+        let best = null, bd = 1e9;
+        cells.forEach(function (c) {
+          const q = c.getBoundingClientRect(), dy = (q.top - me.top) * dir;
+          if (dy < me.height * 0.5) return;
+          const d = dy * 1000 + Math.abs(q.left - me.left);
+          if (d < bd) { bd = d; best = c; }
+        });
+        return best ? parseInt(best.getAttribute('data-rm-day'), 10) : cur + dir;
+      };
       let to = 0;
-      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') to = Math.min(N, cur + 1);
-      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') to = Math.max(1, cur - 1);
+      if (e.key === 'ArrowRight') to = Math.min(N, cur + 1);
+      else if (e.key === 'ArrowLeft') to = Math.max(1, cur - 1);
+      else if (e.key === 'ArrowDown') to = Math.min(N, vert(1));
+      else if (e.key === 'ArrowUp') to = Math.max(1, vert(-1));
+      else if (e.key === 'PageDown') to = Math.min(N, cur + RM_PAGE);
+      else if (e.key === 'PageUp') to = Math.max(1, cur - RM_PAGE);
       else if (e.key === 'Home') to = 1;
       else if (e.key === 'End') to = N;
       if (!to) return;
