@@ -5677,7 +5677,7 @@ const timeManagementModule = (function () {
   }
   function _rmApplySkin() {
     const k = _rmSkin();
-    ['#hub-tm-roadmap', '#tm-btn-roadmap', '#hub-tm-rmlib-modal'].forEach(function (s) { const n = _el(s); if (n && n.getAttribute('data-skin') !== k) n.setAttribute('data-skin', k); });
+    ['#hub-tm-roadmap', '#tm-btn-roadmap', '#hub-tm-rmlib-modal', '#hub-tm-roadmap-modal'].forEach(function (s) { const n = _el(s); if (n && n.getAttribute('data-skin') !== k) n.setAttribute('data-skin', k); });
   }
   function _rmWatchSkin() {
     if (_rm.skinObs || !window.MutationObserver) return;
@@ -5837,28 +5837,103 @@ const timeManagementModule = (function () {
     return { start: _el('#tm-rm-start').value, time: _el('#tm-rm-time').value || '19:30', dur: parseInt(_el('#tm-rm-dur').value, 10) || 120, tagId: _el('#tm-rm-tag').value || 'work',
              dow: _rmFormDow(), rules: p.rules, skip: cur ? (cur.rm.skip || []) : [], deadline: _isDateStr(due) ? due : '', phases: p.phases, days: p.days };
   }
-  /** Preview: one cell per day (coloured by phase) and a schedule table with the real date and time of every day.
+  /** Preview: KPI blueprint strip + interactive journey map + phase timeline cards with expandable checklists.
    *  Rows whose time differs from the rest of their phase are highlighted, so weekday rules are easy to verify. */
   function _rmPreviewHtml(R) {
     const N = R.days.length, dates = _rmDates(R, N), tm = function (w) { return _toTime(w.s) + '–' + _toTime(Math.min(DAY_MINS, w.s + w.d)); };
     const when = [];
-    for (let n = 1; n <= N; n++) when[n] = _rmWhen(R, n, dates[n - 1]);
+    let totalMins = 0, totalTasks = 0;
+    for (let n = 1; n <= N; n++) {
+      when[n] = _rmWhen(R, n, dates[n - 1]);
+      totalMins += when[n].d;
+      totalTasks += R.days[n - 1].ck.length;
+    }
+    const avgMins = Math.round(totalMins / Math.max(1, N));
+    const studyPerWk = Array.isArray(R.dow) && R.dow.some(Boolean) ? R.dow.filter(Boolean).length : 7;
+    const firstDt = _parseDate(dates[0]), lastDt = _parseDate(dates[N - 1]);
+    const dateSpan = _dateLabel(firstDt) + (N > 1 ? ' → ' + _dateLabel(lastDt) : '');
+    let cadenceSub = 'Flexible · no deadline', cadenceCls = '';
+    if (_isDateStr(R.deadline)) {
+      const dueDt = _parseDate(R.deadline);
+      if (dates[N - 1] <= R.deadline) { cadenceSub = 'On track · due ' + _dateLabel(dueDt); cadenceCls = ' is-ok'; }
+      else { const over = Math.max(1, Math.round((lastDt - dueDt) / 86400000)); cadenceSub = '+' + over + 'd past ' + _dateLabel(dueDt); cadenceCls = ' is-late'; }
+    }
+    const kpis =
+      '<div class="hub-tm-rm-pvkpis">' +
+        '<div class="hub-tm-rm-pvkpi"><span class="hub-tm-rm-pvkpi-k">Schedule</span><b class="hub-tm-rm-pvkpi-v">' + N + (N === 1 ? ' day' : ' days') + '</b><span class="hub-tm-rm-pvkpi-s">' + _esc(dateSpan) + '</span></div>' +
+        '<div class="hub-tm-rm-pvkpi"><span class="hub-tm-rm-pvkpi-k">Total time</span><b class="hub-tm-rm-pvkpi-v">' + _esc(_fmtDur(totalMins)) + '</b><span class="hub-tm-rm-pvkpi-s">~' + _esc(_fmtDur(avgMins)) + '/day</span></div>' +
+        '<div class="hub-tm-rm-pvkpi"><span class="hub-tm-rm-pvkpi-k">Workload</span><b class="hub-tm-rm-pvkpi-v">' + totalTasks + (totalTasks === 1 ? ' task' : ' tasks') + '</b><span class="hub-tm-rm-pvkpi-s">' + R.phases.length + (R.phases.length === 1 ? ' phase' : ' phases') + '</span></div>' +
+        '<div class="hub-tm-rm-pvkpi' + cadenceCls + '"><span class="hub-tm-rm-pvkpi-k">Cadence</span><b class="hub-tm-rm-pvkpi-v">' + studyPerWk + ' d/wk</b><span class="hub-tm-rm-pvkpi-s">' + _esc(cadenceSub) + '</span></div>' +
+      '</div>';
+
+    const phaseTop = [], phaseMins = [];
+    R.phases.forEach(function (p, k) {
+      const count = {}; let top = '', topN = 0, sum = 0;
+      for (let n = p.from; n <= p.to; n++) {
+        const t = tm(when[n]);
+        count[t] = (count[t] || 0) + 1;
+        if (count[t] > topN) { topN = count[t]; top = t; }
+        sum += when[n].d;
+      }
+      phaseTop[k] = top; phaseMins[k] = sum;
+    });
+
+    const segs = R.phases.map(function (p, k) {
+      const len = p.to - p.from + 1;
+      return '<button type="button" class="hub-tm-rm-pvseg hub-tm-rm-ph--' + (k % RM_PH) + '" style="flex:' + len + '" data-pv-phase="' + k + '" title="' + _esc(p.name + ' · ' + len + (len === 1 ? ' day' : ' days')) + '"><span>P' + _pad(k + 1) + ' · ' + _esc(p.name) + '</span></button>';
+    }).join('');
+
     const strip = R.phases.map(function (p, k) {
       let cells = '';
-      for (let n = p.from; n <= p.to; n++) { const dt = _parseDate(dates[n - 1]); cells += '<i class="hub-tm-rm-ph--' + (k % RM_PH) + '" title="' + _esc('Day ' + n + ' · ' + DAY_SHORT[dt.getDay()] + ' ' + _dateLabel(dt) + ' · ' + tm(when[n])) + '">' + n + '</i>'; }
+      for (let n = p.from; n <= p.to; n++) {
+        const dt = _parseDate(dates[n - 1]), t = tm(when[n]), alt = t !== phaseTop[k] ? ' is-alt' : '';
+        cells += '<button type="button" class="hub-tm-rm-pvcell hub-tm-rm-ph--' + (k % RM_PH) + alt + '" data-pv-day="' + n + '" title="' + _esc('Day ' + n + ' · ' + DAY_SHORT[dt.getDay()] + ' ' + _dateLabel(dt) + ' · ' + t) + '">' + n + '</button>';
+      }
       return cells;
     }).join('');
+
+    const chev = '<svg class="hub-tm-rm-pvchev" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
     const body = R.phases.map(function (p, k) {
-      const count = {}; let top = '', topN = 0, rows = '';
-      for (let n = p.from; n <= p.to; n++) { const t = tm(when[n]); count[t] = (count[t] || 0) + 1; if (count[t] > topN) { topN = count[t]; top = t; } }
+      const top = phaseTop[k], len = p.to - p.from + 1;
+      let rows = '';
       for (let n = p.from; n <= p.to; n++) {
         const dt = _parseDate(dates[n - 1]), t = tm(when[n]), d = R.days[n - 1];
-        rows += '<li class="hub-tm-rm-pvrow' + (t !== top ? ' is-alt' : '') + '"><span class="n">' + n + '</span><span class="dt">' + DAY_SHORT[dt.getDay()] + ' ' + _esc(_dateLabel(dt)) + '</span><span class="tm">' + t + '</span><span class="tt" title="' + _esc(d.t) + '">' + _esc(d.t) + '</span><span class="ck">' + d.ck.length + (d.ck.length === 1 ? ' task' : ' tasks') + '</span></li>';
+        const ckItems = d.ck.length
+          ? '<ul>' + d.ck.map(function (item) { return '<li>' + _esc(item) + '</li>'; }).join('') + '</ul>'
+          : '<p class="hub-tm-rm-pvck-empty">No tasks yet</p>';
+        rows +=
+          '<li class="hub-tm-rm-pvrow' + (t !== top ? ' is-alt' : '') + '" data-pv-row="' + n + '">' +
+            '<button type="button" class="hub-tm-rm-pvbtn" data-pv-toggle="' + n + '" aria-expanded="false">' +
+              '<span class="n">' + n + '</span>' +
+              '<span class="dt">' + DAY_SHORT[dt.getDay()] + ' ' + _esc(_dateLabel(dt)) + '</span>' +
+              '<span class="tm">' + t + '</span>' +
+              '<span class="tt" title="' + _esc(d.t) + '">' + _esc(d.t) + '</span>' +
+              '<span class="ck"><span>' + d.ck.length + (d.ck.length === 1 ? ' task' : ' tasks') + '</span>' + chev + '</span>' +
+            '</button>' +
+            '<div class="hub-tm-rm-pvck">' + ckItems + '</div>' +
+          '</li>';
       }
       const a = _parseDate(dates[p.from - 1]), b = _parseDate(dates[p.to - 1]);
-      return '<section class="hub-tm-rm-pvph hub-tm-rm-ph--' + (k % RM_PH) + '"><header><b>' + _esc(p.name) + '</b><span>' + (p.to - p.from + 1) + ' days · ' + _esc(_dateLabel(a)) + (p.to > p.from ? ' – ' + _esc(_dateLabel(b)) : '') + ' · ' + top + '</span></header><ol>' + rows + '</ol></section>';
+      const pRange = _esc(_dateLabel(a)) + (p.to > p.from ? ' – ' + _esc(_dateLabel(b)) : '');
+      return (
+        '<section class="hub-tm-rm-pvph hub-tm-rm-ph--' + (k % RM_PH) + '" data-pv-phase-card="' + k + '">' +
+          '<header>' +
+            '<span class="hub-tm-rm-pvbadge">P' + _pad(k + 1) + '</span>' +
+            '<div class="hub-tm-rm-pvph-main"><b>' + _esc(p.name) + '</b><span class="hub-tm-rm-pvph-dates">' + pRange + '</span></div>' +
+            '<div class="hub-tm-rm-pvph-pills"><span class="hub-tm-rm-pvph-meta">' + len + (len === 1 ? ' day' : ' days') + ' · ' + _esc(_fmtDur(phaseMins[k])) + '</span><span class="hub-tm-rm-pvph-time">' + top + '</span></div>' +
+          '</header>' +
+          '<ol class="hub-tm-rm-pvlist">' + rows + '</ol>' +
+        '</section>'
+      );
     }).join('');
-    return '<div class="hub-tm-rm-pvstrip" role="img" aria-label="Days of the roadmap, coloured by phase">' + strip + '</div>' + body;
+
+    return kpis +
+      '<div class="hub-tm-rm-pvmap">' +
+        '<div class="hub-tm-rm-pvmap-head"><span class="hub-tm-rm-pvmap-title">Journey map</span><button type="button" class="hub-tm-rm-pvall" data-pv-expand-all>Expand all</button></div>' +
+        '<div class="hub-tm-rm-pvbar" role="group" aria-label="Phases of the roadmap">' + segs + '</div>' +
+        '<div class="hub-tm-rm-pvstrip" role="group" aria-label="Days of the roadmap, coloured by phase">' + strip + '</div>' +
+      '</div>' +
+      body;
   }
   function _rmRenderPreview() {
     const p = _rmParse(_el('#tm-rm-text').value), box = _el('#tm-rm-preview');
@@ -5976,6 +6051,7 @@ const timeManagementModule = (function () {
     _el('#tm-rm-delete').hidden = !r;
     _rmShowTab('edit');
     _rmValidate();
+    _rmApplySkin();
     _openModal(_el('#hub-tm-roadmap-modal'), spec ? '#tm-rm-start' : '#tm-rm-name');
   }
   function _rmSave() {
@@ -6368,6 +6444,60 @@ const timeManagementModule = (function () {
       if (!p) { _toast('Fix the plan first.'); return; }
       _rmTplAdd({ time: _el('#tm-rm-time').value || '19:30', dur: parseInt(_el('#tm-rm-dur').value, 10) || 120, tagId: _el('#tm-rm-tag').value || 'work', dow: _rmFormDow(), rules: p.rules || [], phases: p.phases, days: p.days }, _el('#tm-rm-name').value);
     });
+
+    const pv = _el('#tm-rm-preview');
+    if (pv) {
+      let pvPingTimer = null;
+      const syncExpandAll = function () {
+        const btn = pv.querySelector('[data-pv-expand-all]');
+        if (btn) btn.textContent = pv.querySelector('.hub-tm-rm-pvrow:not(.is-open)') ? 'Expand all' : 'Collapse all';
+      };
+      pv.addEventListener('click', function (e) {
+        const t = e.target;
+        const ph = t.closest('[data-pv-phase]');
+        if (ph) {
+          const card = pv.querySelector('[data-pv-phase-card="' + ph.getAttribute('data-pv-phase') + '"]');
+          if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          return;
+        }
+        const dayBtn = t.closest('[data-pv-day]');
+        if (dayBtn) {
+          const row = pv.querySelector('[data-pv-row="' + dayBtn.getAttribute('data-pv-day') + '"]');
+          if (row) {
+            row.classList.add('is-open');
+            const tg = row.querySelector('[data-pv-toggle]');
+            if (tg) tg.setAttribute('aria-expanded', 'true');
+            syncExpandAll();
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            pv.querySelectorAll('.hub-tm-rm-pvrow.is-ping').forEach(function (r) { r.classList.remove('is-ping'); });
+            row.classList.add('is-ping');
+            if (pvPingTimer) clearTimeout(pvPingTimer);
+            pvPingTimer = setTimeout(function () { row.classList.remove('is-ping'); }, 900);
+          }
+          return;
+        }
+        const tg = t.closest('[data-pv-toggle]');
+        if (tg) {
+          const row = tg.closest('.hub-tm-rm-pvrow');
+          if (row) {
+            const on = row.classList.toggle('is-open');
+            tg.setAttribute('aria-expanded', String(on));
+            syncExpandAll();
+          }
+          return;
+        }
+        const allBtn = t.closest('[data-pv-expand-all]');
+        if (allBtn) {
+          const openAll = !!pv.querySelector('.hub-tm-rm-pvrow:not(.is-open)');
+          pv.querySelectorAll('.hub-tm-rm-pvrow').forEach(function (row) {
+            row.classList.toggle('is-open', openAll);
+            const b = row.querySelector('[data-pv-toggle]');
+            if (b) b.setAttribute('aria-expanded', String(openAll));
+          });
+          allBtn.textContent = openAll ? 'Collapse all' : 'Expand all';
+        }
+      });
+    }
 
     const box = _el('#hub-tm-roadmap');
     box.addEventListener('click', function (e) {
