@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chuyển & Gộp Dữ Liệu Cloud — Personal Hub → Shared Cloud</title>
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --card: #131926;
+      --card-2: #192132;
+      --border: #263147;
+      --text: #e6edf7;
+      --muted: #8b9bb4;
+      --accent: #00e5ff;
+      --accent-2: #22c55e;
+      --warn: #f59e0b;
+      --danger: #ef4444;
+      --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 28px 16px 64px;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(circle at top right, rgba(0, 229, 255, 0.08), transparent 40%), var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .wrap { max-width: 960px; margin: 0 auto; }
+    h1 { margin: 0 0 6px; font-size: 1.5rem; letter-spacing: -0.02em; }
+    .sub { color: var(--muted); font-size: 0.92rem; margin-bottom: 22px; }
+    .banner {
+      padding: 12px 16px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(245, 158, 11, 0.1);
+      border-color: rgba(245, 158, 11, 0.45);
+      color: #fde68a;
+      margin-bottom: 18px;
+      font-size: 0.9rem;
+      display: none;
+    }
+    .banner.is-danger {
+      background: rgba(239, 68, 68, 0.12);
+      border-color: rgba(239, 68, 68, 0.5);
+      color: #fecaca;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin-bottom: 16px;
+    }
+    .step-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+      font-weight: 600;
+      font-size: 1.02rem;
+    }
+    .badge {
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.78rem;
+      font-weight: 700;
+      background: rgba(0, 229, 255, 0.14);
+      color: var(--accent);
+      border: 1px solid rgba(0, 229, 255, 0.35);
+      flex: none;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+      gap: 14px;
+    }
+    .proj-box {
+      background: var(--card-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .proj-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 4px; }
+    .proj-id { font-family: var(--mono); font-size: 0.78rem; color: var(--accent); margin-bottom: 10px; }
+    .user-info {
+      font-size: 0.85rem;
+      color: var(--muted);
+      min-height: 40px;
+      margin-bottom: 10px;
+      word-break: break-all;
+    }
+    .user-info strong { color: var(--accent-2); }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    button {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: #1d2638;
+      color: var(--text);
+      padding: 9px 15px;
+      border-radius: 9px;
+      font-weight: 600;
+      font-size: 0.88rem;
+      cursor: pointer;
+      transition: transform 0.1s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+    button:hover:not(:disabled) { border-color: var(--accent); background: #232e44; }
+    button:active:not(:disabled) { transform: scale(0.98); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    button.primary {
+      background: linear-gradient(135deg, #0ea5e9, #06b6d4);
+      color: #041017;
+      border-color: transparent;
+    }
+    button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+    button.success {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: #03150a;
+      border-color: transparent;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 0.88rem;
+    }
+    th, td {
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: middle;
+    }
+    th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    td.mono { font-family: var(--mono); font-size: 0.82rem; }
+    .checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; margin: 12px 0; }
+    .check-item {
+      display: flex;
+      gap: 9px;
+      align-items: flex-start;
+      background: var(--card-2);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 10px 12px;
+      cursor: pointer;
+      font-size: 0.88rem;
+    }
+    .check-item input { margin-top: 3px; accent-color: var(--accent); }
+    .log {
+      background: #070a10;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      max-height: 280px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      color: #cbd5e1;
+      margin-top: 12px;
+    }
+    .log .ok { color: #4ade80; }
+    .log .warn { color: #fbbf24; }
+    .log .err { color: #f87171; }
+    .note { color: var(--muted); font-size: 0.83rem; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Chuyển & Gộp Dữ Liệu Cloud An Toàn</h1>
+    <div class="sub">
+      Chuyển và gộp dữ liệu từ project cũ <code>hubos-6b7ac</code> (Personal-hub) sang project dùng chung
+      <code>financial-performaces</code> (Wallet.OS / Zoom + Personal-hub).
+    </div>
+
+    <div id="env-banner" class="banner is-danger"></div>
+    <div id="email-banner" class="banner"></div>
+
+    <!-- STEP 1 -->
+    <section class="card">
+      <div class="step-head"><span class="badge">1</span> Đăng nhập 2 tài khoản Firebase</div>
+      <div class="grid-2">
+        <div class="proj-box">
+          <div class="proj-title">Nguồn cũ (Personal-hub)</div>
+          <div class="proj-id">projectId: hubos-6b7ac</div>
+          <div id="old-user-info" class="user-info">Chưa đăng nhập</div>
+          <div class="btn-row">
+            <button id="btn-login-old" class="primary">Đăng nhập Google (cũ)</button>
+            <button id="btn-logout-old" hidden>Đăng xuất</button>
+          </div>
+        </div>
+        <div class="proj-box">
+          <div class="proj-title">Đích mới (Dùng chung 2 web)</div>
+          <div class="proj-id">projectId: financial-performaces</div>
+          <div id="new-user-info" class="user-info">Chưa đăng nhập</div>
+          <div class="btn-row">
+            <button id="btn-login-new" class="primary">Đăng nhập Google (mới)</button>
+            <button id="btn-logout-new" hidden>Đăng xuất</button>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        Lưu ý: Trước khi ghi vào project mới, hãy đảm bảo bạn đã publish file <code>firestore.rules</code> mới lên
+        Firebase Console của <code>financial-performaces</code> (và thêm domain đang chạy vào Authorized domains).
+      </div>
+    </section>
+
+    <!-- STEP 2 -->
+    <section class="card">
+      <div class="step-head"><span class="badge">2</span> Quét & So sánh dữ liệu giữa 2 Cloud</div>
+      <div class="btn-row">
+        <button id="btn-scan" class="primary" disabled>Quét dữ liệu ngay</button>
+        <span id="scan-status" class="note" style="margin:0;">Cần đăng nhập cả 2 project ở Bước 1.</span>
+      </div>
+      <div id="preview-wrap" hidden>
+        <table>
+          <thead>
+            <tr>
+              <th>Phân hệ</th>
+              <th>Nguồn cũ (<code>hubos-6b7ac</code>)</th>
+              <th>Đích mới (<code>financial-performaces</code>)</th>
+              <th>Cách gộp an toàn</th>
+            </tr>
+          </thead>
+          <tbody id="preview-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- STEP 3 & 4 -->
+    <section class="card">
+      <div class="step-head"><span class="badge">3</span> Sao lưu JSON & Thực hiện gộp dữ liệu</div>
+      <div class="checks">
+        <label class="check-item">
+          <input type="checkbox" id="opt-cashflow" checked />
+          <div><strong>CashFlow (data + meta)</strong><br><span class="note">Gộp theo id (đích thắng nếu trùng id)</span></div>
+        </label>
+        <label class="check-item">
+          <input type="checkbox" id="opt-timeman" checked />
+          <div><strong>Time Management</strong><br><span class="note">Gộp theo updatedAt & bia mộ (tm2)</span></div>
+        </label>
+        <label class="check-item">
+          <input type="checkbox" id="opt-notes" checked />
+          <div><strong>Notes (notes_store)</strong><br><span class="note">Gộp thư mục & ghi chú theo id</span></div>
+        </label>
+        <label class="check-item">
+          <input type="checkbox" id="opt-learning" checked />
+          <div><strong>Flashcards, Quiz, Focus, Pomodoro</strong><br><span class="note">Chép & gộp dữ liệu học tập + settings/stats</span></div>
+        </label>
+        <label class="check-item">
+          <input type="checkbox" id="opt-vault" checked />
+          <div><strong>Notes Backup Vault</strong><br><span class="note">Chép tối đa 10 bản sao lưu gần nhất nếu đích trống</span></div>
+        </label>
+      </div>
+      <div class="btn-row">
+        <button id="btn-backup" disabled>Tải file sao lưu JSON (.json)</button>
+        <button id="btn-migrate" class="success" disabled>Gộp & Chuyển sang Cloud mới</button>
+      </div>
+      <div class="note">
+        Khi bấm "Gộp & Chuyển", công cụ sẽ tự động tải về 1 file JSON sao lưu trước (nếu bạn chưa tải) để đảm bảo an toàn tuyệt đối.
+      </div>
+      <div id="log" class="log">Sẵn sàng.</div>
+    </section>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      var OLD_CONFIG = {
+        apiKey: 'AIzaSyDOxiG1_ATb7_ERh34J4YLOdC8hu5_SYJ0',
+        authDomain: 'hubos-6b7ac.firebaseapp.com',
+        projectId: 'hubos-6b7ac',
+        storageBucket: 'hubos-6b7ac.firebasestorage.app',
+        messagingSenderId: '951576381184',
+        appId: '1:951576381184:web:f9840a882ec1fd2500d5e5'
+      };
+
+      var NEW_CONFIG = {
+        apiKey: 'AIzaSyA-OzyenFKXldv5p5WxFAIJ6dM4ZVucrGU',
+        authDomain: 'financial-performaces.firebaseapp.com',
+        projectId: 'financial-performaces',
+        storageBucket: 'financial-performaces.firebasestorage.app',
+        messagingSenderId: '383668604427',
+        appId: '1:383668604427:web:b20664ddd1d8f63522c10e'
+      };
+
+      var TOMB_TTL = 90 * 24 * 3600 * 1000;
+      var TM_MAX_BYTES = 900 * 1024;
+
+      var envBanner = document.getElementById('env-banner');
+      var emailBanner = document.getElementById('email-banner');
+      if (location.protocol === 'file:') {
+        envBanner.style.display = 'block';
+        envBanner.innerHTML = 'Bạn đang mở file trực tiếp bằng <code>file://</code> — Firebase Auth không cho phép đăng nhập Google trên <code>file://</code>. Hãy mở qua máy chủ nội bộ (<code>http://localhost</code>) hoặc URL đã deploy.';
+      }
+
+      var oldApp = firebase.initializeApp(OLD_CONFIG, 'hubos_source');
+      var newApp = firebase.initializeApp(NEW_CONFIG, 'shared_dest');
+      var oldAuth = oldApp.auth(), oldDb = oldApp.firestore();
+      var newAuth = newApp.auth(), newDb = newApp.firestore();
+
+      var state = { oldUser: null, newUser: null, scan: null, backedUp: false };
+
+      var logEl = document.getElementById('log');
+      function log(msg, cls) {
+        var line = document.createElement('div');
+        if (cls) line.className = cls;
+        line.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+        logEl.appendChild(line);
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      function clone(v) { return v == null ? v : JSON.parse(JSON.stringify(v)); }
+
+      function updateAuthUI() {
+        var oldInfo = document.getElementById('old-user-info');
+        var newInfo = document.getElementById('new-user-info');
+        if (state.oldUser) {
+          oldInfo.innerHTML = '<strong>Đã đăng nhập:</strong> ' + esc(state.oldUser.email || '') + '<br>UID: <code>' + esc(state.oldUser.uid) + '</code>';
+          document.getElementById('btn-logout-old').hidden = false;
+        } else {
+          oldInfo.textContent = 'Chưa đăng nhập';
+          document.getElementById('btn-logout-old').hidden = true;
+        }
+        if (state.newUser) {
+          newInfo.innerHTML = '<strong>Đã đăng nhập:</strong> ' + esc(state.newUser.email || '') + '<br>UID: <code>' + esc(state.newUser.uid) + '</code>';
+          document.getElementById('btn-logout-new').hidden = false;
+        } else {
+          newInfo.textContent = 'Chưa đăng nhập';
+          document.getElementById('btn-logout-new').hidden = true;
+        }
+        if (state.oldUser && state.newUser && state.oldUser.email && state.newUser.email && state.oldUser.email !== state.newUser.email) {
+          emailBanner.style.display = 'block';
+          emailBanner.textContent = 'Cảnh báo: 2 bên đang đăng nhập bằng email khác nhau (' + state.oldUser.email + ' vs ' + state.newUser.email + '). Hãy kiểm tra kỹ trước khi gộp!';
+        } else {
+          emailBanner.style.display = 'none';
+        }
+        var bothReady = !!(state.oldUser && state.newUser);
+        document.getElementById('btn-scan').disabled = !bothReady;
+        document.getElementById('scan-status').textContent = bothReady ? 'Đã sẵn sàng quét dữ liệu.' : 'Cần đăng nhập cả 2 project ở Bước 1.';
+      }
+
+      function esc(s) {
+        return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+
+      oldAuth.onAuthStateChanged(function (u) { state.oldUser = u || null; state.scan = null; state.backedUp = false; updateAuthUI(); });
+      newAuth.onAuthStateChanged(function (u) { state.newUser = u || null; state.scan = null; state.backedUp = false; updateAuthUI(); });
+
+      async function signInPopup(authInst, label) {
+        try {
+          var provider = new firebase.auth.GoogleAuthProvider();
+          provider.setCustomParameters({ prompt: 'select_account' });
+          await authInst.signInWithPopup(provider);
+          log('Đăng nhập ' + label + ' thành công.', 'ok');
+        } catch (err) {
+          log('Lỗi đăng nhập ' + label + ': ' + (err.message || err), 'err');
+          alert('Đăng nhập thất bại: ' + (err.message || err));
+        }
+      }
+
+      document.getElementById('btn-login-old').addEventListener('click', function () { signInPopup(oldAuth, 'hubos-6b7ac'); });
+      document.getElementById('btn-login-new').addEventListener('click', function () { signInPopup(newAuth, 'financial-performaces'); });
+      document.getElementById('btn-logout-old').addEventListener('click', function () { oldAuth.signOut(); });
+      document.getElementById('btn-logout-new').addEventListener('click', function () { newAuth.signOut(); });
+
+      // ── Extractors & Merge helpers ──
+      function extractCFData(raw) {
+        if (!raw || typeof raw !== 'object') return null;
+        if (Array.isArray(raw.transactions)) return raw;
+        if (raw.payload && typeof raw.payload === 'object' && Array.isArray(raw.payload.transactions)) return raw.payload;
+        return null;
+      }
+
+      function normalizeCFMeta(raw) {
+        raw = (raw && typeof raw === 'object') ? raw : {};
+        return {
+          netWorthOffset: Number(raw.netWorthOffset) || 0,
+          savingsBalance: Number(raw.savingsBalance) || 0,
+          initBank: Number(raw.initBank) || 0,
+          initCash: Number(raw.initCash) || 0,
+          budgets: (raw.budgets && typeof raw.budgets === 'object') ? clone(raw.budgets) : {},
+          budgetPlans: (raw.budgetPlans && typeof raw.budgetPlans === 'object') ? clone(raw.budgetPlans) : {},
+          dailyLimits: (raw.dailyLimits && typeof raw.dailyLimits === 'object') ? clone(raw.dailyLimits) : {}
+        };
+      }
+
+      function parseTMDoc(raw) {
+        if (!raw || typeof raw !== 'object') return null;
+        if (typeof raw.json === 'string') {
+          try { return JSON.parse(raw.json); } catch (_) { return null; }
+        }
+        if (raw.payload && typeof raw.payload === 'object') return raw.payload;
+        return null;
+      }
+
+      function unionById(destList, srcList) {
+        var out = [], seen = {};
+        (Array.isArray(destList) ? destList : []).forEach(function (it) {
+          if (!it) return;
+          if (it.id != null) seen[String(it.id)] = true;
+          out.push(clone(it));
+        });
+        (Array.isArray(srcList) ? srcList : []).forEach(function (it) {
+          if (!it) return;
+          if (it.id != null && seen[String(it.id)]) return;
+          if (it.id != null) seen[String(it.id)] = true;
+          out.push(clone(it));
+        });
+        return out;
+      }
+
+      function unionSnapshots(destList, srcList) {
+        var out = [], seen = {};
+        function key(s) { return [s.year, s.month, s.accountId || ''].join('|'); }
+        (Array.isArray(destList) ? destList : []).forEach(function (s) {
+          if (!s) return;
+          seen[key(s)] = true;
+          out.push(clone(s));
+        });
+        (Array.isArray(srcList) ? srcList : []).forEach(function (s) {
+          if (!s) return;
+          var k = key(s);
+          if (seen[k]) return;
+          seen[k] = true;
+          out.push(clone(s));
+        });
+        return out;
+      }
+
+      function mergeCFData(dest, src) {
+        dest = dest || {};
+        src = src || {};
+        return {
+          startingBalance: (Number(dest.startingBalance) || 0) !== 0 ? Number(dest.startingBalance) : (Number(src.startingBalance) || 0),
+          balanceSnapshots: unionSnapshots(dest.balanceSnapshots, src.balanceSnapshots),
+          transactions: unionById(dest.transactions, src.transactions),
+          debts: unionById(dest.debts, src.debts),
+          goals: unionById(dest.goals, src.goals)
+        };
+      }
+
+      function mergeMapPreferDest(destMap, srcMap) {
+        var out = {};
+        Object.keys(srcMap || {}).forEach(function (k) { out[k] = clone(srcMap[k]); });
+        Object.keys(destMap || {}).forEach(function (k) {
+          var dv = destMap[k], sv = out[k];
+          if (dv && typeof dv === 'object' && !Array.isArray(dv) && sv && typeof sv === 'object' && !Array.isArray(sv)) {
+            out[k] = Object.assign({}, sv, clone(dv));
+          } else {
+            out[k] = clone(dv);
+          }
+        });
+        return out;
+      }
+
+      function mergeCFMeta(destRaw, srcRaw) {
+        var d = normalizeCFMeta(destRaw);
+        var s = normalizeCFMeta(srcRaw);
+        return {
+          netWorthOffset: d.netWorthOffset !== 0 ? d.netWorthOffset : s.netWorthOffset,
+          savingsBalance: d.savingsBalance !== 0 ? d.savingsBalance : s.savingsBalance,
+          initBank: d.initBank !== 0 ? d.initBank : s.initBank,
+          initCash: d.initCash !== 0 ? d.initCash : s.initCash,
+          budgets: mergeMapPreferDest(d.budgets, s.budgets),
+          budgetPlans: mergeMapPreferDest(d.budgetPlans, s.budgetPlans),
+          dailyLimits: mergeMapPreferDest(d.dailyLimits, s.dailyLimits)
+        };
+      }
+
+      function tmBlocksOf(p) {
+        if (!p) return [];
+        return Array.isArray(p.timeBlocks) ? p.timeBlocks : (Array.isArray(p.blocks) ? p.blocks : []);
+      }
+      function tmTs(o) { return (o && Number(o.updatedAt)) || 0; }
+      function tmMergeList(la, lb, ta, tb) {
+        var now = Date.now();
+        var tombs = {};
+        [ta, tb].forEach(function (m) {
+          Object.keys(m || {}).forEach(function (id) {
+            var t = Number(m[id]) || 0;
+            if (t > 0 && now - t <= TOMB_TTL) tombs[id] = Math.max(tombs[id] || 0, t);
+          });
+        });
+        var byId = {}, order = [];
+        [la, lb].forEach(function (list) {
+          (Array.isArray(list) ? list : []).forEach(function (it) {
+            if (!it || it.id === undefined || it.id === null) return;
+            var id = String(it.id), cur = byId[id];
+            if (!cur) { byId[id] = it; order.push(id); }
+            else if (tmTs(it) > tmTs(cur)) byId[id] = it;
+          });
+        });
+        var out = [];
+        order.forEach(function (id) {
+          if (tombs[id] && tombs[id] >= tmTs(byId[id])) return;
+          out.push(byId[id]);
+        });
+        return { list: out, tombs: tombs };
+      }
+
+      function mergeTimeManagement(a, b) {
+        a = a || {}; b = b || {};
+        var ta = a.tombs || {}, tb = b.tombs || {};
+        var blocks = tmMergeList(tmBlocksOf(a), tmBlocksOf(b), ta.blocks, tb.blocks);
+        var tags   = tmMergeList(a.customTags, b.customTags, ta.tags, tb.tags);
+        var tpls   = tmMergeList(a.templates, b.templates, ta.templates, tb.templates);
+        var sa = Number(a.settingsAt) || 0, sb = Number(b.settingsAt) || 0;
+        var win = sb > sa ? b : a, other = win === a ? b : a;
+        var out = {
+          v: 2,
+          timeBlocks: clone(blocks.list),
+          customTags: clone(tags.list),
+          templates: clone(tpls.list),
+          tombs: { blocks: blocks.tombs, tags: tags.tombs, templates: tpls.tombs },
+          settingsAt: Math.max(sa, sb),
+          updatedAt: Date.now()
+        };
+        var at = win.activeTagId !== undefined ? win.activeTagId : other.activeTagId;
+        if (at !== undefined) out.activeTagId = at;
+        var au = win.audio !== undefined ? win.audio : other.audio;
+        if (au !== undefined) out.audio = clone(au);
+        return out;
+      }
+
+      function mergeNotesWorkspace(destWs, srcWs) {
+        if (!destWs || !Array.isArray(destWs.folders)) return srcWs ? clone(srcWs) : null;
+        if (!srcWs || !Array.isArray(srcWs.folders)) return clone(destWs);
+        var out = clone(destWs);
+        srcWs.folders.forEach(function (sf) {
+          if (!sf) return;
+          var df = out.folders.find(function (f) { return f && f.id === sf.id; });
+          if (!df) {
+            out.folders.push(clone(sf));
+          } else if (Array.isArray(sf.notes)) {
+            if (!Array.isArray(df.notes)) df.notes = [];
+            sf.notes.forEach(function (sn) {
+              if (!sn) return;
+              var dn = df.notes.find(function (n) { return n && n.id === sn.id; });
+              if (!dn) {
+                df.notes.push(clone(sn));
+              } else if ((!dn.content || !String(dn.content).trim()) && sn.content && String(sn.content).trim()) {
+                dn.content = sn.content;
+                if (sn.title) dn.title = sn.title;
+              }
+            });
+          }
+        });
+        return out;
+      }
+
+      function mergeFlashcardStats(a, b) {
+        var out = { daily: {} };
+        [a, b].forEach(function (src) {
+          if (!src || !src.daily) return;
+          Object.keys(src.daily).forEach(function (day) {
+            var from = src.daily[day] || {};
+            var to = out.daily[day] || (out.daily[day] = { decks: {} });
+            Object.keys(from).forEach(function (k) {
+              if (k === 'decks') {
+                Object.keys(from.decks || {}).forEach(function (id) {
+                  var dd = from.decks[id] || {};
+                  var td = to.decks[id] || (to.decks[id] = {});
+                  Object.keys(dd).forEach(function (f) { td[f] = Math.max(td[f] || 0, Number(dd[f]) || 0); });
+                });
+              } else if (typeof from[k] === 'number') {
+                to[k] = Math.max(to[k] || 0, from[k]);
+              }
+            });
+          });
+        });
+        return out;
+      }
+
+      async function safeGet(ref) {
+        var snap = await ref.get();
+        return snap.exists ? snap.data() : null;
+      }
+
+      // ── Step 2: Scan ──
+      document.getElementById('btn-scan').addEventListener('click', async function () {
+        if (!state.oldUser || !state.newUser) return;
+        var oUid = state.oldUser.uid, nUid = state.newUser.uid;
+        log('Đang quét dữ liệu từ hubos-6b7ac (' + oUid + ') và financial-performaces (' + nUid + ')...');
+        document.getElementById('btn-scan').disabled = true;
+        try {
+          var oldBase = oldDb.collection('users').doc(oUid);
+          var newBase = newDb.collection('users').doc(nUid);
+
+          var [
+            oldCfDataRaw, oldCfMetaRaw, oldTmRaw, oldNotesRaw, oldStatsRaw, oldSettingsRaw, oldUserDoc, oldVaultSnap,
+            newCfDataRaw, newCfMetaRaw, newTmRaw, newNotesRaw, newStatsRaw, newSettingsRaw, newUserDoc, newVaultSnap
+          ] = await Promise.all([
+            safeGet(oldBase.collection('cashflow_store').doc('data')),
+            safeGet(oldBase.collection('cashflow_store').doc('meta')),
+            safeGet(oldBase.collection('timeman_store').doc('data')),
+            safeGet(oldBase.collection('notes_store').doc('data')),
+            safeGet(oldBase.collection('flashcard_store').doc('stats')),
+            safeGet(oldBase.collection('settings').doc('flashcards')),
+            safeGet(oldBase),
+            oldBase.collection('notes_backup_vault').orderBy('created_at', 'desc').limit(10).get().catch(function () { return { docs: [] }; }),
+            safeGet(newBase.collection('cashflow').doc('data')),
+            safeGet(newBase.collection('cashflow').doc('meta')),
+            safeGet(newBase.collection('timeManagement').doc('state')),
+            safeGet(newBase.collection('notes_store').doc('data')),
+            safeGet(newBase.collection('flashcard_store').doc('stats')),
+            safeGet(newBase.collection('settings').doc('flashcards')),
+            safeGet(newBase),
+            newBase.collection('notes_backup_vault').limit(10).get().catch(function () { return { docs: [] }; })
+          ]);
+
+          var scan = {
+            capturedAt: new Date().toISOString(),
+            source: {
+              projectId: 'hubos-6b7ac',
+              uid: oUid,
+              email: state.oldUser.email || '',
+              cfData: extractCFData(oldCfDataRaw),
+              cfMeta: oldCfMetaRaw,
+              tm: parseTMDoc(oldTmRaw),
+              notes: oldNotesRaw && oldNotesRaw.workspace ? oldNotesRaw.workspace : null,
+              fcStats: oldStatsRaw && oldStatsRaw.payload ? oldStatsRaw.payload : null,
+              fcSettings: oldSettingsRaw,
+              userDoc: oldUserDoc,
+              vaultDocs: (oldVaultSnap.docs || []).map(function (d) { return d.data(); })
+            },
+            dest: {
+              projectId: 'financial-performaces',
+              uid: nUid,
+              email: state.newUser.email || '',
+              cfData: extractCFData(newCfDataRaw),
+              cfMeta: newCfMetaRaw,
+              tm: parseTMDoc(newTmRaw),
+              notes: newNotesRaw && newNotesRaw.workspace ? newNotesRaw.workspace : null,
+              fcStats: newStatsRaw && newStatsRaw.payload ? newStatsRaw.payload : null,
+              fcSettings: newSettingsRaw,
+              userDoc: newUserDoc,
+              vaultCount: (newVaultSnap.docs || []).length
+            }
+          };
+
+          state.scan = scan;
+          state.backedUp = false;
+          renderPreview(scan);
+          document.getElementById('btn-backup').disabled = false;
+          document.getElementById('btn-migrate').disabled = false;
+          log('Quét hoàn tất. Hãy xem bảng so sánh và sao lưu trước khi gộp.', 'ok');
+        } catch (err) {
+          log('Lỗi khi quét dữ liệu: ' + (err.message || err), 'err');
+          alert('Quét thất bại: ' + (err.message || err));
+        } finally {
+          document.getElementById('btn-scan').disabled = !(state.oldUser && state.newUser);
+        }
+      });
+
+      function sumCF(d) {
+        if (!d) return 'Trống';
+        return (d.transactions ? d.transactions.length : 0) + ' GD · ' +
+               (d.debts ? d.debts.length : 0) + ' nợ · ' +
+               (d.goals ? d.goals.length : 0) + ' mục tiêu';
+      }
+      function sumTM(p) {
+        if (!p) return 'Trống';
+        return tmBlocksOf(p).length + ' block · ' +
+               (Array.isArray(p.customTags) ? p.customTags.length : 0) + ' tag · ' +
+               (Array.isArray(p.templates) ? p.templates.length : 0) + ' template';
+      }
+      function sumNotes(w) {
+        if (!w || !Array.isArray(w.folders)) return 'Trống';
+        var n = 0; w.folders.forEach(function (f) { n += (f && Array.isArray(f.notes)) ? f.notes.length : 0; });
+        return w.folders.length + ' thư mục · ' + n + ' ghi chú';
+      }
+      function sumLearning(u, st, cfg) {
+        var parts = [];
+        if (u && u.flashcardsData && Array.isArray(u.flashcardsData.decks)) parts.push(u.flashcardsData.decks.length + ' bộ flashcard');
+        if (u && u.quizData && Array.isArray(u.quizData.sections)) parts.push(u.quizData.sections.length + ' quiz');
+        if (u && u.focusData) parts.push('Focus');
+        if (u && u.pomodoroData) parts.push('Pomodoro');
+        if (st && st.daily) parts.push('Stats');
+        if (cfg) parts.push('Settings');
+        return parts.length ? parts.join(' · ') : 'Trống';
+      }
+
+      function renderPreview(scan) {
+        var rows = [
+          ['CashFlow (data)', sumCF(scan.source.cfData), sumCF(scan.dest.cfData), 'Gộp theo id (đích ưu tiên)'],
+          ['CashFlow (meta)', scan.source.cfMeta ? 'Có dữ liệu' : 'Trống', scan.dest.cfMeta ? 'Có dữ liệu' : 'Trống', 'Giữ số đích nếu khác 0, gộp ngân sách'],
+          ['Time Management', sumTM(scan.source.tm), sumTM(scan.dest.tm), 'Gộp theo updatedAt & bia mộ (tm2)'],
+          ['Notes', sumNotes(scan.source.notes), sumNotes(scan.dest.notes), 'Gộp thư mục & ghi chú theo id'],
+          ['Học tập Personal-hub', sumLearning(scan.source.userDoc, scan.source.fcStats, scan.source.fcSettings), sumLearning(scan.dest.userDoc, scan.dest.fcStats, scan.dest.fcSettings), 'Gộp decks/quiz, giữ dữ liệu hiện có'],
+          ['Notes Backup Vault', scan.source.vaultDocs.length + ' bản sao lưu', scan.dest.vaultCount + ' bản sao lưu', 'Chép sang nếu đích chưa có']
+        ];
+        var tbody = document.getElementById('preview-body');
+        tbody.innerHTML = '';
+        rows.forEach(function (r) {
+          var tr = document.createElement('tr');
+          tr.innerHTML = '<td><strong>' + esc(r[0]) + '</strong></td><td class="mono">' + esc(r[1]) + '</td><td class="mono">' + esc(r[2]) + '</td><td>' + esc(r[3]) + '</td>';
+          tbody.appendChild(tr);
+        });
+        document.getElementById('preview-wrap').hidden = false;
+      }
+
+      function downloadBackup(scan) {
+        var now = new Date();
+        var pad = function (n) { return String(n).padStart(2, '0'); };
+        var stamp = now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate()) + '-' + pad(now.getHours()) + pad(now.getMinutes());
+        var fname = 'hub-migration-backup-' + stamp + '.json';
+        var blob = new Blob([JSON.stringify(scan, null, 2)], { type: 'application/json' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = fname;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+        state.backedUp = true;
+        log('Đã tải file sao lưu: ' + fname, 'ok');
+      }
+
+      document.getElementById('btn-backup').addEventListener('click', function () {
+        if (state.scan) downloadBackup(state.scan);
+      });
+
+      function utf8Bytes(s) {
+        return typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(s).length : s.length * 2;
+      }
+
+      // ── Step 4: Migrate ──
+      document.getElementById('btn-migrate').addEventListener('click', async function () {
+        if (!state.scan || !state.newUser) return;
+        if (!confirm('Bắt đầu gộp & ghi dữ liệu từ hubos-6b7ac sang financial-performaces?')) return;
+
+        if (!state.backedUp) downloadBackup(state.scan);
+
+        var s = state.scan.source;
+        var d = state.scan.dest;
+        var newBase = newDb.collection('users').doc(state.newUser.uid);
+        var btn = document.getElementById('btn-migrate');
+        btn.disabled = true;
+
+        try {
+          if (document.getElementById('opt-cashflow').checked) {
+            if (s.cfData || d.cfData) {
+              var mergedCF = mergeCFData(d.cfData, s.cfData);
+              await newBase.collection('cashflow').doc('data').set(JSON.parse(JSON.stringify(mergedCF)));
+              log('CashFlow data: Đã ghi ' + mergedCF.transactions.length + ' GD, ' + mergedCF.debts.length + ' nợ, ' + mergedCF.goals.length + ' mục tiêu.', 'ok');
+            } else {
+              log('CashFlow data: Cả 2 bên đều trống, bỏ qua.', 'warn');
+            }
+            if (s.cfMeta || d.cfMeta) {
+              var mergedMeta = mergeCFMeta(d.cfMeta, s.cfMeta);
+              await newBase.collection('cashflow').doc('meta').set(JSON.parse(JSON.stringify(mergedMeta)));
+              log('CashFlow meta: Đã gộp & ghi xong.', 'ok');
+            }
+          }
+
+          if (document.getElementById('opt-timeman').checked) {
+            if (s.tm || d.tm) {
+              var mergedTM = mergeTimeManagement(d.tm, s.tm);
+              var json = JSON.stringify(mergedTM);
+              if (utf8Bytes(json) > TM_MAX_BYTES) {
+                throw new Error('Dữ liệu Time Management sau khi gộp vượt quá 900 KB (' + utf8Bytes(json) + ' bytes).');
+              }
+              await newBase.collection('timeManagement').doc('state').set({
+                schema: 'tm2',
+                json: json,
+                updatedAt: mergedTM.updatedAt
+              });
+              log('Time Management: Đã ghi ' + mergedTM.timeBlocks.length + ' block, ' + mergedTM.customTags.length + ' tag (' + utf8Bytes(json) + ' bytes).', 'ok');
+            } else {
+              log('Time Management: Cả 2 bên đều trống, bỏ qua.', 'warn');
+            }
+          }
+
+          if (document.getElementById('opt-notes').checked) {
+            var mergedNotes = mergeNotesWorkspace(d.notes, s.notes);
+            if (mergedNotes) {
+              await newBase.collection('notes_store').doc('data').set({ workspace: JSON.parse(JSON.stringify(mergedNotes)) });
+              log('Notes: Đã ghi ' + mergedNotes.folders.length + ' thư mục.', 'ok');
+            } else {
+              log('Notes: Không có dữ liệu để chuyển.', 'warn');
+            }
+          }
+
+          if (document.getElementById('opt-learning').checked) {
+            var su = s.userDoc || {}, du = d.userDoc || {};
+            var nextUser = clone(du);
+            var changed = false;
+            if (su.flashcardsData) {
+              var destDecks = (du.flashcardsData && Array.isArray(du.flashcardsData.decks)) ? du.flashcardsData.decks : [];
+              var srcDecks = Array.isArray(su.flashcardsData.decks) ? su.flashcardsData.decks : [];
+              nextUser.flashcardsData = Object.assign({}, clone(su.flashcardsData), clone(du.flashcardsData || {}), {
+                decks: unionById(destDecks, srcDecks)
+              });
+              changed = true;
+            }
+            if (su.quizData) {
+              var destSec = (du.quizData && Array.isArray(du.quizData.sections)) ? du.quizData.sections : [];
+              var srcSec = Array.isArray(su.quizData.sections) ? su.quizData.sections : [];
+              nextUser.quizData = Object.assign({}, clone(su.quizData), clone(du.quizData || {}), {
+                sections: unionById(destSec, srcSec)
+              });
+              changed = true;
+            }
+            if (su.focusData && !du.focusData) { nextUser.focusData = clone(su.focusData); changed = true; }
+            if (su.pomodoroData && !du.pomodoroData) { nextUser.pomodoroData = clone(su.pomodoroData); changed = true; }
+            if (changed) {
+              await newBase.set(JSON.parse(JSON.stringify(nextUser)), { merge: true });
+              log('Tài liệu người dùng (Flashcards/Quiz/Focus/Pomodoro): Đã gộp xong.', 'ok');
+            }
+            if (s.fcStats || d.fcStats) {
+              var mergedStats = mergeFlashcardStats(d.fcStats, s.fcStats);
+              await newBase.collection('flashcard_store').doc('stats').set({ payload: mergedStats });
+              log('Flashcard stats: Đã gộp xong.', 'ok');
+            }
+            if (s.fcSettings && !d.fcSettings) {
+              await newBase.collection('settings').doc('flashcards').set(JSON.parse(JSON.stringify(s.fcSettings)));
+              log('Flashcard settings: Đã chép sang Cloud mới.', 'ok');
+            }
+          }
+
+          if (document.getElementById('opt-vault').checked && s.vaultDocs.length) {
+            if (d.vaultCount === 0) {
+              var vaultRef = newBase.collection('notes_backup_vault');
+              for (var i = s.vaultDocs.length - 1; i >= 0; i--) {
+                var docCopy = clone(s.vaultDocs[i]);
+                docCopy.created_at = firebase.firestore.FieldValue.serverTimestamp();
+                await vaultRef.add(docCopy);
+              }
+              log('Notes Backup Vault: Đã chép ' + s.vaultDocs.length + ' bản sao lưu.', 'ok');
+            } else {
+              log('Notes Backup Vault: Cloud mới đã có ' + d.vaultCount + ' bản sao lưu, bỏ qua để tránh trùng.', 'warn');
+            }
+          }
+
+          // Upsert userDirectory để hiện trong danh bạ Zoom
+          await newDb.collection('userDirectory').doc(state.newUser.uid).set({
+            email: state.newUser.email || '',
+            displayName: state.newUser.displayName || '',
+            lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+
+          log('HOÀN TẤT! Bây giờ bạn có thể tải lại Personal-hub và Zoom để kiểm tra dữ liệu đồng bộ.', 'ok');
+        } catch (err) {
+          log('LỖI KHI GỘP DỮ LIỆU: ' + (err.message || err), 'err');
+          alert('Có lỗi xảy ra: ' + (err.message || err));
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

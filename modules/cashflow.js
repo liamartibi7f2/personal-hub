@@ -1044,6 +1044,78 @@ const cashflowModule = (function () {
    *  persist wrote empty transactions array to cloud,
    *  wiping the user's data. This CANNOT happen anymore.
    */
+  var _cfLiveUnsub = null;
+  var _cfApplyingRemote = false;
+
+  function _cfApplyRemoteUpdate(ev) {
+    if (!ev || !_isDataLoaded) return;
+    var mounted = !!(_container && _container.querySelector('.hub-cf-dashboard'));
+    if (ev.type === 'data' && ev.data && Array.isArray(ev.data.transactions)) {
+      var nextSig = '';
+      var curSig = '';
+      try {
+        nextSig = JSON.stringify(ev.data);
+        curSig = JSON.stringify(_data);
+      } catch (_) {}
+      if (nextSig && nextSig === curSig) return;
+      _cfApplyingRemote = true;
+      try {
+        _data = ev.data;
+        _ensureDefault();
+        _migrationPending = false;
+        _migrationCount = 0;
+        _isOfflineMode = false;
+        _sessionLoaded = true;
+        if (mounted) {
+          _renderAllViews();
+          if (typeof _updateChart === 'function') _updateChart();
+        }
+      } finally {
+        _cfApplyingRemote = false;
+      }
+    } else if (ev.type === 'meta' && ev.meta && typeof ev.meta === 'object') {
+      var nextMeta = {
+        netWorthOffset: Number(ev.meta.netWorthOffset) || 0,
+        savingsBalance: Number(ev.meta.savingsBalance) || 0,
+        initBank: Number(ev.meta.initBank) || 0,
+        initCash: Number(ev.meta.initCash) || 0,
+        budgets: ev.meta.budgets || {},
+        budgetPlans: ev.meta.budgetPlans || {},
+        dailyLimits: ev.meta.dailyLimits || {}
+      };
+      var nextMSig = '';
+      var curMSig = '';
+      try {
+        nextMSig = JSON.stringify(nextMeta);
+        curMSig = JSON.stringify(_cashFlowMeta);
+      } catch (_) {}
+      if (nextMSig && nextMSig === curMSig) return;
+      _cfApplyingRemote = true;
+      try {
+        _cashFlowMeta.netWorthOffset = nextMeta.netWorthOffset;
+        _cashFlowMeta.savingsBalance = nextMeta.savingsBalance;
+        _cashFlowMeta.initBank = nextMeta.initBank;
+        _cashFlowMeta.initCash = nextMeta.initCash;
+        _cashFlowMeta.budgets = nextMeta.budgets;
+        _cashFlowMeta.budgetPlans = nextMeta.budgetPlans;
+        _cashFlowMeta.dailyLimits = nextMeta.dailyLimits;
+        if (mounted) {
+          _renderAllViews();
+          if (typeof _updateChart === 'function') _updateChart();
+        }
+      } finally {
+        _cfApplyingRemote = false;
+      }
+    }
+  }
+
+  function _cfEnsureLiveSync() {
+    if (_cfLiveUnsub) return;
+    if (typeof HubDB !== 'undefined' && typeof HubDB.subscribeCashFlow === 'function') {
+      _cfLiveUnsub = HubDB.subscribeCashFlow(_cfApplyRemoteUpdate);
+    }
+  }
+
   async function _loadData() {
     if (_sessionLoaded && _data) return;
 
@@ -1103,6 +1175,7 @@ const cashflowModule = (function () {
     }
 
     _sessionLoaded = true;
+    _cfEnsureLiveSync();
     console.log('[CashFlow] Data loaded successfully. Meta:', _cashFlowMeta);
   }
 
@@ -1118,6 +1191,7 @@ const cashflowModule = (function () {
    *  are allowed.
    */
   async function _persist() {
+    if (_cfApplyingRemote) return;
     if (!_isDataLoaded) return;
 
     // ═══ GUARD: Offline-mode empty data = DO NOT SAVE ═══
@@ -1141,8 +1215,10 @@ const cashflowModule = (function () {
   /** Debounced persist for meta (netWorthOffset, savingsBalance, initBank, initCash).
    *  Meta writes are lightweight — no offline guard needed. */
   function _debouncedPersistMeta() {
+    if (_cfApplyingRemote) return;
     if (typeof HubDebounce !== 'undefined') {
       HubDebounce.call('cf-meta', function () {
+        if (_cfApplyingRemote) return;
         if (typeof HubDB !== 'undefined' && typeof HubDB.saveCashFlowMeta === 'function') {
           HubDB.saveCashFlowMeta(_cashFlowMeta).catch(function (_) {});
         }

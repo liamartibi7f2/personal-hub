@@ -9,13 +9,13 @@ const HubDB = (function () {
   'use strict';
 
   const firebaseConfig = {
-    apiKey: 'AIzaSyDOxiG1_ATb7_ERh34J4YLOdC8hu5_SYJ0',
-    authDomain: 'hubos-6b7ac.firebaseapp.com',
-    projectId: 'hubos-6b7ac',
-    storageBucket: 'hubos-6b7ac.firebasestorage.app',
-    messagingSenderId: '951576381184',
-    appId: '1:951576381184:web:f9840a882ec1fd2500d5e5',
-    measurementId: 'G-77QKMV18LQ'
+    apiKey: 'AIzaSyA-OzyenFKXldv5p5WxFAIJ6dM4ZVucrGU',
+    authDomain: 'financial-performaces.firebaseapp.com',
+    projectId: 'financial-performaces',
+    storageBucket: 'financial-performaces.firebasestorage.app',
+    messagingSenderId: '383668604427',
+    appId: '1:383668604427:web:b20664ddd1d8f63522c10e',
+    measurementId: 'G-MC56TNVCZ3'
   };
 
   // ── Private state ──
@@ -30,6 +30,8 @@ const HubDB = (function () {
   let _authFired = false;
   const _tmSubs = [];             // live Time Management subscribers
   let _tmWatch = null;            // { uid, unsub } — Firestore listener of the signed-in account
+  const _cfSubs = [];             // live CashFlow subscribers
+  let _cfWatch = null;            // { uid, unsubData, unsubMeta }
 
   // ── Global debounce utility (shared by all modules) ──
   window.HubDebounce = (function () {
@@ -85,6 +87,13 @@ const HubDB = (function () {
         var prevUid = _user ? _user.uid : null;
         _user = user;
         _ready = true;
+        if (user && _db) {
+          _db.collection('userDirectory').doc(user.uid).set({
+            email: user.email || '',
+            displayName: user.displayName || '',
+            lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true }).catch(function () {});
+        }
         resolve();
         _notifyAuth(prevUid);
       });
@@ -101,6 +110,7 @@ const HubDB = (function () {
     var initial = !_authFired;
     _authFired = true;
     _tmRewatch();
+    _cfRewatch();
     _authListeners.slice().forEach(function (fn) {
       try { fn({ uid: uid, prevUid: prevUid, initial: initial, loggedIn: !!uid }); }
       catch (e) { console.warn('[HubDB] auth listener failed:', e); }
@@ -400,14 +410,43 @@ const HubDB = (function () {
   const CF_LOCAL_OFFSET    = 'hub_cf_cloud_offset';
   const CF_LOCAL_SAVINGS   = 'hub_cf_cloud_savings';
 
+  function _cfDataDocRefFor(uid) {
+    return _db.collection('users').doc(uid).collection('cashflow').doc('data');
+  }
+
+  function _cfMetaDocRefFor(uid) {
+    return _db.collection('users').doc(uid).collection('cashflow').doc('meta');
+  }
+
   function _cfDataDocRef() {
     if (!_isOnline()) return null;
-    return _db.collection('users').doc(_user.uid).collection('cashflow_store').doc('data');
+    return _cfDataDocRefFor(_user.uid);
   }
 
   function _cfMetaDocRef() {
     if (!_isOnline()) return null;
-    return _db.collection('users').doc(_user.uid).collection('cashflow_store').doc('meta');
+    return _cfMetaDocRefFor(_user.uid);
+  }
+
+  /** Extract CashFlow payload from either Zoom flat schema or legacy wrapped `{ payload }` schema. */
+  function _cfExtractData(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    if (Array.isArray(raw.transactions)) return raw;
+    if (raw.payload && typeof raw.payload === 'object' && Array.isArray(raw.payload.transactions)) return raw.payload;
+    return null;
+  }
+
+  function _cfNormalizeMeta(meta) {
+    meta = (meta && typeof meta === 'object') ? meta : {};
+    return {
+      netWorthOffset: Number(meta.netWorthOffset) || 0,
+      savingsBalance: Number(meta.savingsBalance) || 0,
+      initBank: Number(meta.initBank) || 0,
+      initCash: Number(meta.initCash) || 0,
+      budgets: (meta.budgets && typeof meta.budgets === 'object') ? meta.budgets : {},
+      budgetPlans: (meta.budgetPlans && typeof meta.budgetPlans === 'object') ? meta.budgetPlans : {},
+      dailyLimits: (meta.dailyLimits && typeof meta.dailyLimits === 'object') ? meta.dailyLimits : {}
+    };
   }
 
   /**
@@ -425,14 +464,18 @@ const HubDB = (function () {
 
     // ── STEP 2: localStorage mirror (same legacy key for quick access) ──
     try { localStorage.setItem(CF_LOCAL_KEY, JSON.stringify(data)); } catch (_) {}
+    if (data && Array.isArray(data.goals)) {
+      try { localStorage.setItem('hub_cf_goals_backup_v1', JSON.stringify(data.goals)); } catch (_) {}
+    }
 
-    // ── STEP 3: Firestore (cloud sync) ──
+    // ── STEP 3: Firestore (cloud sync — flat schema matching Wallet.OS) ──
     await _ensureReady();
     if (_isOnline()) {
       try {
+        var cleanData = JSON.parse(JSON.stringify(data));
         await Promise.race([
           _cfDataDocRef()
-            .set({ payload: data }, { merge: true })
+            .set(cleanData)
             .catch(function (err) {
               console.error('[HubDB] CashFlow Firestore write failed:', err);
               throw err;
@@ -474,17 +517,10 @@ const HubDB = (function () {
     await _ensureReady();
     if (_isOnline()) {
       try {
+        var cleanMeta = JSON.parse(JSON.stringify(_cfNormalizeMeta(meta)));
         await Promise.race([
           _cfMetaDocRef()
-            .set({
-              netWorthOffset: Number(meta.netWorthOffset) || 0,
-              savingsBalance: Number(meta.savingsBalance) || 0,
-              initBank: Number(meta.initBank) || 0,
-              initCash: Number(meta.initCash) || 0,
-              budgets: meta.budgets || {},
-              budgetPlans: meta.budgetPlans || {},
-              dailyLimits: meta.dailyLimits || {}
-            }, {
+            .set(cleanMeta, {
               // mergeFields replaces each listed field WHOLESALE. A plain { merge: true } deep-merges maps,
               // so a deleted budget / month would silently reappear after the next cloud load.
               mergeFields: ['netWorthOffset', 'savingsBalance', 'initBank', 'initCash', 'budgets', 'budgetPlans', 'dailyLimits']
@@ -543,29 +579,14 @@ const HubDB = (function () {
           _timeout(3000)
         ]);
         if (doc && doc.exists) {
-          var cloudData = doc.data().payload;
+          var cloudData = _cfExtractData(doc.data());
           if (cloudData && Array.isArray(cloudData.transactions)) {
-            // ═══ CLOUD LOAD SUCCESS: cache locally + merge any offline queue ═══
+            // ═══ CLOUD LOAD SUCCESS: mirror to local caches (Cloud is source of truth) ═══
             try { await _idb.cacheCFData(cloudData); } catch (_) {}
             try { localStorage.setItem(CF_LOCAL_KEY, JSON.stringify(cloudData)); } catch (_) {}
-
-            // Merge any offline transactions that accumulated in IndexedDB
-            try {
-              var localPayload = await _idb.loadCFData();
-              if (localPayload && Array.isArray(localPayload.transactions) && localPayload.transactions.length > 0) {
-                var existingIds = {};
-                cloudData.transactions.forEach(function (t) { existingIds[t.id] = true; });
-                var merged = false;
-                localPayload.transactions.forEach(function (t) {
-                  if (!existingIds[t.id]) { cloudData.transactions.push(t); merged = true; }
-                });
-                if (merged) {
-                  await _idb.cacheCFData(cloudData);
-                  _cfDataDocRef().set({ payload: cloudData }, { merge: true }).catch(function () {});
-                }
-              }
-            } catch (_) {}
-
+            if (Array.isArray(cloudData.goals)) {
+              try { localStorage.setItem('hub_cf_goals_backup_v1', JSON.stringify(cloudData.goals)); } catch (_) {}
+            }
             return cloudData;
           }
           // Cloud doc exists but has no valid payload — return null, NOT a fresh default
@@ -645,30 +666,12 @@ const HubDB = (function () {
           _timeout(3000)
         ]);
         if (doc && doc.exists) {
-          var meta = doc.data();
-          // Cache to IndexedDB + localStorage
+          var resolved = _cfNormalizeMeta(doc.data());
           try {
-            var resolved = {
-              netWorthOffset: Number(meta.netWorthOffset) || 0,
-              savingsBalance: Number(meta.savingsBalance) || 0,
-              initBank: Number(meta.initBank) || 0,
-              initCash: Number(meta.initCash) || 0,
-              budgets: meta.budgets || {},
-              budgetPlans: meta.budgetPlans || {},
-              dailyLimits: meta.dailyLimits || {}
-            };
             await _idb.cacheCFMeta(resolved);
             localStorage.setItem(CF_LOCAL_OFFSET, JSON.stringify(resolved));
           } catch (_) {}
-          return {
-            netWorthOffset: Number(meta.netWorthOffset) || 0,
-            savingsBalance: Number(meta.savingsBalance) || 0,
-            initBank: Number(meta.initBank) || 0,
-            initCash: Number(meta.initCash) || 0,
-            budgets: meta.budgets || {},
-            budgetPlans: meta.budgetPlans || {},
-            dailyLimits: meta.dailyLimits || {}
-          };
+          return resolved;
         }
         return defaults;
       } catch (err) {
@@ -695,6 +698,70 @@ const HubDB = (function () {
       }
     } catch (_) {}
     return defaults;
+  }
+
+  function _cfStopWatch() {
+    if (_cfWatch) {
+      try { if (_cfWatch.unsubData) _cfWatch.unsubData(); } catch (_) {}
+      try { if (_cfWatch.unsubMeta) _cfWatch.unsubMeta(); } catch (_) {}
+    }
+    _cfWatch = null;
+  }
+
+  /** (Re)attach live Firestore listeners for CashFlow (data + meta) on the signed-in account. */
+  function _cfRewatch() {
+    var uid = _user ? _user.uid : null;
+    if (!uid || !_cfSubs.length || !_db) {
+      _cfStopWatch();
+      return;
+    }
+    if (_cfWatch && _cfWatch.uid === uid) return;
+    _cfStopWatch();
+    var unsubData = _cfDataDocRefFor(uid).onSnapshot(function (snap) {
+      if (!snap.exists || (snap.metadata && snap.metadata.hasPendingWrites)) return;
+      var d = _cfExtractData(snap.data());
+      if (!d) return;
+      try { _idb.cacheCFData(d); } catch (_) {}
+      try { localStorage.setItem(CF_LOCAL_KEY, JSON.stringify(d)); } catch (_) {}
+      if (Array.isArray(d.goals)) {
+        try { localStorage.setItem('hub_cf_goals_backup_v1', JSON.stringify(d.goals)); } catch (_) {}
+      }
+      _cfSubs.slice().forEach(function (fn) {
+        try { fn({ type: 'data', uid: uid, data: d }); } catch (e) { console.warn('[HubDB] CashFlow data subscriber failed:', e); }
+      });
+    }, function (err) {
+      console.warn('[HubDB] CashFlow data listener stopped:', err.message || err);
+    });
+    var unsubMeta = _cfMetaDocRefFor(uid).onSnapshot(function (snap) {
+      if (!snap.exists || (snap.metadata && snap.metadata.hasPendingWrites)) return;
+      var raw = snap.data();
+      if (!raw || typeof raw !== 'object') return;
+      var resolved = _cfNormalizeMeta(raw);
+      try { _idb.cacheCFMeta(resolved); } catch (_) {}
+      try { localStorage.setItem(CF_LOCAL_OFFSET, JSON.stringify(resolved)); } catch (_) {}
+      _cfSubs.slice().forEach(function (fn) {
+        try { fn({ type: 'meta', uid: uid, meta: resolved }); } catch (e) { console.warn('[HubDB] CashFlow meta subscriber failed:', e); }
+      });
+    }, function (err) {
+      console.warn('[HubDB] CashFlow meta listener stopped:', err.message || err);
+    });
+    _cfWatch = { uid: uid, unsubData: unsubData, unsubMeta: unsubMeta };
+  }
+
+  /**
+   * Live updates from other devices / Wallet.OS on the signed-in account.
+   * fn({ type: 'data'|'meta', uid, data?, meta? }). Follows account switches automatically.
+   * @returns {Function} unsubscribe
+   */
+  function subscribeCashFlow(fn) {
+    if (typeof fn !== 'function') return function () {};
+    _cfSubs.push(fn);
+    _cfRewatch();
+    return function () {
+      var i = _cfSubs.indexOf(fn);
+      if (i > -1) _cfSubs.splice(i, 1);
+      if (!_cfSubs.length) _cfStopWatch();
+    };
   }
 
   /**
@@ -1666,9 +1733,9 @@ const HubDB = (function () {
     return local || { daily: {} };
   }
 
-  // ── Time Management (per-account sync) ──
+  // ── Time Management (per-account sync, shared schema with Wallet.OS) ──
   //
-  // One Firestore doc per account:  users/{uid}/timeman_store/data  →  { payload }
+  // One Firestore doc per account:  users/{uid}/timeManagement/state  →  { schema: 'tm2', json, updatedAt }
   // payload (v2) = { v, timeBlocks, customTags, templates, audio, activeTagId, settingsAt,
   //                  tombs: { blocks, tags, templates }, updatedAt }
   //
@@ -1682,6 +1749,7 @@ const HubDB = (function () {
 
   const TM_LOCAL_KEY = 'hub_tm_data';            // legacy key shared by every account — read-only, one-time migration
   const TM_TOMB_TTL  = 90 * 24 * 3600 * 1000;    // deletion marks are kept 90 days
+  const TM_MAX_BYTES = 900 * 1024;               // keep well under Firestore 1 MiB / rule 940 KB limit
 
   function _tmKey(uid) { return TM_LOCAL_KEY + ':' + (uid || 'guest'); }
   function _tmReadKey(key) {
@@ -1692,7 +1760,20 @@ const HubDB = (function () {
     try { localStorage.setItem(_tmKey(uid), JSON.stringify(data)); } catch (_) {}
   }
   function _tmDocRefFor(uid) {
-    return _db.collection('users').doc(uid).collection('timeman_store').doc('data');
+    return _db.collection('users').doc(uid).collection('timeManagement').doc('state');
+  }
+  function _tmBytes(s) {
+    return typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(s).length : s.length * 2;
+  }
+  function _tmParseDoc(snap) {
+    if (!snap || !snap.exists) return null;
+    var d = snap.data();
+    if (!d || typeof d !== 'object') return null;
+    if (typeof d.json === 'string') {
+      try { return JSON.parse(d.json); } catch (_) { return null; }
+    }
+    if (d.payload && typeof d.payload === 'object') return d.payload;
+    return null;
   }
 
   function _tmBlocksOf(p) {
@@ -1795,7 +1876,7 @@ const HubDB = (function () {
       try {
         var doc = await Promise.race([_tmDocRefFor(uid).get(), _timeout(3000)]);
         st.cloudOk = true;
-        var cloud = doc && doc.exists ? doc.data().payload : null;
+        var cloud = _tmParseDoc(doc);
         if (cloud && typeof cloud === 'object') {
           st.cloudExists = true;
           st.payload = mergeTimeManagement(cloud, local);          // cloud wins ties; offline edits survive
@@ -1835,17 +1916,25 @@ const HubDB = (function () {
     if (!uid || uid !== owner || !_isOnline()) return { synced: false };
     try {
       var ref = _tmDocRefFor(uid);
+      var merged = null;
       await Promise.race([
         _db.runTransaction(function (tx) {
           return tx.get(ref).then(function (snap) {
-            var cloud = snap.exists ? snap.data().payload : null;
-            var merged = mergeTimeManagement(data, cloud);       // what we just edited wins ties
+            var cloud = _tmParseDoc(snap);
+            merged = mergeTimeManagement(data, cloud);       // what we just edited wins ties
             merged.updatedAt = Date.now();
-            tx.set(ref, { payload: merged });                    // full replace: no deep-merge resurrecting deleted keys
+            var json = JSON.stringify(merged);
+            if (_tmBytes(json) > TM_MAX_BYTES) {
+              var err = new Error('Time Management data exceeds 900KB limit');
+              err.code = 'tm/too-big';
+              throw err;
+            }
+            tx.set(ref, { schema: 'tm2', json: json, updatedAt: merged.updatedAt });
           });
         }),
         _timeout(8000)
       ]);
+      if (merged) _tmWriteLocal(uid, merged);
       return { synced: true };
     } catch (err) {
       console.error('[HubDB] TimeManagement save failed — kept locally, will merge on next save/load:', err.message || err);
@@ -1865,8 +1954,8 @@ const HubDB = (function () {
     _tmStopWatch();
     if (!uid || !_tmSubs.length || !_db) return;
     var unsub = _tmDocRefFor(uid).onSnapshot(function (snap) {
-      if (!snap.exists || snap.metadata.hasPendingWrites) return;
-      var p = snap.data().payload;
+      if (!snap.exists || (snap.metadata && snap.metadata.hasPendingWrites)) return;
+      var p = _tmParseDoc(snap);
       if (!p || typeof p !== 'object') return;
       _tmSubs.slice().forEach(function (fn) {
         try { fn(uid, p); } catch (e) { console.warn('[HubDB] TimeManagement subscriber failed:', e); }
@@ -1909,6 +1998,7 @@ const HubDB = (function () {
     loadCashFlowData: loadCashFlowData,
     saveCashFlowMeta: saveCashFlowMeta,
     loadCashFlowMeta: loadCashFlowMeta,
+    subscribeCashFlow: subscribeCashFlow,
     savePomodoroData: savePomodoroData,
     loadPomodoroData: loadPomodoroData,
     saveFlashcardSettings: saveFlashcardSettings,
