@@ -100,7 +100,8 @@ const timeManagementModule = (function () {
   const TL_KEY = 'hub_tm_timeline_prefs';
   const TL_RANGES = [['all', 'All'], ['today', 'Today'], ['week', 'This week'], ['late', 'Overdue']];
   const TL_STATUS = [['all', 'All'], ['todo', 'To do'], ['done', 'Done']];
-  const TL_SORTS = ['nearest', 'newest', 'duration'];
+  const TL_SORTS = ['nearest', 'newest', 'duration', 'tag'];
+  const TL_CAPS = [4, 6, 8, 10, 12];                 // daily capacity (hours) used by the week strip + day load meters
   const TL_SVG = function (p) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>'; };
   const RM_ICON_LIB = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5z"/><path d="m3 13 9 5 9-5"/><path d="m3 17.5 9 5 9-5" opacity=".55"/></svg>';
   const TL_ICON = {
@@ -113,7 +114,12 @@ const timeManagementModule = (function () {
     chev:   TL_SVG('<path d="m9 6 6 6-6 6"/>'),
     edit:   TL_SVG('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>')
   };
-  let _tl = { q: '', tag: 'all', range: 'all', status: 'all', pastOpen: false, open: {} };
+  Object.assign(TL_ICON, {
+    sel:  TL_SVG('<path d="m9 11 3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h9"/>'),
+    dl:   TL_SVG('<path d="M12 4v11M7 11l5 5 5-5M5 20h14"/>'),
+    dens: TL_SVG('<path d="M4 6h16M4 12h16M4 18h16"/>')
+  });
+  let _tl = { q: '', tag: 'all', range: 'all', status: 'all', pastOpen: false, open: {}, day: '', wk: 0, cap: 8, dens: 'cozy', sel: false, picked: {}, fold: {}, vis: [] };
   /* Set Time v2 — constants & state */
   const SB_DURS = [15, 30, 45, 60, 90, 120, 180];
   const SB_WEEKS = [1, 2, 4, 8, 12];
@@ -736,12 +742,13 @@ const timeManagementModule = (function () {
 
       '<div class="hub-tm-toolbar">' +
         '<div class="hub-tm-tag-manager" id="hub-tm-tag-manager">' +
-          '<span class="hub-tm-tag-manager-label" title="New blocks are painted with the selected tag. Press 1–9 to switch.">' + ICON.brush + '<span>Brush</span></span>' +
+          '<span class="hub-tm-tag-manager-label" title="New blocks are painted with the selected tag. Press 1–9 to switch.">' + ICON.brush + '<span class="hub-tm-tag-manager-name">Brush</span></span>' +
           '<div class="hub-tm-tag-list" id="hub-tm-tag-list" role="group" aria-label="Tag brush"></div>' +
-          '<button type="button" class="hub-tm-tag-add" id="hub-tm-btn-new-tag" aria-expanded="false" aria-controls="hub-tm-add-tag-form" title="Create a tag"><span aria-hidden="true">+</span>Tag</button>' +
+          '<button type="button" class="hub-tm-tag-add" id="hub-tm-btn-new-tag" aria-expanded="false" aria-controls="hub-tm-add-tag-form" title="Create a tag" aria-label="Create a tag"><span class="hub-tm-tag-add-ic" aria-hidden="true">+</span><span class="hub-tm-tag-add-t">Tag</span></button>' +
         '</div>' +
-        '<div class="hub-tm-deck">' +
-        '<div class="hub-tm-summary" id="hub-tm-summary" aria-live="polite"></div>' +
+        '<div class="hub-tm-deck" id="hub-tm-deck">' +
+        '<button type="button" class="hub-tm-pulse" id="hub-tm-pulse" aria-expanded="false" aria-controls="hub-tm-summary" title="Show stats"></button>' +
+        '<div class="hub-tm-summary" id="hub-tm-summary" role="region" aria-label="Stats for this view"></div>' +
         '<button type="button" class="hub-tm-chip hub-tm-hidden" id="hub-tm-hab-chip" title="Habitica"></button>' +
         '<button type="button" class="hub-tm-chip hub-tm-hidden" id="hub-tm-audio-chip">' + ICON.bell + '<span class="hub-tm-chip-text"></span></button>' +
         '</div>' +
@@ -1222,14 +1229,17 @@ const timeManagementModule = (function () {
 
       /* ── Timeline drawer ── */
       '<div class="hub-tm-drawer-scrim" id="hub-tm-timeline-scrim"></div>' +
-      '<aside class="hub-tm-drawer" id="hub-tm-timeline-drawer" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="hub-tm-drawer-heading">' +
+      '<aside class="hub-tm-drawer" id="hub-tm-timeline-drawer" data-density="cozy" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="hub-tm-drawer-heading">' +
         '<div class="hub-tm-drawer-head"><h3 class="hub-tm-drawer-title" id="hub-tm-drawer-heading">' + ICON.timeline + 'Timeline</h3><button type="button" class="hub-tm-dialog-close" id="tm-btn-timeline-close" aria-label="Close timeline">&times;</button></div>' +
         '<div class="hub-tm-drawer-body hub-tm-drawer-body--tl">' +
           '<div class="hub-tm-tl-controls">' +
             '<div class="hub-tm-tl-tools">' +
               '<div class="hub-tm-tl-search">' + TL_ICON.search + '<input type="search" class="hub-tm-input" id="tm-timeline-search" placeholder="Search blocks, tags, tasks…" aria-label="Search timeline" autocomplete="off"></div>' +
               '<button type="button" class="hub-tm-tl-iconbtn" id="tm-timeline-today" title="Jump to today" aria-label="Jump to today">' + TL_ICON.target + '</button>' +
+              '<button type="button" class="hub-tm-tl-iconbtn" id="tm-timeline-select" data-tl-sel title="Select blocks (X)" aria-label="Select blocks" aria-pressed="false">' + TL_ICON.sel + '</button>' +
+              '<button type="button" class="hub-tm-tl-iconbtn" id="tm-timeline-dens" data-tl-dens title="Compact rows" aria-label="Toggle compact rows" aria-pressed="false">' + TL_ICON.dens + '</button>' +
               '<button type="button" class="hub-tm-tl-iconbtn" id="tm-timeline-copy" title="Copy agenda as text" aria-label="Copy agenda as text">' + TL_ICON.copy + '</button>' +
+              '<button type="button" class="hub-tm-tl-iconbtn" id="tm-timeline-ics" title="Export as calendar file (.ics)" aria-label="Export as calendar file">' + TL_ICON.dl + '</button>' +
             '</div>' +
             '<div class="hub-tm-tl-seg" id="hub-tm-tl-range" role="group" aria-label="Date range">' +
               TL_RANGES.map(function (r) { return '<button type="button" data-tl-range="' + r[0] + '" aria-pressed="false">' + r[1] + '</button>'; }).join('') +
@@ -1239,14 +1249,16 @@ const timeManagementModule = (function () {
               '<div class="hub-tm-tl-seg" id="hub-tm-tl-status" role="group" aria-label="Status">' +
                 TL_STATUS.map(function (r) { return '<button type="button" data-tl-status="' + r[0] + '" aria-pressed="false">' + r[1] + '</button>'; }).join('') +
               '</div>' +
-              '<div class="hub-tm-sort-wrap"><label class="hub-tm-sr-only" for="tm-timeline-sort">Sort by</label><select class="hub-tm-input" id="tm-timeline-sort"><option value="nearest">Nearest first</option><option value="newest">Newly added</option><option value="duration">Longest first</option></select></div>' +
+              '<div class="hub-tm-sort-wrap"><label class="hub-tm-sr-only" for="tm-timeline-sort">Sort by</label><select class="hub-tm-input" id="tm-timeline-sort"><option value="nearest">Nearest first</option><option value="newest">Newly added</option><option value="duration">Longest first</option><option value="tag">By tag</option></select></div>' +
             '</div>' +
           '</div>' +
           '<div class="hub-tm-tl-scroll" id="hub-tm-tl-scroll">' +
+            '<div class="hub-tm-tl-week" id="hub-tm-tl-week"></div>' +
             '<div id="hub-tm-tl-spot"></div>' +
             '<div class="hub-tm-tl-stats" id="hub-tm-tl-stats"></div>' +
             '<div id="hub-tm-timeline-list"></div>' +
           '</div>' +
+          '<div class="hub-tm-tl-bulk" id="hub-tm-tl-bulk" role="toolbar" aria-label="Bulk actions" hidden></div>' +
         '</div>' +
       '</aside>' +
 
@@ -1310,6 +1322,7 @@ const timeManagementModule = (function () {
     _bindToast();
     _bindHabitica();
     _bindTagPop();
+    _bindDeck();
     _bindChecklist();
     _bindQuickPlan();
     _bindInbox();
@@ -1360,6 +1373,14 @@ const timeManagementModule = (function () {
       }
     }
     if (e.key === 'Escape') {
+      const deck = _el('#hub-tm-deck');
+      if (deck && deck.classList.contains('is-open') && !_modalStack.length) {
+        e.preventDefault();
+        _deckOpen(false);
+        const pb = _el('#hub-tm-pulse');
+        if (pb) pb.focus();
+        return;
+      }
       const pop = _el('#hub-tm-add-tag-form');
       if (pop && pop.classList.contains('is-open') && !_modalStack.length) {
         e.preventDefault();
@@ -2053,6 +2074,48 @@ const timeManagementModule = (function () {
     else { const d = _parseDate(_currentDate); from = _dateToStr(new Date(d.getFullYear(), d.getMonth(), 1)); to = _dateToStr(new Date(d.getFullYear(), d.getMonth() + 1, 0)); }
     return _timeBlocks.filter(function (b) { return b.date >= from && b.date <= to; });
   }
+  /** The lean one-line readout on the toolbar; the full numbers live in the popover (#hub-tm-summary). */
+  let _pulseLast = null;
+  function _pulseRender(sk, planned) {
+    const btn = _el('#hub-tm-pulse');
+    if (!btn) return;
+    _pulseLast = [sk, planned];
+    const has = Object.keys(sk.stats).length, need = Math.round(STREAK_MIN * 100), st = sk.state[sk.today], t = _tierAt(sk.cur);
+    let html = '', say = [];
+    if (has) {
+      html += '<span class="hub-tm-pulse-streak' + (sk.cur > 0 ? ' is-live' : '') + '"' + (t ? ' data-tier="' + t.k + '"' : '') + '>' + ICON.flame + '<b>' + sk.cur + 'd</b></span>';
+      say.push('streak ' + sk.cur + ' day' + (sk.cur === 1 ? '' : 's'));
+      if (st === 'rest') { html += '<span class="hub-tm-pulse-rest">Rest</span>'; say.push('rest day'); }
+      else {
+        html += '<i class="hub-tm-meter' + (st === 'hit' ? ' is-hit' : '') + '" style="--p:' + Math.min(100, sk.todayPct) + ';--t:' + need + '" aria-hidden="true"></i><b>' + (st === 'hit' ? '\u2713' : sk.todayPct + '%') + '</b>';
+        say.push('today ' + sk.todayPct + '%');
+      }
+    }
+    if (planned > 0) { html += '<span class="hub-tm-pulse-plan"><b>' + _fmtDur(planned) + '</b></span>'; say.push('planned ' + _fmtDur(planned)); }
+    if (!html) html = '<span class="hub-tm-pulse-rest">Stats</span>';
+    btn.innerHTML = html + '<i class="hub-tm-pulse-caret" aria-hidden="true"></i>';
+    const open = btn.getAttribute('aria-expanded') === 'true', label = (say.length ? say.join(' · ') : 'Stats');
+    btn.title = (open ? 'Hide' : 'Show') + ' stats · ' + label;
+    btn.setAttribute('aria-label', 'Stats: ' + label + (open ? '. Hide details' : '. Show details'));
+  }
+  function _deckOpen(open) {
+    const deck = _el('#hub-tm-deck'), btn = _el('#hub-tm-pulse');
+    if (!deck || !btn) return;
+    deck.classList.toggle('is-open', !!open);
+    btn.setAttribute('aria-expanded', String(!!open));
+    if (_pulseLast) _pulseRender(_pulseLast[0], _pulseLast[1]);   // refresh the button's title / label for the new state
+  }
+  function _bindDeck() {
+    const btn = _el('#hub-tm-pulse');
+    if (!btn) return;
+    btn.addEventListener('click', function () { const d = _el('#hub-tm-deck'); _deckOpen(!(d && d.classList.contains('is-open'))); }, { signal: _ui.signal });
+    document.addEventListener('pointerdown', function (e) {
+      const d = _el('#hub-tm-deck');
+      if (!d || !d.classList.contains('is-open')) return;
+      if (e.target.closest && e.target.closest('#hub-tm-summary, #hub-tm-pulse')) return;
+      _deckOpen(false);
+    }, { signal: _ui.signal });
+  }
   function _updateSummary() {
     _habChip();
     const sk = _streakInfo();
@@ -2064,6 +2127,7 @@ const timeManagementModule = (function () {
     if (hc) lead = lead ? lead.slice(0, -sepHtml.length) + hc + sepHtml : hc + sepHtml;
     const per = _tagTimes();
     _applyTagTimes(per);
+    _pulseRender(sk, Object.keys(per).reduce(function (a, k) { return a + per[k]; }, 0));
     const box = _el('#hub-tm-summary');
     if (!box) return;
     const list = _rangeBlocks();
@@ -5690,7 +5754,7 @@ const timeManagementModule = (function () {
   }
   function _rmApplySkin() {
     const k = _rmSkin();
-    ['#hub-tm-roadmap', '#tm-btn-roadmap', '#hub-tm-rmlib-modal', '#hub-tm-roadmap-modal'].forEach(function (s) { const n = _el(s); if (n && n.getAttribute('data-skin') !== k) n.setAttribute('data-skin', k); });
+    ['#hub-tm-roadmap', '#tm-btn-roadmap', '#hub-tm-rmlib-modal', '#hub-tm-roadmap-modal', '#hub-tm-timeline-drawer'].forEach(function (s) { const n = _el(s); if (n && n.getAttribute('data-skin') !== k) n.setAttribute('data-skin', k); });
   }
   function _rmWatchSkin() {
     if (_rm.skinObs || !window.MutationObserver) return;
@@ -6708,13 +6772,22 @@ const timeManagementModule = (function () {
     if (TL_STATUS.some(function (r) { return r[0] === p.status; })) _tl.status = p.status;
     if (TL_SORTS.indexOf(p.sort) > -1) _el('#tm-timeline-sort').value = p.sort;
     _tl.pastOpen = p.pastOpen === true;
+    if (p.dens === 'compact') _tl.dens = 'compact';
+    if (TL_CAPS.indexOf(p.cap) > -1) _tl.cap = p.cap;
+    _tlApplyDens();
+  }
+  function _tlApplyDens() {
+    const d = _el('#hub-tm-timeline-drawer'), b = _el('#tm-timeline-dens');
+    if (d) d.setAttribute('data-density', _tl.dens);
+    if (b) b.setAttribute('aria-pressed', _tl.dens === 'compact' ? 'true' : 'false');
   }
   function _tlSavePrefs() {
-    _lsSet(TL_KEY, JSON.stringify({ range: _tl.range, status: _tl.status, sort: _el('#tm-timeline-sort').value, pastOpen: _tl.pastOpen }));
+    _lsSet(TL_KEY, JSON.stringify({ range: _tl.range, status: _tl.status, sort: _el('#tm-timeline-sort').value, pastOpen: _tl.pastOpen, dens: _tl.dens, cap: _tl.cap }));
   }
 
   function _openTimeline() {
     _el('#tm-timeline-search').value = _tl.q;
+    _rmApplySkin(); _rmWatchSkin();
     _renderTimeline();
     _el('#hub-tm-timeline-scrim').classList.add('is-open');
     _openModal(_el('#hub-tm-timeline-drawer'), '#tm-btn-timeline-close');
@@ -6735,12 +6808,20 @@ const timeManagementModule = (function () {
     drawer.addEventListener('click', function (e) {
       const t = e.target;
       let n;
+      if ((n = t.closest('[data-tl-wd]')))     { const v = n.getAttribute('data-tl-wd'); _tl.day = (v === _tl.day ? '' : v); _renderTimeline(); return; }
+      if ((n = t.closest('[data-tl-wk]')))     { const v = parseInt(n.getAttribute('data-tl-wk'), 10); _tl.wk = v === 0 ? 0 : _tl.wk + v; _renderTimeline(); return; }
+      if ((n = t.closest('[data-tl-fold]')))   { const k = n.getAttribute('data-tl-fold'); _tl.fold[k] = !_tl.fold[k]; _renderTimeline(); return; }
+      if (t.closest('[data-tl-sel]'))          { _tlSelToggle(); return; }
+      if (t.closest('[data-tl-dens]'))         { _tl.dens = _tl.dens === 'compact' ? 'cozy' : 'compact'; _tlApplyDens(); _tlSavePrefs(); return; }
+      if (t.closest('#tm-timeline-ics'))       { _tlIcs(); return; }
+      if ((n = t.closest('[data-tl-bulk]')))   { _tlBulk(n.getAttribute('data-tl-bulk')); return; }
+      if (_tl.sel && (n = t.closest('.hub-tm-tl-main[data-tl-go]'))) { const pid = n.getAttribute('data-tl-go'); _tl.picked[pid] = !_tl.picked[pid]; _renderTimeline(); return; }   // in select mode a row click ticks it
       if ((n = t.closest('[data-tl-range]')))  { _tl.range = n.getAttribute('data-tl-range'); _tlSavePrefs(); _renderTimeline(); return; }
       if ((n = t.closest('[data-tl-status]'))) { _tl.status = n.getAttribute('data-tl-status'); _tlSavePrefs(); _renderTimeline(); return; }
       if ((n = t.closest('[data-tl-tag]')))    { const v = n.getAttribute('data-tl-tag'); _tl.tag = (v === _tl.tag ? 'all' : v); _renderTimeline(); return; }
       if (t.closest('[data-tl-past]'))         { _tl.pastOpen = !_tl.pastOpen; _tlSavePrefs(); _renderTimeline(); return; }
       if (t.closest('[data-tl-reset]')) {
-        _tl.q = ''; _tl.tag = 'all'; _tl.range = 'all'; _tl.status = 'all';
+        _tl.q = ''; _tl.tag = 'all'; _tl.range = 'all'; _tl.status = 'all'; _tl.day = '';
         _el('#tm-timeline-search').value = '';
         _tlSavePrefs(); _renderTimeline(); return;
       }
@@ -6766,8 +6847,24 @@ const timeManagementModule = (function () {
       }
     });
 
+    drawer.addEventListener('keydown', function (e) {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target;
+      if (t.closest && t.closest('input, select, textarea')) {
+        if (e.key === 'Escape' && t.id === 'tm-timeline-search' && t.value) { e.stopPropagation(); t.value = ''; _tl.q = ''; _renderTimeline(); }
+        return;
+      }
+      if (e.key === '/') { e.preventDefault(); _el('#tm-timeline-search').focus(); }
+      else if (e.key === 't' || e.key === 'T') _tlJumpToday();
+      else if (e.key === 'x' || e.key === 'X') _tlSelToggle();
+    });
+
     // Tick checklist items right inside the Timeline (same effect as in Focus mode)
     drawer.addEventListener('change', function (e) {
+      let n;
+      if ((n = e.target.closest('[data-tl-cap]')))     { _tl.cap = parseInt(n.value, 10) || 8; _tlSavePrefs(); _renderTimeline(); return; }
+      if ((n = e.target.closest('[data-tl-bulktag]'))) { const v = n.value; n.value = ''; _tlBulkTag(v); return; }
+      if ((n = e.target.closest('[data-tl-pick]')))    { _tl.picked[n.getAttribute('data-tl-pick')] = n.checked; _renderTimeline(); return; }
       const cb = e.target.closest('[data-tl-ck]');
       if (!cb) return;
       const bid = cb.getAttribute('data-tl-blk'), iid = cb.getAttribute('data-tl-ck');
@@ -6864,16 +6961,19 @@ const timeManagementModule = (function () {
   }
 
   /* ---- Data ---- */
-  function _tlFilter(today, nm) {
+  function _tlFilter(today, nm, skip) {           // skip = ignore range + day (the week strip needs the wider set)
     const mon = _dateToStr(_weekStart(today)), sun = _dateToStr(_addDays(_weekStart(today), 6));
     const q = _tl.q.trim().toLowerCase();
     return _timeBlocks.filter(function (b) {
       if (_tl.tag !== 'all' && b.tagId !== _tl.tag) return false;
       if (_tl.status === 'done' && !b.done) return false;
       if (_tl.status === 'todo' && b.done) return false;
-      if (_tl.range === 'today' && b.date !== today) return false;
-      if (_tl.range === 'week' && (b.date < mon || b.date > sun)) return false;
-      if (_tl.range === 'late' && !_tlLate(b, today, nm)) return false;
+      if (!skip) {
+        if (_tl.day && b.date !== _tl.day) return false;
+        if (_tl.range === 'today' && b.date !== today) return false;
+        if (_tl.range === 'week' && (b.date < mon || b.date > sun)) return false;
+        if (_tl.range === 'late' && !_tlLate(b, today, nm)) return false;
+      }
       if (q) {
         const hay = [b.title, _tagOrFallback(b.tagId).label].concat((b.checklist || []).map(function (c) { return c.text; })).join(' ').toLowerCase();
         if (hay.indexOf(q) === -1) return false;
@@ -6889,6 +6989,169 @@ const timeManagementModule = (function () {
     const up = list.filter(function (b) { return b.date >= today; }).sort(function (a, b) { return a.date === b.date ? byStart(a, b) : a.date < b.date ? -1 : 1; });
     const past = list.filter(function (b) { return b.date < today; }).sort(function (a, b) { return a.date === b.date ? byStart(a, b) : a.date < b.date ? 1 : -1; });
     return up.concat(past);
+  }
+
+  /* ---- v2 · week strip, load meters ---- */
+  function _tlDur(b) { return _toMins(b.endTime) - _toMins(b.startTime); }
+  function _tlWeekDates() {
+    const mon = _addDays(_weekStart(_todayStr()), _tl.wk * 7);
+    return [0, 1, 2, 3, 4, 5, 6].map(function (i) { return _dateToStr(_addDays(mon, i)); });
+  }
+  function _tlKeepFocus(node, attrs, paint) {         // repaint a strip without dropping keyboard focus
+    const act = document.activeElement;
+    let key = null;
+    if (act && node.contains(act)) attrs.some(function (a) { if (act.hasAttribute(a)) { key = [a, act.getAttribute(a)]; return true; } return false; });
+    if (paint() && key) { const n = node.querySelector('[' + key[0] + '="' + key[1] + '"]'); if (n) n.focus({ preventScroll: true }); }
+  }
+  function _tlPaintWeek(today, nm) {
+    const dates = _tlWeekDates(), base = _tlFilter(today, nm, true), cap = _tl.cap * 60, by = {};
+    base.forEach(function (b) { (by[b.date] = by[b.date] || []).push(b); });
+    let tot = 0, dn = 0, cnt = 0;
+    const cells = dates.map(function (ds) {
+      const L = by[ds] || [], d = _parseDate(ds);
+      let mins = 0, done = 0, late = 0;
+      L.forEach(function (b) { mins += _tlDur(b); if (b.done) done++; if (_tlLate(b, today, nm)) late++; });
+      tot += mins; dn += done; cnt += L.length;
+      const over = mins > cap, pct = Math.min(100, Math.round(mins / cap * 100));
+      const tip = DAY_FULL[d.getDay()] + ' ' + _dateLabel(d) + ' · ' + (L.length ? _tlPlural(L.length, 'block') + ' · ' + _fmtDur(mins) + ' planned' + (over ? ' · over by ' + _fmtDur(mins - cap) : '') + (late ? ' · ' + late + ' overdue' : '') : 'free day');
+      const cls = 'hub-tm-tl-wd' + (ds === today ? ' is-today' : '') + (ds === _tl.day ? ' is-sel' : '') + (over ? ' is-over' : '') + (L.length ? '' : ' is-empty') + (late ? ' is-late' : '');
+      return '<button type="button" class="' + cls + '" data-tl-wd="' + ds + '" aria-pressed="' + (ds === _tl.day) + '" title="' + _esc(tip) + '" aria-label="' + _esc(tip) + '">' +
+        '<span class="hub-tm-tl-wd-n">' + DAY_SHORT[d.getDay()] + '</span><span class="hub-tm-tl-wd-d">' + d.getDate() + '</span>' +
+        '<span class="hub-tm-tl-wd-bar" aria-hidden="true"><i style="height:' + pct + '%"></i></span>' +
+        '<span class="hub-tm-tl-wd-s">' + (L.length ? done + '/' + L.length : '–') + '</span></button>';
+    }).join('');
+    const a = _parseDate(dates[0]), z = _parseDate(dates[6]);
+    const range = _dateLabel(a) + ' – ' + (a.getMonth() === z.getMonth() ? z.getDate() : _dateLabel(z));
+    const html =
+      '<div class="hub-tm-tl-whead"><button type="button" class="hub-tm-tl-wnav is-prev" data-tl-wk="-1" aria-label="Previous week">' + TL_ICON.chev + '</button>' +
+        '<span class="hub-tm-tl-wrange"><b>' + range + '</b>' + (_tl.wk === 0 ? '<em>This week</em>' : '<button type="button" class="hub-tm-tl-wthis" data-tl-wk="0">This week</button>') + '</span>' +
+        '<button type="button" class="hub-tm-tl-wnav" data-tl-wk="1" aria-label="Next week">' + TL_ICON.chev + '</button>' +
+        '<label class="hub-tm-tl-cap"><span>Cap</span><select class="hub-tm-input" data-tl-cap aria-label="Daily capacity">' +
+          TL_CAPS.map(function (h) { return '<option value="' + h + '"' + (h === _tl.cap ? ' selected' : '') + '>' + h + 'h/day</option>'; }).join('') + '</select></label></div>' +
+      '<div class="hub-tm-tl-wdays">' + cells + '</div>' +
+      '<div class="hub-tm-tl-wfoot"><span>' + _fmtDur(tot) + ' planned · ' + (cnt ? Math.round(dn / cnt * 100) : 0) + '% done</span>' +
+        (_tl.day ? '<button type="button" class="hub-tm-tl-wclear" data-tl-wd="">Clear day filter</button>' : '') + '</div>';
+    const wk = _el('#hub-tm-tl-week');
+    _tlKeepFocus(wk, ['data-tl-wd', 'data-tl-wk'], function () { return _tlSet(wk, html); });
+  }
+
+  /* ---- v2 · bulk edit ---- */
+  function _tlPicked() {
+    const vis = {};
+    _tl.vis.forEach(function (id) { vis[id] = 1; });
+    return Object.keys(_tl.picked).filter(function (id) { return _tl.picked[id] && vis[id] && _blockById(id); });   // only what is on screen
+  }
+  function _tlSelToggle() { _tl.sel = !_tl.sel; if (!_tl.sel) _tl.picked = {}; _renderTimeline(); }
+  function _tlPaintBulk(today, nm) {
+    const bar = _el('#hub-tm-tl-bulk'), drawer = _el('#hub-tm-timeline-drawer');
+    drawer.classList.toggle('is-select', _tl.sel);
+    _all('[data-tl-sel]').forEach(function (b) { b.setAttribute('aria-pressed', _tl.sel ? 'true' : 'false'); });
+    if (!_tl.sel) { bar.hidden = true; return; }
+    bar.hidden = false;
+    const n = _tlPicked().length, off = n ? '' : ' disabled';
+    const html =
+      '<div class="hub-tm-tl-bulk-top"><b>' + n + ' selected</b>' +
+        '<span class="hub-tm-tl-bulk-quick"><button type="button" data-tl-bulk="all">All shown</button><button type="button" data-tl-bulk="late">Overdue</button><button type="button" data-tl-bulk="none"' + off + '>None</button></span>' +
+        '<button type="button" class="hub-tm-tl-bulk-x" data-tl-sel aria-label="Exit selection">' + TL_ICON.del + '</button></div>' +
+      '<div class="hub-tm-tl-bulk-acts">' +
+        '<button type="button" class="hub-tm-btn hub-tm-btn--outline" data-tl-bulk="done"' + off + '>' + TL_ICON.check + 'Done</button>' +
+        '<button type="button" class="hub-tm-btn hub-tm-btn--outline" data-tl-bulk="move"' + off + '>' + TL_ICON.fwd + '+1 day</button>' +
+        '<select class="hub-tm-input" data-tl-bulktag aria-label="Set tag"' + off + '><option value="">Set tag…</option>' + _allTags().map(function (t) { return '<option value="' + _esc(t.id) + '">' + _esc(t.label) + '</option>'; }).join('') + '</select>' +
+        '<button type="button" class="hub-tm-btn hub-tm-btn--outline hub-tm-tl-bulk-del" data-tl-bulk="del"' + off + '>Delete</button></div>';
+    _tlKeepFocus(bar, ['data-tl-bulk', 'data-tl-sel'], function () { return _tlSet(bar, html); });
+  }
+  function _tlBulk(act) {
+    const today = _todayStr(), nm = _tlNowMins();
+    if (act === 'all')  { _tl.vis.forEach(function (id) { _tl.picked[id] = true; }); _renderTimeline(); return; }
+    if (act === 'none') { _tl.picked = {}; _renderTimeline(); return; }
+    if (act === 'late') { _tl.picked = {}; _tl.vis.forEach(function (id) { const b = _blockById(id); if (b && _tlLate(b, today, nm)) _tl.picked[id] = true; }); _renderTimeline(); return; }
+    if (act === 'done') return _tlBulkDone();
+    if (act === 'move') return _tlBulkMove();
+    if (act === 'del')  return _tlBulkDel();
+  }
+  function _tlBulkAfter(msg, undo) {
+    _tl.picked = {};
+    _scheduleSave();
+    _renderGrid({ animate: false, scroll: false });
+    _renderTimeline();
+    _toast(msg, undo ? { action: 'Undo', onAction: undo } : undefined);
+  }
+  function _tlBulkRefresh() { _scheduleSave(); _renderGrid({ animate: false, scroll: false }); _tlRefresh(); }
+  function _tlBulkDone() {
+    const hold = [], ok = [];
+    _tlPicked().map(_blockById).forEach(function (b) {
+      if (b.done) return;
+      if (_habOn() && _habStartMs(b) > Date.now()) { hold.push(b); return; }      // same rule as the single check-off
+      b.done = true; ok.push(b);
+    });
+    if (!ok.length) { _toast(hold.length ? 'Those blocks haven’t started yet — do the work first.' : 'Selected blocks are already done.'); return; }
+    _habQueueSync(300);
+    _tlBulkAfter(ok.length + ' marked complete' + (hold.length ? ' · ' + hold.length + ' not started yet' : ''), function () {
+      ok.forEach(function (b) { if (!b.habDone) { b.done = false; b.gp = 0; } });
+      _tlBulkRefresh();
+    });
+  }
+  function _tlBulkMove() {
+    const today = _todayStr(), moved = []; let skipped = 0;
+    _tlPicked().map(_blockById).sort(_tlCmp).forEach(function (b) {
+      if (b.done) return;
+      const to = _tlMoveTarget(b, today);
+      if (_overlap(to, _toMins(b.startTime), _toMins(b.endTime), b.id)) { skipped++; return; }
+      moved.push({ b: b, from: b.date }); b.date = to;
+    });
+    if (!moved.length) { _toast(skipped ? 'Nothing moved — those slots are taken tomorrow.' : 'Completed blocks stay where they are.'); return; }
+    _tlBulkAfter('Moved ' + moved.length + ' to the next day' + (skipped ? ' · ' + skipped + ' skipped (slot taken)' : ''), function () {
+      let bad = 0;
+      moved.forEach(function (m) { if (_overlap(m.from, _toMins(m.b.startTime), _toMins(m.b.endTime), m.b.id)) bad++; else m.b.date = m.from; });
+      _tlBulkRefresh();
+      if (bad) _toast(bad + ' couldn’t go back — slot taken now.');
+    });
+  }
+  function _tlBulkTag(tagId) {
+    const ids = _tlPicked();
+    if (!tagId || !ids.length) return;
+    const prev = ids.map(function (id) { return [id, _blockById(id).tagId]; }), t = _tagOrFallback(tagId);
+    ids.forEach(function (id) { _blockById(id).tagId = tagId; });
+    _tlBulkAfter('Tag “' + t.label + '” set on ' + ids.length, function () {
+      prev.forEach(function (p) { const b = _blockById(p[0]); if (b) b.tagId = p[1]; });
+      _tlBulkRefresh();
+    });
+  }
+  function _tlBulkDel() {
+    const removed = [];
+    _tlPicked().forEach(function (id) { const i = _timeBlocks.findIndex(function (b) { return b.id === id; }); if (i > -1) removed.push(_timeBlocks.splice(i, 1)[0]); });
+    if (!removed.length) return;
+    _tlBulkAfter('Deleted ' + _tlPlural(removed.length, 'block'), function () {
+      let bad = 0;
+      removed.forEach(function (b) { if (_overlap(b.date, _toMins(b.startTime), _toMins(b.endTime))) bad++; else _timeBlocks.push(b); });
+      _tlBulkRefresh();
+      if (bad) _toast(bad + ' couldn’t be restored — time is taken now.');
+    });
+  }
+
+  /* ---- v2 · calendar export (.ics, floating local time) ---- */
+  function _tlIcs() {
+    const today = _todayStr(), list = _tlFilter(today, _tlNowMins()).sort(_tlCmp);
+    if (!list.length) { _toast('Nothing to export'); return; }
+    const esc = function (s) { return String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n'); };
+    const at = function (ds, t) { return ds.replace(/-/g, '') + 'T' + t.replace(':', '') + '00'; };
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
+    const out = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Hub.OS//Time Management//EN', 'CALSCALE:GREGORIAN'];
+    list.forEach(function (b) {
+      const tag = _tagOrFallback(b.tagId), ck = (b.checklist || []).map(function (c) { return (c.done ? '[x] ' : '[ ] ') + c.text; }).join('\n');
+      const end = b.endTime === '24:00' ? _dateToStr(_addDays(_parseDate(b.date), 1)).replace(/-/g, '') + 'T000000' : at(b.date, b.endTime);
+      out.push('BEGIN:VEVENT', 'UID:' + b.id + '@hub.os', 'DTSTAMP:' + stamp, 'DTSTART:' + at(b.date, b.startTime), 'DTEND:' + end,
+        'SUMMARY:' + esc((b.done ? '✓ ' : '') + (b.title || tag.label)), 'CATEGORIES:' + esc(tag.label));
+      if (ck) out.push('DESCRIPTION:' + esc(ck));
+      out.push('END:VEVENT');
+    });
+    out.push('END:VCALENDAR');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([out.join('\r\n')], { type: 'text/calendar;charset=utf-8' }));
+    a.download = 'timeline-' + today + '.ics';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    _toast('Exported ' + _tlPlural(list.length, 'block') + ' (.ics)');
   }
 
   /* ---- Controls ---- */
@@ -6944,14 +7207,31 @@ const timeManagementModule = (function () {
   /* ---- Stats strip ---- */
   function _tlPaintStats(list, today, nm) {
     let mins = 0, done = 0, late = 0;
-    list.forEach(function (b) { mins += _toMins(b.endTime) - _toMins(b.startTime); if (b.done) done++; if (_tlLate(b, today, nm)) late++; });
+    const byTag = {};
+    list.forEach(function (b) {
+      const m = _tlDur(b);
+      mins += m; byTag[b.tagId] = (byTag[b.tagId] || 0) + m;
+      if (b.done) done++;
+      if (_tlLate(b, today, nm)) late++;
+    });
     const n = list.length, pct = n ? Math.round(done / n * 100) : 0;
     const cell = function (k, v, extra, tag, attrs) { return '<' + tag + (tag === 'button' ? ' type="button"' : '') + ' class="hub-tm-tl-stat' + (attrs.cls || '') + '"' + (attrs.attr || '') + '><span class="hub-tm-tl-stat-k">' + k + '</span><span class="hub-tm-tl-stat-v">' + v + '</span>' + (extra || '') + '</' + tag + '>'; };
+    const ids = Object.keys(byTag).sort(function (a, b) { return byTag[b] - byTag[a]; });
+    let mix = '';
+    if (ids.length > 1 && mins) {
+      mix = '<div class="hub-tm-tl-mix" role="group" aria-label="Planned time by tag">' + ids.map(function (id) {
+        const t = _tagOrFallback(id);
+        return '<button type="button" class="hub-tm-tl-mixseg' + (_tl.tag === id ? ' is-on' : '') + '" data-tl-tag="' + _esc(id) + '" style="flex:' + byTag[id] + ';' + _tagStyle(t) + '" title="' + _esc(t.label) + ' · ' + _fmtDur(byTag[id]) + ' (' + Math.round(byTag[id] / mins * 100) + '%)" aria-label="' + _esc(t.label) + ' ' + _fmtDur(byTag[id]) + '"></button>';
+      }).join('') + '</div><div class="hub-tm-tl-mixleg">' + ids.slice(0, 3).map(function (id) {
+        const t = _tagOrFallback(id);
+        return '<span style="' + _tagStyle(t) + '"><i></i>' + _esc(t.label) + ' ' + _fmtDur(byTag[id]) + '</span>';
+      }).join('') + (ids.length > 3 ? '<span class="hub-tm-tl-mixmore">+' + (ids.length - 3) + '</span>' : '') + '</div>';
+    }
     const html =
       cell('Blocks', n, '', 'div', {}) +
       cell('Planned', n ? _fmtDur(mins) : '0m', '', 'div', {}) +
       cell('Done', done + '/' + n, '<span class="hub-tm-tl-bar" style="--tm-c:var(--accent-primary)"><i style="width:' + pct + '%"></i></span>', 'div', {}) +
-      (late ? cell('Overdue', late, '', 'button', { cls: ' is-alert', attr: ' data-tl-range="late" title="Show overdue blocks"' }) : cell('Overdue', 0, '', 'div', {}));
+      (late ? cell('Overdue', late, '', 'button', { cls: ' is-alert', attr: ' data-tl-range="late" title="Show overdue blocks"' }) : cell('Overdue', 0, '', 'div', {})) + mix;
     _tlSet(_el('#hub-tm-tl-stats'), html);
   }
 
@@ -6990,10 +7270,12 @@ const timeManagementModule = (function () {
           : '<p class="hub-tm-tl-ckempty">No tasks yet — add some in the editor.</p>') +
         '<button type="button" class="hub-tm-tl-ckedit" data-tl-edit="' + id + '">' + TL_ICON.edit + '<span>Edit block &amp; checklist</span></button></div>';
     }
-    const cls = 'hub-tm-tl-item' + (b.done ? ' is-done' : '') + (live ? ' is-live' : '') + (late ? ' is-late' : '');
+    const picked = _tl.sel && !!_tl.picked[b.id];
+    const pick = _tl.sel ? '<label class="hub-tm-tl-pick"><span class="hub-tm-ck-box"><input type="checkbox" data-tl-pick="' + id + '"' + (picked ? ' checked' : '') + ' aria-label="Select ' + title + '"><span></span></span></label>' : '';
+    const cls = 'hub-tm-tl-item' + (b.done ? ' is-done' : '') + (live ? ' is-live' : '') + (late ? ' is-late' : '') + (picked ? ' is-picked' : '');
     return '<li class="' + cls + '" style="' + _tagStyle(tag) + '">' +
       '<span class="hub-tm-tl-when">' + when + '</span><span class="hub-tm-tl-node" aria-hidden="true"></span>' +
-      '<div class="hub-tm-tl-card">' +
+      '<div class="hub-tm-tl-card">' + pick +
         '<button type="button" class="hub-tm-tl-main" data-tl-go="' + id + '">' +
           '<span class="hub-tm-tl-title">' + title + '</span>' +
           '<span class="hub-tm-tl-meta">' + meta.join('<span class="hub-tm-tl-sep" aria-hidden="true">·</span>') +
@@ -7009,29 +7291,48 @@ const timeManagementModule = (function () {
       '</div></li>';
   }
   function _tlGroup(g, c) {
-    const d = _parseDate(g.date), diff = _tlDayDiff(g.date), isToday = diff === 0;
+    const d = _parseDate(g.date), diff = _tlDayDiff(g.date), isToday = diff === 0, folded = !!_tl.fold[g.date];
     let mins = 0, done = 0, gold = 0;
-    g.items.forEach(function (b) { mins += _toMins(b.endTime) - _toMins(b.startTime); if (b.done) done++; gold += b.gp || 0; });
+    g.items.forEach(function (b) { mins += _tlDur(b); if (b.done) done++; gold += b.gp || 0; });
+    const cap = _tl.cap * 60, over = mins > cap;
     const label = isToday ? 'Today' : diff === 1 ? 'Tomorrow' : diff === -1 ? 'Yesterday' : DAY_FULL[d.getDay()];
     let rows = '', placed = !isToday || !!c.liveId;
-    g.items.forEach(function (b, i) {
-      const s = _toMins(b.startTime);
-      if (!placed && s > c.nm) {
-        rows += '<li class="hub-tm-tl-now" aria-label="Current time"><span class="hub-tm-tl-now-t">' + _pad(Math.floor(c.nm / 60)) + ':' + _pad(c.nm % 60) + '</span><i class="hub-tm-tl-now-dot"></i><i class="hub-tm-tl-now-line"></i></li>';
-        placed = true;
-      } else if (c.gaps && i > 0) {
-        const gap = s - _toMins(g.items[i - 1].endTime);
-        if (gap >= 30) rows += '<li class="hub-tm-tl-gap" aria-hidden="true"><span>Free · ' + _fmtDur(gap) + '</span></li>';
-      }
-      rows += _tlItem(b, c);
-    });
-    if (!placed) rows += '<li class="hub-tm-tl-now" aria-label="Current time"><span class="hub-tm-tl-now-t">' + _pad(Math.floor(c.nm / 60)) + ':' + _pad(c.nm % 60) + '</span><i class="hub-tm-tl-now-dot"></i><i class="hub-tm-tl-now-line"></i></li>';
-    return '<section class="hub-tm-tl-group' + (isToday ? ' is-today' : '') + '">' +
-      '<button type="button" class="hub-tm-tl-ghead" data-tl-day="' + _esc(g.date) + '" title="Open this day">' +
-        '<span class="hub-tm-tl-day">' + label + '</span><span class="hub-tm-tl-date">' + DAY_SHORT[d.getDay()] + ', ' + _dateLabel(d) + ', ' + d.getFullYear() + '</span>' +
-        (Math.abs(diff) > 1 ? '<span class="hub-tm-tl-rel">' + _tlRel(diff) + '</span>' : '') +
-        '<span class="hub-tm-tl-gsum">' + done + '/' + g.items.length + ' · ' + _fmtDur(mins) + (gold > 0 ? ' · +' + _fmtGold(gold) : '') + '</span>' +
-      '</button><ul class="hub-tm-tl-rail">' + rows + '</ul></section>';
+    const nowRow = '<li class="hub-tm-tl-now" aria-label="Current time"><span class="hub-tm-tl-now-t">' + _pad(Math.floor(c.nm / 60)) + ':' + _pad(c.nm % 60) + '</span><i class="hub-tm-tl-now-dot"></i><i class="hub-tm-tl-now-line"></i></li>';
+    if (!folded) {
+      g.items.forEach(function (b, i) {
+        const s = _toMins(b.startTime);
+        if (!placed && s > c.nm) { rows += nowRow; placed = true; }
+        else if (c.gaps && i > 0) {
+          const gap = s - _toMins(g.items[i - 1].endTime);
+          if (gap >= 30) rows += '<li class="hub-tm-tl-gap" aria-hidden="true"><span>Free · ' + _fmtDur(gap) + '</span></li>';
+        }
+        rows += _tlItem(b, c);
+      });
+      if (!placed) rows += nowRow;
+    }
+    return '<section class="hub-tm-tl-group' + (isToday ? ' is-today' : '') + (folded ? ' is-folded' : '') + '">' +
+      '<div class="hub-tm-tl-ghead">' +
+        '<button type="button" class="hub-tm-tl-gfold" data-tl-fold="' + _esc(g.date) + '" aria-expanded="' + !folded + '" aria-label="' + (folded ? 'Expand ' : 'Collapse ') + label + '">' + TL_ICON.chev + '</button>' +
+        '<button type="button" class="hub-tm-tl-gopen" data-tl-day="' + _esc(g.date) + '" title="Open this day">' +
+          '<span class="hub-tm-tl-day">' + label + '</span><span class="hub-tm-tl-date">' + DAY_SHORT[d.getDay()] + ', ' + _dateLabel(d) + ', ' + d.getFullYear() + '</span>' +
+          (Math.abs(diff) > 1 ? '<span class="hub-tm-tl-rel">' + _tlRel(diff) + '</span>' : '') + '</button>' +
+        '<span class="hub-tm-tl-load' + (over ? ' is-over' : '') + '" title="' + _fmtDur(mins) + ' of ' + _tl.cap + 'h capacity" aria-hidden="true"><i style="width:' + Math.min(100, Math.round(mins / cap * 100)) + '%"></i></span>' +
+        '<span class="hub-tm-tl-gsum">' + done + '/' + g.items.length + ' · ' + _fmtDur(mins) + (gold > 0 ? ' · +' + _fmtGold(gold) : '') + (over ? ' <b class="hub-tm-tl-over">+' + _fmtDur(mins - cap) + '</b>' : '') + '</span>' +
+      '</div>' + (folded ? '' : '<ul class="hub-tm-tl-rail">' + rows + '</ul>') + '</section>';
+  }
+  /* "By tag": one group per tag, biggest planned time first */
+  function _tlTagGroup(id, items, c) {
+    const t = _tagOrFallback(id), key = 'tag:' + id, folded = !!_tl.fold[key];
+    let mins = 0, done = 0;
+    items.forEach(function (b) { mins += _tlDur(b); if (b.done) done++; });
+    const pct = items.length ? Math.round(done / items.length * 100) : 0;
+    return '<section class="hub-tm-tl-group hub-tm-tl-group--tag' + (folded ? ' is-folded' : '') + '" style="' + _tagStyle(t) + '">' +
+      '<div class="hub-tm-tl-ghead">' +
+        '<button type="button" class="hub-tm-tl-gfold" data-tl-fold="' + _esc(key) + '" aria-expanded="' + !folded + '" aria-label="' + (folded ? 'Expand ' : 'Collapse ') + _esc(t.label) + '">' + TL_ICON.chev + '</button>' +
+        '<span class="hub-tm-tl-gtag"><span class="hub-tm-tag-dot"></span><span class="hub-tm-tl-day">' + _esc(t.label) + '</span></span>' +
+        '<span class="hub-tm-tl-load" aria-hidden="true" title="' + pct + '% done"><i style="width:' + pct + '%"></i></span>' +
+        '<span class="hub-tm-tl-gsum">' + done + '/' + items.length + ' · ' + _fmtDur(mins) + '</span></div>' +
+      (folded ? '' : '<ul class="hub-tm-tl-rail">' + items.map(function (b) { return _tlItem(b, c); }).join('') + '</ul>') + '</section>';
   }
   function _tlEmpty(filtered) {
     return filtered
@@ -7046,15 +7347,24 @@ const timeManagementModule = (function () {
     const type = _el('#tm-timeline-sort').value, today = _todayStr(), nm = _tlNowMins();
     _habitReset();
     _tlSyncControls();
+    _tlPaintWeek(today, nm);
     const spot = _tlPaintSpot(today, nm);
     const list = _tlFilter(today, nm), blocks = _timelineBlocks(type, list);
+    _tl.vis = blocks.map(function (b) { return b.id; });
     _tlPaintStats(list, today, nm);
 
-    const noFilter = !_tl.q.trim() && _tl.tag === 'all' && _tl.status === 'all';
+    const noFilter = !_tl.q.trim() && _tl.tag === 'all' && _tl.status === 'all' && !_tl.day;
     const c = { today: today, nm: nm, liveId: spot.liveId, nextId: spot.nextId, flat: type !== 'nearest', gaps: type === 'nearest' && noFilter };
     let html;
     if (!_timeBlocks.length) html = _tlEmpty(false);
     else if (!blocks.length) html = _tlEmpty(true);
+    else if (type === 'tag') {
+      const by = {}, order = [];
+      blocks.forEach(function (b) { if (!by[b.tagId]) { by[b.tagId] = []; order.push(b.tagId); } by[b.tagId].push(b); });
+      const tot = function (id) { return by[id].reduce(function (s, b) { return s + _tlDur(b); }, 0); };
+      order.sort(function (a, b) { return tot(b) - tot(a); });
+      html = order.map(function (id) { return _tlTagGroup(id, by[id].sort(_tlCmp), c); }).join('');
+    }
     else if (type !== 'nearest') {
       html = '<section class="hub-tm-tl-group"><div class="hub-tm-tl-ghead hub-tm-tl-ghead--static"><span class="hub-tm-tl-day">' + (type === 'newest' ? 'Newly added' : 'Longest first') + '</span><span class="hub-tm-tl-gsum">' + _tlPlural(blocks.length, 'block') + '</span></div>' +
         '<ul class="hub-tm-tl-rail">' + blocks.map(function (b) { return _tlItem(b, c); }).join('') + '</ul></section>';
@@ -7067,7 +7377,7 @@ const timeManagementModule = (function () {
       const upG = groups.filter(function (g) { return g.date >= today; }), pastG = groups.filter(function (g) { return g.date < today; });
       html = upG.map(function (g) { return _tlGroup(g, c); }).join('');
       if (pastG.length) {
-        const collapsible = _tl.range === 'all' && !_tl.q.trim(), open = !collapsible || _tl.pastOpen || !upG.length;
+        const collapsible = _tl.range === 'all' && !_tl.q.trim() && !_tl.day, open = !collapsible || _tl.pastOpen || !upG.length;
         if (collapsible) {
           let pb = 0, late = 0;
           pastG.forEach(function (g) { pb += g.items.length; g.items.forEach(function (b) { if (_tlLate(b, today, nm)) late++; }); });
@@ -7093,6 +7403,7 @@ const timeManagementModule = (function () {
         if (n) n.focus({ preventScroll: true });
       }
     }
+    _tlPaintBulk(today, nm);
   }
 
   /* ============================================================
@@ -7341,12 +7652,13 @@ const timeManagementModule = (function () {
     const armed = _armed(), t = chip.querySelector('.hub-tm-chip-text');
     chip.classList.toggle('is-armed', armed);
     chip.classList.toggle('is-waiting', !armed);
-    if (!armed) { t.textContent = 'Click anywhere to arm alerts'; chip.title = 'Browsers keep sound off until you interact with the page.'; return; }
+    if (!armed) { t.textContent = 'Arm alerts'; chip.title = 'Browsers keep sound off until you interact with the page. Click anywhere to arm alerts.'; chip.setAttribute('aria-label', 'Alerts are not armed yet. Click anywhere to arm them.'); return; }
     const n = _nextCue();
-    if (!n) { t.textContent = 'Alerts on · nothing scheduled'; chip.title = 'Alerts are armed.'; return; }
-    const d = new Date(n.at);
-    t.textContent = 'Next ' + _pad(d.getHours()) + ':' + _pad(d.getMinutes()) + ' · ' + CUE_NAME[n.type];
-    chip.title = (n.title || _tagOrFallback(n.tagId).label) + ' — ' + CUE_NAME[n.type];
+    if (!n) { t.textContent = ''; chip.title = 'Alerts on · nothing scheduled'; chip.setAttribute('aria-label', 'Alerts on, nothing scheduled'); return; }
+    const d = new Date(n.at), hm = _pad(d.getHours()) + ':' + _pad(d.getMinutes());
+    t.textContent = hm;
+    chip.title = 'Next ' + hm + ' · ' + CUE_NAME[n.type] + ' — ' + (n.title || _tagOrFallback(n.tagId).label);
+    chip.setAttribute('aria-label', 'Next alert at ' + hm + ', ' + CUE_NAME[n.type]);
   }
 
   /* ============================================================
@@ -8531,11 +8843,14 @@ const timeManagementModule = (function () {
     chip.classList.remove('hub-tm-hidden');
     chip.classList.toggle('is-alert', od > 0);
     const pct = tot ? Math.round(dn / tot * 100) : 0;
+    const say = 'Habitica' + (_hab.user ? ' · Gold ' + _hab.user.gp.toFixed(1) : '') + ' · Today ' + dn + '/' + tot + (od ? ' · ' + od + ' overdue' : '');
+    chip.title = say;
+    chip.setAttribute('aria-label', say);
     chip.innerHTML =
-      (_hab.user ? '<span>Gold <b>' + _hab.user.gp.toFixed(1) + '</b></span><span class="hub-tm-pulse-sep"></span>' : '') +
-      '<span>Today <b>' + dn + '/' + tot + '</b></span>' +
-      '<span class="hub-tm-pulse-bar" role="img" aria-label="' + pct + '% of today complete"><i style="width:' + pct + '%"></i></span>' +
-      (od ? '<span class="hub-tm-pulse-sep"></span><span class="hub-tm-pulse-late"><b>' + od + '</b> overdue</span>' : '');
+      (_hab.user ? '<span class="hub-tm-hc-gold"><i aria-hidden="true"></i><b>' + _hab.user.gp.toFixed(1) + '</b></span>' : '') +
+      '<span class="hub-tm-hc-today"><b>' + dn + '/' + tot + '</b></span>' +
+      '<span class="hub-tm-pulse-bar" aria-hidden="true"><i style="width:' + pct + '%"></i></span>' +
+      (od ? '<span class="hub-tm-pulse-late"><b>' + od + '</b></span>' : '');
   }
   function _habTick() {
     _habChip();
