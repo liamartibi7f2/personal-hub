@@ -1118,6 +1118,14 @@ const timeManagementModule = (function () {
                   '<p class="hub-tm-rm-lead">Let any AI draft the plan, then paste its answer into the Edit tab.</p>' +
                   '<ol class="hub-tm-rm-steps"><li><b>Describe</b> what you need below.</li><li><b>Copy</b> the prompt into ChatGPT, Claude or Gemini and add your syllabus at the end.</li><li><b>Paste</b> the answer into the Edit tab. Phases, times and tasks are recognised for you.</li></ol>' +
                   '<div class="hub-tm-field"><label for="tm-rm-ai-topic">Subject</label><input type="text" class="hub-tm-input" id="tm-rm-ai-topic" maxlength="120" placeholder="e.g. Civil Law: contracts, or Daily English dictation" autocomplete="off"></div>' +
+                  '<div class="hub-tm-field">' +
+                    '<label for="tm-rm-ai-tag-input">Tags <em class="hub-tm-sb-opt">optional · existing or custom</em></label>' +
+                    '<div class="hub-tm-rm-ai-tags" id="tm-rm-ai-tags" role="group" aria-label="Prompt tags"></div>' +
+                    '<div class="hub-tm-rm-ai-tagadd">' +
+                      '<input type="text" class="hub-tm-input hub-tm-input--sm" id="tm-rm-ai-tag-input" maxlength="40" placeholder="Add custom tag (e.g. Exam prep, Listening)..." autocomplete="off">' +
+                      '<button type="button" class="hub-tm-btn hub-tm-btn--outline hub-tm-rm-ai-tagbtn" id="tm-rm-ai-tag-add">+ Add</button>' +
+                    '</div>' +
+                  '</div>' +
                   '<div class="hub-tm-field"><label for="tm-rm-ai-extra">Extra requirements <em class="hub-tm-sb-opt">optional</em></label><textarea class="hub-tm-input hub-tm-rm-ai-extra" id="tm-rm-ai-extra" rows="3" maxlength="600" placeholder="e.g. 15 min a day in phases 1-2 and 30 min in phases 3-4; Sundays at 11:30"></textarea></div>' +
                   '<div class="hub-tm-rm-trio">' +
                     '<div class="hub-tm-field"><label for="tm-rm-ai-days">Days</label><input type="number" class="hub-tm-input" id="tm-rm-ai-days" min="1" max="365" value="30"></div>' +
@@ -5139,7 +5147,7 @@ const timeManagementModule = (function () {
     ['Tuần 4 · BTTH ngoài hợp đồng', ['Khái niệm & căn cứ phát sinh BTTH ngoài hợp đồng', 'Nguyên tắc & năng lực chịu trách nhiệm bồi thường', 'BTTH do người của pháp nhân & nguồn nguy hiểm cao độ gây ra', 'Xác định thiệt hại & mức bồi thường', '*Ôn tập phần BTTH · tình huống tổng hợp']],
     ['Ngày 27–30 · Tổng hợp', ['*Hệ thống hóa toàn bộ kiến thức: sơ đồ tư duy', '*Làm đề / tình huống tổng hợp 1', '*Làm đề / tình huống tổng hợp 2 & sửa lỗi sai', '*Rà soát cuối & chốt bài']]
   ];
-  let _rm = { sel: 0, pickOn: '', scrolled: '', pg: -1, editId: null };   // pg: window the person paged to (-1 = follow the selected day)
+  let _rm = { sel: 0, pickOn: '', scrolled: '', pg: -1, editId: null, aiTags: [], aiCustomTags: [] };   // pg: window the person paged to (-1 = follow the selected day)
   const RM_TABS = ['edit', 'preview', 'ai', 'io'];
   let _rmTab = 'edit';
 
@@ -5382,7 +5390,12 @@ const timeManagementModule = (function () {
     const L = [
       'TASK',
       'Create a ' + N + '-day study roadmap' + (o.topic ? ' for: ' + o.topic : '') + '.',
-      'Write every title and task in ' + lang + '.',
+      'Write every title and task in ' + lang + '.'
+    ];
+    if (Array.isArray(o.tags) && o.tags.length) {
+      L.push('Focus / Tags: ' + o.tags.join(', ') + '. Tailor the roadmap structure, daily titles, and checkable tasks to fit these tags.');
+    }
+    L.push(
       '',
       'OUTPUT FORMAT (follow it exactly)',
       'Reply with the plan only, as plain text: no introduction, no closing remarks, no code block, and no Markdown formatting (no headings, bold, bullet points, numbering or tables).',
@@ -5429,7 +5442,7 @@ const timeManagementModule = (function () {
       '[paste your syllabus or materials here, or delete this line]',
       '',
       'BEFORE YOU ANSWER, CHECK: exactly ' + P + ' PHASE lines, exactly ' + N + ' DAY lines, 3 tasks on every DAY line, every phase ends with a review day, and nothing else in the reply.'
-    ];
+    );
     return L.join('\n') + '\n';
   }
   /* ---- Plan data: dates · progress ---- */
@@ -5940,8 +5953,48 @@ const timeManagementModule = (function () {
     if (p.errors.length || !p.days.length || !_isDateStr(_el('#tm-rm-start').value)) { box.innerHTML = '<p class="hub-tm-rm-empty">Fix the plan on the Edit tab to see the preview.</p>'; return; }
     box.innerHTML = _rmPreviewHtml(_rmDraft(p));
   }
+  function _rmSelectedAiTags() {
+    const sel = _rm.aiTags || [], custom = _rm.aiCustomTags || [];
+    const out = _allTags().filter(function (t) { return sel.indexOf(t.id) > -1; }).map(function (t) { return t.label; });
+    return out.concat(custom);
+  }
+  function _rmRenderAiTags() {
+    const box = _el('#tm-rm-ai-tags');
+    if (!box) return;
+    const sel = _rm.aiTags || [], custom = _rm.aiCustomTags || [];
+    const builtIn = _allTags().map(function (t) {
+      const on = sel.indexOf(t.id) > -1;
+      return '<button type="button" class="hub-tm-rm-aitag" data-rm-ai-tag="' + _esc(t.id) + '" style="--tm-c:' + _safeColor(t.color) + '" aria-pressed="' + on + '"><span class="hub-tm-tag-dot"></span><span>' + _esc(t.label) + '</span></button>';
+    }).join('');
+    const cust = custom.map(function (label, idx) {
+      return '<button type="button" class="hub-tm-rm-aitag hub-tm-rm-aitag--custom" data-rm-ai-ctag="' + idx + '" aria-pressed="true" title="Click to remove"><span>' + _esc(label) + '</span><span class="hub-tm-rm-aitag-x" aria-hidden="true">×</span></button>';
+    }).join('');
+    box.innerHTML = builtIn + cust;
+  }
+  function _rmAddCustomAiTag() {
+    const inp = _el('#tm-rm-ai-tag-input');
+    if (!inp) return;
+    const raw = (inp.value || '').split(','), tags = _allTags();
+    _rm.aiTags = _rm.aiTags || [];
+    _rm.aiCustomTags = _rm.aiCustomTags || [];
+    let changed = false;
+    raw.forEach(function (part) {
+      const label = part.trim().slice(0, 40);
+      if (!label) return;
+      const low = label.toLowerCase();
+      const match = tags.filter(function (t) { return t.label.toLowerCase() === low || t.id.toLowerCase() === low; })[0];
+      if (match) {
+        if (_rm.aiTags.indexOf(match.id) === -1) { _rm.aiTags.push(match.id); changed = true; }
+      } else if (!_rm.aiCustomTags.some(function (c) { return c.toLowerCase() === low; })) {
+        _rm.aiCustomTags.push(label);
+        changed = true;
+      }
+    });
+    inp.value = '';
+    if (changed) { _rmRenderAiTags(); _rmRefreshPrompt(); }
+  }
   function _rmPromptOpts() {
-    return { topic: _el('#tm-rm-ai-topic').value.trim(), extra: _el('#tm-rm-ai-extra').value.trim(), days: _el('#tm-rm-ai-days').value, phases: _el('#tm-rm-ai-phases').value, lang: _el('#tm-rm-ai-lang').value, time: _el('#tm-rm-time').value, dur: _el('#tm-rm-dur').value };
+    return { topic: _el('#tm-rm-ai-topic').value.trim(), tags: _rmSelectedAiTags(), extra: _el('#tm-rm-ai-extra').value.trim(), days: _el('#tm-rm-ai-days').value, phases: _el('#tm-rm-ai-phases').value, lang: _el('#tm-rm-ai-lang').value, time: _el('#tm-rm-time').value, dur: _el('#tm-rm-dur').value };
   }
   function _rmRefreshPrompt() { _el('#tm-rm-prompt-view').value = _rmPrompt(_rmPromptOpts()); }
   function _rmShowTab(name) {
@@ -5952,7 +6005,7 @@ const timeManagementModule = (function () {
     });
     _rmTab = name;
     if (name === 'preview') _rmRenderPreview();
-    if (name === 'ai') _rmRefreshPrompt();
+    if (name === 'ai') { _rmRenderAiTags(); _rmRefreshPrompt(); }
   }
   /** Insert a ready-made line into the plan text and select the placeholder so it can be overtyped. */
   function _rmInsert(kind) {
@@ -6049,6 +6102,11 @@ const timeManagementModule = (function () {
     if (sub) sub.textContent = { edit: 'Change the plan, the schedule or the daily session', rerun: 'Pick a new Day 1. Progress starts again from zero', tpl: 'Pick Day 1, adjust anything, then start', 'new': 'Plan a multi-day path and follow it day by day' }[mode];
     _el('#tm-rm-save').textContent = { edit: 'Save roadmap', rerun: 'Start run', tpl: 'Start roadmap', 'new': 'Create roadmap' }[mode];
     _el('#tm-rm-delete').hidden = !r;
+    _rm.aiCustomTags = [];
+    _rm.aiTags = [_el('#tm-rm-tag').value].filter(Boolean);
+    const aiTagInp = _el('#tm-rm-ai-tag-input');
+    if (aiTagInp) aiTagInp.value = '';
+    _rmRenderAiTags();
     _rmShowTab('edit');
     _rmValidate();
     _rmApplySkin();
@@ -6417,6 +6475,33 @@ const timeManagementModule = (function () {
 
     // AI prompt
     ['#tm-rm-ai-topic', '#tm-rm-ai-extra', '#tm-rm-ai-days', '#tm-rm-ai-phases', '#tm-rm-ai-lang'].forEach(function (s) { _el(s).addEventListener('input', _rmRefreshPrompt); });
+    const aiTagsBox = _el('#tm-rm-ai-tags');
+    if (aiTagsBox) {
+      aiTagsBox.addEventListener('click', function (e) {
+        const b = e.target.closest('[data-rm-ai-tag]');
+        if (b) {
+          const id = b.getAttribute('data-rm-ai-tag');
+          _rm.aiTags = _rm.aiTags || [];
+          const idx = _rm.aiTags.indexOf(id);
+          if (idx > -1) _rm.aiTags.splice(idx, 1); else _rm.aiTags.push(id);
+          _rmRenderAiTags(); _rmRefreshPrompt();
+          return;
+        }
+        const cb = e.target.closest('[data-rm-ai-ctag]');
+        if (cb) {
+          const ci = parseInt(cb.getAttribute('data-rm-ai-ctag'), 10);
+          if (_rm.aiCustomTags && ci >= 0 && ci < _rm.aiCustomTags.length) {
+            _rm.aiCustomTags.splice(ci, 1);
+            _rmRenderAiTags(); _rmRefreshPrompt();
+          }
+        }
+      });
+    }
+    const aiTagAdd = _el('#tm-rm-ai-tag-add'), aiTagInput = _el('#tm-rm-ai-tag-input');
+    if (aiTagAdd) aiTagAdd.addEventListener('click', _rmAddCustomAiTag);
+    if (aiTagInput) aiTagInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); _rmAddCustomAiTag(); }
+    });
     _el('#tm-rm-ai-copy').addEventListener('click', function () {
       _rmCopy(_rmPrompt(_rmPromptOpts()), 'Prompt copied — paste it into your AI, add your syllabus, then paste its answer into the Edit tab.');
     });
