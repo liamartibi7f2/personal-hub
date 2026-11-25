@@ -79,6 +79,268 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // COLLAB HUB — phòng giữ streak chung (module Cộng tác)
+    //   rooms/{roomId}                       thông tin + luật phòng + trạng thái quản lý
+    //        name, code, ownerUid, maxHearts, regenDays, cutoff, createdAt,
+    //        maxMembers (2–20), joinOpen (khoá/mở cho người mới), memberCount (đếm thành viên), deleting (đang xoá),
+    //        photoDays (3–365, mặc định 30: ảnh check-in mới tự hết hạn sau bấy nhiêu ngày)
+    //   rooms/{roomId}/members/{uid}         hồ sơ + cam kết của từng người
+    //   rooms/{roomId}/checkins/{uid_date}   mỗi người mỗi ngày đúng một check-in (BẮT BUỘC kèm ảnh lúc tạo)
+    //        + photoMode (all | some | me), photoExpireAt, photoState (deleted | expired khi ảnh đã gỡ). Giờ check-in luôn được giữ.
+    //   rooms/{roomId}/photos/{uid_date}     ảnh check-in (JPEG dataURL đã nén), tách riêng cho nhẹ
+    //        + viewers (không có = cả phòng · [] = chỉ mình · [uid…] = chỉ những người đó), expireAt (TTL của Firestore dọn)
+    //   rooms/{roomId}/nudges/{from_to_date} lời nhắc nhẹ
+    //   invites/{code}                       mã mời → roomId, có hạn dùng (expiresAt, null = không hết hạn)
+    //   users/{uid}/collab/rooms             danh sách phòng của mình
+    //
+    // QUẢN LÝ PHÒNG
+    //   Chủ phòng: đổi tên, số người tối đa, khoá/mở phòng, đổi mã mời, đổi hạn dùng mã,
+    //              mời thành viên ra, chuyển quyền chủ phòng, xoá phòng (2 bước: deleting = true rồi dọn dữ liệu).
+    //   Thành viên: tự rời phòng. Chủ phòng KHÔNG tự rời được (phải chuyển quyền hoặc xoá phòng).
+    // ─────────────────────────────────────────────────────────────
+    function isRoomMember(roomId) {
+      return signedIn() &&
+        exists(/databases/$(db)/documents/rooms/$(roomId)/members/$(request.auth.uid));
+    }
+    function dayNum(t) { return t.year() * 10000 + t.month() * 100 + t.day(); }   // 20261124
+
+    // Chủ phòng / phòng đang bị xoá (đọc thẳng từ document phòng)
+    function isRoomOwner(roomId) {
+      return signedIn() &&
+        get(/databases/$(db)/documents/rooms/$(roomId)).data.ownerUid == request.auth.uid;
+    }
+    function roomDeleting(roomId) {
+      return get(/databases/$(db)/documents/rooms/$(roomId)).data.get('deleting', false) == true;
+    }
+    // Hạn dùng của mã: không có (null) hoặc nằm trong tương lai, tối đa 31 ngày
+    function validExpiry(v) {
+      return v == null ||
+        (v is timestamp && v > request.time && v <= request.time + duration.value(31, 'd'));
+    }
+    // Điều kiện để một người (chưa là thành viên) vào phòng bằng mã:
+    // mã đúng phòng + còn hạn, phòng đang mở, không bị xoá, còn chỗ, và đếm thành viên tăng đúng +1 trong cùng batch
+    function canJoin(roomId, code) {
+      let roomPath = /databases/$(db)/documents/rooms/$(roomId);
+      let before = get(roomPath).data;
+      let after = getAfter(roomPath).data;
+      let inv = get(/databases/$(db)/documents/invites/$(code)).data;
+      return inv.roomId == roomId
+          && (inv.get('expiresAt', null) == null || inv.expiresAt > request.time)
+          && after.get('joinOpen', true) == true
+          && after.get('deleting', false) == false
+          && after.get('memberCount', 0) == before.get('memberCount', 0) + 1
+          && after.get('memberCount', 0) <= after.get('maxMembers', 20);
+    }
+
+    // ── Ảnh check-in: quyền riêng tư + hạn sống ──────────────────
+    // viewers: không có = cả phòng xem được · [] = chỉ mình tôi · [uid, …] = chỉ những người này (và chủ ảnh)
+    function modeOf(viewers) {
+      return viewers == null ? 'all' : (viewers.size() == 0 ? 'me' : 'some');
+    }
+    function validViewers(v) {
+      return v == null || (v is list && v.size() <= 19);
+    }
+    // Đọc được khi CHƯA hết hạn (kể cả lúc TTL chưa kịp xoá, có thể trễ tới ~24 giờ) và người đọc nằm trong danh sách xem
+    function photoReadable(d) {
+      return (!('expireAt' in d) || d.expireAt > request.time)
+          && (d.uid == request.auth.uid
+              || d.get('viewers', null) == null
+              || request.auth.uid in d.viewers);
+    }
+    // Hạn của ảnh mới: ở tương lai và không quá photoDays ngày của phòng (mặc định 30).
+    // CHUYỂN TIẾP: vế "!('expireAt' in d)" cho phép máy chưa cập nhật vẫn check-in được. Khi mọi máy đã dùng
+    // bản JS mới, xoá vế đó để BẮT BUỘC ảnh nào cũng có hạn.
+    function photoExpiryOk(roomId, d) {
+      return !('expireAt' in d)
+          || (d.expireAt is timestamp
+              && d.expireAt > request.time
+              && d.expireAt <= request.time + duration.value(
+                   get(/databases/$(db)/documents/rooms/$(roomId)).data.get('photoDays', 30), 'd'));
+    }
+    function validPhotoDays(d) {
+      return !('photoDays' in d) || (d.photoDays is int && d.photoDays >= 3 && d.photoDays <= 365);
+    }
+
+    // Mã mời: chỉ đọc được từng mã một (không liệt kê) → phải biết mã mới vào được phòng.
+    // Chỉ CHỦ PHÒNG mới tạo / sửa hạn / thu hồi được mã của phòng mình.
+    match /invites/{code} {
+      allow get: if signedIn();
+      allow create: if signedIn()
+                    && request.resource.data.createdBy == request.auth.uid
+                    && request.resource.data.keys().hasOnly(['roomId', 'createdBy', 'createdAt', 'expiresAt'])
+                    && getAfter(/databases/$(db)/documents/rooms/$(request.resource.data.roomId)).data.ownerUid == request.auth.uid
+                    && validExpiry(request.resource.data.get('expiresAt', null));
+      allow update: if signedIn()
+                    && isRoomOwner(resource.data.roomId)
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['expiresAt'])
+                    && validExpiry(request.resource.data.get('expiresAt', null));
+      allow delete: if signedIn() && isRoomOwner(resource.data.roomId);
+      allow list: if false;
+    }
+
+    match /rooms/{roomId} {
+      allow create: if signedIn()
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.keys().hasOnly(['name', 'code', 'ownerUid', 'maxHearts', 'regenDays', 'cutoff', 'createdAt', 'maxMembers', 'joinOpen', 'memberCount', 'photoDays'])
+                    && request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 40
+                    && request.resource.data.get('memberCount', 1) == 1
+                    && request.resource.data.get('joinOpen', true) == true
+                    && (!('maxMembers' in request.resource.data)
+                        || (request.resource.data.maxMembers is int && request.resource.data.maxMembers >= 2 && request.resource.data.maxMembers <= 20))
+                    && validPhotoDays(request.resource.data);
+      allow read: if isRoomMember(roomId);
+
+      // CHỦ PHÒNG: đổi tên, luật tim, mã mời, số người tối đa, khoá/mở, đếm thành viên,
+      // chuyển quyền (chỉ cho một thành viên đang ở trong phòng), đánh dấu đang xoá (chỉ được bật, không tắt)
+      allow update: if isRoomMember(roomId)
+                    && resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['name', 'maxHearts', 'regenDays', 'code', 'maxMembers', 'joinOpen', 'ownerUid', 'memberCount', 'deleting', 'photoDays'])
+                    && request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 40
+                    && (!('maxMembers' in request.resource.data)
+                        || (request.resource.data.maxMembers is int && request.resource.data.maxMembers >= 2 && request.resource.data.maxMembers <= 20))
+                    && (!('joinOpen' in request.resource.data) || request.resource.data.joinOpen is bool)
+                    && validPhotoDays(request.resource.data)
+                    && (!('memberCount' in request.resource.data) || request.resource.data.memberCount is int)
+                    && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['maxMembers'])
+                        || request.resource.data.maxMembers >= request.resource.data.get('memberCount', 0))
+                    && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['deleting'])
+                        || request.resource.data.deleting == true)
+                    && (request.resource.data.ownerUid == resource.data.ownerUid
+                        || exists(/databases/$(db)/documents/rooms/$(roomId)/members/$(request.resource.data.ownerUid)))
+                    && (request.resource.data.code == resource.data.code
+                        || getAfter(/databases/$(db)/documents/invites/$(request.resource.data.code)).data.roomId == roomId);
+
+      // NGƯỜI VÀO / RỜI: chỉ được đụng memberCount (±1) khi hồ sơ thành viên của chính mình được tạo / xoá trong cùng batch
+      allow update: if signedIn()
+                    && resource.data.ownerUid != request.auth.uid
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
+                    && ((request.resource.data.memberCount == resource.data.get('memberCount', 0) + 1
+                         && !exists(/databases/$(db)/documents/rooms/$(roomId)/members/$(request.auth.uid))
+                         && existsAfter(/databases/$(db)/documents/rooms/$(roomId)/members/$(request.auth.uid)))
+                        || (request.resource.data.memberCount == resource.data.get('memberCount', 0) - 1
+                         && exists(/databases/$(db)/documents/rooms/$(roomId)/members/$(request.auth.uid))
+                         && !existsAfter(/databases/$(db)/documents/rooms/$(roomId)/members/$(request.auth.uid))));
+
+      // Xoá phòng: chỉ chủ phòng, và chỉ sau khi đã đánh dấu deleting = true (client dọn dữ liệu con trước)
+      allow delete: if isRoomOwner(roomId) && resource.data.get('deleting', false) == true;
+
+      match /members/{uid} {
+        allow read: if isRoomMember(roomId);
+        // Chủ phòng tạo hồ sơ cùng lúc với phòng (phòng chưa tồn tại trước batch);
+        // người khác phải vào bằng mã hợp lệ: đúng phòng, còn hạn, phòng đang mở và còn chỗ (xem canJoin)
+        allow create: if signedIn() && request.auth.uid == uid
+                      && request.resource.data.uid == uid
+                      && request.resource.data.keys().hasOnly(['uid', 'name', 'commits', 'joinedAt', 'code'])
+                      && request.resource.data.name is string && request.resource.data.name.size() <= 24
+                      && request.resource.data.commits is list && request.resource.data.commits.size() <= 60
+                      && ((!exists(/databases/$(db)/documents/rooms/$(roomId))
+                           && getAfter(/databases/$(db)/documents/rooms/$(roomId)).data.ownerUid == uid)
+                          || canJoin(roomId, request.resource.data.code));
+        // Chỉ sửa hồ sơ của chính mình (cam kết, tên)
+        allow update: if signedIn() && request.auth.uid == uid
+                      && request.resource.data.uid == uid
+                      && request.resource.data.name is string && request.resource.data.name.size() <= 24
+                      && request.resource.data.commits is list && request.resource.data.commits.size() <= 60;
+        // Tự rời phòng (chủ phòng chỉ rời được khi phòng đang bị xoá), hoặc chủ phòng mời người khác ra
+        allow delete: if signedIn() && request.auth.uid == uid
+                      && (!isRoomOwner(roomId) || roomDeleting(roomId));
+        allow delete: if isRoomOwner(roomId) && uid != request.auth.uid;
+      }
+
+      // Check-in: chỉ cho chính mình, giờ lấy từ máy chủ, mỗi (người, ngày) một tài liệu,
+      // ngày ghi chỉ lệch tối đa ±1 ngày so với giờ máy chủ (chặn ghi bù xa),
+      // và PHẢI có ảnh lúc tạo: tài liệu photos cùng id phải được ghi trong cùng batch (existsAfter).
+      // photoMode / photoExpireAt là bản "công khai" của quyền riêng tư và hạn ảnh để giao diện biết trạng thái
+      // mà không phải đọc ảnh (nặng); luật ép chúng khớp với tài liệu photos.
+      match /checkins/{id} {
+        allow read: if isRoomMember(roomId);
+        allow create: if isRoomMember(roomId)
+                      && request.resource.data.keys().hasOnly(['uid', 'date', 'day', 'at', 'note', 'late', 'hasPhoto', 'photoMode', 'photoExpireAt'])
+                      && request.resource.data.hasPhoto == true
+                      && existsAfter(/databases/$(db)/documents/rooms/$(roomId)/photos/$(id))
+                      && request.resource.data.get('photoMode', 'all')
+                           == modeOf(getAfter(/databases/$(db)/documents/rooms/$(roomId)/photos/$(id)).data.get('viewers', null))
+                      && request.resource.data.get('photoExpireAt', null)
+                           == getAfter(/databases/$(db)/documents/rooms/$(roomId)/photos/$(id)).data.get('expireAt', null)
+                      && request.resource.data.uid == request.auth.uid
+                      && id == request.auth.uid + '_' + request.resource.data.date
+                      && request.resource.data.at == request.time
+                      && request.resource.data.note is string && request.resource.data.note.size() <= 120
+                      && request.resource.data.day in [dayNum(request.time - duration.value(1, 'd')),
+                                                       dayNum(request.time),
+                                                       dayNum(request.time + duration.value(1, 'd'))];
+        // Hoàn tác: chỉ xoá check-in của mình trong vòng 5 phút
+        allow delete: if isRoomMember(roomId)
+                      && resource.data.uid == request.auth.uid
+                      && resource.data.at > request.time - duration.value(5, 'm');
+        // Dọn phòng: chủ phòng chỉ xoá được khi phòng đã đánh dấu deleting
+        allow delete: if isRoomOwner(roomId) && roomDeleting(roomId);
+        // Chủ check-in được sửa DUY NHẤT phần ảnh (giờ / ngày / ghi chú vẫn bất biến):
+        //   (a) đổi chế độ xem: photoMode phải khớp viewers của ảnh sau batch
+        //   (b) gỡ ảnh: hasPhoto true → false, photoState = deleted | expired, và ảnh không còn tồn tại sau batch
+        allow update: if isRoomMember(roomId)
+                      && resource.data.uid == request.auth.uid
+                      && (
+                        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['photoMode'])
+                          && resource.data.hasPhoto == true
+                          && existsAfter(/databases/$(db)/documents/rooms/$(roomId)/photos/$(id))
+                          && request.resource.data.photoMode
+                               == modeOf(getAfter(/databases/$(db)/documents/rooms/$(roomId)/photos/$(id)).data.get('viewers', null)))
+                        ||
+                        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hasPhoto', 'photoState'])
+                          && resource.data.hasPhoto == true
+                          && request.resource.data.hasPhoto == false
+                          && request.resource.data.photoState in ['deleted', 'expired']
+                          && !existsAfter(/databases/$(db)/documents/rooms/$(roomId)/photos/$(id)))
+                      );
+      }
+
+      // Ảnh check-in: chỉ chủ ảnh ghi, giờ máy chủ, dung lượng chuỗi ≤ 400k ký tự (~300KB).
+      //   - Đọc từng ảnh (get): chỉ khi còn hạn và người đọc nằm trong viewers (xem photoReadable)
+      //   - Liệt kê (list): chỉ ảnh của chính mình, để dọn ảnh hết hạn → query phải có where('uid', '==', uid)
+      //   - Chủ ảnh xoá bất cứ lúc nào, đổi viewers bất cứ lúc nào (không kéo dài được hạn)
+      match /photos/{id} {
+        allow get: if isRoomMember(roomId) && photoReadable(resource.data);
+        allow list: if isRoomMember(roomId) && resource.data.uid == request.auth.uid;
+        allow create: if isRoomMember(roomId)
+                      && request.resource.data.keys().hasOnly(['uid', 'date', 'img', 'at', 'viewers', 'expireAt'])
+                      && request.resource.data.uid == request.auth.uid
+                      && id == request.auth.uid + '_' + request.resource.data.date
+                      && request.resource.data.at == request.time
+                      && request.resource.data.img is string
+                      && request.resource.data.img.size() <= 400000
+                      && validViewers(request.resource.data.get('viewers', null))
+                      && photoExpiryOk(roomId, request.resource.data);
+        allow update: if isRoomMember(roomId)
+                      && resource.data.uid == request.auth.uid
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewers'])
+                      && validViewers(request.resource.data.get('viewers', null))
+                      && (!('expireAt' in resource.data) || resource.data.expireAt > request.time);
+        // Xoá ảnh của mình (xoá một tài liệu không tồn tại là vô hại: cho phép để dọn hàng loạt không bị vướng)
+        allow delete: if isRoomMember(roomId)
+                      && (resource == null || resource.data.uid == request.auth.uid);
+        // Dọn phòng (xem checkins)
+        allow delete: if isRoomOwner(roomId) && roomDeleting(roomId);
+      }
+
+      match /nudges/{id} {
+        allow read: if isRoomMember(roomId);
+        allow create: if isRoomMember(roomId)
+                      && request.resource.data.keys().hasOnly(['from', 'to', 'date', 'at'])
+                      && request.resource.data.from == request.auth.uid
+                      && id == request.auth.uid + '_' + request.resource.data.to + '_' + request.resource.data.date;
+        allow delete: if isRoomOwner(roomId) && roomDeleting(roomId);
+        allow update: if false;
+      }
+    }
+
+    // Danh sách phòng của mỗi người (riêng tư, chỉ chủ tài khoản)
+    match /users/{uid}/collab/{doc} {
+      allow read, write: if isOwner(uid);
+    }
+
     // Nhật ký xem: admin tự ghi (chỉ được ghi bằng đúng uid của mình), không sửa/xóa được
     match /auditLogs/{id} {
       allow create: if isAdmin()

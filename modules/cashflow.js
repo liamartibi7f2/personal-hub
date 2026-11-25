@@ -271,6 +271,12 @@ const cashflowModule = (function () {
       categoryTitle:       'CATEGORY BREAKDOWN',
       tabLedger:           'Transactions',
       tabStats:            'Statistics',
+      cfSubLedger:         'Transactions',
+      cfSubAnalytics:      'Analytics',
+      cfSubPlanning:       'Goals & Debt',
+      cfSubAI:             'AI Advisor',
+      cfSubNavLabel:       'CashFlow sections',
+      addTxShort:          'Add Detail',
       breakdownIncome:     '⬆ Income',
       breakdownExpense:    '⬇ Expense',
 
@@ -564,6 +570,12 @@ const cashflowModule = (function () {
       categoryTitle:       'HẠNG MỤC CHI TIÊU',
       tabLedger:           'Lịch sử',
       tabStats:            'Thống kê',
+      cfSubLedger:         'Sổ giao dịch',
+      cfSubAnalytics:      'Phân tích',
+      cfSubPlanning:       'Mục tiêu & Công nợ',
+      cfSubAI:             'Trợ lý AI',
+      cfSubNavLabel:       'Các mục quản lý dòng tiền',
+      addTxShort:          'Thêm chi tiết',
       breakdownIncome:     '⬆ Thu Nhập',
       breakdownExpense:    '⬇ Chi Phí',
 
@@ -3518,14 +3530,14 @@ function _restoreAIState() {
       </div>
 
       <div class="cfd-strip">
-        <div class="cfd-note cfd-unc" id="cf-uncategorized-card">
+        <div class="cfd-note cfd-unc cfd-note--jump" id="cf-uncategorized-card" role="button" tabindex="0">
           <span class="cfd-note-main">
             <svg class="cfd-unc-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.3 3.9L2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>
             <span data-i18n="cfdUncategorized">${_t('cfdUncategorized')}</span>
           </span>
           <span class="cfd-note-val"><span class="cfd-num" id="cf-uncategorized-balance">0 ₫</span><span class="cfd-note-hint" data-i18n="cfdNeedsReview">${_t('cfdNeedsReview')}</span></span>
         </div>
-        <div class="cfd-note cfd-debt">
+        <div class="cfd-note cfd-debt cfd-note--jump" id="cf-debt-shortcut" role="button" tabindex="0">
           <span class="cfd-note-main"><span data-i18n="cfdDebt">${_t('cfdDebt')}</span></span>
           <span class="cfd-note-val"><span class="cfd-num" id="cf-debt-pending">${_formatVNFull(_getTotalPendingDebt())}</span></span>
         </div>
@@ -3534,160 +3546,84 @@ function _restoreAIState() {
     </div>
   </div>
 
-  <!-- ═══ QUICK ENTRY (một dòng) ═══ -->
-  <div class="cfq" id="cfq">
-    <div class="cfq-bar">
-      <svg class="cfq-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z"></path></svg>
-      <input type="text" id="cfq-input" class="cfq-input" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"
-             aria-label="${_escHtml(_t('cfqLabel'))}" aria-describedby="cfq-hint"
-             data-i18n-placeholder="cfqPlaceholder" placeholder="${_escHtml(_t('cfqPlaceholder'))}" maxlength="160" />
-      <button type="button" class="cfq-save" id="cfq-save" disabled data-i18n="cfqSave">${_t('cfqSave')}</button>
+  <!-- ═══ FIXED ENTRY ROW (Quick Entry + Add Detail) ═══ -->
+  <div class="cf-entry-row">
+    <div class="cfq" id="cfq">
+      <div class="cfq-bar">
+        <svg class="cfq-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z"></path></svg>
+        <input type="text" id="cfq-input" class="cfq-input" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"
+               aria-label="${_escHtml(_t('cfqLabel'))}" aria-describedby="cfq-hint"
+               data-i18n-placeholder="cfqPlaceholder" placeholder="${_escHtml(_t('cfqPlaceholder'))}" maxlength="160" />
+        <button type="button" class="cfq-save" id="cfq-save" disabled data-i18n="cfqSave">${_t('cfqSave')}</button>
+      </div>
+      <div class="cfq-preview" id="cfq-preview" aria-live="polite" hidden></div>
+      <div class="cfq-done" id="cfq-done" role="status" hidden></div>
+      <div class="cfq-hint" id="cfq-hint" data-i18n="cfqHint">${_t('cfqHint')}</div>
     </div>
-    <div class="cfq-preview" id="cfq-preview" aria-live="polite" hidden></div>
-    <div class="cfq-done" id="cfq-done" role="status" hidden></div>
-    <div class="cfq-hint" id="cfq-hint" data-i18n="cfqHint">${_t('cfqHint')}</div>
-  </div>
-
-  <!-- ═══ SAVINGS GOALS ═══ -->
-  <section class="cfg glass-card" id="cfg-goals" aria-labelledby="cfg-title"></section>
-  <div id="cfg-modal-root"></div>
-
-  <!-- ═══ REAL-TIME CHART / HEATMAP ═══ -->
-  <div class="hub-cf-chart-section glass-card cfc">
-    <div class="hub-cf-chart-header cfc-head">
-      <div class="cfc-titles">
-        <h4 class="hub-cf-chart-title" data-i18n="chartTitle">${_t('chartTitle')}</h4>
-        <p class="cfc-sub" id="cfc-sub"></p>
-      </div>
-
-      <div class="hub-cf-view-toggle" role="group" aria-label="View Mode">
-        <button type="button" class="hub-cf-view-toggle-btn active" data-view="chart" aria-pressed="true">
-          <svg class="hub-cf-view-toggle-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
-          <span class="hub-cf-view-toggle-label" data-i18n="viewChart">${_t('viewChart')}</span>
-        </button>
-        <button type="button" class="hub-cf-view-toggle-btn" data-view="heatmap" aria-pressed="false">
-          <svg class="hub-cf-view-toggle-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
-          <span class="hub-cf-view-toggle-label" data-i18n="viewHeatmap">${_t('viewHeatmap')}</span>
-        </button>
-      </div>
-
-      <select class="hub-cf-chart-filter" id="hub-cf-chart-filter" aria-label="${_escHtml(_t('chartTitle'))}">
-        <option value="day" ${_chartFilter === 'day' ? 'selected' : ''} data-i18n="chartDay">${_t('chartDay')}</option>
-        <option value="month" ${_chartFilter === 'month' ? 'selected' : ''} data-i18n="chartMonth">${_t('chartMonth')}</option>
-        <option value="year" ${_chartFilter === 'year' ? 'selected' : ''} data-i18n="chartYear">${_t('chartYear')}</option>
-      </select>
-    </div>
-
-    <!-- Chart View -->
-    <div class="hub-cf-chart-canvas-wrap cfc-view" id="hub-cf-chart-view" style="display: block;">
-      <div class="cfc-kpis" id="cfc-kpis"></div>
-      <div class="cfc-legend" id="cfc-legend" role="group" aria-label="Legend"></div>
-      <div class="cfc-canvas-box">
-        <canvas id="hub-cf-chart-canvas" role="img"></canvas>
-        <div class="cfc-empty" id="cfc-empty" hidden>
-          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
-          <strong data-i18n="cfcEmptyTitle">${_t('cfcEmptyTitle')}</strong>
-          <span data-i18n="cfcEmptyHint">${_t('cfcEmptyHint')}</span>
-        </div>
-      </div>
-      <p class="cfc-hint" id="cfc-hint"></p>
-    </div>
-
-    <!-- Heatmap View -->
-    <div class="hub-cf-heatmap-wrap" id="hub-cf-heatmap-view" style="display: none;">
-      <div class="hub-cf-heatmap-header">
-        <div class="hub-cf-heatmap-nav" role="group" aria-label="${_escHtml(_t('heatmapPickMonth'))}">
-          <button type="button" class="hub-cf-heatmap-nav-btn" id="hub-cf-heatmap-prev" aria-label="${_escHtml(_t('heatmapPrevMonth'))}" title="${_escHtml(_t('heatmapPrevMonth'))}">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg>
-          </button>
-          <button type="button" class="hub-cf-heatmap-month-btn" id="hub-cf-heatmap-month-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="hub-cf-heatmap-picker" title="${_escHtml(_t('heatmapPickMonth'))}">
-            <span class="hub-cf-heatmap-month" id="hub-cf-heatmap-month-label"></span>
-            <svg class="hub-cf-heatmap-month-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
-          </button>
-          <button type="button" class="hub-cf-heatmap-nav-btn" id="hub-cf-heatmap-next" aria-label="${_escHtml(_t('heatmapNextMonth'))}" title="${_escHtml(_t('heatmapNextMonth'))}">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
-          </button>
-          <button type="button" class="hub-cf-heatmap-today" id="hub-cf-heatmap-today" data-i18n="heatmapThisMonth" hidden>${_t('heatmapThisMonth')}</button>
-          <div class="hub-cf-heatmap-picker" id="hub-cf-heatmap-picker" role="dialog" aria-label="${_escHtml(_t('heatmapPickMonth'))}" hidden></div>
-        </div>
-        <div class="heatmap-limit-pill" id="hub-cf-heatmap-limit-pill" tabindex="0" role="button">
-          <span class="heatmap-limit-label" data-i18n="heatmapDailyLimit">${_t('heatmapDailyLimit')}</span>
-          <span class="heatmap-limit-value" id="hub-cf-heatmap-limit-value">500.0k</span>
-          <span class="heatmap-limit-unit" data-i18n="heatmapPerDay">${_t('heatmapPerDay')}</span>
-          <span class="heatmap-limit-icon" aria-hidden="true">✏️</span>
-        </div>
-      </div>
-      <div class="hub-cf-heatmap-grid" id="hub-cf-heatmap-grid" role="grid"></div>
-      <div class="hub-cf-heatmap-legend" id="hub-cf-heatmap-legend" aria-hidden="true">
-        <div class="hub-cf-heatmap-legend-item">
-          <span class="hub-cf-heatmap-legend-color hub-cf-heatmap-legend-level-0"></span>
-          <span data-i18n="heatmapLevel0">${_t('heatmapLevel0')}</span>
-        </div>
-        <div class="hub-cf-heatmap-legend-item">
-          <span class="hub-cf-heatmap-legend-color hub-cf-heatmap-legend-level-1"></span>
-          <span data-i18n="heatmapLevel1">${_t('heatmapLevel1')}</span>
-        </div>
-        <div class="hub-cf-heatmap-legend-item">
-          <span class="hub-cf-heatmap-legend-color hub-cf-heatmap-legend-level-2"></span>
-          <span data-i18n="heatmapLevel2">${_t('heatmapLevel2')}</span>
-        </div>
-        <div class="hub-cf-heatmap-legend-item">
-          <span class="hub-cf-heatmap-legend-color hub-cf-heatmap-legend-level-3"></span>
-          <span data-i18n="heatmapLevel3">${_t('heatmapLevel3')}</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ═══ ACTION BAR ═══ -->
-  <div class="hub-cf-action-bar">
-    <button class="hub-cf-btn hub-cf-btn--add" id="hub-cf-btn-add">
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+    <button type="button" class="hub-cf-btn hub-cf-btn--add cf-entry-add" id="hub-cf-btn-add">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
         <path d="M9 4v10M4 9h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
       </svg>
-      <span data-i18n="addTx">${_t('addTx')}</span>
-    </button>
-    <button class="hub-cf-btn hub-cf-btn--import" id="hub-cf-btn-import">
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-        <path d="M9 2v12M5 10l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M3 14v1a1 1 0 001 1h10a1 1 0 001-1v-1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-      </svg>
-      <span data-i18n="importXlsx">${_t('importXlsx')}</span>
-      <input type="file" id="hub-cf-file-input" accept=".xlsx" style="display:none;" />
-    </button>
-    <button class="hub-cf-btn hub-cf-btn--export" id="hub-cf-btn-export">
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-        <path d="M9 2v10M5 8l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M3 13v2a1 1 0 001 1h10a1 1 0 001-1v-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-      </svg>
-      <span data-i18n="exportXlsx">${_t('exportXlsx')}</span>
+      <span data-i18n="addTxShort">${_t('addTxShort')}</span>
     </button>
   </div>
 
-  <!-- ═══ TRANSACTION LEDGER ═══ -->
-  <div class="hub-cf-ledger glass-card">
-    <div class="hub-cf-ledger-header">
-      <div class="hub-cf-month-bar">
-        <button class="hub-cf-month-nav" id="hub-cf-month-prev" title="${_escHtml(_t('heatmapPrevMonth'))}" aria-label="${_escHtml(_t('heatmapPrevMonth'))}">◀</button>
-        <span class="hub-cf-month-label" id="hub-cf-month-label"></span>
-        <button class="hub-cf-month-nav" id="hub-cf-month-next" title="${_escHtml(_t('heatmapNextMonth'))}" aria-label="${_escHtml(_t('heatmapNextMonth'))}">▶</button>
-      </div>
-      <span class="hub-cf-ledger-count" id="hub-cf-tx-count">${_t('txCount_zero')}</span>
-    </div>
+  <!-- ═══ 4-TAB SUB-NAVIGATION ═══ -->
+  <nav class="cf-subnav" id="cf-subnav" role="tablist" aria-label="${_escHtml(_t('cfSubNavLabel'))}">
+    <button type="button" class="cf-subnav-btn" role="tab" id="cf-subtab-ledger" data-subtab="ledger" aria-controls="cf-panel-ledger" aria-selected="true" tabindex="0">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      <span data-i18n="cfSubLedger">${_t('cfSubLedger')}</span>
+    </button>
+    <button type="button" class="cf-subnav-btn" role="tab" id="cf-subtab-analytics" data-subtab="analytics" aria-controls="cf-panel-analytics" aria-selected="false" tabindex="-1">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+      <span data-i18n="cfSubAnalytics">${_t('cfSubAnalytics')}</span>
+    </button>
+    <button type="button" class="cf-subnav-btn" role="tab" id="cf-subtab-planning" data-subtab="planning" aria-controls="cf-panel-planning" aria-selected="false" tabindex="-1">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>
+      <span data-i18n="cfSubPlanning">${_t('cfSubPlanning')}</span>
+      <span class="cf-subnav-badge" id="cf-nav-debt-badge" hidden></span>
+    </button>
+    <button type="button" class="cf-subnav-btn" role="tab" id="cf-subtab-ai" data-subtab="ai" aria-controls="cf-panel-ai" aria-selected="false" tabindex="-1">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/></svg>
+      <span data-i18n="cfSubAI">${_t('cfSubAI')}</span>
+    </button>
+  </nav>
 
-    <!-- Segmented Tab Switcher -->
-    <div class="hub-cf-tab-switcher" role="tablist">
-      <button class="hub-cf-tab-switcher-btn" role="tab" data-view="ledger" aria-selected="true" id="hub-cf-tab-ledger">
-        <span class="hub-cf-tab-switcher-icon">📋</span>
-        <span class="hub-cf-tab-switcher-label" data-i18n="tabLedger">${_t('tabLedger')}</span>
-      </button>
-      <button class="hub-cf-tab-switcher-btn" role="tab" data-view="stats" aria-selected="false" id="hub-cf-tab-stats">
-        <span class="hub-cf-tab-switcher-icon">📊</span>
-        <span class="hub-cf-tab-switcher-label" data-i18n="tabStats">${_t('tabStats')}</span>
-      </button>
-    </div>
+  <!-- ═══ SUB-TAB PANELS ═══ -->
+  <div class="cf-panels" id="cf-panels">
 
-    <!-- HISTORY VIEW -->
+    <!-- PANEL 1: TRANSACTION LEDGER -->
+    <div class="cf-panel" id="cf-panel-ledger" data-panel="ledger" role="tabpanel" aria-labelledby="cf-subtab-ledger">
+      <div class="hub-cf-ledger glass-card">
+        <div class="hub-cf-ledger-header">
+          <div class="hub-cf-ledger-left">
+            <div class="hub-cf-month-bar">
+              <button class="hub-cf-month-nav" id="hub-cf-month-prev" title="${_escHtml(_t('heatmapPrevMonth'))}" aria-label="${_escHtml(_t('heatmapPrevMonth'))}">◀</button>
+              <span class="hub-cf-month-label" id="hub-cf-month-label"></span>
+              <button class="hub-cf-month-nav" id="hub-cf-month-next" title="${_escHtml(_t('heatmapNextMonth'))}" aria-label="${_escHtml(_t('heatmapNextMonth'))}">▶</button>
+            </div>
+            <span class="hub-cf-ledger-count" id="hub-cf-tx-count">${_t('txCount_zero')}</span>
+          </div>
+          <div class="hub-cf-ledger-tools">
+            <button class="hub-cf-btn hub-cf-btn--import" id="hub-cf-btn-import">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M9 2v12M5 10l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M3 14v1a1 1 0 001 1h10a1 1 0 001-1v-1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+              <span data-i18n="importXlsx">${_t('importXlsx')}</span>
+              <input type="file" id="hub-cf-file-input" accept=".xlsx" style="display:none;" />
+            </button>
+            <button class="hub-cf-btn hub-cf-btn--export" id="hub-cf-btn-export">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M9 2v10M5 8l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M3 13v2a1 1 0 001 1h10a1 1 0 001-1v-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+              <span data-i18n="exportXlsx">${_t('exportXlsx')}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- HISTORY VIEW -->
     <div class="hub-cf-view-wrapper" id="hub-cf-history-view">
       <div class="hub-cf-empty" id="hub-cf-empty-state" style="display:none;">
         <span class="hub-cf-empty-icon">📋</span>
@@ -3792,68 +3728,179 @@ function _restoreAIState() {
       </div>
     </div>
 
-    <!-- STATS VIEW -->
-    <div class="hub-cf-view-wrapper" id="hub-cf-stats-view" style="display:none;">
-      <div class="hub-cf-category-breakdown" id="hub-cf-breakdown-section">
-        <p class="hub-cf-breakdown-title" data-i18n="categoryTitle">${_t('categoryTitle')}</p>
-        <div id="hub-cf-breakdown-content"></div>
       </div>
     </div>
+
+    <!-- PANEL 2: ANALYTICS (Chart / Heatmap + Category Breakdown) -->
+    <div class="cf-panel" id="cf-panel-analytics" data-panel="analytics" role="tabpanel" aria-labelledby="cf-subtab-analytics" hidden>
+      <!-- ═══ REAL-TIME CHART / HEATMAP ═══ -->
+      <div class="hub-cf-chart-section glass-card cfc">
+        <div class="hub-cf-chart-header cfc-head">
+          <div class="cfc-titles">
+            <h4 class="hub-cf-chart-title" data-i18n="chartTitle">${_t('chartTitle')}</h4>
+            <p class="cfc-sub" id="cfc-sub"></p>
+          </div>
+
+          <div class="hub-cf-view-toggle" role="group" aria-label="View Mode">
+            <button type="button" class="hub-cf-view-toggle-btn active" data-view="chart" aria-pressed="true">
+              <svg class="hub-cf-view-toggle-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+              <span class="hub-cf-view-toggle-label" data-i18n="viewChart">${_t('viewChart')}</span>
+            </button>
+            <button type="button" class="hub-cf-view-toggle-btn" data-view="heatmap" aria-pressed="false">
+              <svg class="hub-cf-view-toggle-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+              <span class="hub-cf-view-toggle-label" data-i18n="viewHeatmap">${_t('viewHeatmap')}</span>
+            </button>
+          </div>
+
+          <select class="hub-cf-chart-filter" id="hub-cf-chart-filter" aria-label="${_escHtml(_t('chartTitle'))}">
+            <option value="day" ${_chartFilter === 'day' ? 'selected' : ''} data-i18n="chartDay">${_t('chartDay')}</option>
+            <option value="month" ${_chartFilter === 'month' ? 'selected' : ''} data-i18n="chartMonth">${_t('chartMonth')}</option>
+            <option value="year" ${_chartFilter === 'year' ? 'selected' : ''} data-i18n="chartYear">${_t('chartYear')}</option>
+          </select>
+        </div>
+
+        <!-- Chart View -->
+        <div class="hub-cf-chart-canvas-wrap cfc-view" id="hub-cf-chart-view" style="display: block;">
+          <div class="cfc-kpis" id="cfc-kpis"></div>
+          <div class="cfc-legend" id="cfc-legend" role="group" aria-label="Legend"></div>
+          <div class="cfc-canvas-box">
+            <canvas id="hub-cf-chart-canvas" role="img"></canvas>
+            <div class="cfc-empty" id="cfc-empty" hidden>
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+              <strong data-i18n="cfcEmptyTitle">${_t('cfcEmptyTitle')}</strong>
+              <span data-i18n="cfcEmptyHint">${_t('cfcEmptyHint')}</span>
+            </div>
+          </div>
+          <p class="cfc-hint" id="cfc-hint"></p>
+        </div>
+
+        <!-- Heatmap View -->
+        <div class="hub-cf-heatmap-wrap" id="hub-cf-heatmap-view" style="display: none;">
+          <div class="hub-cf-heatmap-header">
+            <div class="hub-cf-heatmap-nav" role="group" aria-label="${_escHtml(_t('heatmapPickMonth'))}">
+              <button type="button" class="hub-cf-heatmap-nav-btn" id="hub-cf-heatmap-prev" aria-label="${_escHtml(_t('heatmapPrevMonth'))}" title="${_escHtml(_t('heatmapPrevMonth'))}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg>
+              </button>
+              <button type="button" class="hub-cf-heatmap-month-btn" id="hub-cf-heatmap-month-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="hub-cf-heatmap-picker" title="${_escHtml(_t('heatmapPickMonth'))}">
+                <span class="hub-cf-heatmap-month" id="hub-cf-heatmap-month-label"></span>
+                <svg class="hub-cf-heatmap-month-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+              <button type="button" class="hub-cf-heatmap-nav-btn" id="hub-cf-heatmap-next" aria-label="${_escHtml(_t('heatmapNextMonth'))}" title="${_escHtml(_t('heatmapNextMonth'))}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </button>
+              <button type="button" class="hub-cf-heatmap-today" id="hub-cf-heatmap-today" data-i18n="heatmapThisMonth" hidden>${_t('heatmapThisMonth')}</button>
+              <div class="hub-cf-heatmap-picker" id="hub-cf-heatmap-picker" role="dialog" aria-label="${_escHtml(_t('heatmapPickMonth'))}" hidden></div>
+            </div>
+            <div class="heatmap-limit-pill" id="hub-cf-heatmap-limit-pill" tabindex="0" role="button">
+              <span class="heatmap-limit-label" data-i18n="heatmapDailyLimit">${_t('heatmapDailyLimit')}</span>
+              <span class="heatmap-limit-value" id="hub-cf-heatmap-limit-value">500.0k</span>
+              <span class="heatmap-limit-unit" data-i18n="heatmapPerDay">${_t('heatmapPerDay')}</span>
+              <span class="heatmap-limit-icon" aria-hidden="true">✏️</span>
+            </div>
+          </div>
+          <div class="hub-cf-heatmap-grid" id="hub-cf-heatmap-grid" role="grid"></div>
+          <div class="hub-cf-heatmap-legend" id="hub-cf-heatmap-legend" aria-hidden="true">
+            <div class="hub-cf-heatmap-legend-item">
+              <span class="hub-cf-heatmap-legend-color hub-cf-heatmap-legend-level-0"></span>
+              <span data-i18n="heatmapLevel0">${_t('heatmapLevel0')}</span>
+            </div>
+            <div class="hub-cf-heatmap-legend-item">
+              <span class="hub-cf-heatmap-legend-color hub-cf-heatmap-legend-level-1"></span>
+              <span data-i18n="heatmapLevel1">${_t('heatmapLevel1')}</span>
+            </div>
+            <div class="hub-cf-heatmap-legend-item">
+              <span class="hub-cf-heatmap-legend-color hub-cf-heatmap-legend-level-2"></span>
+              <span data-i18n="heatmapLevel2">${_t('heatmapLevel2')}</span>
+            </div>
+            <div class="hub-cf-heatmap-legend-item">
+              <span class="hub-cf-heatmap-legend-color hub-cf-heatmap-legend-level-3"></span>
+              <span data-i18n="heatmapLevel3">${_t('heatmapLevel3')}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hub-cf-breakdown-card glass-card">
+        <div class="hub-cf-breakdown-head">
+          <p class="hub-cf-breakdown-title" data-i18n="categoryTitle">${_t('categoryTitle')}</p>
+          <div class="hub-cf-month-bar hub-cf-month-bar--sm">
+            <button type="button" class="hub-cf-month-nav" id="hub-cf-analytics-month-prev" title="${_escHtml(_t('heatmapPrevMonth'))}" aria-label="${_escHtml(_t('heatmapPrevMonth'))}">◀</button>
+            <span class="hub-cf-month-label" id="hub-cf-analytics-month-label"></span>
+            <button type="button" class="hub-cf-month-nav" id="hub-cf-analytics-month-next" title="${_escHtml(_t('heatmapNextMonth'))}" aria-label="${_escHtml(_t('heatmapNextMonth'))}">▶</button>
+          </div>
+        </div>
+        <div class="hub-cf-category-breakdown" id="hub-cf-breakdown-section">
+          <div id="hub-cf-breakdown-content"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEL 3: PLANNING (Savings Goals + Pocket Debt Ledger) -->
+    <div class="cf-panel" id="cf-panel-planning" data-panel="planning" role="tabpanel" aria-labelledby="cf-subtab-planning" hidden>
+      <!-- ═══ SAVINGS GOALS ═══ -->
+      <section class="cfg glass-card" id="cfg-goals" aria-labelledby="cfg-title"></section>
+
+      <!-- ═══ POCKET DEBT LEDGER ═══ -->
+      <div class="hub-cf-debt-ledger glass-card">
+        <div class="hub-cf-debt-header">
+          <div class="hub-cf-debt-heading">
+            <h4 class="hub-cf-debt-title" data-i18n="ledgerTitle">${_pd_t('ledgerTitle')}</h4>
+            <p class="hub-cf-debt-subtitle" id="dl-subtitle" aria-live="polite"></p>
+          </div>
+          <div class="hub-cf-debt-actions">
+            <button class="hub-cf-btn hub-cf-btn--add-debt" id="hub-cf-btn-add-debt">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+              <span data-i18n="btnAddDebt">${_pd_t('btnAddDebt')}</span>
+            </button>
+            <button class="hub-cf-btn hub-cf-btn--ghost hub-cf-debt-history-toggle" id="hub-cf-debt-history-toggle" data-i18n="toggleHistory" aria-label="${_pd_t('toggleHistory')}">${_pd_t('toggleHistory')}</button>
+          </div>
+        </div>
+
+        <div class="dl" id="dl-root">
+          <div class="dl-stats" id="dl-stats" hidden></div>
+          <div class="dl-toolbar" id="dl-toolbar" hidden>
+            <div class="dl-filters" id="dl-filters" role="group">
+              <button type="button" class="dl-filter" data-filter="all" aria-pressed="true"></button>
+              <button type="button" class="dl-filter" data-filter="overdue" aria-pressed="false"></button>
+              <button type="button" class="dl-filter" data-filter="soon" aria-pressed="false"></button>
+              <button type="button" class="dl-filter" data-filter="paid" aria-pressed="false"></button>
+            </div>
+            <div class="dl-tools">
+              <label class="dl-search">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+                <input type="search" id="dl-search" autocomplete="off" />
+              </label>
+              <select id="dl-sort" class="dl-sort"></select>
+            </div>
+          </div>
+          <div class="dl-undo" id="dl-undo" role="status" aria-live="polite" hidden></div>
+        </div>
+
+        <div class="hub-cf-debt-empty" id="hub-cf-debt-empty-state" style="display:none;">
+          <span class="hub-cf-debt-empty-icon">📓</span>
+          <p class="hub-cf-debt-empty-text" data-i18n="noDebtsYet">${_pd_t('noDebtsYet')}</p>
+          <p class="hub-cf-debt-empty-hint" data-i18n="noDebtsHint">${_pd_t('noDebtsHint')}</p>
+        </div>
+
+        <div class="dl-list-wrap" id="hub-cf-debt-table-wrap" style="display:none;">
+          <div class="dl-list" id="hub-cf-debt-body" role="list"></div>
+          <div class="dl-noresult" id="dl-noresult" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEL 4: AI FINANCIAL ADVISOR -->
+    <div class="cf-panel" id="cf-panel-ai" data-panel="ai" role="tabpanel" aria-labelledby="cf-subtab-ai" hidden>
+      <!-- ═══ AI FINANCIAL ADVISOR v2 ═══ -->
+      ${_aiShellHTML()}
+    </div>
+
   </div>
 </div>
 
-<!-- ═══ POCKET DEBT LEDGER ═══ -->
-<div class="hub-cf-debt-ledger glass-card">
-  <div class="hub-cf-debt-header">
-    <div class="hub-cf-debt-heading">
-      <h4 class="hub-cf-debt-title" data-i18n="ledgerTitle">${_pd_t('ledgerTitle')}</h4>
-      <p class="hub-cf-debt-subtitle" id="dl-subtitle" aria-live="polite"></p>
-    </div>
-    <div class="hub-cf-debt-actions">
-      <button class="hub-cf-btn hub-cf-btn--add-debt" id="hub-cf-btn-add-debt">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-        <span data-i18n="btnAddDebt">${_pd_t('btnAddDebt')}</span>
-      </button>
-      <button class="hub-cf-btn hub-cf-btn--ghost hub-cf-debt-history-toggle" id="hub-cf-debt-history-toggle" data-i18n="toggleHistory" aria-label="${_pd_t('toggleHistory')}">${_pd_t('toggleHistory')}</button>
-    </div>
-  </div>
-
-  <div class="dl" id="dl-root">
-    <div class="dl-stats" id="dl-stats" hidden></div>
-    <div class="dl-toolbar" id="dl-toolbar" hidden>
-      <div class="dl-filters" id="dl-filters" role="group">
-        <button type="button" class="dl-filter" data-filter="all" aria-pressed="true"></button>
-        <button type="button" class="dl-filter" data-filter="overdue" aria-pressed="false"></button>
-        <button type="button" class="dl-filter" data-filter="soon" aria-pressed="false"></button>
-        <button type="button" class="dl-filter" data-filter="paid" aria-pressed="false"></button>
-      </div>
-      <div class="dl-tools">
-        <label class="dl-search">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
-          <input type="search" id="dl-search" autocomplete="off" />
-        </label>
-        <select id="dl-sort" class="dl-sort"></select>
-      </div>
-    </div>
-    <div class="dl-undo" id="dl-undo" role="status" aria-live="polite" hidden></div>
-  </div>
-
-  <div class="hub-cf-debt-empty" id="hub-cf-debt-empty-state" style="display:none;">
-    <span class="hub-cf-debt-empty-icon">📓</span>
-    <p class="hub-cf-debt-empty-text" data-i18n="noDebtsYet">${_pd_t('noDebtsYet')}</p>
-    <p class="hub-cf-debt-empty-hint" data-i18n="noDebtsHint">${_pd_t('noDebtsHint')}</p>
-  </div>
-
-  <div class="dl-list-wrap" id="hub-cf-debt-table-wrap" style="display:none;">
-    <div class="dl-list" id="hub-cf-debt-body" role="list"></div>
-    <div class="dl-noresult" id="dl-noresult" hidden></div>
-  </div>
-</div>
-
-<!-- ═══ AI FINANCIAL ADVISOR v2 ═══ -->
-${_aiShellHTML()}
+<div id="cfg-modal-root"></div>
 
 <!-- ═══ AI KEY MANAGEMENT MODAL ═══ -->
 <div id="cf-ai-key-modal" class="hub-cf-ai-key-modal" role="dialog" aria-modal="true" aria-label="${_escHtml(_t('aiKeyModalTitle'))}" style="display:none;">
@@ -4716,6 +4763,7 @@ ${_aiShellHTML()}
     var months = _heatmapMonthNames(false);
     var label = months[_currentMonth.month - 1] + ' ' + _currentMonth.year;
     _setTextById('hub-cf-month-label', label);
+    _setTextById('hub-cf-analytics-month-label', label);
   }
 
   function _refreshTransactions() {
@@ -5811,6 +5859,18 @@ ${_aiShellHTML()}
     var active = _getActiveDebts(), paid = _getPaidDebts();
     var overdue = active.filter(function (d) { return _getDebtStatus(d) === 'overdue'; });
     var soon = active.filter(_dlIsSoon);
+    var debtBadge = _qs('#cf-nav-debt-badge');
+    if (debtBadge) {
+      var urgentCount = overdue.length + soon.length;
+      if (active.length > 0) {
+        debtBadge.textContent = String(active.length);
+        debtBadge.hidden = false;
+        debtBadge.classList.toggle('is-urgent', urgentCount > 0);
+      } else {
+        debtBadge.hidden = true;
+        debtBadge.classList.remove('is-urgent');
+      }
+    }
 
     // ── Dải tóm tắt ──
     var now = new Date(), collected = paid.filter(function (d) {
@@ -6579,7 +6639,7 @@ ${_aiShellHTML()}
       });
     }
 
-    // Month navigation
+    // Month navigation (Ledger + Analytics breakdown)
     const prevBtn = _qs('#hub-cf-month-prev');
     const nextBtn = _qs('#hub-cf-month-next');
     if (prevBtn) {
@@ -6587,6 +6647,14 @@ ${_aiShellHTML()}
     }
     if (nextBtn) {
       nextBtn.addEventListener('click', function () { _shiftMonth(1); });
+    }
+    const analyticsPrevBtn = _qs('#hub-cf-analytics-month-prev');
+    const analyticsNextBtn = _qs('#hub-cf-analytics-month-next');
+    if (analyticsPrevBtn) {
+      analyticsPrevBtn.addEventListener('click', function () { _shiftMonth(-1); });
+    }
+    if (analyticsNextBtn) {
+      analyticsNextBtn.addEventListener('click', function () { _shiftMonth(1); });
     }
 
     // Chart filter change — re-render dashboard totals + chart
@@ -6605,35 +6673,84 @@ ${_aiShellHTML()}
     // Initialize heatmap toggle
     _initHeatmapToggle();
 
-    // ── Segmented Tab Switcher: Ledger ↔ Stats ──
-    var ledgerTab = _qs('#hub-cf-tab-ledger');
-    var statsTab  = _qs('#hub-cf-tab-stats');
-    var historyView = _qs('#hub-cf-history-view');
-    var statsView   = _qs('#hub-cf-stats-view');
+    // ── CashFlow 4-Tab Workspace Switching ──
+    var CF_SUBTABS = ['ledger', 'analytics', 'planning', 'ai'];
+    var subnavEl   = _qs('#cf-subnav');
+    var subtabBtns = subnavEl ? Array.prototype.slice.call(subnavEl.querySelectorAll('.cf-subnav-btn')) : [];
+    var cfPanels   = Array.prototype.slice.call(document.querySelectorAll('#cf-panels > .cf-panel'));
 
-    var _ledgerView = 'ledger'; // 'ledger' | 'stats'
+    function _switchCFSubTab(tabId, opts) {
+      if (CF_SUBTABS.indexOf(tabId) === -1) tabId = 'ledger';
+      try { localStorage.setItem('hub_cf_subtab', tabId); } catch (_) {}
 
-    function _switchLedgerView(view) {
-      _ledgerView = view;
-      if (ledgerTab) ledgerTab.setAttribute('aria-selected', view === 'ledger');
-      if (statsTab)  statsTab.setAttribute('aria-selected',  view === 'stats');
+      subtabBtns.forEach(function (btn) {
+        var active = btn.getAttribute('data-subtab') === tabId;
+        btn.setAttribute('aria-selected', active ? 'true' : 'false');
+        btn.setAttribute('tabindex', active ? '0' : '-1');
+      });
 
-      var switcher = _qs('.hub-cf-tab-switcher');
-      if (switcher) switcher.setAttribute('data-active-view', view);
+      cfPanels.forEach(function (panel) {
+        panel.hidden = (panel.getAttribute('data-panel') !== tabId);
+      });
 
-      // ONLY toggle the VIEW WRAPPERS — never touch emptyState/tableWrap directly
-      // _refreshTransactions() owns the empty-vs-table logic inside historyView
-      var showHistory = view === 'ledger';
-      var showStats   = view === 'stats';
+      if (tabId === 'analytics') {
+        requestAnimationFrame(function () {
+          if (_chart && typeof _chart.resize === 'function') _chart.resize();
+          _updateChart();
+          _refreshHeatmap();
+          _renderCategoryBreakdown();
+        });
+      } else if (tabId === 'planning') {
+        _renderGoals();
+        _refreshDebtLedger();
+      }
 
-      if (historyView) historyView.style.display = showHistory ? '' : 'none';
-      if (statsView)   statsView.style.display   = showStats   ? '' : 'none';
+      if (opts && opts.scroll && subnavEl && typeof subnavEl.scrollIntoView === 'function') {
+        subnavEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
     }
 
-    if (ledgerTab && statsTab) {
-      ledgerTab.addEventListener('click', function () { _switchLedgerView('ledger'); });
-      statsTab.addEventListener('click',  function () { _switchLedgerView('stats');  });
+    subtabBtns.forEach(function (btn, idx) {
+      btn.addEventListener('click', function () {
+        _switchCFSubTab(btn.getAttribute('data-subtab'));
+      });
+      btn.addEventListener('keydown', function (e) {
+        var nextIdx = -1;
+        if (e.key === 'ArrowRight') nextIdx = (idx + 1) % subtabBtns.length;
+        else if (e.key === 'ArrowLeft') nextIdx = (idx - 1 + subtabBtns.length) % subtabBtns.length;
+        else if (e.key === 'Home') nextIdx = 0;
+        else if (e.key === 'End') nextIdx = subtabBtns.length - 1;
+        if (nextIdx === -1) return;
+        e.preventDefault();
+        var targetBtn = subtabBtns[nextIdx];
+        if (targetBtn) {
+          _switchCFSubTab(targetBtn.getAttribute('data-subtab'));
+          targetBtn.focus();
+        }
+      });
+    });
+
+    function _bindJumpCard(el, targetTab) {
+      if (!el) return;
+      el.addEventListener('click', function () {
+        _switchCFSubTab(targetTab, { scroll: true });
+      });
+      el.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          _switchCFSubTab(targetTab, { scroll: true });
+        }
+      });
     }
+    _bindJumpCard(_qs('#cf-debt-shortcut'), 'planning');
+    _bindJumpCard(_qs('#cf-uncategorized-card'), 'ledger');
+
+    var initialTab = 'ledger';
+    try {
+      var savedTab = localStorage.getItem('hub_cf_subtab');
+      if (CF_SUBTABS.indexOf(savedTab) !== -1) initialTab = savedTab;
+    } catch (_) {}
+    _switchCFSubTab(initialTab);
 
     // Escape key to close modals
     _boundKeydown = function (e) {

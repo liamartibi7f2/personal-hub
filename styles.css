@@ -26950,3 +26950,503 @@ body.theme-optimized .dsh { --d-bank: var(--cfk-info); }
   .dsh *, .dsh *::before, .dsh *::after { transition: none !important; animation: none !important; }
 }
 body.theme-optimized .dsh *, body.perf-lite .dsh * { animation: none !important; }
+
+/* ==========================================================================
+   CASHFLOW WORKSPACE v2 — Entry Row · 4-Tab Subnav · Panels · 5-Theme Polish
+   ========================================================================== */
+
+/* ── 1. Dashboard jumpable notes ── */
+.cfd-note--jump {
+  cursor: pointer;
+  transition: border-color 0.16s ease, background-color 0.16s ease, transform 0.16s ease;
+}
+.cfd-note--jump:hover {
+  border-color: var(--cfk-accent, var(--accent-primary));
+  transform: translateY(-1px);
+}
+.cfd-note--jump:focus-visible {
+  outline: 2px solid var(--cfk-accent, var(--accent-primary));
+  outline-offset: 2px;
+}
+
+/* ── 2. Quick Entry + Add Detail row ── */
+.cf-entry-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+}
+.cf-entry-row > .cfq {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cf-entry-add {
+  flex: 0 0 auto;
+  min-height: 56px;
+  padding: 0 20px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 700;
+}
+
+/* ── 3. 4-Tab Sub-Navigation ── */
+.cf-subnav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px;
+  border-radius: var(--cfk-r-lg, 14px);
+  background: color-mix(in srgb, var(--cfk-elevated, var(--bg-elevated)) 78%, var(--cfk-card, var(--bg-surface)));
+  border: 1px solid var(--cfk-line, var(--glass-border));
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.cf-subnav::-webkit-scrollbar { display: none; }
+.cf-subnav-btn {
+  position: relative;
+  flex: 1 1 0;
+  min-width: max-content;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: var(--cfk-r-sm, 10px);
+  background: transparent;
+  color: var(--cfk-text-2, var(--text-secondary));
+  font: 600 0.85rem/1 var(--font-body);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.16s ease, background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+.cf-subnav-btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  opacity: 0.78;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+.cf-subnav-btn:hover {
+  color: var(--cfk-text, var(--text-primary));
+  background: var(--cfk-hi, var(--glass-highlight));
+}
+.cf-subnav-btn:hover svg { opacity: 1; }
+.cf-subnav-btn[aria-selected="true"] {
+  color: var(--cfk-accent, var(--accent-primary));
+  background: color-mix(in srgb, var(--cfk-accent, var(--accent-primary)) 12%, var(--cfk-card, var(--bg-surface)));
+  border-color: color-mix(in srgb, var(--cfk-accent, var(--accent-primary)) 45%, transparent);
+  box-shadow: 0 4px 16px -8px color-mix(in srgb, var(--cfk-accent, var(--accent-primary)) 55%, transparent);
+}
+.cf-subnav-btn[aria-selected="true"] svg { opacity: 1; }
+.cf-subnav-btn:focus-visible {
+  outline: 2px solid var(--cfk-accent, var(--accent-primary));
+  outline-offset: 2px;
+}
+.cf-subnav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cfk-accent, var(--accent-primary)) 18%, transparent);
+  color: var(--cfk-accent, var(--accent-primary));
+  font: 700 0.7rem/1 var(--cfk-font-num, var(--font-mono));
+}
+.cf-subnav-badge.is-urgent {
+  background: color-mix(in srgb, var(--danger, #ff4466) 20%, transparent);
+  color: var(--danger, #ff4466);
+  border: 1px solid color-mix(in srgb, var(--danger, #ff4466) 45%, transparent);
+}
+
+/* ── 4. Panels, Compact Ledger Tools, Analytics Breakdown Card ── */
+.cf-panels {
+  width: 100%;
+  min-width: 0;
+}
+.cf-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  width: 100%;
+  min-width: 0;
+  animation: cf-panel-in 0.18s ease-out;
+}
+.cf-panel[hidden] { display: none !important; }
+@keyframes cf-panel-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.cf-panel > .hub-cf-chart-section,
+.cf-panel > .hub-cf-debt-ledger,
+.cf-panel > #cfx-ai {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.hub-cf-ledger-header {
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+.hub-cf-ledger-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.hub-cf-ledger-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.hub-cf-ledger-tools .hub-cf-btn {
+  min-height: 34px;
+  padding: 6px 12px;
+  font-size: 0.78rem;
+  gap: 6px;
+}
+.hub-cf-ledger-tools .hub-cf-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.hub-cf-breakdown-card {
+  position: relative;
+  padding: var(--space-lg);
+  background-color: var(--cfk-card, var(--bg-surface));
+  background-image: var(--cfk-deco, none);
+  background-size: var(--cfk-deco-size, auto);
+  background-position: var(--cfk-deco-pos, 0 0);
+  background-repeat: no-repeat;
+  border: 1px solid var(--cfk-line, var(--glass-border));
+  border-radius: var(--cfk-r-lg, 14px);
+  box-shadow: var(--cfk-card-shadow, none);
+}
+.hub-cf-breakdown-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--cfk-line, var(--glass-border));
+}
+.hub-cf-breakdown-head .hub-cf-breakdown-title {
+  margin: 0;
+}
+.hub-cf-breakdown-card .hub-cf-category-breakdown {
+  margin: 0;
+  border-bottom: 0;
+}
+.hub-cf-month-bar--sm .hub-cf-month-nav {
+  width: 28px;
+  height: 28px;
+  font-size: 0.72rem;
+}
+.hub-cf-month-bar--sm .hub-cf-month-label {
+  font-size: 0.82rem;
+}
+
+/* ==========================================================================
+   5-THEME POLISH FOR CASHFLOW WORKSPACE v2
+   ========================================================================== */
+
+/* ---- A · Cyberpunk — Neon Command Strip ---- */
+[data-theme="cyberpunk"] body:not(.theme-optimized) .cf-subnav {
+  border-radius: 4px;
+  border-color: rgba(0, 240, 255, 0.24);
+  background:
+    linear-gradient(90deg, rgba(0, 240, 255, 0.06), rgba(179, 71, 234, 0.05) 55%, transparent),
+    repeating-linear-gradient(0deg, transparent 0 3px, rgba(0, 240, 255, 0.025) 3px 4px),
+    var(--bg-deep);
+}
+[data-theme="cyberpunk"] body:not(.theme-optimized) .cf-subnav-btn {
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+[data-theme="cyberpunk"] body:not(.theme-optimized) .cf-subnav-btn[aria-selected="true"] {
+  background: linear-gradient(90deg, rgba(0, 240, 255, 0.18), rgba(179, 71, 234, 0.14));
+  border-color: rgba(0, 240, 255, 0.65);
+  color: #00f0ff;
+  text-shadow: 0 0 12px rgba(0, 240, 255, 0.45);
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+}
+[data-theme="cyberpunk"] body:not(.theme-optimized) .cf-entry-add {
+  border-radius: 0;
+  border: 0;
+  background: linear-gradient(90deg, #00f0ff, color-mix(in srgb, #00f0ff 58%, #b347ea));
+  color: #06080f;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+}
+[data-theme="cyberpunk"] body:not(.theme-optimized) .cf-entry-row .cfq-bar {
+  border-radius: 3px;
+  border-color: rgba(0, 240, 255, 0.24);
+}
+[data-theme="cyberpunk"] body:not(.theme-optimized) .cf-panel > .hub-cf-ledger,
+[data-theme="cyberpunk"] body:not(.theme-optimized) .cf-panel > .hub-cf-chart-section,
+[data-theme="cyberpunk"] body:not(.theme-optimized) .cf-panel > .hub-cf-breakdown-card,
+[data-theme="cyberpunk"] body:not(.theme-optimized) .cf-panel > .hub-cf-debt-ledger {
+  border-color: rgba(0, 240, 255, 0.18);
+  box-shadow: inset 0 1px 0 rgba(0, 240, 255, 0.22), 0 12px 30px -18px rgba(0, 0, 0, 0.75);
+}
+
+/* ---- B · Solar Zen — Sunlit Paper Studio ---- */
+[data-theme="solar-zen"] body:not(.theme-optimized) .cf-subnav {
+  padding: 5px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+[data-theme="solar-zen"] body:not(.theme-optimized) .cf-subnav-btn {
+  border-radius: 999px;
+  color: #475569;
+  font-weight: 600;
+}
+[data-theme="solar-zen"] body:not(.theme-optimized) .cf-subnav-btn[aria-selected="true"] {
+  background: #ffffff;
+  color: #1e293b;
+  border-color: rgba(15, 23, 42, 0.06);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.09), 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+[data-theme="solar-zen"] body:not(.theme-optimized) .cf-subnav-btn[aria-selected="true"] svg {
+  color: #4f46e5;
+}
+[data-theme="solar-zen"] body:not(.theme-optimized) .cf-entry-row .cfq-bar {
+  border-radius: 18px;
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.1);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 24px -18px rgba(15, 23, 42, 0.16);
+}
+[data-theme="solar-zen"] body:not(.theme-optimized) .cf-entry-add {
+  border-radius: 999px;
+  border: 0;
+  padding: 0 22px;
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  color: #ffffff;
+  box-shadow: 0 10px 22px -10px rgba(79, 70, 229, 0.65);
+}
+[data-theme="solar-zen"] body:not(.theme-optimized) .cf-entry-add:hover {
+  color: #ffffff;
+  background: linear-gradient(135deg, #4338ca, #6d28d9);
+  box-shadow: 0 14px 26px -10px rgba(79, 70, 229, 0.78);
+}
+[data-theme="solar-zen"] body:not(.theme-optimized) .cf-panel > .hub-cf-ledger,
+[data-theme="solar-zen"] body:not(.theme-optimized) .cf-panel > .hub-cf-chart-section,
+[data-theme="solar-zen"] body:not(.theme-optimized) .cf-panel > .hub-cf-breakdown-card,
+[data-theme="solar-zen"] body:not(.theme-optimized) .cf-panel > .hub-cf-debt-ledger {
+  border-radius: 20px;
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 16px 34px -22px rgba(15, 23, 42, 0.16);
+}
+[data-theme="solar-zen"] body:not(.theme-optimized) .hub-cf-ledger-tools .hub-cf-btn {
+  border-radius: 999px;
+}
+
+/* ---- C · Lo-Fi Twilight — Cozy Stitched Dock ---- */
+[data-theme="lofi-twilight"] body:not(.theme-optimized) .cf-subnav {
+  padding: 6px;
+  border-radius: 999px;
+  border: 1.5px dashed rgba(192, 202, 245, 0.22);
+  background: var(--bg-deep);
+}
+[data-theme="lofi-twilight"] body:not(.theme-optimized) .cf-subnav-btn {
+  border-radius: 999px;
+  font-weight: 700;
+}
+[data-theme="lofi-twilight"] body:not(.theme-optimized) .cf-subnav-btn[aria-selected="true"] {
+  background: #bb9af7;
+  color: #1a1b26;
+  border-color: transparent;
+  box-shadow: 3px 3px 0 rgba(255, 158, 100, 0.65);
+}
+[data-theme="lofi-twilight"] body:not(.theme-optimized) .cf-subnav-btn[aria-selected="true"] .cf-subnav-badge {
+  background: rgba(26, 27, 38, 0.2);
+  color: #1a1b26;
+  border-color: transparent;
+}
+[data-theme="lofi-twilight"] body:not(.theme-optimized) .cf-entry-row .cfq-bar {
+  border-radius: 20px;
+  border: 1.5px solid rgba(192, 202, 245, 0.2);
+}
+[data-theme="lofi-twilight"] body:not(.theme-optimized) .cf-entry-add {
+  border-radius: 999px;
+  border: 0;
+  padding: 0 22px;
+  background: #bb9af7;
+  color: #1a1b26;
+  font-weight: 800;
+  box-shadow: 0 4px 0 #7357a8;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+[data-theme="lofi-twilight"] body:not(.theme-optimized) .cf-entry-add:hover {
+  background: #c7abfa;
+  color: #1a1b26;
+  transform: translateY(-1px);
+  box-shadow: 0 5px 0 #7357a8;
+}
+[data-theme="lofi-twilight"] body:not(.theme-optimized) .cf-entry-add:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #7357a8;
+}
+[data-theme="lofi-twilight"] body:not(.theme-optimized) .cf-panel > .hub-cf-ledger,
+[data-theme="lofi-twilight"] body:not(.theme-optimized) .cf-panel > .hub-cf-breakdown-card,
+[data-theme="lofi-twilight"] body:not(.theme-optimized) .cf-panel > .hub-cf-debt-ledger {
+  border-radius: 22px;
+  outline: 1.5px dashed rgba(187, 154, 247, 0.22);
+  outline-offset: -7px;
+}
+[data-theme="lofi-twilight"] body:not(.theme-optimized) .hub-cf-ledger-tools .hub-cf-btn {
+  border-radius: 999px;
+  border-style: dashed;
+}
+
+/* ---- D · Ember Noir — Brass Ledger Rail ---- */
+[data-theme="ember-noir"] body:not(.theme-optimized) .cf-subnav {
+  padding: 0;
+  gap: 0;
+  border-radius: 0;
+  border: 1px solid var(--ember-brass-line, rgba(224, 170, 100, 0.22));
+  background: linear-gradient(180deg, rgba(255, 159, 67, 0.05), transparent), #140f0c;
+}
+[data-theme="ember-noir"] body:not(.theme-optimized) .cf-subnav-btn {
+  border-radius: 0;
+  min-height: 44px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  font-family: var(--cfk-font-num, var(--font-mono));
+  font-size: 0.78rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cfk-text-2, #c8b4a5);
+}
+[data-theme="ember-noir"] body:not(.theme-optimized) .cf-subnav-btn[aria-selected="true"] {
+  background: linear-gradient(0deg, rgba(255, 159, 67, 0.11), transparent 80%);
+  border-bottom-color: var(--ember-brass, #e0aa64);
+  color: var(--ember-brass, #e0aa64);
+  box-shadow: inset 0 1px 0 rgba(224, 170, 100, 0.25);
+}
+[data-theme="ember-noir"] body:not(.theme-optimized) .cf-subnav-btn[aria-selected="true"]::before {
+  content: "◆";
+  font-size: 0.62rem;
+  color: var(--ember-brass, #e0aa64);
+}
+[data-theme="ember-noir"] body:not(.theme-optimized) .cf-entry-add {
+  border-radius: 2px;
+  border: 1px solid #f3c27f;
+  background: linear-gradient(180deg, #f3c27f, #e0aa64 48%, #b9813f);
+  color: #1a1411;
+  font-family: var(--cfk-font-num, var(--font-mono));
+  font-size: 0.82rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+  box-shadow: 0 8px 20px -10px rgba(255, 159, 67, 0.6);
+}
+[data-theme="ember-noir"] body:not(.theme-optimized) .cf-entry-add:hover {
+  color: #1a1411;
+  filter: brightness(1.08);
+}
+[data-theme="ember-noir"] body:not(.theme-optimized) .hub-cf-ledger-tools .hub-cf-btn {
+  border-radius: 2px;
+  border-color: var(--ember-brass-line, rgba(224, 170, 100, 0.26));
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+}
+
+/* ---- E · Optimize — Terminal TUI Tabs ---- */
+body.theme-optimized .cf-subnav {
+  padding: 2px;
+  border-radius: 0;
+  border: 1px solid var(--accent-primary);
+  background: transparent;
+}
+body.theme-optimized .cf-subnav-btn {
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  text-transform: lowercase;
+  box-shadow: none !important;
+}
+body.theme-optimized .cf-subnav-btn[aria-selected="true"] {
+  background: var(--accent-primary);
+  color: #000000;
+  border-color: var(--accent-primary);
+}
+body.theme-optimized .cf-subnav-btn[aria-selected="true"]::before {
+  content: "▶";
+  font-size: 0.72rem;
+}
+body.theme-optimized .cf-subnav-badge {
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  padding: 0 2px;
+}
+body.theme-optimized .cf-subnav-badge::before { content: "["; }
+body.theme-optimized .cf-subnav-badge::after  { content: "]"; }
+body.theme-optimized .cf-subnav-btn[aria-selected="true"] .cf-subnav-badge {
+  color: #000000;
+}
+body.theme-optimized .cf-entry-add {
+  border-radius: 0;
+  background: transparent;
+  color: var(--accent-primary);
+  border: 1px solid var(--accent-primary);
+  font-family: var(--font-mono);
+  text-transform: lowercase;
+  box-shadow: none !important;
+}
+body.theme-optimized .cf-entry-add:hover {
+  background: var(--accent-primary);
+  color: #000000;
+}
+body.theme-optimized .hub-cf-breakdown-card {
+  border-radius: 0;
+  box-shadow: none !important;
+}
+
+/* ── 5. Responsive + motion safety ── */
+@media (max-width: 720px) {
+  .cf-entry-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .cf-entry-add {
+    width: 100%;
+    min-height: 44px;
+  }
+  .cf-subnav {
+    gap: 4px;
+    padding: 4px;
+  }
+  .cf-subnav-btn {
+    flex: 0 0 auto;
+    padding: 0 13px;
+    font-size: 0.8rem;
+  }
+  .hub-cf-ledger-tools {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cf-panel { animation: none !important; }
+}
+body.perf-lite .cf-panel { animation: none !important; }
