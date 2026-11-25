@@ -84,10 +84,14 @@ service cloud.firestore {
     //   rooms/{roomId}                       thông tin + luật phòng + trạng thái quản lý
     //        name, code, ownerUid, maxHearts, regenDays, cutoff, createdAt,
     //        maxMembers (2–20), joinOpen (khoá/mở cho người mới), memberCount (đếm thành viên), deleting (đang xoá),
-    //        photoDays (3–365, mặc định 30: ảnh check-in mới tự hết hạn sau bấy nhiêu ngày)
+    //        photoDays (3–365, mặc định 30: ảnh check-in mới tự hết hạn sau bấy nhiêu ngày),
+    //        challenge (bật/tắt mã thử thách mỗi lần chụp; thiếu = tắt)
     //   rooms/{roomId}/members/{uid}         hồ sơ + cam kết của từng người
     //   rooms/{roomId}/checkins/{uid_date}   mỗi người mỗi ngày đúng một check-in (BẮT BUỘC kèm ảnh lúc tạo)
     //        + photoMode (all | some | me), photoExpireAt, photoState (deleted | expired khi ảnh đã gỡ). Giờ check-in luôn được giữ.
+    //        + ch (mã thử thách 'P482' | 'F7' | ''), ph / pm (dấu vân tay ảnh dHash 256 bit và bản lật ngang; dùng báo ảnh trùng, sống lâu hơn ảnh)
+    //   rooms/{roomId}/reviews/{uid_date_voter}  phiếu duyệt chéo: { target, by, v: ok | sus, ref, at }
+    //        quá nửa người KHÁC nghi ngờ → check-in bị hủy (client tính lại từ phiếu, không lưu cờ)
     //   rooms/{roomId}/photos/{uid_date}     ảnh check-in (JPEG dataURL đã nén), tách riêng cho nhẹ
     //        + viewers (không có = cả phòng · [] = chỉ mình · [uid…] = chỉ những người đó), expireAt (TTL của Firestore dọn)
     //   rooms/{roomId}/nudges/{from_to_date} lời nhắc nhẹ
@@ -158,6 +162,45 @@ service cloud.firestore {
               && d.expireAt <= request.time + duration.value(
                    get(/databases/$(db)/documents/rooms/$(roomId)).data.get('photoDays', 30), 'd'));
     }
+    // ── Mã thử thách · dấu vân tay ảnh ───────────────────────────
+    //   ch: 'P' + số 100–999 (viết lên giấy) hoặc 'F' + 1–10 (giơ ngón tay); '' = không có.
+    //   ph / pm: 64 ký tự hex (256 bit). Luật chỉ kiểm định dạng; việc đối chiếu số trên ảnh là của người duyệt.
+    function okCode(v) { return v is string && (v == '' || v.matches('^(P[1-9][0-9]{2}|F([1-9]|10))$')); }
+    function okHash(v) { return v is string && (v == '' || v.matches('^[0-9a-f]{64}$')); }
+    function challengeOn(roomId) {
+      return get(/databases/$(db)/documents/rooms/$(roomId)).data.get('challenge', false) == true;
+    }
+
+    // ── Duyệt chéo ───────────────────────────────────────────────
+    // Một phiếu = (ảnh, người duyệt). Id phiếu = <uid_date> + '_' + <uid người duyệt>.
+    //   - người duyệt là thành viên, KHÔNG phải chủ check-in
+    //   - ref = giây của check-in.at → phiếu cũ không dính sang lần check-in mới (xoá rồi chụp lại)
+    //   - chỉ duyệt được ảnh mà mình ĐỌC được (còn hạn, nằm trong viewers) — không thể duyệt thứ mình không thấy
+    //   - trong 72 giờ kể từ check-in; hết hạn thì chốt, ai cũng không đổi được nữa
+    function validReviewTarget(ck, ph, ref) {
+      return ck.uid != request.auth.uid
+          && ck.hasPhoto == true
+          && photoReadable(ph)
+          && ck.at is timestamp
+          && ref * 1000 <= ck.at.toMillis()
+          && ck.at.toMillis() < (ref + 1) * 1000
+          && request.time < ck.at + duration.value(3, 'd');
+    }
+    function validReview(roomId, id) {
+      let d = request.resource.data;
+      let ckPath = /databases/$(db)/documents/rooms/$(roomId)/checkins/$(d.target);
+      let phPath = /databases/$(db)/documents/rooms/$(roomId)/photos/$(d.target);
+      return d.keys().hasOnly(['target', 'by', 'v', 'ref', 'at'])
+          && d.target is string && d.target.size() >= 1 && d.target.size() <= 80
+          && d.by == request.auth.uid
+          && id == d.target + '_' + d.by
+          && d.v in ['ok', 'sus']
+          && d.ref is int && d.ref >= 1000000000 && d.ref <= 9999999999
+          && d.at == request.time
+          && exists(ckPath) && exists(phPath)
+          && validReviewTarget(get(ckPath).data, get(phPath).data, d.ref);
+    }
+
     function validPhotoDays(d) {
       return !('photoDays' in d) || (d.photoDays is int && d.photoDays >= 3 && d.photoDays <= 365);
     }
@@ -182,13 +225,14 @@ service cloud.firestore {
     match /rooms/{roomId} {
       allow create: if signedIn()
                     && request.resource.data.ownerUid == request.auth.uid
-                    && request.resource.data.keys().hasOnly(['name', 'code', 'ownerUid', 'maxHearts', 'regenDays', 'cutoff', 'createdAt', 'maxMembers', 'joinOpen', 'memberCount', 'photoDays'])
+                    && request.resource.data.keys().hasOnly(['name', 'code', 'ownerUid', 'maxHearts', 'regenDays', 'cutoff', 'createdAt', 'maxMembers', 'joinOpen', 'memberCount', 'photoDays', 'challenge'])
                     && request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 40
                     && request.resource.data.get('memberCount', 1) == 1
                     && request.resource.data.get('joinOpen', true) == true
                     && (!('maxMembers' in request.resource.data)
                         || (request.resource.data.maxMembers is int && request.resource.data.maxMembers >= 2 && request.resource.data.maxMembers <= 20))
-                    && validPhotoDays(request.resource.data);
+                    && validPhotoDays(request.resource.data)
+                    && request.resource.data.get('challenge', false) is bool;
       allow read: if isRoomMember(roomId);
 
       // CHỦ PHÒNG: đổi tên, luật tim, mã mời, số người tối đa, khoá/mở, đếm thành viên,
@@ -196,12 +240,13 @@ service cloud.firestore {
       allow update: if isRoomMember(roomId)
                     && resource.data.ownerUid == request.auth.uid
                     && request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['name', 'maxHearts', 'regenDays', 'code', 'maxMembers', 'joinOpen', 'ownerUid', 'memberCount', 'deleting', 'photoDays'])
+                         .hasOnly(['name', 'maxHearts', 'regenDays', 'code', 'maxMembers', 'joinOpen', 'ownerUid', 'memberCount', 'deleting', 'photoDays', 'challenge'])
                     && request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 40
                     && (!('maxMembers' in request.resource.data)
                         || (request.resource.data.maxMembers is int && request.resource.data.maxMembers >= 2 && request.resource.data.maxMembers <= 20))
                     && (!('joinOpen' in request.resource.data) || request.resource.data.joinOpen is bool)
                     && validPhotoDays(request.resource.data)
+                    && request.resource.data.get('challenge', false) is bool
                     && (!('memberCount' in request.resource.data) || request.resource.data.memberCount is int)
                     && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['maxMembers'])
                         || request.resource.data.maxMembers >= request.resource.data.get('memberCount', 0))
@@ -257,8 +302,12 @@ service cloud.firestore {
       match /checkins/{id} {
         allow read: if isRoomMember(roomId);
         allow create: if isRoomMember(roomId)
-                      && request.resource.data.keys().hasOnly(['uid', 'date', 'day', 'at', 'note', 'late', 'hasPhoto', 'photoMode', 'photoExpireAt'])
+                      && request.resource.data.keys().hasOnly(['uid', 'date', 'day', 'at', 'note', 'late', 'hasPhoto', 'photoMode', 'photoExpireAt', 'ch', 'ph', 'pm'])
                       && request.resource.data.hasPhoto == true
+                      && okCode(request.resource.data.get('ch', ''))
+                      && okHash(request.resource.data.get('ph', ''))
+                      && okHash(request.resource.data.get('pm', ''))
+                      && (!challengeOn(roomId) || request.resource.data.get('ch', '') != '')      // phòng bật mã thử thách → bắt buộc kèm mã
                       && existsAfter(/databases/$(db)/documents/rooms/$(roomId)/photos/$(id))
                       && request.resource.data.get('photoMode', 'all')
                            == modeOf(getAfter(/databases/$(db)/documents/rooms/$(roomId)/photos/$(id)).data.get('viewers', null))
@@ -322,6 +371,18 @@ service cloud.firestore {
         allow delete: if isRoomMember(roomId)
                       && (resource == null || resource.data.uid == request.auth.uid);
         // Dọn phòng (xem checkins)
+        allow delete: if isRoomOwner(roomId) && roomDeleting(roomId);
+      }
+
+      // Phiếu duyệt chéo (xem validReview). Đổi ý = ghi đè chính phiếu của mình (chỉ v / ref / at đổi được), trong 72 giờ.
+      // Không ai xoá được phiếu của ai (kể cả chủ ảnh) — chỉ chủ phòng khi dọn phòng.
+      match /reviews/{id} {
+        allow read: if isRoomMember(roomId);
+        allow create: if isRoomMember(roomId) && validReview(roomId, id);
+        allow update: if isRoomMember(roomId)
+                      && resource.data.by == request.auth.uid
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['v', 'ref', 'at'])
+                      && validReview(roomId, id);
         allow delete: if isRoomOwner(roomId) && roomDeleting(roomId);
       }
 

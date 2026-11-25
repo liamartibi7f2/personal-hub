@@ -1079,27 +1079,35 @@ const timeManagementModule = (function () {
             '<div class="hub-tm-sb-pane hub-tm-sb-controls">' +
               '<section class="hub-tm-sb-sec"><h4 class="hub-tm-sb-h"><i>1</i>Basics</h4>' +
                 '<div class="hub-tm-field"><label for="tm-rm-name">Name</label><input type="text" class="hub-tm-input" id="tm-rm-name" maxlength="60" placeholder="e.g. 30 days · Civil Law" autocomplete="off"></div>' +
-                '<div class="hub-tm-field"><label for="tm-rm-tag">Tag for the blocks</label><select class="hub-tm-input" id="tm-rm-tag"></select></div>' +
+                '<div class="hub-tm-field"><span class="hub-tm-rm-flab">Tag for the blocks</span><div class="hub-tm-sb-tags hub-tm-rm-tags" id="tm-rm-tags" role="group" aria-label="Tag for the blocks"></div><input type="hidden" id="tm-rm-tag" value="study"></div>' +
               '</section>' +
-              '<section class="hub-tm-sb-sec"><h4 class="hub-tm-sb-h"><i>2</i>Calendar</h4>' +
+              '<section class="hub-tm-sb-sec">' +
+                '<div class="hub-tm-sb-hrow">' +
+                  '<h4 class="hub-tm-sb-h"><i>2</i>Calendar</h4>' +
+                  '<div class="hub-tm-sb-chips hub-tm-rm-pres" id="tm-rm-dowp" role="group" aria-label="Study day presets">' +
+                    '<button type="button" data-rm-dowp="all" aria-pressed="false">Every day</button><button type="button" data-rm-dowp="wk" aria-pressed="false">Weekdays</button><button type="button" data-rm-dowp="we" aria-pressed="false">Weekends</button>' +
+                  '</div>' +
+                '</div>' +
                 '<div class="hub-tm-rm-pair">' +
                   '<div class="hub-tm-field"><label for="tm-rm-start">Day 1 is</label><input type="date" class="hub-tm-input" id="tm-rm-start"></div>' +
                   '<div class="hub-tm-field"><label for="tm-rm-due">Deadline <em class="hub-tm-sb-opt">optional</em></label><input type="date" class="hub-tm-input" id="tm-rm-due"></div>' +
                 '</div>' +
-                '<div class="hub-tm-sb-chips" id="tm-rm-dowp" role="group" aria-label="Study day presets">' +
-                  '<button type="button" data-rm-dowp="all" aria-pressed="false">Every day</button><button type="button" data-rm-dowp="wk" aria-pressed="false">Weekdays</button><button type="button" data-rm-dowp="we" aria-pressed="false">Weekends</button>' +
-                '</div>' +
                 '<fieldset class="hub-tm-field"><legend class="hub-tm-sr-only">Study days</legend><div class="hub-tm-sb-days" id="tm-rm-dow">' +
                   RM_DOW.map(function (d) { return '<label class="hub-tm-day-check"><input type="checkbox" data-dow="' + d[0] + '" checked><span>' + d[1] + '</span></label>'; }).join('') +
                 '</div></fieldset>' +
-                '<p class="hub-tm-hint">Day 1, Day 2 … fall on the study days you switch on. Use “Push back” or “Catch up” later to add rest days.</p>' +
+                '<div class="hub-tm-rm-skipbar" id="tm-rm-skipbar" hidden><span id="tm-rm-skip-txt"></span><button type="button" class="hub-tm-rm-link" id="tm-rm-skip-clear">Clear rest days</button></div>' +
+                '<p class="hub-tm-hint">Study days map Day 1, Day 2… in order.</p>' +
               '</section>' +
               '<section class="hub-tm-sb-sec"><h4 class="hub-tm-sb-h"><i>3</i>Daily session</h4>' +
-                '<div class="hub-tm-field"><label for="tm-rm-time">Starts at</label><input type="time" class="hub-tm-input" id="tm-rm-time" value="19:30"></div>' +
+                '<div class="hub-tm-rm-pair">' +
+                  '<div class="hub-tm-field"><label for="tm-rm-time">Starts at</label><input type="time" class="hub-tm-input" id="tm-rm-time" value="19:30"></div>' +
+                  '<div class="hub-tm-field"><label for="tm-rm-dur-num">Length (min)</label><input type="number" class="hub-tm-input" id="tm-rm-dur-num" min="15" max="480" step="5" value="120"></div>' +
+                '</div>' +
                 '<div class="hub-tm-sb-chips" id="tm-rm-durs" role="group" aria-label="Session length">' +
                   RM_DURS.map(function (m) { return '<button type="button" data-rm-dur="' + m + '" aria-pressed="false">' + _fmtDur(m) + '</button>'; }).join('') +
                 '</div><input type="hidden" id="tm-rm-dur" value="120">' +
                 '<p class="hub-tm-hint" id="tm-rm-sess-cap"></p>' +
+                '<div class="hub-tm-rm-ovwarn" id="tm-rm-ovwarn" hidden><span id="tm-rm-ovwarn-txt"></span><button type="button" class="hub-tm-rm-link" id="tm-rm-pull-rule">Apply here &amp; remove rule</button></div>' +
               '</section>' +
             '</div>' +
             '<div class="hub-tm-sb-pane hub-tm-sb-preview hub-tm-rm-work">' +
@@ -1115,24 +1123,17 @@ const timeManagementModule = (function () {
                   '<div class="hub-tm-rm-snip" id="tm-rm-snip" role="group" aria-label="Insert a line">' +
                     '<span class="hub-tm-rm-snip-l">Insert</span>' +
                     '<button type="button" data-rm-ins="phase">+ Phase</button><button type="button" data-rm-ins="day">+ Day</button><button type="button" data-rm-ins="rule">+ Weekday time</button>' +
-                    '<span class="hub-tm-rm-spacer"></span><button type="button" data-rm-ins="starter">Load starter plan</button>' +
+                    '<input type="search" class="hub-tm-input hub-tm-rm-find" id="tm-rm-find" placeholder="Jump to day or text…" aria-label="Jump to day or text in plan" autocomplete="off">' +
+                    '<button type="button" data-rm-ins="starter" id="tm-rm-starter-btn">Load starter plan</button>' +
                   '</div>' +
                   '<textarea class="hub-tm-input hub-tm-rm-text" id="tm-rm-text" spellcheck="false" aria-label="Plan" aria-describedby="tm-rm-help"></textarea>' +
-                  '<p class="hub-tm-hint" id="tm-rm-help">One line per day: <code>Title | task | task | task</code>. <code>PHASE: name</code> starts a phase. Optional times: <code>@15m</code> after a phase name, <code>@20:00-22:00</code> after a day title, or a line such as <code>@Sun 11:30</code>. Paste rows from Excel or Sheets and they are converted for you.</p>' +
+                  '<details class="hub-tm-rm-helpdet" id="tm-rm-help"><summary>Format guide &amp; Excel/Sheets paste</summary><p class="hub-tm-hint">One line per day: <code>Title | task | task | task</code>. <code># Phase name</code> (or <code>PHASE: name</code>) starts a phase. Optional times: <code>@15m</code> after a phase name, <code>@20:00-22:00</code> after a day title, or a line such as <code>@Sun 11:30</code>. Paste rows from Excel or Sheets and they are converted for you.</p></details>' +
                 '</section>' +
                 '<section class="hub-tm-rm-pane" id="tm-rm-pane-preview" role="tabpanel" aria-labelledby="tm-rm-tab-preview" hidden><div id="tm-rm-preview"></div></section>' +
                 '<section class="hub-tm-rm-pane" id="tm-rm-pane-ai" role="tabpanel" aria-labelledby="tm-rm-tab-ai" hidden>' +
                   '<p class="hub-tm-rm-lead">Let any AI draft the plan, then paste its answer into the Edit tab.</p>' +
                   '<ol class="hub-tm-rm-steps"><li><b>Describe</b> what you need below.</li><li><b>Copy</b> the prompt into ChatGPT, Claude or Gemini and add your syllabus at the end.</li><li><b>Paste</b> the answer into the Edit tab. Phases, times and tasks are recognised for you.</li></ol>' +
                   '<div class="hub-tm-field"><label for="tm-rm-ai-topic">Subject</label><input type="text" class="hub-tm-input" id="tm-rm-ai-topic" maxlength="120" placeholder="e.g. Civil Law: contracts, or Daily English dictation" autocomplete="off"></div>' +
-                  '<div class="hub-tm-field">' +
-                    '<label for="tm-rm-ai-tag-input">Tags <em class="hub-tm-sb-opt">optional · existing or custom</em></label>' +
-                    '<div class="hub-tm-rm-ai-tags" id="tm-rm-ai-tags" role="group" aria-label="Prompt tags"></div>' +
-                    '<div class="hub-tm-rm-ai-tagadd">' +
-                      '<input type="text" class="hub-tm-input hub-tm-input--sm" id="tm-rm-ai-tag-input" maxlength="40" placeholder="Add custom tag (e.g. Exam prep, Listening)..." autocomplete="off">' +
-                      '<button type="button" class="hub-tm-btn hub-tm-btn--outline hub-tm-rm-ai-tagbtn" id="tm-rm-ai-tag-add">+ Add</button>' +
-                    '</div>' +
-                  '</div>' +
                   '<div class="hub-tm-field"><label for="tm-rm-ai-extra">Extra requirements <em class="hub-tm-sb-opt">optional</em></label><textarea class="hub-tm-input hub-tm-rm-ai-extra" id="tm-rm-ai-extra" rows="3" maxlength="600" placeholder="e.g. 15 min a day in phases 1-2 and 30 min in phases 3-4; Sundays at 11:30"></textarea></div>' +
                   '<div class="hub-tm-rm-trio">' +
                     '<div class="hub-tm-field"><label for="tm-rm-ai-days">Days</label><input type="number" class="hub-tm-input" id="tm-rm-ai-days" min="1" max="365" value="30"></div>' +
@@ -1158,7 +1159,11 @@ const timeManagementModule = (function () {
             '</div>' +
           '</div>' +
           '<div class="hub-tm-dialog-foot hub-tm-dialog-foot--split">' +
-            '<div class="hub-tm-rm-footl"><button type="button" class="hub-tm-btn hub-tm-btn--outline hub-tm-rm-del" id="tm-rm-delete" hidden>Delete roadmap</button><p class="hub-tm-sb-foot">Blocks already on your calendar are not changed when you save. Tip: Ctrl + Enter saves from the editor.</p></div>' +
+            '<div class="hub-tm-rm-footl">' +
+              '<button type="button" class="hub-tm-btn hub-tm-btn--outline hub-tm-rm-del" id="tm-rm-delete" hidden>Delete roadmap</button>' +
+              '<label class="hub-tm-rm-sync" id="tm-rm-sync-wrap" hidden><input type="checkbox" id="tm-rm-sync"><span>Update <b id="tm-rm-sync-n">0</b> unfinished calendar blocks</span></label>' +
+              '<p class="hub-tm-sb-foot" id="tm-rm-foot-hint">Ctrl + Enter saves from the editor.</p>' +
+            '</div>' +
             '<div class="hub-tm-sb-actions"><button type="button" class="hub-tm-btn hub-tm-btn--outline" data-close>Cancel</button><button type="button" class="hub-tm-btn hub-tm-btn--primary" id="tm-rm-save">Save roadmap</button></div>' +
           '</div>' +
         '</div>' +
@@ -5211,7 +5216,7 @@ const timeManagementModule = (function () {
     ['Tuần 4 · BTTH ngoài hợp đồng', ['Khái niệm & căn cứ phát sinh BTTH ngoài hợp đồng', 'Nguyên tắc & năng lực chịu trách nhiệm bồi thường', 'BTTH do người của pháp nhân & nguồn nguy hiểm cao độ gây ra', 'Xác định thiệt hại & mức bồi thường', '*Ôn tập phần BTTH · tình huống tổng hợp']],
     ['Ngày 27–30 · Tổng hợp', ['*Hệ thống hóa toàn bộ kiến thức: sơ đồ tư duy', '*Làm đề / tình huống tổng hợp 1', '*Làm đề / tình huống tổng hợp 2 & sửa lỗi sai', '*Rà soát cuối & chốt bài']]
   ];
-  let _rm = { sel: 0, pickOn: '', scrolled: '', pg: -1, editId: null, aiTags: [], aiCustomTags: [] };   // pg: window the person paged to (-1 = follow the selected day)
+  let _rm = { sel: 0, pickOn: '', scrolled: '', pg: -1, editId: null, skipDraft: [], findIdx: -1, findQ: '' };   // pg: window the person paged to (-1 = follow the selected day)
   const RM_TABS = ['edit', 'preview', 'ai', 'io'];
   let _rmTab = 'edit';
 
@@ -5906,13 +5911,113 @@ const timeManagementModule = (function () {
   function _rmSetDur(m) {
     m = _clamp(parseInt(m, 10) || 120, MIN_DUR, 480);
     _el('#tm-rm-dur').value = String(m);
+    const numEl = _el('#tm-rm-dur-num');
+    if (numEl && numEl.value !== String(m)) numEl.value = String(m);
     _all('#tm-rm-durs button').forEach(function (b) { b.setAttribute('aria-pressed', String(parseInt(b.getAttribute('data-rm-dur'), 10) === m)); });
+  }
+  function _rmRenderTagChips(selectedId) {
+    const box = _el('#tm-rm-tags'), inp = _el('#tm-rm-tag');
+    if (!box || !inp) return;
+    const tags = _allTags(), cur = tags.some(function (t) { return t.id === selectedId; }) ? selectedId : tags[0].id;
+    inp.value = cur;
+    box.innerHTML = tags.map(function (t) {
+      return '<button type="button" class="hub-tm-tl-chip" data-rm-tag="' + _esc(t.id) + '" style="' + _tagStyle(t) + '" aria-pressed="' + (t.id === cur) + '"><span class="hub-tm-tag-dot"></span>' + _esc(t.label) + '</button>';
+    }).join('');
+  }
+  function _rmSetTag(id) {
+    const tags = _allTags(), cur = tags.some(function (t) { return t.id === id; }) ? id : tags[0].id;
+    _el('#tm-rm-tag').value = cur;
+    _all('#tm-rm-tags [data-rm-tag]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-rm-tag') === cur)); });
+    if (_rmPane('ai')) _rmRefreshPrompt();
+  }
+  function _rmActiveSkips(start, dow) {
+    const list = (_rm.skipDraft || []).slice().sort();
+    if (!_isDateStr(start)) return list;
+    const hasDow = Array.isArray(dow) && dow.length === 7 && dow.some(Boolean);
+    return list.filter(function (ds) { return ds >= start && (!hasDow || !!dow[_parseDate(ds).getDay()]); });
+  }
+  function _rmFullRule(p, dow) {
+    if (!p || !Array.isArray(p.rules) || !p.rules.length) return null;
+    const active = [];
+    for (let i = 0; i < 7; i++) if (!dow || !dow.some(Boolean) || dow[i]) active.push(i);
+    let hit = null;
+    p.rules.forEach(function (r) {
+      if ((r.s !== undefined || r.d !== undefined) && active.every(function (d) { return r.dow.indexOf(d) > -1; })) hit = r;
+    });
+    return hit;
+  }
+  function _rmStripFullRules(text, dow) {
+    const active = [];
+    for (let i = 0; i < 7; i++) if (!dow || !dow.some(Boolean) || dow[i]) active.push(i);
+    const out = [];
+    String(text || '').split('\n').forEach(function (raw) {
+      const line = raw.trim();
+      if (line.charAt(0) === '@') {
+        const m = /^@(\S+)\s+(.+)$/.exec(line), dows = m ? _rmDowList(m[1]) : null;
+        if (dows && active.every(function (d) { return dows.indexOf(d) > -1; })) return;
+      }
+      out.push(raw);
+    });
+    while (out.length && !out[0].trim()) out.shift();
+    return out.join('\n');
+  }
+  function _rmDayLineRange(text, targetDay) {
+    const lines = String(text || '').split('\n');
+    const hasExplicitPhase = lines.some(function (l) { return RM_PHASE_RE.test(l.trim().replace(/\*\*|__/g, '')); });
+    let offset = 0, dayCount = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const raw = lines[i], l = raw.trim(), end = offset + raw.length;
+      if (l && l.slice(0, 2) !== '//' && l.charAt(0) !== '@' && !RM_PHASE_RE.test(l.replace(/\*\*|__/g, ''))) {
+        let isImpliedPhase = false;
+        if (!hasExplicitPhase && l.indexOf('|') === -1 && (i === 0 || !lines[i - 1].trim())) {
+          let j = i + 1;
+          while (j < lines.length && !lines[j].trim()) j++;
+          if (j < lines.length && lines[j].indexOf('|') > -1) isImpliedPhase = true;
+        }
+        if (!isImpliedPhase) {
+          dayCount++;
+          if (dayCount === targetDay) return { start: offset, end: end, line: i };
+        }
+      }
+      offset = end + 1;
+    }
+    return null;
+  }
+  function _rmFocusRange(ta, start, end) {
+    if (!ta) return;
+    ta.focus({ preventScroll: true });
+    ta.setSelectionRange(start, end);
+    const before = ta.value.slice(0, start), cs = window.getComputedStyle(ta);
+    const mirror = document.createElement('div');
+    mirror.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;white-space:pre-wrap;overflow-wrap:anywhere;box-sizing:border-box;width:' + ta.clientWidth + 'px;font:' + cs.font + ';padding:' + cs.padding + ';letter-spacing:' + cs.letterSpacing + ';';
+    mirror.textContent = before || ' ';
+    document.body.appendChild(mirror);
+    const y = mirror.scrollHeight;
+    document.body.removeChild(mirror);
+    const lh = parseFloat(cs.lineHeight) || 20;
+    ta.scrollTop = Math.max(0, y - lh * 3);
+  }
+  function _rmUnfinishedBlocks(rmId) {
+    return _timeBlocks.filter(function (b) { return b.rmId === rmId && !b.done && _rmPct(b) < 100; });
+  }
+  function _rmFreeSlotFor(date, pref, dur, exceptId) {
+    if (!_overlap(date, pref, pref + dur, exceptId)) return pref;
+    const maxS = DAY_MINS - dur, base = _clamp(Math.round(pref / SNAP) * SNAP, 0, maxS);
+    for (let d = 0; d <= DAY_MINS; d += SNAP) {
+      const c = [base - d, base + d];
+      for (let k = 0; k < 2; k++) {
+        const s = c[k];
+        if (s >= 0 && s <= maxS && !_overlap(date, s, s + dur, exceptId)) return s;
+        if (d === 0) break;
+      }
+    }
+    return null;
   }
   /** The roadmap as the dialog currently describes it (form fields + the parsed plan). */
   function _rmDraft(p) {
-    const cur = _rmEditing(), due = _el('#tm-rm-due').value;
+    const due = _el('#tm-rm-due').value;
     return { start: _el('#tm-rm-start').value, time: _el('#tm-rm-time').value || '19:30', dur: parseInt(_el('#tm-rm-dur').value, 10) || 120, tagId: _el('#tm-rm-tag').value || 'work',
-             dow: _rmFormDow(), rules: p.rules, skip: cur ? (cur.rm.skip || []) : [], deadline: _isDateStr(due) ? due : '', phases: p.phases, days: p.days };
+             dow: _rmFormDow(), rules: p.rules, skip: (_rm.skipDraft || []).slice(), deadline: _isDateStr(due) ? due : '', phases: p.phases, days: p.days };
   }
   /** Preview: KPI blueprint strip + interactive journey map + phase timeline cards with expandable checklists.
    *  Rows whose time differs from the rest of their phase are highlighted, so weekday rules are easy to verify. */
@@ -5980,13 +6085,16 @@ const timeManagementModule = (function () {
           : '<p class="hub-tm-rm-pvck-empty">No tasks yet</p>';
         rows +=
           '<li class="hub-tm-rm-pvrow' + (t !== top ? ' is-alt' : '') + '" data-pv-row="' + n + '">' +
-            '<button type="button" class="hub-tm-rm-pvbtn" data-pv-toggle="' + n + '" aria-expanded="false">' +
-              '<span class="n">' + n + '</span>' +
-              '<span class="dt">' + DAY_SHORT[dt.getDay()] + ' ' + _esc(_dateLabel(dt)) + '</span>' +
-              '<span class="tm">' + t + '</span>' +
-              '<span class="tt" title="' + _esc(d.t) + '">' + _esc(d.t) + '</span>' +
-              '<span class="ck"><span>' + d.ck.length + (d.ck.length === 1 ? ' task' : ' tasks') + '</span>' + chev + '</span>' +
-            '</button>' +
+            '<div class="hub-tm-rm-pvrow-hd">' +
+              '<button type="button" class="hub-tm-rm-pvbtn" data-pv-toggle="' + n + '" aria-expanded="false">' +
+                '<span class="n">' + n + '</span>' +
+                '<span class="dt">' + DAY_SHORT[dt.getDay()] + ' ' + _esc(_dateLabel(dt)) + '</span>' +
+                '<span class="tm">' + t + '</span>' +
+                '<span class="tt" title="' + _esc(d.t) + '">' + _esc(d.t) + '</span>' +
+                '<span class="ck"><span>' + d.ck.length + (d.ck.length === 1 ? ' task' : ' tasks') + '</span>' + chev + '</span>' +
+              '</button>' +
+              '<button type="button" class="hub-tm-rm-pvedit" data-pv-edit="' + n + '" title="Edit Day ' + n + ' in Plan" aria-label="Edit Day ' + n + '">' + TL_ICON.edit + '</button>' +
+            '</div>' +
             '<div class="hub-tm-rm-pvck">' + ckItems + '</div>' +
           '</li>';
       }
@@ -6017,48 +6125,9 @@ const timeManagementModule = (function () {
     if (p.errors.length || !p.days.length || !_isDateStr(_el('#tm-rm-start').value)) { box.innerHTML = '<p class="hub-tm-rm-empty">Fix the plan on the Edit tab to see the preview.</p>'; return; }
     box.innerHTML = _rmPreviewHtml(_rmDraft(p));
   }
-  function _rmSelectedAiTags() {
-    const sel = _rm.aiTags || [], custom = _rm.aiCustomTags || [];
-    const out = _allTags().filter(function (t) { return sel.indexOf(t.id) > -1; }).map(function (t) { return t.label; });
-    return out.concat(custom);
-  }
-  function _rmRenderAiTags() {
-    const box = _el('#tm-rm-ai-tags');
-    if (!box) return;
-    const sel = _rm.aiTags || [], custom = _rm.aiCustomTags || [];
-    const builtIn = _allTags().map(function (t) {
-      const on = sel.indexOf(t.id) > -1;
-      return '<button type="button" class="hub-tm-rm-aitag" data-rm-ai-tag="' + _esc(t.id) + '" style="--tm-c:' + _safeColor(t.color) + '" aria-pressed="' + on + '"><span class="hub-tm-tag-dot"></span><span>' + _esc(t.label) + '</span></button>';
-    }).join('');
-    const cust = custom.map(function (label, idx) {
-      return '<button type="button" class="hub-tm-rm-aitag hub-tm-rm-aitag--custom" data-rm-ai-ctag="' + idx + '" aria-pressed="true" title="Click to remove"><span>' + _esc(label) + '</span><span class="hub-tm-rm-aitag-x" aria-hidden="true">×</span></button>';
-    }).join('');
-    box.innerHTML = builtIn + cust;
-  }
-  function _rmAddCustomAiTag() {
-    const inp = _el('#tm-rm-ai-tag-input');
-    if (!inp) return;
-    const raw = (inp.value || '').split(','), tags = _allTags();
-    _rm.aiTags = _rm.aiTags || [];
-    _rm.aiCustomTags = _rm.aiCustomTags || [];
-    let changed = false;
-    raw.forEach(function (part) {
-      const label = part.trim().slice(0, 40);
-      if (!label) return;
-      const low = label.toLowerCase();
-      const match = tags.filter(function (t) { return t.label.toLowerCase() === low || t.id.toLowerCase() === low; })[0];
-      if (match) {
-        if (_rm.aiTags.indexOf(match.id) === -1) { _rm.aiTags.push(match.id); changed = true; }
-      } else if (!_rm.aiCustomTags.some(function (c) { return c.toLowerCase() === low; })) {
-        _rm.aiCustomTags.push(label);
-        changed = true;
-      }
-    });
-    inp.value = '';
-    if (changed) { _rmRenderAiTags(); _rmRefreshPrompt(); }
-  }
   function _rmPromptOpts() {
-    return { topic: _el('#tm-rm-ai-topic').value.trim(), tags: _rmSelectedAiTags(), extra: _el('#tm-rm-ai-extra').value.trim(), days: _el('#tm-rm-ai-days').value, phases: _el('#tm-rm-ai-phases').value, lang: _el('#tm-rm-ai-lang').value, time: _el('#tm-rm-time').value, dur: _el('#tm-rm-dur').value };
+    const tg = _tagById(_el('#tm-rm-tag').value);
+    return { topic: _el('#tm-rm-ai-topic').value.trim(), tags: tg ? [tg.label] : [], extra: _el('#tm-rm-ai-extra').value.trim(), days: _el('#tm-rm-ai-days').value, phases: _el('#tm-rm-ai-phases').value, lang: _el('#tm-rm-ai-lang').value, time: _el('#tm-rm-time').value, dur: _el('#tm-rm-dur').value };
   }
   function _rmRefreshPrompt() { _el('#tm-rm-prompt-view').value = _rmPrompt(_rmPromptOpts()); }
   function _rmShowTab(name) {
@@ -6069,7 +6138,7 @@ const timeManagementModule = (function () {
     });
     _rmTab = name;
     if (name === 'preview') _rmRenderPreview();
-    if (name === 'ai') { _rmRenderAiTags(); _rmRefreshPrompt(); }
+    if (name === 'ai') _rmRefreshPrompt();
   }
   /** Insert a ready-made line into the plan text and select the placeholder so it can be overtyped. */
   function _rmInsert(kind) {
@@ -6084,19 +6153,36 @@ const timeManagementModule = (function () {
       ta.focus(); ta.setSelectionRange(1, 10);
     } else {
       const pos = ta.selectionEnd, nl = v.indexOf('\n', pos), end = nl < 0 ? v.length : nl, lead = v ? '\n' : '';
-      const snip = kind === 'phase' ? 'PHASE: New phase' : 'New day | task | task | task';
+      const snip = kind === 'phase' ? '# New phase' : 'New day | task | task | task';
       ta.setRangeText(lead + snip, end, end, 'end');
-      const from = end + lead.length + (kind === 'phase' ? 7 : 0);
+      const from = end + lead.length + (kind === 'phase' ? 2 : 0);
       ta.focus(); ta.setSelectionRange(from, from + (kind === 'phase' ? 9 : 7));
     }
     _rmValidate();
   }
-  /** Keep everything that mirrors the form in step: session caption, day presets, and the visible tab. */
-  function _rmSyncUi() {
+  /** Keep everything that mirrors the form in step: session caption, day presets, skip/rule warnings, and the visible tab. */
+  function _rmSyncUi(p) {
     const t = _el('#tm-rm-time').value, dur = parseInt(_el('#tm-rm-dur').value, 10) || 120;
-    _el('#tm-rm-sess-cap').textContent = /^\d{1,2}:\d{2}$/.test(t) ? 'Each day: ' + _toTime(_toMins(t)) + ' → ' + _toTime(Math.min(DAY_MINS, _toMins(t) + dur)) + ' (' + _fmtDur(dur) + '). The plan can override this per phase, weekday or day.' : 'Pick a start time.';
+    _el('#tm-rm-sess-cap').textContent = /^\d{1,2}:\d{2}$/.test(t) ? 'Each day: ' + _toTime(_toMins(t)) + ' → ' + _toTime(Math.min(DAY_MINS, _toMins(t) + dur)) + ' (' + _fmtDur(dur) + '). Plan tokens can override per phase, weekday or day.' : 'Pick a start time.';
     const sel = _rmFormDow();
     _all('#tm-rm-dowp button').forEach(function (b) { b.setAttribute('aria-pressed', String(sel.join() === RM_DOW_PRESETS[b.getAttribute('data-rm-dowp')].join())); });
+    const skips = _rmActiveSkips(_el('#tm-rm-start').value, sel), skipBar = _el('#tm-rm-skipbar');
+    if (skipBar) {
+      skipBar.hidden = !skips.length;
+      if (skips.length) {
+        _el('#tm-rm-skip-txt').textContent = 'Skipping ' + _tlPlural(skips.length, 'rest day') + ' (' + skips.slice(0, 3).map(function (ds) { return _dateLabel(_parseDate(ds)); }).join(', ') + (skips.length > 3 ? ', …' : '') + ')';
+      }
+    }
+    const parsed = p || _rmParse(_el('#tm-rm-text').value), full = _rmFullRule(parsed, sel), ovBox = _el('#tm-rm-ovwarn');
+    if (ovBox) {
+      ovBox.hidden = !full;
+      if (full) {
+        const desc = _rmRuleTime(full);
+        _el('#tm-rm-ovwarn-txt').textContent = 'Overridden by Plan rule @' + desc + ' across active days.';
+      }
+    }
+    const stBtn = _el('#tm-rm-starter-btn');
+    if (stBtn) stBtn.hidden = !!_rmEditing() && !!_el('#tm-rm-text').value.trim();
     if (_rmPane('preview')) _rmRenderPreview();
     if (_rmPane('ai')) _rmRefreshPrompt();
   }
@@ -6108,7 +6194,7 @@ const timeManagementModule = (function () {
     else if (!_isDateStr(start)) { msg = 'Pick the date of Day 1.'; bad = true; }
     else if (!dow.some(function (v) { return v; })) { msg = 'Pick at least one study day.'; bad = true; }
     else {
-      const cur = _rmEditing(), dates = _rmDates({ start: start, dow: dow, skip: cur ? (cur.rm.skip || []) : [] }, p.days.length), last = dates[dates.length - 1];
+      const dates = _rmDates({ start: start, dow: dow, skip: (_rm.skipDraft || []).slice() }, p.days.length), last = dates[dates.length - 1];
       const e = _parseDate(last);
       const sizes = p.phases.length > 1 && p.phases.length <= 8 ? ' (' + p.phases.map(function (x) { return x.to - x.from + 1; }).join(' + ') + ')' : '';
       msg = p.days.length + ' days · ' + p.phases.length + ' phase' + (p.phases.length === 1 ? '' : 's') + sizes + ' · ' + _dateLabel(_parseDate(dates[0])) + ' → ' + _dateLabel(e) + ', ' + e.getFullYear();
@@ -6121,7 +6207,7 @@ const timeManagementModule = (function () {
     st.textContent = msg;
     st.classList.toggle('is-error', bad); st.classList.toggle('is-warn', warn && !bad);
     _el('#tm-rm-save').disabled = bad;
-    _rmSyncUi();
+    _rmSyncUi(p);
     return p;
   }
   /** Editor. opts.id = edit that roadmap · opts.spec = new roadmap from a template / a re-run · nothing = edit the active one (or start a blank one). */
@@ -6129,35 +6215,39 @@ const timeManagementModule = (function () {
     opts = opts && (opts.id || opts.spec) ? opts : {};
     const spec = opts.spec || null, r = opts.id ? _rmById(opts.id) : (spec ? null : _rmGet()), tags = _allTags();
     _rm.editId = r ? r.id : null;
-    _el('#tm-rm-tag').innerHTML = tags.map(function (t) { return '<option value="' + _esc(t.id) + '">' + _esc(t.label) + '</option>'; }).join('');
+    _rm.findIdx = -1; _rm.findQ = '';
+    const findEl = _el('#tm-rm-find'); if (findEl) findEl.value = '';
     const tagOf = function (id, fb) { return tags.some(function (t) { return t.id === id; }) ? id : (tags.some(function (t) { return t.id === fb; }) ? fb : tags[0].id); };
     if (r) {
       const R = r.rm;
+      _rm.skipDraft = Array.isArray(R.skip) ? R.skip.slice() : [];
       _el('#tm-rm-name').value = r.name || '';
       _el('#tm-rm-start').value = R.start;
       _el('#tm-rm-time').value = _toTime(_rmStartMins(R));
       _rmSetDur(_rmDur(R));
       _el('#tm-rm-due').value = _isDateStr(R.deadline) ? R.deadline : '';
       _el('#tm-rm-text').value = _rmToText(R);
-      _el('#tm-rm-tag').value = tagOf(R.tagId);
+      _rmRenderTagChips(tagOf(R.tagId));
       _rmSetDow(R.dow);
     } else if (spec) {
+      _rm.skipDraft = [];
       _el('#tm-rm-name').value = spec.name || '';
       _el('#tm-rm-start').value = _todayStr();
       _el('#tm-rm-time').value = /^\d{1,2}:\d{2}$/.test(spec.time || '') ? _toTime(_toMins(spec.time)) : '19:30';
       _rmSetDur(spec.dur || 120);
       _el('#tm-rm-due').value = '';
       _el('#tm-rm-text').value = spec.text || '';
-      _el('#tm-rm-tag').value = tagOf(spec.tagId, 'study');
+      _rmRenderTagChips(tagOf(spec.tagId, 'study'));
       _rmSetDow(spec.dow || null);
     } else {
+      _rm.skipDraft = [];
       _el('#tm-rm-name').value = '30-day roadmap';
       _el('#tm-rm-start').value = _todayStr();
       _el('#tm-rm-time').value = '19:30';
       _rmSetDur(120);
       _el('#tm-rm-due').value = '';
       _el('#tm-rm-text').value = _rmStarterText();
-      _el('#tm-rm-tag').value = tagOf('study');
+      _rmRenderTagChips(tagOf('study'));
       _rmSetDow(null);
     }
     const mode = r ? 'edit' : (spec && spec.rerun ? 'rerun' : spec ? 'tpl' : 'new');
@@ -6166,11 +6256,15 @@ const timeManagementModule = (function () {
     if (sub) sub.textContent = { edit: 'Change the plan, the schedule or the daily session', rerun: 'Pick a new Day 1. Progress starts again from zero', tpl: 'Pick Day 1, adjust anything, then start', 'new': 'Plan a multi-day path and follow it day by day' }[mode];
     _el('#tm-rm-save').textContent = { edit: 'Save roadmap', rerun: 'Start run', tpl: 'Start roadmap', 'new': 'Create roadmap' }[mode];
     _el('#tm-rm-delete').hidden = !r;
-    _rm.aiCustomTags = [];
-    _rm.aiTags = [_el('#tm-rm-tag').value].filter(Boolean);
-    const aiTagInp = _el('#tm-rm-ai-tag-input');
-    if (aiTagInp) aiTagInp.value = '';
-    _rmRenderAiTags();
+    const unf = r ? _rmUnfinishedBlocks(r.id).length : 0, syncWrap = _el('#tm-rm-sync-wrap'), syncEl = _el('#tm-rm-sync'), footHint = _el('#tm-rm-foot-hint');
+    if (syncWrap && syncEl) {
+      syncWrap.hidden = !unf;
+      syncEl.checked = false;
+      _el('#tm-rm-sync-n').textContent = String(unf);
+      if (footHint) footHint.hidden = !!unf;
+    }
+    const helpEl = _el('#tm-rm-help');
+    if (helpEl) helpEl.open = !r;
     _rmShowTab('edit');
     _rmValidate();
     _rmApplySkin();
@@ -6180,17 +6274,42 @@ const timeManagementModule = (function () {
     const p = _rmValidate();
     if (p.errors.length || !p.days.length || _el('#tm-rm-save').disabled) return;
     const name = (_el('#tm-rm-name').value || '').trim().slice(0, 60) || 'Roadmap', cur = _rmEditing(), data = _rmDraft(p);
-    let saved = cur;
+    let saved = cur, updated = 0, keptSlot = 0;
+    const doSync = !!(cur && _el('#tm-rm-sync') && _el('#tm-rm-sync').checked);
     if (cur) { cur.name = name; cur.rm = data; }
     else { saved = { kind: 'roadmap', id: 'rm-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: name, createdAt: Date.now(), blocks: [], rm: data }; _templates.push(saved); }
+    if (doSync) {
+      const dates = _rmDates(data, data.days.length), today = _todayStr();
+      const resolvedTag = _tagOrFallback(data.tagId).id === FALLBACK_TAG.id ? 'work' : data.tagId;
+      _rmUnfinishedBlocks(cur.id).sort(function (a, b) { return b.rmDay - a.rmDay; }).forEach(function (b) {
+        b.tagId = resolvedTag;
+        if (b.rmDay >= 1 && b.rmDay <= data.days.length) {
+          const day = data.days[b.rmDay - 1], oldByText = {};
+          b.title = 'D' + b.rmDay + ' · ' + day.t;
+          _ck(b).forEach(function (it) { if (it.text && !oldByText[it.text]) oldByText[it.text] = it; });
+          b.checklist = _normCk((day.ck || []).map(function (t) { return oldByText[t] || { text: t, done: false }; }));
+          const targetDate = dates[b.rmDay - 1], destDate = (b.date >= today && targetDate >= today) ? targetDate : b.date;
+          const w = _rmWhen(data, b.rmDay, destDate), curDur = _toMins(b.endTime) - _toMins(b.startTime);
+          if (destDate !== b.date || _toMins(b.startTime) !== w.s || curDur !== w.d) {
+            const s = _rmFreeSlotFor(destDate, w.s, w.d, b.id);
+            if (s !== null) { b.date = destDate; b.startTime = _toTime(s); b.endTime = _toTime(s + w.d); }
+            else keptSlot++;
+          }
+        }
+        b.updatedAt = Date.now();
+        updated++;
+      });
+      if (updated) _scheduleSave();
+    }
     _rm.editId = null;
     _saveTemplates();
     if (!saved.archivedAt) _rmSetActive(saved.id);
     if (_rmLibOpen()) _renderRmLib();
     _closeModal(_el('#hub-tm-roadmap-modal'));
     _rm.sel = 0; _rm.pickOn = ''; _rm.pg = -1;
+    if (updated) { _renderGrid({ animate: false, scroll: false }); _tlRefresh(); }
     _renderRoadmap();
-    _toast('Roadmap saved · ' + p.days.length + ' days');
+    _toast('Roadmap saved · ' + p.days.length + ' days' + (updated ? ' · ' + updated + ' block' + (updated === 1 ? '' : 's') + ' updated' : '') + (keptSlot ? ' (' + keptSlot + ' kept slot)' : ''));
   }
   function _rmCopy(text, okMsg) {
     const ok = function () { _toast(okMsg); };
@@ -6225,7 +6344,7 @@ const timeManagementModule = (function () {
         if (j.name) _el('#tm-rm-name').value = j.name;
         if (/^\d{1,2}:\d{2}$/.test(j.time || '')) _el('#tm-rm-time').value = _toTime(_toMins(j.time));
         if (j.dur) _rmSetDur(j.dur);
-        if (j.tagId && _el('#tm-rm-tag').querySelector('option[value="' + j.tagId + '"]')) _el('#tm-rm-tag').value = j.tagId;
+        if (j.tagId && _tagById(j.tagId)) _rmSetTag(j.tagId);
         if (j.dow) _rmSetDow(j.dow);
         _rmSetPlanText(_rmToText(j), 'Imported ' + name);
         return;
@@ -6486,6 +6605,58 @@ const timeManagementModule = (function () {
     _el('#tm-rm-dow').addEventListener('change', _rmValidate);
     _el('#tm-rm-dowp').addEventListener('click', function (e) { const b = e.target.closest('[data-rm-dowp]'); if (b) { _rmSetDow(RM_DOW_PRESETS[b.getAttribute('data-rm-dowp')]); _rmValidate(); } });
     _el('#tm-rm-durs').addEventListener('click', function (e) { const b = e.target.closest('[data-rm-dur]'); if (b) { _rmSetDur(b.getAttribute('data-rm-dur')); _rmValidate(); } });
+    const durNum = _el('#tm-rm-dur-num');
+    if (durNum) {
+      durNum.addEventListener('input', function () {
+        const n = parseInt(durNum.value, 10);
+        if (n >= MIN_DUR && n <= 480) {
+          _el('#tm-rm-dur').value = String(n);
+          _all('#tm-rm-durs button').forEach(function (b) { b.setAttribute('aria-pressed', String(parseInt(b.getAttribute('data-rm-dur'), 10) === n)); });
+          _rmValidate();
+        }
+      });
+      durNum.addEventListener('change', function () { _rmSetDur(durNum.value); _rmValidate(); });
+    }
+    const tagsBox = _el('#tm-rm-tags');
+    if (tagsBox) tagsBox.addEventListener('click', function (e) { const b = e.target.closest('[data-rm-tag]'); if (b) { _rmSetTag(b.getAttribute('data-rm-tag')); _rmSyncUi(); } });
+    const skipClear = _el('#tm-rm-skip-clear');
+    if (skipClear) skipClear.addEventListener('click', function () {
+      const prev = (_rm.skipDraft || []).slice();
+      _rm.skipDraft = [];
+      _rmValidate();
+      _toast('Rest days cleared', { action: 'Undo', onAction: function () { _rm.skipDraft = prev; _rmValidate(); } });
+    });
+    const pullBtn = _el('#tm-rm-pull-rule');
+    if (pullBtn) pullBtn.addEventListener('click', function () {
+      const taEl = _el('#tm-rm-text'), dow = _rmFormDow(), p = _rmParse(taEl.value), full = _rmFullRule(p, dow);
+      if (!full) return;
+      const prevT = _el('#tm-rm-time').value, prevD = _el('#tm-rm-dur').value, prevTxt = taEl.value;
+      if (full.s !== undefined) _el('#tm-rm-time').value = _toTime(full.s);
+      if (full.d !== undefined) _rmSetDur(full.d);
+      taEl.value = _rmStripFullRules(taEl.value, dow);
+      _rmValidate();
+      _toast('Moved schedule rule into Daily session', { action: 'Undo', onAction: function () { _el('#tm-rm-time').value = prevT; _rmSetDur(prevD); taEl.value = prevTxt; _rmValidate(); } });
+    });
+    const findInp = _el('#tm-rm-find');
+    if (findInp) findInp.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' || e.isComposing) return;
+      e.preventDefault();
+      const q = (findInp.value || '').trim(), taEl = _el('#tm-rm-text');
+      if (!q) return;
+      const dayMatch = /^(?:day|ngày)?\s*(\d{1,3})$/i.exec(q);
+      if (dayMatch) {
+        const rng = _rmDayLineRange(taEl.value, parseInt(dayMatch[1], 10));
+        if (rng) _rmFocusRange(taEl, rng.start, rng.end); else _toast('Day ' + dayMatch[1] + ' not found in plan');
+        return;
+      }
+      const low = taEl.value.toLowerCase(), ql = q.toLowerCase();
+      if (_rm.findQ !== ql) { _rm.findQ = ql; _rm.findIdx = -1; }
+      let idx = low.indexOf(ql, _rm.findIdx + 1);
+      if (idx < 0 && _rm.findIdx >= 0) idx = low.indexOf(ql, 0);
+      if (idx < 0) { _toast('No match for “' + q + '”'); return; }
+      _rm.findIdx = idx;
+      _rmFocusRange(taEl, idx, idx + q.length);
+    });
     _el('#tm-rm-snip').addEventListener('click', function (e) { const b = e.target.closest('[data-rm-ins]'); if (b) _rmInsert(b.getAttribute('data-rm-ins')); });
     const tabs = _el('#tm-rm-tabs');
     tabs.addEventListener('click', function (e) { const b = e.target.closest('[role="tab"]'); if (b) _rmShowTab(b.id.replace('tm-rm-tab-', '')); });
@@ -6539,33 +6710,6 @@ const timeManagementModule = (function () {
 
     // AI prompt
     ['#tm-rm-ai-topic', '#tm-rm-ai-extra', '#tm-rm-ai-days', '#tm-rm-ai-phases', '#tm-rm-ai-lang'].forEach(function (s) { _el(s).addEventListener('input', _rmRefreshPrompt); });
-    const aiTagsBox = _el('#tm-rm-ai-tags');
-    if (aiTagsBox) {
-      aiTagsBox.addEventListener('click', function (e) {
-        const b = e.target.closest('[data-rm-ai-tag]');
-        if (b) {
-          const id = b.getAttribute('data-rm-ai-tag');
-          _rm.aiTags = _rm.aiTags || [];
-          const idx = _rm.aiTags.indexOf(id);
-          if (idx > -1) _rm.aiTags.splice(idx, 1); else _rm.aiTags.push(id);
-          _rmRenderAiTags(); _rmRefreshPrompt();
-          return;
-        }
-        const cb = e.target.closest('[data-rm-ai-ctag]');
-        if (cb) {
-          const ci = parseInt(cb.getAttribute('data-rm-ai-ctag'), 10);
-          if (_rm.aiCustomTags && ci >= 0 && ci < _rm.aiCustomTags.length) {
-            _rm.aiCustomTags.splice(ci, 1);
-            _rmRenderAiTags(); _rmRefreshPrompt();
-          }
-        }
-      });
-    }
-    const aiTagAdd = _el('#tm-rm-ai-tag-add'), aiTagInput = _el('#tm-rm-ai-tag-input');
-    if (aiTagAdd) aiTagAdd.addEventListener('click', _rmAddCustomAiTag);
-    if (aiTagInput) aiTagInput.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); _rmAddCustomAiTag(); }
-    });
     _el('#tm-rm-ai-copy').addEventListener('click', function () {
       _rmCopy(_rmPrompt(_rmPromptOpts()), 'Prompt copied — paste it into your AI, add your syllabus, then paste its answer into the Edit tab.');
     });
@@ -6623,6 +6767,14 @@ const timeManagementModule = (function () {
             if (pvPingTimer) clearTimeout(pvPingTimer);
             pvPingTimer = setTimeout(function () { row.classList.remove('is-ping'); }, 900);
           }
+          return;
+        }
+        const edBtn = t.closest('[data-pv-edit]');
+        if (edBtn) {
+          const n = parseInt(edBtn.getAttribute('data-pv-edit'), 10), taEl = _el('#tm-rm-text');
+          const rng = _rmDayLineRange(taEl.value, n);
+          _rmShowTab('edit');
+          if (rng) _rmFocusRange(taEl, rng.start, rng.end);
           return;
         }
         const tg = t.closest('[data-pv-toggle]');
