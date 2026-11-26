@@ -85,16 +85,20 @@ service cloud.firestore {
     //        name, code, ownerUid, maxHearts, regenDays, cutoff, createdAt,
     //        maxMembers (2–20), joinOpen (khoá/mở cho người mới), memberCount (đếm thành viên), deleting (đang xoá),
     //        photoDays (3–365, mặc định 30: ảnh check-in mới tự hết hạn sau bấy nhiêu ngày),
-    //        challenge (bật/tắt mã thử thách mỗi lần chụp; thiếu = tắt)
-    //   rooms/{roomId}/members/{uid}         hồ sơ + cam kết của từng người
+    //        challenge (bật/tắt mã thử thách mỗi lần chụp; thiếu = tắt),
+    //        quest ('off' | 'random' | 'owner'; thiếu = off): Đề ngày — mỗi ngày một đề chụp ảnh cho cả phòng
+    //   rooms/{roomId}/members/{uid}         hồ sơ + cam kết của từng người (+ avatar: id ảnh có sẵn, '' / thiếu = chữ cái)
     //   rooms/{roomId}/checkins/{uid_date}   mỗi người mỗi ngày đúng một check-in (BẮT BUỘC kèm ảnh lúc tạo)
     //        + photoMode (all | some | me), photoExpireAt, photoState (deleted | expired khi ảnh đã gỡ). Giờ check-in luôn được giữ.
     //        + ch (mã thử thách 'P482' | 'F7' | ''), ph / pm (dấu vân tay ảnh dHash 256 bit và bản lật ngang; dùng báo ảnh trùng, sống lâu hơn ảnh)
-    //   rooms/{roomId}/reviews/{uid_date_voter}  phiếu duyệt chéo: { target, by, v: ok | sus, ref, at }
+    //        + qid ('pool<N>' = đề dự phòng | '<date>_<uid người ra đề>'), qt (bản chụp tiêu đề đề ngày, ≤ 60) — phòng bật Đề ngày thì BẮT BUỘC có qid
+    //   rooms/{roomId}/reviews/{uid_date_voter}  phiếu duyệt chéo: { target, by, v: ok | sus, ref, at, off? }
+    //        off: true = "Lạc đề" (ảnh thật nhưng sai đề; chỉ với v = ok và check-in có qid) — KHÔNG hủy check-in, chỉ mất ✦ đúng đề
     //        quá nửa người KHÁC nghi ngờ → check-in bị hủy (client tính lại từ phiếu, không lưu cờ)
     //   rooms/{roomId}/photos/{uid_date}     ảnh check-in (JPEG dataURL đã nén), tách riêng cho nhẹ
     //        + viewers (không có = cả phòng · [] = chỉ mình · [uid…] = chỉ những người đó), expireAt (TTL của Firestore dọn)
     //   rooms/{roomId}/nudges/{from_to_date} lời nhắc nhẹ
+    //   rooms/{roomId}/quests/{date_uid}      Đề ngày: { date, day, by, title, hint, pass, at } — người được bốc thăm đăng; pass = nhường lượt
     //   invites/{code}                       mã mời → roomId, có hạn dùng (expiresAt, null = không hết hạn)
     //   users/{uid}/collab/rooms             danh sách phòng của mình
     //
@@ -165,10 +169,31 @@ service cloud.firestore {
     // ── Mã thử thách · dấu vân tay ảnh ───────────────────────────
     //   ch: 'P' + số 100–999 (viết lên giấy) hoặc 'F' + 1–10 (giơ ngón tay); '' = không có.
     //   ph / pm: 64 ký tự hex (256 bit). Luật chỉ kiểm định dạng; việc đối chiếu số trên ảnh là của người duyệt.
+    function okAvatar(d) { return d.get('avatar', '') is string && d.get('avatar', '').matches('^[a-z0-9]{0,16}$'); }   // id avatar có sẵn trong app ('' = dùng chữ cái)
     function okCode(v) { return v is string && (v == '' || v.matches('^(P[1-9][0-9]{2}|F([1-9]|10))$')); }
     function okHash(v) { return v is string && (v == '' || v.matches('^[0-9a-f]{64}$')); }
     function challengeOn(roomId) {
       return get(/databases/$(db)/documents/rooms/$(roomId)).data.get('challenge', false) == true;
+    }
+
+    // ── Đề ngày (daily quest) ────────────────────────────────────
+    //   Việc bốc thăm "ai ra đề hôm nay" là hàm thuần của client (mọi máy tính ra cùng kết quả, giống cách tính streak),
+    //   nên Rules chỉ kiểm định dạng + giới hạn: ai cũng đăng được nhiều nhất 1 đề / ngày (id gắn uid → không chặn được ngày của người khác),
+    //   client chỉ nhận đề của người nằm trong 3 người đầu danh sách bốc thăm của ngày đó.
+    function validQuest(d) { return !('quest' in d) || d.quest in ['off', 'random', 'owner']; }
+    function questMode(roomId) { return get(/databases/$(db)/documents/rooms/$(roomId)).data.get('quest', 'off'); }
+    function questOn(roomId) { return questMode(roomId) in ['random', 'owner']; }
+    function okQid(v) { return v is string && (v == '' || v.matches('^(pool[0-9]{1,3}|[0-9]{4}-[0-9]{2}-[0-9]{2}_[A-Za-z0-9_-]{1,128})$')); }
+    function okQuestBody(d) {
+      return d.get('pass', false) is bool
+          && d.title is string && d.title.size() <= 60
+          && d.hint is string && d.hint.size() <= 120
+          && (d.get('pass', false) == true || d.title.size() >= 1);      // nhường lượt thì không cần đề
+    }
+    // Phiếu "Lạc đề" (off) chỉ đi với v = ok và chỉ trên check-in có qid
+    function okOffVote(d, ck) {
+      return d.get('off', false) is bool
+          && (d.get('off', false) == false || (d.v == 'ok' && ck.get('qid', '') != ''));
     }
 
     // ── Duyệt chéo ───────────────────────────────────────────────
@@ -190,7 +215,7 @@ service cloud.firestore {
       let d = request.resource.data;
       let ckPath = /databases/$(db)/documents/rooms/$(roomId)/checkins/$(d.target);
       let phPath = /databases/$(db)/documents/rooms/$(roomId)/photos/$(d.target);
-      return d.keys().hasOnly(['target', 'by', 'v', 'ref', 'at'])
+      return d.keys().hasOnly(['target', 'by', 'v', 'ref', 'at', 'off'])
           && d.target is string && d.target.size() >= 1 && d.target.size() <= 80
           && d.by == request.auth.uid
           && id == d.target + '_' + d.by
@@ -198,7 +223,8 @@ service cloud.firestore {
           && d.ref is int && d.ref >= 1000000000 && d.ref <= 9999999999
           && d.at == request.time
           && exists(ckPath) && exists(phPath)
-          && validReviewTarget(get(ckPath).data, get(phPath).data, d.ref);
+          && validReviewTarget(get(ckPath).data, get(phPath).data, d.ref)
+          && okOffVote(d, get(ckPath).data);
     }
 
     function validPhotoDays(d) {
@@ -225,14 +251,15 @@ service cloud.firestore {
     match /rooms/{roomId} {
       allow create: if signedIn()
                     && request.resource.data.ownerUid == request.auth.uid
-                    && request.resource.data.keys().hasOnly(['name', 'code', 'ownerUid', 'maxHearts', 'regenDays', 'cutoff', 'createdAt', 'maxMembers', 'joinOpen', 'memberCount', 'photoDays', 'challenge'])
+                    && request.resource.data.keys().hasOnly(['name', 'code', 'ownerUid', 'maxHearts', 'regenDays', 'cutoff', 'createdAt', 'maxMembers', 'joinOpen', 'memberCount', 'photoDays', 'challenge', 'quest'])
                     && request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 40
                     && request.resource.data.get('memberCount', 1) == 1
                     && request.resource.data.get('joinOpen', true) == true
                     && (!('maxMembers' in request.resource.data)
                         || (request.resource.data.maxMembers is int && request.resource.data.maxMembers >= 2 && request.resource.data.maxMembers <= 20))
                     && validPhotoDays(request.resource.data)
-                    && request.resource.data.get('challenge', false) is bool;
+                    && request.resource.data.get('challenge', false) is bool
+                    && validQuest(request.resource.data);
       allow read: if isRoomMember(roomId);
 
       // CHỦ PHÒNG: đổi tên, luật tim, mã mời, số người tối đa, khoá/mở, đếm thành viên,
@@ -240,13 +267,14 @@ service cloud.firestore {
       allow update: if isRoomMember(roomId)
                     && resource.data.ownerUid == request.auth.uid
                     && request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['name', 'maxHearts', 'regenDays', 'code', 'maxMembers', 'joinOpen', 'ownerUid', 'memberCount', 'deleting', 'photoDays', 'challenge'])
+                         .hasOnly(['name', 'maxHearts', 'regenDays', 'code', 'maxMembers', 'joinOpen', 'ownerUid', 'memberCount', 'deleting', 'photoDays', 'challenge', 'quest'])
                     && request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 40
                     && (!('maxMembers' in request.resource.data)
                         || (request.resource.data.maxMembers is int && request.resource.data.maxMembers >= 2 && request.resource.data.maxMembers <= 20))
                     && (!('joinOpen' in request.resource.data) || request.resource.data.joinOpen is bool)
                     && validPhotoDays(request.resource.data)
                     && request.resource.data.get('challenge', false) is bool
+                    && validQuest(request.resource.data)
                     && (!('memberCount' in request.resource.data) || request.resource.data.memberCount is int)
                     && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['maxMembers'])
                         || request.resource.data.maxMembers >= request.resource.data.get('memberCount', 0))
@@ -277,7 +305,8 @@ service cloud.firestore {
         // người khác phải vào bằng mã hợp lệ: đúng phòng, còn hạn, phòng đang mở và còn chỗ (xem canJoin)
         allow create: if signedIn() && request.auth.uid == uid
                       && request.resource.data.uid == uid
-                      && request.resource.data.keys().hasOnly(['uid', 'name', 'commits', 'joinedAt', 'code'])
+                      && request.resource.data.keys().hasOnly(['uid', 'name', 'commits', 'joinedAt', 'code', 'avatar'])
+                      && okAvatar(request.resource.data)
                       && request.resource.data.name is string && request.resource.data.name.size() <= 24
                       && request.resource.data.commits is list && request.resource.data.commits.size() <= 60
                       && ((!exists(/databases/$(db)/documents/rooms/$(roomId))
@@ -287,7 +316,8 @@ service cloud.firestore {
         allow update: if signedIn() && request.auth.uid == uid
                       && request.resource.data.uid == uid
                       && request.resource.data.name is string && request.resource.data.name.size() <= 24
-                      && request.resource.data.commits is list && request.resource.data.commits.size() <= 60;
+                      && request.resource.data.commits is list && request.resource.data.commits.size() <= 60
+                      && okAvatar(request.resource.data);
         // Tự rời phòng (chủ phòng chỉ rời được khi phòng đang bị xoá), hoặc chủ phòng mời người khác ra
         allow delete: if signedIn() && request.auth.uid == uid
                       && (!isRoomOwner(roomId) || roomDeleting(roomId));
@@ -302,12 +332,20 @@ service cloud.firestore {
       match /checkins/{id} {
         allow read: if isRoomMember(roomId);
         allow create: if isRoomMember(roomId)
-                      && request.resource.data.keys().hasOnly(['uid', 'date', 'day', 'at', 'note', 'late', 'hasPhoto', 'photoMode', 'photoExpireAt', 'ch', 'ph', 'pm'])
+                      && request.resource.data.keys().hasOnly(['uid', 'date', 'day', 'at', 'note', 'late', 'hasPhoto', 'photoMode', 'photoExpireAt', 'ch', 'ph', 'pm', 'qid', 'qt'])
                       && request.resource.data.hasPhoto == true
                       && okCode(request.resource.data.get('ch', ''))
                       && okHash(request.resource.data.get('ph', ''))
                       && okHash(request.resource.data.get('pm', ''))
                       && (!challengeOn(roomId) || request.resource.data.get('ch', '') != '')      // phòng bật mã thử thách → bắt buộc kèm mã
+                      && okQid(request.resource.data.get('qid', ''))
+                      && request.resource.data.get('qt', '') is string
+                      && request.resource.data.get('qt', '').size() <= 60
+                      && (request.resource.data.get('qid', '') == ''
+                          || (request.resource.data.get('qt', '').size() >= 1
+                              && (request.resource.data.get('qid', '').matches('^pool[0-9]{1,3}$')
+                                  || request.resource.data.get('qid', '').split('_')[0] == request.resource.data.date)))   // đề của đúng ngày check-in
+                      && (!questOn(roomId) || request.resource.data.get('qid', '') != '')          // phòng bật Đề ngày → bắt buộc kèm đề
                       && existsAfter(/databases/$(db)/documents/rooms/$(roomId)/photos/$(id))
                       && request.resource.data.get('photoMode', 'all')
                            == modeOf(getAfter(/databases/$(db)/documents/rooms/$(roomId)/photos/$(id)).data.get('viewers', null))
@@ -381,9 +419,43 @@ service cloud.firestore {
         allow create: if isRoomMember(roomId) && validReview(roomId, id);
         allow update: if isRoomMember(roomId)
                       && resource.data.by == request.auth.uid
-                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['v', 'ref', 'at'])
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['v', 'ref', 'at', 'off'])
                       && validReview(roomId, id);
         allow delete: if isRoomOwner(roomId) && roomDeleting(roomId);
+      }
+
+      // Đề ngày. Id = <date>_<uid người đăng>.
+      //   - tạo: thành viên, phòng đang bật đề, ngày trong khoảng [hôm qua, +8 ngày] theo giờ máy chủ và khớp trường `day`,
+      //          chế độ 'owner' thì chỉ chủ phòng; giờ lấy từ máy chủ
+      //   - sửa (title / hint / pass) và xoá: chính người đăng, tới hết ngày áp dụng (so theo UTC, lệch tối đa ±1 như check-in);
+      //          đề đã dùng không mất vì check-in giữ bản chụp tiêu đề (qt)
+      //   - chủ phòng xoá được mọi đề (kiểm duyệt, và dọn phòng khi xoá)
+      match /quests/{id} {
+        allow read: if isRoomMember(roomId);
+        allow create: if isRoomMember(roomId)
+                      && questOn(roomId)
+                      && request.resource.data.keys().hasOnly(['date', 'day', 'by', 'title', 'hint', 'pass', 'at'])
+                      && request.resource.data.keys().hasAll(['date', 'day', 'by', 'title', 'hint', 'at'])
+                      && request.resource.data.by == request.auth.uid
+                      && request.resource.data.date is string
+                      && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+                      && id == request.resource.data.date + '_' + request.auth.uid
+                      && request.resource.data.day is int
+                      && request.resource.data.day == int(request.resource.data.date.replace('-', ''))
+                      && request.resource.data.day >= dayNum(request.time - duration.value(1, 'd'))
+                      && request.resource.data.day <= dayNum(request.time + duration.value(8, 'd'))
+                      && request.resource.data.at == request.time
+                      && okQuestBody(request.resource.data)
+                      && (questMode(roomId) != 'owner' || isRoomOwner(roomId));
+        allow update: if isRoomMember(roomId)
+                      && resource.data.by == request.auth.uid
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'hint', 'pass'])
+                      && okQuestBody(request.resource.data)
+                      && resource.data.day >= dayNum(request.time);
+        allow delete: if isRoomMember(roomId)
+                      && resource.data.by == request.auth.uid
+                      && resource.data.day >= dayNum(request.time);
+        allow delete: if isRoomOwner(roomId);
       }
 
       match /nudges/{id} {
